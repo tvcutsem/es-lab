@@ -1,0 +1,139 @@
+{
+  "NaN": true,
+  "Infinity": true,
+  "undefined": true,
+  "eval": true, 
+  "parseInt": true,
+  "parseFloat": true,
+  "isNaN": true,
+  "isFinite": true,
+  "decodeURI": true,
+  "decodeURIComponent": true,
+  "encodeURI": true,
+  "encodeURIComponent": true,
+  "Object": {
+    "prototype": {
+      "constructor": "*",
+      "toString": "*",
+      "toLocaleString": "*", 
+      "valueOf": true,
+      "hasOwnProperty": true,
+      "isPrototypeOf": true,
+      "propertyIsEnumerable": true
+    },
+    "getPrototypeOf": true,
+    "getOwnPropertyDescriptor": true,
+    "getOwnPropertyNames": true, 
+    "create": true,
+    "defineProperty": true,
+    "defineProperties": true,
+    "seal": true,
+    "freeze": true,
+    "preventExtensions": true,
+    "isSealed": true,
+    "isFrozen": true,
+    "isExtensible": true,
+    "keys": true 
+  },
+  "Function": {
+    "prototype": {
+      "apply": true,
+      "call": true,
+      "bind": true,
+      "length": "*",
+      "prototype": "*"
+    }
+  },
+  "Array": {
+    "prototype": {
+      "concat": true,
+      //...
+      "reduceRight": true,
+      "length": "*"
+    },
+    "isArray": true
+  },
+  "String": {
+    "prototype": {
+      "valueOf": true,
+      //...
+      "trim": true,
+      "length": "*"
+    },
+    "fromCharCode": true
+  },
+  "Boolean": {
+    "prototype": {
+      "valueOf": true,
+    }
+  },
+  "Number": {
+    "prototype": {
+      "valueOf": true,
+      "toFixed": true,
+      "toExponential": true,
+      "toPrecision": true
+    },
+    "MAX_VALUE": true,
+    "MIN_VALUE": true,
+    "NaN": true,
+    "NEGATIVE_INFINITY": true,
+    "POSITIVE_INFINITY": true
+  },
+  "Math": {
+    "E": true,
+    //...
+    "random": true,
+    //...
+    "tan": true
+  },
+  "Date": {
+    "prototype": {
+      "toDateString": true,
+      //...
+      "toJSON": true
+    },
+    "parse": true,
+    "UTC": true,
+    "now": true
+  },
+  "RegExp": {
+    "prototype": {
+      "exec": true,
+      "test": true,
+      "source": "*",
+      "global": "*",
+      "ignoreCase": "*",
+      "multiline": "*",
+      "lastIndex": "*"
+    }
+  },
+  "Error": {
+    "prototype": {
+      "name": "*",
+      "message": "*"
+    }
+  },
+  "EvalError": {
+    "prototype": true
+  },
+  "RangeError": {
+    "prototype": true
+  },
+  "ReferenceError": {
+    "prototype": true
+  },
+  "SyntaxError": {
+    "prototype": true
+  },
+  "TypeError": {
+    "prototype": true
+  },
+  "URIError": {
+    "prototype": true
+  },
+  "JSON": {
+    "parse": true,
+    "stringify": true
+  }
+}
