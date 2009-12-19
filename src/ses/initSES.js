@@ -113,7 +113,7 @@ function initSES(global, whitelist, verify, ObjTable) {
 
   /**
    * Read the current value of base[name], and freeze that property as
-   * a data property to ensure that all further read of that same
+   * a data property to ensure that all further reads of that same
    * property from that base produce the same value.
    * 
    * <p>The frozen property should preserve the enumerability of the
