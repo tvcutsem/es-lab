@@ -1,0 +1,934 @@
+// Copyright (C) 2009 Google Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// OMeta/JS parser for Ecmascript 5
+// @author Tom Van Cutsem
+
+// === A.1 Lexical Grammar (Scanner) ===
+
+// TODO: currently restricted to the ASCII subset of Unicode...
+// Note: hex and regexp literals not used in this lexer because Ometa/JS does not support them
+var UnicodeCategories = {
+    // each function in this object = f(CharCode) -> Boolean
+    'ZWNJ' : function(c) { return c ==  8204 /*0x200C*/; },
+    'ZWJ'  : function(c) { return c ==  8205 /*0x200D*/; },
+    'TAB'  : function(c) { return c ==     9 /*0x0009*/; },
+    'VT'   : function(c) { return c ==    11 /*0x000B*/; },
+    'FF'   : function(c) { return c ==    12 /*0x000C*/; },
+    'SP'   : function(c) { return c ==    32 /*0x0020*/; },
+    'NBSP' : function(c) { return c ==   160 /*0x00A0*/; },
+    'BOM'  : function(c) { return c == 65279 /*0xFEFF*/; },
+    'USP'  : function(c) { return false; }, // apart from SP and NBSP completely out of ASCII range
+    'LF'   : function(c) { return c ==    10 /*0x000A*/; },
+    'CR'   : function(c) { return c ==    13 /*0x000D*/; },
+    'LS'   : function(c) { return c ==  8232 /*0x2028*/; },
+    'PS'   : function(c) { return c ==  8233 /*0x2029*/; },
+    'L'    : function(c) { // L = Lu, Ll, Lt, Lm, Lo
+      return (65 /*0x0041*/ <= c && c <= 90 /*0x005A*/) || // Lu
+             (97 /*0x0061*/ <= c && c <= 122 /*0x007A*/);  // Ll
+      },     //(false) ||  // Lt, completely out of ASCII range
+             //(false) ||  // Lm, completely out of ASCII range
+             //(false); }, // Lo, completely out of ASCII range
+    'Nl'   : function(c) { return false; }, // completely out of ASCII range
+    'Mn'   : function(c) { return false; }, // completely out of ASCII range
+    'Mc'   : function(c) { return false; }, // completely out of ASCII range
+    'Nd'   : function(c) { return 48 <= c && c <= 57; }, // 0x0030 <= c <= 0x0039
+    'Pc'   : function(c) { return c == 95 /*0x005F*/; }  // _ is only char in ASCII range
+};
+
+// Literal tokens are represented as objects of the form { type: String, value: String }
+// Literal tokens represent number, string, boolean, null and regular expression literals
+function literal(t, val) {
+	return { type: t, value: val };
+};
+
+// some regular expressions for faster identifier and whitespace parsing
+var ucLetterRE = new RegExp("[a-zA-Z]");
+var ucDigitRE = new RegExp("\\d");
+var ucSpacesRE = new RegExp("\\s");
+
+// A.1 Lexical Grammar
+ometa LexicalGrammar {
+  
+  // input characters are represented as ES3 characters, which can be any unicode character
+  SourceCharacter = char,
+  
+  // 7: Goal production in contexts where a leading '/' or '/=' is permitted
+  InputElementDiv = Whitespace | LineTerminator | Comment | Token | DivPunctuator,
+  
+  // 7: Goal production in contexts where a leading '/' or '/=' is not permitted
+  InputElementRegExp = Whitespace | LineTerminator | Comment | Token | RegularExpressionLiteral,
+  
+  Whitespace = uc('SP') | uc('TAB') | uc('VT') | uc('FF') | uc('NBSP') | uc('BOM') | uc('USP'),
+  LineTerminator = uc('LF') | uc('CR') | uc('LS') | uc('PS'),
+  LineTerminatorSequence = uc('LF') | ~uc('LF') uc('CR') | uc('LS') | uc('PS') | uc('CR') uc('LF'),
+  
+  Comment = MultiLineComment | SingleLineComment,
+  
+  // In contrast to the spec, the rules for MultiLineCommentChars and PostAsteriskCommentChars
+  // do not allow 'PostAsteriskCommentChars' to be optional
+  MultiLineComment = seq("/*") (MultiLineCommentChars | empty -> ""):cs seq("*/") -> (cs),
+  MultiLineCommentChars = MultiLineNotAsteriskChar:c (MultiLineCommentChars | empty -> ""):cs ->
+                          ( c + cs )
+                        | '*' PostAsteriskCommentChars:cs -> ( '*' + cs ),
+  PostAsteriskCommentChars = MultiLineNotForwardSlashOrAsteriskChar:c
+                             (MultiLineCommentChars | empty -> ""):cs -> ( c + cs )
+                           | '*' PostAsteriskCommentChars:cs -> ( '*' + cs ),
+  MultiLineNotAsteriskChar = ~('*') SourceCharacter:c -> (c),
+  MultiLineNotForwardSlashOrAsteriskChar = ~('/' | '*') SourceCharacter:c -> (c),
+  SingleLineComment = seq("//") (SingleLineCommentChars | empty -> ""):cs -> (cs),
+  SingleLineCommentChars = SingleLineCommentChar:c (SingleLineCommentChars | empty -> ""):cs ->
+                           (c + cs),
+  SingleLineCommentChar = ~LineTerminator SourceCharacter:c -> (c),
+  
+  Token = IdentifierName | Punctuator | NumericLiteral | StringLiteral,
+  
+  Identifier = IdentifierName:n ~checkReservedWord(n) -> (n),
+  IdentifierName = IdentifierName:first IdentifierPart:rest -> ( first+rest )
+                 | IdentifierStart,
+  IdentifierStart = UnicodeLetter | '$' | '_' | '\\' UnicodeEscapeSequence,
+  IdentifierPart = IdentifierStart | UnicodeCombiningMark
+                 | UnicodeDigit | UnicodeConnectorPunctuation
+                 | uc('ZWNJ') | uc('ZWJ'),
+  UnicodeLetter = char:x ?(ucLetterRE.test(x)) -> x /* uc('L') | uc('Nl')*/, // efficiency shortcut
+  UnicodeCombiningMark = uc('Mn') | uc('Mc'),
+  UnicodeDigit = char:x ?(ucDigitRE.test(x)) -> x /* uc('Nd') */, // efficiency shortcut
+  UnicodeConnectorPunctuation = uc('Pc'),
+  
+  checkReservedWord :id = ?(self.isKeyword(id) || self.isFutureReservedWord(id,self.strictmode) ||
+                            id == "null" || id == "true" || id == "false") -> (true),
+  
+  // Because OMeta/JS currently does not optimize Keyword-like rules using
+  // jump tables, such rules can be quite slow. Using firefox's profiler,
+  // I measured parsing times for the following expression: "{set y(z) {1}}"
+  // and got the following results:
+  //   using the regular OMeta rules for Keyword and FutureReservedWord: 1578.443ms, 23287 calls
+  //   using the ad hoc rules for Keyword and FutureReservedWord: 1036.422ms, 14779 calls
+  // which amounts to ~ 33% speedup
+  
+  /*
+  ReservedWord = Keyword | FutureReservedWord(self.strictmode) | NullLiteral | BooleanLiteral,
+  
+  // Note: keywords that are the complete prefix of another keyword should
+  // be prioritized (e.g. 'in' should come before 'instanceof')
+  Keyword = (``break''   | ``do''        | ``in''         | ``typeof''
+          | ``case''     | ``else''      | ``new''        | ``var''
+          | ``catch''    | ``finally''   | ``return''     | ``void''
+          | ``continue'' | ``for''       | ``switch''     | ``while''
+          | ``debugger'' | ``function''  | ``this''       | ``with''
+          | ``default''  | ``if''        | ``throw''
+          | ``delete''   | ``instanceof''| ``try''):kwname -> (kwname),*/
+          
+  // Alternative (faster) keyword rule
+  Keyword = IdentifierName:n ?(self.isKeyword(n)) -> (n),
+  
+  /*FutureReservedWord false:strict = (``class''| ``enum''  | ``extends''| ``super''
+                                  |  ``const''| ``export''| ``import''):kwname -> (kwname),
+  FutureReservedWord true:strict = FutureReservedWord(false)
+                                 | (``implements''| ``let''    | ``private''  | ``public''
+                                 |  ``interface'' | ``package''| ``protected''| ``static''
+                                 |  ``yield''):kwname -> (kwname),*/
+  
+  // Alternative (faster) future reserved word rule
+  FutureReservedWord :strict = IdentifierName:n ?(self.isFutureReservedWord(n,strict)) -> n,
+  
+  // Note: beware of the ordering of punctuators with a common prefix!
+  // OMeta is a PEG, so '|' denotes prioritized choice.
+  // E.g. if '+' would come before ``++'' then the string "++5"
+  // would be parsed as "+(+(5))" rather than "++(5)"
+  // Punctuators comprised of more characters are prioritized
+  Punctuator = (``>>>=''
+             | ``>>='' | ``>>>'' | ``==='' | ``!==''| ``<<='' 
+             | ``+=''  | ``-=''  | ``*=''  | ``%='' | ``>=''
+             | ``==''  | ``!=''  | ``++''  | ``--'' | ``<<''
+             | ``>>''  | ``<=''  | ``&=''  | ``|='' | ``^=''
+             | ``&&''  | ``||''
+             | '{'     | '}'     | '('     | ')'    | '['   | ']'    
+             | '.'     | ';'     | ','     | '<'    | '>'   | '!'
+             | '~'     | '='     | '&'     | '|'    | '^'   | '?'
+             | ':'     | '*'     | '%'     | '+'    | '-'):symbol -> (symbol),
+  DivPunctuator = (``/='' | '/'):symbol -> (symbol),
+  
+  Literal = NullLiteral | BooleanLiteral | NumericLiteral
+          | StringLiteral | RegularExpressionLiteral, // spec forgot Regexp literals in appendix?
+  // TODO: even though 'null' is a valid JSON value, it may not be valid JSONML
+  // if it's not valid JSONML, consider dropping the 'value' attribute of a null literal
+  NullLiteral = ``null'' -> (literal("null", null)),
+  BooleanLiteral = (``true'' -> true | ``false'' -> false):b -> (literal("boolean",b)),
+  
+  // For semantics on how decimal literals are constructed, see section 7.8.3
+  
+  // Note that the ordering of HexIntegerLiteral and DecimalLiteral is reversed w.r.t. the spec
+  // This is intentional: the order DecimalLiteral | HexIntegerLiteral will parse
+  // '0x...' as a decimal literal '0' followed by 'x...'
+  NumericLiteral = (HexIntegerLiteral | DecimalLiteral):l -> (literal("number",l)),
+  
+  // DecimalLiteral produces objects of the form {val: aNumber, len: aNumber }
+  // The 'len' attribute describes the number of characters in the parsed numeral
+  // This is required for interpreting fractional literals
+  DecimalLiteral = DecimalIntegerLiteral:l '.'
+                     (DecimalDigits | empty -> {val:0,len:0}):d (ExponentPart | empty -> 0):e ->
+                     ( (l + (d.val * Math.pow(10,-d.len))) * Math.pow(10,e) )
+                 | '.' DecimalDigits:d (ExponentPart | empty -> 0):e ->
+                     ( (d.val * Math.pow(10, -d.len)) * Math.pow(10,e) )
+                 | DecimalIntegerLiteral:l (ExponentPart | empty -> 0):e ->
+                     ( l * Math.pow(10,e) ),                 
+  DecimalIntegerLiteral = NonZeroDigit:z (DecimalDigits | empty -> {val:0,len:0}):d ->
+                          ( (z * Math.pow(10,d.len)) + d.val )
+                        | '0'->0,
+  DecimalDigits = DecimalDigits:ds DecimalDigit:d -> ({ val: (ds.val * 10 + d), len: ds.len+1 })
+                | DecimalDigit:d -> ({val: d, len: 1}),
+  DecimalDigit = '0'->0 | '1'->1 | '2'->2 | '3'->3 | '4'->4 | '5'->5 | '6'->6 | '7'->7 | '8'->8 | '9'->9,
+  NonZeroDigit = '1'->1 | '2'->2 | '3'->3 | '4'->4 | '5'->5 | '6'->6 | '7'->7 | '8'->8 | '9'->9,
+  
+  ExponentPart = ExponentIndicator SignedInteger:si -> si,
+  ExponentIndicator = 'e' | 'E',
+  SignedInteger = DecimalDigits:ds -> (ds.val)
+                | '+' DecimalDigits:ds -> (ds.val)
+                | '-' DecimalDigits:ds -> (-(ds.val)),
+                
+  HexIntegerLiteral = HexIntegerLiteral:l HexDigit:d -> ( (l * 16) + d )
+                    | ``0x'' HexDigit:d -> (d)
+                    | ``0X'' HexDigit:d -> (d),
+  HexDigit = '0'->0 | '1'->1 | '2'->2 | '3'->3 | '4'->4 | '5'->5 | '6'->6 | '7'->7 | '8'->8 | '9'->9
+           | 'a'->10 | 'b'->11 | 'c'->12 | 'd'->13 | 'e'->14 | 'f'->15
+           | 'A'->10 | 'B'->11 | 'C'->12 | 'D'->13 | 'E'->14 | 'F'->15,
+           
+  // For semantics on how string literals are constructed, see section 7.8.4
+  StringLiteral = '"' (DoubleStringCharacters | empty -> ""):s '"' -> (literal("string",s))
+                | '\'' (SingleStringCharacters | empty -> ""):s '\'' -> (literal("string",s)),
+  DoubleStringCharacters = DoubleStringCharacter:c (DoubleStringCharacters | empty -> ""):cs ->
+                           ( c.concat(cs) ),
+  SingleStringCharacters = SingleStringCharacter:c (SingleStringCharacters | empty -> ""):cs ->
+                           ( c.concat(cs) ),
+  DoubleStringCharacter = ~('"' | '\\' | LineTerminator) SourceCharacter:s -> (s)
+                        | '\\' EscapeSequence:s -> (s)
+                        | LineContinuation,
+  SingleStringCharacter = ~('\'' | '\\' | LineTerminator) SourceCharacter:s -> (s)
+                        | '\\' EscapeSequence:s -> (s)
+                        | LineContinuation,
+  LineContinuation = '\\' LineTerminatorSequence -> (""),
+  EscapeSequence = CharacterEscapeSequence
+                 | ~(&DecimalDigit) '0' -> ( String.fromCharCode(0000) ) /*\u0000*/
+                 | HexEscapeSequence
+                 | UnicodeEscapeSequence,
+  CharacterEscapeSequence = SingleEscapeCharacter
+                          | NonEscapeCharacter,
+  SingleEscapeCharacter = '\'' -> ( String.fromCharCode(0027) ) /*\u0027*/
+                        | '"'  -> ( String.fromCharCode(0022) ) /*\u0022*/
+                        | '\\' -> ( String.fromCharCode(0092) ) /*\u005C*/
+                        | 'b'  -> ( String.fromCharCode(0008) ) /*\u0008*/
+                        | 'f'  -> ( String.fromCharCode(0012) ) /*\u000C*/
+                        | 'n'  -> ( String.fromCharCode(0010) ) /*\u000A*/
+                        | 'r'  -> ( String.fromCharCode(0013) ) /*\u000D*/
+                        | 't'  -> ( String.fromCharCode(0009) ) /*\u0009*/
+                        | 'v'  -> ( String.fromCharCode(0011) ) /*\u000B*/,
+  NonEscapeCharacter = ~(EscapeCharacter | LineTerminator) SourceCharacter:s -> (s),
+  EscapeCharacter = SingleEscapeCharacter | DecimalDigit | 'x' | 'u',
+  HexEscapeSequence = 'x' HexDigit:a HexDigit:b -> ( String.fromCharCode(a*16+b) ),
+  UnicodeEscapeSequence = 'u' HexDigit:a HexDigit:b HexDigit:c HexDigit:d ->
+                              ( String.fromCharCode(a*4096 + b*256 + c*16 + d) ),
+                              
+  // section 7.8.5                           
+  
+  // body and flags are left uninterpreted while parsing (they are parsed as strings)
+  RegularExpressionLiteral = '/' RegularExpressionBody:b '/' RegularExpressionFlags:f ->
+                             ( literal("regexp",{body:b,flags:f}) ),
+  RegularExpressionBody = RegularExpressionFirstChar:c RegularExpressionChars:cs -> (c+cs),
+  RegularExpressionChars = RegularExpressionChars:cs RegularExpressionChar:c -> (cs+c)
+                         | empty -> (""),
+  RegularExpressionFirstChar = ~('*' |'\\' | '/' | '[') RegularExpressionNonTerminator
+                             | RegularExpressionBackslashSequence
+                             | RegularExpressionClass,
+  RegularExpressionChar = ~('\\' | '/' | '[') RegularExpressionNonTerminator
+                        | RegularExpressionBackslashSequence
+                        | RegularExpressionClass,
+  RegularExpressionBackslashSequence = '\\' NonTerminator:nt -> ( "\\"+nt ),
+  RegularExpressionNonTerminator = ~(LineTerminator) SourceCharacter,
+  RegularExpressionClass = '[' RegularExpressionClassChars:cs ']' -> ("["+cs+"]" ),
+  RegularExpressionClassChars = RegularExpressionClassChars:cs RegularExpressionClassChar:c ->
+                                ( cs+c )
+                              | empty -> (""),
+  RegularExpressionClassChar = ~(']' | '\\') RegularExpressionNonTerminator
+                             | RegularExpressionBackslashSequence,
+  RegularExpressionFlags = RegularExpressionFlags:fs IdentifierPart:f -> ( fs+f )
+                         | empty -> (""),
+                         
+  // === Implementation-level rules (not part of the spec) ===
+  
+  // uc(category) -> accepts only unicode characters x that fall within the given unicode category
+  uc :id = char:x ?(UnicodeCategories[id](x.charCodeAt(0))) -> (x),
+  
+  MultiLineCommentNoNL = seq("/*") (MultiLineCommentCharsNoNL | empty -> ""):cs seq("*/") -> (cs),
+  MultiLineCommentCharsNoNL = MultiLineNotAsteriskCharNoNL:c (MultiLineCommentCharsNoNL | empty -> ""):cs ->
+                          ( c + cs )
+                        | '*' PostAsteriskCommentCharsNoNL:cs -> ( '*' + cs ),
+  PostAsteriskCommentCharsNoNL = MultiLineNotForwardSlashOrAsteriskCharNoNL:c
+                             (MultiLineCommentCharsNoNL | empty -> ""):cs -> ( c + cs )
+                           | '*' PostAsteriskCommentCharsNoNL:cs -> ( '*' + cs ),
+  MultiLineNotAsteriskCharNoNL = ~('*') ~LineTerminator SourceCharacter:c -> (c),
+  MultiLineNotForwardSlashOrAsteriskCharNoNL = ~('/' | '*') ~LineTerminator SourceCharacter:c -> (c),
+  
+  // used by parser to parse actual tokens
+  
+  // eat wspace, lineterminators and comments
+  // a much more efficient rule than Whitespace | LineTerminator by the above definitions
+  WhitespaceOrLineTerminator = char:x ?(ucSpacesRE.test(x)) -> (x), // efficiency shortcut
+  
+  skip = (/*WhiteSpace | LineTerminator*/ WhitespaceOrLineTerminator | Comment)*,
+  
+  // does not accept LineTerminators, not even implicit ones in a MultiLineComment (cf. section 7.4)
+  skipNoLine = (Whitespace | SingleLineComment | MultiLineCommentNoNL)*,
+  
+  scanLineTerminator = LineTerminator | ~MultiLineCommentNoNL MultiLineComment,
+  
+  // @returns a string
+  // since the parser indicates to the lexer that it expects a keyword,
+  // the lexer does not need to actually verify that a scanned identifier
+  // is a keyword. This rule is thus an ad hoc, faster version of the
+  // more general rule:
+  //   scanKeyword = skip (Keyword | FutureReservedWord(self.strictmode)):t -> (t),
+  scanKeyword = skip IdentifierName:n -> (n),
+  
+  // @returns a string
+  scanPunctuator = skip (Punctuator | DivPunctuator):t -> (t),
+
+  // @returns a string
+  scanPunctNoLineTerminator = skipNoLine // does not accept LineTerminators
+                              (Punctuator | DivPunctuator):t -> (t),
+  
+  // @returns a string
+  scanIdentifier = skip Identifier:id -> (id),
+  
+  // @returns a string
+  scanIdentifierNoLineTerminator = skipNoLine
+                                   Identifier:id -> (id),
+  
+  // @returns a literal token
+  scanLiteral = skip Literal:l -> (l)
+}
+
+// turns an array into a set, represented as a map of elements -> boolean
+// to test whether e is in the set s, perform s.e && !Object.prototype.hasProperty(e)
+function makeSet(array) {
+  var o = {};
+  for (var idx = 0; idx < array.length; idx++) {
+    o[array[idx]] = true;
+  };
+  return o;
+};
+
+var keywords = makeSet(
+ ["break","do","instanceof","typeof","case","else","new","var","catch","finally",
+  "return", "void", "continue", "for", "switch", "while", "debugger", "function",
+  "this", "with", "default", "if", "throw", "delete", "in", "try" ]);
+var nonStrictFutureKws = makeSet(
+ ["class", "enum", "extends", "super", "const", "export", "import"]);
+var strictFutureKws = makeSet(
+ ["implements", "let", "private", "public", "interface", "package",
+  "protected", "static", "yield" ]);
+
+LexicalGrammar.isKeyword = function(k) {
+  return !!keywords[k] && !Object.prototype.hasProperty(k);
+};
+LexicalGrammar.isFutureReservedWord = function(k,isStrict) {
+  if (isStrict) {
+    return  !!(strictFutureKws[k] || nonStrictFutureKws[k]) &&
+            !Object.prototype.hasProperty(k);
+  } else {
+    return !!nonStrictFutureKws[k] &&
+            !Object.prototype.hasProperty(k);
+  }
+};
+LexicalGrammar.initialize = function() {
+  this.strictmode = false;
+};
+
+// === Expression Parser ===
+
+/* abstract syntax trees (ASTs) are stored in JSONML format
+   and are of the form:
+    [ "Type",
+      { key : value properties },
+      childNode1,
+      childNode2,
+      ... ]
+ 
+   By convention, the last 4 letters of "Type" represent a subtype:
+	 - Expressions: *Expr
+	 - Statements: *Stmt
+	 - Declarations: *Decl
+	 - Property definitions: *Prop
+	 - Patterns: *Patt
+	 - Case | DefaultCase: *Case (only within a SwitchStmt)
+	 - Empty marker: "Empty" (for elisions in Array-literals and omitted parts of a For-statement)
+     
+   ASTs are created by invoking self.ast("Type", attributes, [childNode1, childNode2, ...])
+   where self is a reference to the current Grammar.
+   
+   Note that ASTs are created as live objects that can be stored in JSONML
+   format simply by invoking JSON.stringify(ast)
+   
+   For literal ASTs:
+    type: string // the type of literal
+    value: object // the value of the parsed literal
+   For break, continue and labelled statements:
+    label: string
+   For unary, binary and assignment operators
+    op: string
+   For identifiers, function declarations
+    name: string
+
+   Useful optional properties:
+    strict: boolean // whether or not this AST occurs in strict code
+    line: number // line number
+    column: number // column number
+    // alternatively span: [ [l1,c1], [l2,c2] ] but this is not valid JSONML
+*/
+
+// this function adds accessors to an AST object,
+// making it easier to manipulate the datastructure
+// note that these methods will simply be dropped when the AST
+// is stringified into a JSONML format
+function mixinASTMethods(ast) {
+  ast.nodeType = function() { return this[0]; };
+  ast.attributes = function() { return this[1] || {}; }; // some leaf nodes may not have attrs
+  ast.childAt = function(i) { return this[Number(i)+2]; };
+  ast.children = function() { return this.slice(2); };
+  return ast;
+}
+
+// A.3 Expressions, A.4 Statements and A.5 Functions and Programs
+ometa ES5Parser {
+
+  // A.3 Expressions
+  
+  // @returns an AST
+  PrimaryExpression = k("this") -> (self.ast("ThisExpr", {}, []))
+                    | identifier:id ->
+                      (self.ast("IdExpr",{name:id}, []))
+                    | literal:litToken ->
+                      ( litToken.type === "regexp"
+                        ? self.ast("RegExpExpr",{body:  litToken.value.body,
+                                                 flags: litToken.value.flags}, [])
+                        : self.ast("LiteralExpr",{type:  litToken.type,
+                                                  value: litToken.value}, []) )
+                    | ArrayLiteral
+                    | ObjectLiteral
+                    | "(" Expression:e ")" -> (e),
+    
+  // @returns an ArrayExpr AST
+  ArrayLiteral = "[" ElementList:elts "," (Elision | empty -> []):elis "]" ->
+                     ( self.ast("ArrayExpr",{}, elts.concat(elis)) )
+               | "[" ElementList:elts "]" ->
+                     ( self.ast("ArrayExpr",{}, elts) )
+               | "[" (Elision | empty -> []):elis "]" ->
+                     ( self.ast("ArrayExpr",{}, elis) ),
+            
+  // @returns an array of ASTs
+  ElementList = ElementList:elts "," (Elision | empty -> []):elis AssignmentExpression:exp ->
+                ( elts.concat(elis.concat([ exp ])) )
+              | (Elision | empty -> []):elis AssignmentExpression:exp ->
+                ( elis.concat([exp]) ),
+  
+  // @returns an array of ["Empty"] leaf nodes
+  Elision = Elision:es "," -> ( es.concat([ self.emptyAst() ]) )
+          | "," -> ( [ self.emptyAst() ] ),
+  
+  // @returns an ObjectExpr AST
+  ObjectLiteral = "{" PropertyNameAndValueList:ps "," "}" ->
+                      ( self.ast("ObjectExpr",{},ps) )
+                | "{" PropertyNameAndValueList:ps "}" ->
+                      ( self.ast("ObjectExpr",{},ps) )
+                | "{" "}" -> ( self.ast("ObjectExpr",{},[]) ),
+  
+  // @returns an array of ASTs
+  PropertyNameAndValueList = PropertyNameAndValueList:ps "," PropertyAssignment:p ->
+                             ( ps.concat([ p ]) )
+                           | PropertyAssignment:p -> ([ p ]),
+    
+  // @returns a *Prop AST
+  PropertyAssignment = identifier:id ?(id == "get") PropertyName:n
+                       "(" ")" "{" FunctionBody:body "}" ->
+                       ( self.ast("GetterProp",{name:n},
+                                  [ self.ast("FunctionExpr",{},
+                                             [self.emptyAst(),
+                                              self.ast("ParamDecl",{},[])].concat(body)) ]) )
+                     | identifier:id ?(id == "set") PropertyName:n
+                       "(" PropertySetParameterList:arg ")" "{" FunctionBody:body "}" ->
+                       ( self.ast("SetterProp",{name:n},
+                                  [ self.ast("FunctionExpr",{},
+                                    [ self.emptyAst(),
+                                      self.ast("ParamDecl",{},
+                                        [self.ast("IdPatt",{name:arg},[])]) ].concat(body)
+                                    )
+                                  ]) )
+                     | PropertyName:n ":" AssignmentExpression:exp ->
+                       ( self.ast("DataProp",{name:n},[exp]) ),
+  
+  // @returns a string
+  PropertyName = identifier:id -> (id)
+               | literal:l ?(l.type == "string") -> (l.value)
+               | literal:l ?(l.type == "number") -> ( parseFloat(l.value) ),
+  
+  // @returns a string (the identifier name)
+  PropertySetParameterList = identifier:id -> (id),
+  
+  // @returns an AST
+  MemberExpression = k("new") MemberExpression:mexp Arguments:args ->
+                     ( mexp.nodeType() === "MemberExpr"
+                       ? self.ast("NewExpr",{},
+                           [ self.ast("InvokeExpr",{},mexp.children().concat(args)) ])
+                       : self.ast("NewExpr",{},[mexp].concat(args)) )
+                   | MemberExpression:mexp "[" Expression:iexp "]" ->
+                     ( self.ast("MemberExpr",{},[mexp,iexp]) )
+                   | MemberExpression:mexp "." identifier:id ->
+                     ( self.ast("MemberExpr",{},[mexp,
+                                               self.ast("LiteralExpr",{type:"string",value:id},[])]) )
+                   | FunctionExpression
+                   | PrimaryExpression,
+  
+  // @returns an AST
+  NewExpression = MemberExpression
+                | k("new") NewExpression:exp -> ( self.ast("NewExpr",{},[exp]) ),
+                
+  // @returns an AST                
+  CallExpression = CallExpression:cexp "[" Expression:iexp "]" ->
+                   ( self.ast("MemberExpr",{},[cexp,iexp]) )
+                 | CallExpression:cexp "." identifier:id ->
+                   ( self.ast("MemberExpr",{},[cexp,
+                              self.ast("Literal",{type:"string",value:id},[])]) )
+                 | CallExpression:cexp Arguments:args ->
+                                 ( self.ast("CallExpr",{},[cexp].concat(args)) )             
+                 | MemberExpression:mexp Arguments:args ->
+                   ( mexp.nodeType() === "MemberExpr"
+                     ? self.ast("InvokeExpr",{},mexp.children().concat(args))
+                     : self.ast("CallExpr",{},[mexp].concat(args)) ),
+                 
+  // @returns an array of ASTs  
+  Arguments = "(" ")" -> ([])
+            | "(" ArgumentList:args ")" -> (args),
+
+  // @returns an array of ASTs            
+  ArgumentList = ArgumentList:args "," AssignmentExpression:exp ->
+                 ( args.concat([ exp ]) )
+               | AssignmentExpression:exp -> ([ exp ]),
+  
+  LeftHandSideExpression = CallExpression | NewExpression,
+  
+  PostfixExpression = LeftHandSideExpression:lexp noLineTermPunct("++") ->
+                      ( self.ast("CountExpr",{isPrefix:false,op:"++"},[lexp]) )
+                    | LeftHandSideExpression:lexp noLineTermPunct("--") ->
+                      ( self.ast("CountExpr",{isPrefix:false,op:"--"},[lexp]) )
+                    | LeftHandSideExpression,
+                    
+  UnaryExpression = k("delete")   UnaryExpression:uexp -> ( self.ast("UnaryExpr",{op:"delete"},[uexp]) )
+                  | k("void")     UnaryExpression:uexp -> ( self.ast("UnaryExpr",{op:"void"},  [uexp]) )
+                  | k("typeof")   UnaryExpression:uexp -> ( self.ast("TypeofExpr",{},[uexp]) )
+                  | "++"          UnaryExpression:uexp ->
+                    ( self.ast("CountExpr",{isPrefix:true,op:"++"},[uexp]) )
+                  | "--"          UnaryExpression:uexp ->
+                    ( self.ast("CountExpr",{isPrefix:true,op:"--"},[uexp]) )
+                  | noEqDbl("+")  UnaryExpression:uexp -> ( self.ast("UnaryExpr",{op:"+"},[uexp]) )
+                  | noEqDbl("-")  UnaryExpression:uexp -> ( self.ast("UnaryExpr",{op:"-"},[uexp]) )
+                  | "~"           UnaryExpression:uexp -> ( self.ast("UnaryExpr",{op:"~"},[uexp]) )
+                  | noEqChar("!") UnaryExpression:uexp -> ( self.ast("UnaryExpr",{op:"!"},[uexp]) )
+                  | PostfixExpression,
+                  
+  MultiplicativeExpression = MultiplicativeExpression:mexp noEqChar("*")
+                               UnaryExpression:uexp ->
+                             ( self.ast("BinaryExpr",{op:"*"},[mexp,uexp]) )
+                           | MultiplicativeExpression:mexp noEqChar("/") UnaryExpression:uexp ->
+                             ( self.ast("BinaryExpr",{op:"/"},[mexp,uexp]) )
+                           | MultiplicativeExpression:mexp noEqChar("%") UnaryExpression:uexp ->
+                             ( self.ast("BinaryExpr",{op:"%"},[mexp,uexp]) )
+                           | UnaryExpression,
+  
+  AdditiveExpression = AdditiveExpression:aexp noEqDbl("+") MultiplicativeExpression:mexp ->
+					   ( self.ast("BinaryExpr",{op:"+"},[aexp,mexp]) )
+				     | AdditiveExpression:aexp noEqDbl("-") MultiplicativeExpression:mexp ->
+					   ( self.ast("BinaryExpr",{op:"-"},[aexp,mexp]) )
+					 | MultiplicativeExpression,
+  
+  ShiftExpression = ShiftExpression:sexp noEq("<<") AdditiveExpression:aexp ->
+                    ( self.ast("BinaryExpr",{op:"<<"},[sexp,aexp]) )
+                  | ShiftExpression:sexp noEq(">>>") AdditiveExpression:aexp ->
+                    ( self.ast("BinaryExpr",{op:">>>"},[sexp,aexp]) )
+                  | ShiftExpression:sexp shiftRightPunct AdditiveExpression:aexp ->
+                    ( self.ast("BinaryExpr",{op:">>"},[sexp,aexp]) )
+                  | AdditiveExpression,
+  
+  // Note: the 'NoIn' rules are not implemented by parameterizing the
+  // following rules. Instead we use a mutable 'inAllowed' flag.
+  // It would be easy to parameterize the following rules with a :NoIn
+  // parameter. However, OMeta/JS does not memoize left-recursive rules
+  // with arguments.
+  
+  RelationalExpression = RelationalExpression:rexp noEqDbl("<") ShiftExpression:sexp ->
+				( self.ast("BinaryExpr",{op:"<"},[rexp,sexp]) )
+			  | RelationalExpression:rexp noEqDbl(">") ShiftExpression:sexp ->
+				( self.ast("BinaryExpr",{op:">"},[rexp,sexp]) )
+			  | RelationalExpression:rexp "<=" ShiftExpression:sexp ->
+				( self.ast("BinaryExpr",{op:"<="},[rexp,sexp]) )
+			  | RelationalExpression:rexp ">=" ShiftExpression:sexp ->
+				( self.ast("BinaryExpr",{op:">="},[rexp,sexp]) )
+			  | RelationalExpression:rexp k("instanceof") ShiftExpression:sexp ->
+				( self.ast("BinaryExpr",{op:"instanceof"},[rexp,sexp]) )
+			  | ?(self.inAllowed) RelationalExpression:rexp k("in") ShiftExpression:sexp ->
+				( self.ast("BinaryExpr",{op:"in"},[rexp,sexp]) )
+			  | ShiftExpression,
+  
+  EqualityExpression =
+      EqualityExpression:eexp noEq("==") RelationalExpression:rexp ->
+			( self.ast("BinaryExpr",{op:"=="},[eexp,rexp]) )
+		  | EqualityExpression:eexp noEq("!=") RelationalExpression:rexp ->
+			( self.ast("BinaryExpr",{op:"!="},[eexp,rexp]) )
+		  | EqualityExpression:eexp "===" RelationalExpression:rexp ->
+			( self.ast("BinaryExpr",{op:"==="},[eexp,rexp]) )
+		  | EqualityExpression:eexp "!==" RelationalExpression:rexp ->
+			( self.ast("BinaryExpr",{op:"!=="},[eexp,rexp]) )
+		  | RelationalExpression,
+ 
+  BitwiseANDExpression = BitwiseANDExpression:aexp noEqDbl("&") EqualityExpression:eexp ->
+						 ( self.ast("BinaryExpr",{op:"&"},[aexp,eexp]) )
+					   | EqualityExpression,
+
+  BitwiseXORExpression = BitwiseXORExpression:xexp noEqChar("^") BitwiseANDExpression:aexp ->
+						 ( self.ast("BinaryExpr",{op:"^"},[xexp,aexp]) )
+					   | BitwiseANDExpression,
+	  
+  BitwiseORExpression = BitwiseORExpression:oexp noEqDbl("|") BitwiseXORExpression:xexp ->
+						 ( self.ast("BinaryExpr",{op:"|"},[oexp,xexp]) )
+					   | BitwiseXORExpression,
+	  
+  LogicalANDExpression = LogicalANDExpression:aexp "&&" BitwiseORExpression:oexp ->
+						 ( self.ast("LogicalAndExpr",{},[aexp,oexp]) )
+					   | BitwiseORExpression,
+
+  LogicalORExpression = LogicalORExpression:oexp "||" LogicalANDExpression:aexp ->
+						( self.ast("LogicalOrExpr",{},[oexp,aexp]) )
+					  | LogicalANDExpression,
+
+  ConditionalExpression = LogicalORExpression:oexp "?"
+                            AssignmentExpression:texp ":" AssignmentExpression:fexp ->
+                          ( self.ast("ConditionalExpr",{},[oexp,texp,fexp]) )
+                        | LogicalORExpression,
+
+  AssignmentExpression = LeftHandSideExpression:lexp
+                           AssignmentOperator:op AssignmentExpression:aexp ->
+                           ( self.ast("AssignExpr",{op:op},[lexp,aexp]) )
+                       | ConditionalExpression,
+                       
+  AssignmentOperator = simpleAssignPunct | ">>>=" | "<<=" | ">>="
+                     | "*=" | "/=" | "%=" | "+=" | "-=" | "&=" | "^=" | "|=",
+
+  Expression = Expression:exp "," AssignmentExpression:aexp ->
+               ( self.ast("BinaryExpr",{op:","},[exp,aexp]) )
+             | AssignmentExpression,
+
+  // A.4 Statements
+
+  Statement = Block
+            | VariableStatement
+            | EmptyStatement
+            | ExpressionStatement
+            | IfStatement
+            | IterationStatement
+            | ContinueStatement
+            | BreakStatement
+            | ReturnStatement
+            | WithStatement
+            | LabelledStatement
+            | SwitchStatement
+            | ThrowStatement
+            | TryStatement
+            | DebuggerStatement,
+  
+  // @returns a Block AST
+  // Note: the ES5 spec prescribes that a block is a StatementList, not a SourceElements list
+  // this precludes nested function declarations
+  // This parser explicitly deviates from the spec to enable nested function declarations
+  Block = "{" (SourceElements | empty -> []):stmts "}" ->
+          ( self.ast("BlockStmt",{},stmts) ),
+          
+  // @returns an array of ASTs
+  StatementList = StatementList:stmts Statement:stmt ->
+                  ( stmts.concat([ stmt ]) )
+                | Statement:stmt -> ( [stmt] ),
+                
+  // @returns a Var AST
+  VariableStatement = k("var") VariableDeclarationList:vars sc ->
+                      ( self.ast("VarDecl",{},vars) ),
+  
+  // @returns an array of ASTs
+  VariableDeclarationList = VariableDeclarationList:vs "," VariableDeclaration:v ->
+                            ( vs.concat([v]) )
+                          | VariableDeclaration:v -> ( [v] ),
+                          
+  // @returns an AST
+  VariableDeclaration = identifier:id Initialiser:init ->
+                        ( self.ast("InitPatt",{},
+                                   [self.ast("IdPatt",{name:id},[]),init]) )
+                      | identifier:id -> (self.ast("IdPatt",{name:id}, [])),
+  
+  // @returns an AST
+  Initialiser = simpleAssignPunct AssignmentExpression:exp -> ( exp ),
+  
+  // @returns an AST
+  EmptyStatement = ";" -> ( self.ast("EmptyStmt",{},[]) ), // note: this semicolon eats newlines
+  
+  // @returns an Expression AST
+  ExpressionStatement = ~("{" | k("function")) Expression:exp sc -> ( exp ),
+  
+  // @returns an AST
+  IfStatement = k("if") "(" Expression:bexp ")" Statement:tstmt k("else") Statement:fstmt ->
+                ( self.ast("IfStmt",{},[bexp,tstmt,fstmt]) )
+              | k("if") "(" Expression:bexp ")" Statement:tstmt ->
+                ( self.ast("IfStmt",{},[bexp, tstmt, self.ast("EmptyStmt",{},[])]) ),
+  
+  // @returns an AST
+  IterationStatement = k("do") Statement:s k("while") "(" Expression:e ")" sc ->
+                       ( self.ast("DoWhileStmt",{},[s,e]) )
+                     | k("while") "(" Expression:e ")" Statement:s ->
+                       ( self.ast("WhileStmt",{},[e,s]) )
+                     | k("for") "(" (NoIn('Expression') | empty -> self.emptyAst()):init ";"
+                         (Expression | empty -> self.emptyAst()):cond ";"
+                         (Expression | empty -> self.emptyAst()):update ")" Statement:s ->
+                       ( self.ast("ForStmt",{},[init,cond,update,s]) )
+                     | k("for") "(" k("var") NoIn('VariableDeclarationList'):vars ";"
+                         (Expression | empty -> self.emptyAst()):cond ";"
+                         (Expression | empty -> self.emptyAst()):update ")" Statement:s ->
+                       ( self.ast("ForStmt",{},[self.ast("VarDecl",{},vars),cond,update,s]) )
+                     | k("for") "(" LeftHandSideExpression:lhs k("in")
+                          Expression:e ")" Statement:s ->
+                       ( self.ast("ForInStmt",{},[lhs,e,s]) )
+                     | k("for") "(" k("var") NoIn('VariableDeclaration'):v k("in")
+                          Expression:e ")" Statement:s ->
+                       ( self.ast("ForInStmt",{},[ self.ast("VarDecl",{},[v]),e,s]) ),
+                         
+  ContinueStatement = k("continue") sc -> ( self.ast("ContinueStmt",{},[]) )
+                    | k("continue") noLineTermIdentifier:id sc ->
+                      ( self.ast("ContinueStmt",{label:id},[]) ),
+  
+  BreakStatement = k("break") sc -> ( self.ast("BreakStmt",{},[]) )
+                 | k("break") noLineTermIdentifier:id sc ->
+                      ( self.ast("BreakStmt",{label:id},[]) ),
+  
+  ReturnStatement = k("return") sc ->
+                      ( self.ast("ReturnStmt",{},[]) )
+                  | k("return") noLineTerminator Expression:exp sc ->
+                      ( self.ast("ReturnStmt",{},[exp]) ),
+                      
+  WithStatement = k("with") "(" Expression:e ")" Statement:s ->
+                  ( self.ast("WithStmt",{},[e,s]) ),
+                  
+  SwitchStatement = k("switch") "(" Expression:e ")" CaseBlock:cases ->
+                    ( self.ast("SwitchStmt",{},[e].concat(cases)) ),
+  
+  // @return an array of ASTs
+  CaseBlock = "{" (CaseClauses | empty -> []):precases DefaultClause:dflt
+                  (CaseClauses | empty -> []):postcases "}" ->
+                    ( precases.concat([dflt]).concat(postcases) )
+            | "{" (CaseClauses | empty -> []):cases "}" -> (cases),
+  
+  // @return an array of ASTs
+  CaseClauses = CaseClauses:clauses CaseClause:clause -> (clauses.concat([clause]))
+              | CaseClause:clause -> ([ clause ]),
+              
+  CaseClause = k("case") Expression:e ":" (StatementList | empty -> []):stmts ->
+               ( self.ast("Case",{},[e].concat(stmts)) ),
+  
+  DefaultClause = k("default") ":" (StatementList | empty -> []):stmts ->
+                  ( self.ast("DefaultCase",{}, stmts) ),
+  
+  LabelledStatement = identifier:id ":" Statement:s ->
+                      ( self.ast("LabelledStmt",{ label: id },[s]) ),
+  
+  ThrowStatement = k("throw") noLineTerminator lineTerminator ~empty // fails explicitly
+                 | k("throw") Expression:e sc -> ( self.ast("ThrowStmt",{},[e]) ),
+  
+  TryStatement = k("try") Block:b Catch:c Finally:f ->
+                 ( self.ast("TryCatchFinallyStmt",{},[b,c.excId,c.block,f]) )
+               | k("try") Block:b Finally:f ->
+                 ( self.ast("TryFinallyStmt",{},[b,f]) )
+               | k("try") Block:b Catch:c ->
+                 ( self.ast("TryCatchStmt",{},[b,c.excId,c.block]) ),
+  
+  // @returns an object { excId: IdPatt, block: Block }
+  Catch = k("catch") "(" identifier:id ")" Block:b -> ( {excId: self.ast("IdPatt",{name:id},[]),
+                                                      block: b } ),
+  
+  // @returns a Block AST
+  Finally = k("finally") Block:b -> ( b ),
+  
+  DebuggerStatement = k("debugger") sc -> ( self.ast("DebuggerStmt",{},[]) ),
+ 
+  // A.5 Functions and Programs
+  
+  FunctionDeclaration = k("function") identifier:id
+                        "(" (FormalParameterList | empty -> []):formals ")"
+                        "{" FunctionBody:body "}" ->
+                        ( self.ast("FunctionDecl",{},
+                                   [self.ast("IdPatt",{name:id},[]),
+                                    self.ast("ParamDecl",{},formals)].concat(body)) ),
+  
+  FunctionExpression = k("function") identifier:id
+                       "(" (FormalParameterList | empty -> []):formals ")"
+                       "{" FunctionBody:body "}" ->
+                       ( self.ast("FunctionExpr",{},
+                                  [self.ast("IdPatt",{name:id},[]),
+                                   self.ast("ParamDecl",{},formals)].concat(body)) ) 
+                     | k("function") "(" (FormalParameterList | empty -> []):formals ")"
+                       "{" FunctionBody:body "}" ->
+                       ( self.ast("FunctionExpr",{},
+                                  [self.emptyAst(),
+                                   self.ast("ParamDecl",{},formals)].concat(body)) ), 
+                       
+  // @returns an array of ASTs
+  FormalParameterList = FormalParameterList:formals "," identifier:id ->
+                        ( formals.concat([ self.ast("IdPatt",{name:id},[]) ]) )
+                      | identifier:id -> ([ self.ast("IdPatt",{name:id},[]) ]),
+  
+  // @returns an array of ASTs
+  FunctionBody = (SourceElements | empty -> []):src -> (src),
+  
+  Program = (SourceElements | empty -> []):src skipToEnd ->
+            ( self.ast("Program",{},src) ),
+  
+  // @returns an array of ASTs
+  SourceElements = SourceElements:elts SourceElement:e -> ( elts.concat([e]) )
+                 | SourceElement:e -> ([e]),
+                 
+  SourceElement = FunctionDeclaration | Statement,
+  
+  // === Implementation-level rules (not part of the spec) ===
+
+  // useful for parsing only expressions and making sure the parser sees all input
+  ExpressionOnly = Expression:e skipToEnd -> (e),
+  
+  // higher-order rule that parses a rule and ensures there is no lingering input
+  complete :rule = apply(rule):res skipToEnd -> (res),
+  
+  // higher-order rule that, before applying the rule, saves the current value
+  // of the inAllowed flag, sets it to false, parses the given rule, then restores
+  // the flag to its previous value, and returns the result of parsing the rule
+  // TODO: the rule is currently too strict, e.g. it prevents:
+  //  for ( (x in b) ; c; u ) { }
+  // even though 'in' may not occur as a top-level expression in the initialization clause,
+  // it should still be allowed in a nested expression!
+  NoIn :rule = (empty -> {var cur = self.inAllowed; self.inAllowed = false; cur}):prev
+               apply(rule):res
+               (empty -> (self.inAllowed = prev)) -> res
+             // if 'rule' fails, make sure to reset the flag
+             | (empty -> (self.inAllowed = prev)) ~empty, // fail explicitly
+  
+  // In OMeta, terms of the syntactic form "name" are translated into
+  // an invocation of the 'token' rule, with the text between quotes passed as
+  // an argument, i.e. token("name"). In this parser, the term "name" instructs
+  // the LexicalGrammar to parse a specific punctuator:
+  // token :punct = foreign(LexicalGrammar, 'scanPunctuator'):lexed ?(punct == lexed) -> (punct),
+  
+  // The above scanPunctuator rule turns out to be one of the main bottlenecks
+  // of the parsing process, so we replace it by a set of more efficient rules:
+  // given that the parser can already indicate what punctuator it is interested in,
+  // the parser just instructs the lexer to skip whitespace, then tries to match
+  // exactly the characters it expects. This works for all punctuators that are not
+  // the prefix of another punctuator:
+  // ``>>>='' |``>>='' | ``==='' | ``!==''| ``<<=''| ``/=''
+  // ``+=''   | ``-='' | ``*=''  | ``%='' | ``>='' | ``++'' |
+  // ``--''   | ``<='' | ``&=''  | ``|='' | ``^='' | ``&&'' |
+  // ``||''   | '{'    | '}'     | '('    | ')'    | '['    | ']' |
+  // '.'      | ';'    | ','     | '~'    | '?'    | ':'
+  token :punct = foreign(LexicalGrammar, 'skip') seq(punct) -> (punct),
+
+  // for all other punctuators, an additional check is required to
+  // distinguish the punctuator from a longer punctuator with the same prefix
+
+  //``>>'' 	avoid: >>> >>>=
+  shiftRightPunct = foreign(LexicalGrammar, 'skip') ``>>'' ~'>' -> (">>"),
+
+  //'='  	  avoid: == ===
+  simpleAssignPunct = foreign(LexicalGrammar, 'skip') '=' ~'=' -> ("="),
+  
+  //``=='' 	avoid: ===				
+  //``!='' 	avoid: !==				
+  //``>>>'' avoid: >>>=
+  //``<<''  avoid: <<=
+  // no Compare or Assignment Punctuator
+  noEq :t = foreign(LexicalGrammar, 'skip') seq(t) ~'=' -> (t),
+
+  //'!'  	  avoid: != !==		
+  //'*' 	  avoid: *=				
+  //'%' 	  avoid: %=				
+  //'^'  	  avoid: ^=
+  //'/'     avoid: /=
+  // no Compare or Assignment Single-character Punctuator
+  noEqChar :t = foreign(LexicalGrammar, 'skip') exactly(t) ~'=' -> (t),
+  
+  //  '&'  	avoid: &= &&		
+  //  '|'  	avoid: |= ||		
+  //  '<'  	avoid: <= << <<=	
+  //  '>'   avoid: >= >> >>> >>>=
+  //  '+' 	avoid: += ++		
+  //  '-' 	avoid: -= --			
+  // no Assignment single-character punctuator (excludes doubles)
+  noEqDbl :t = foreign(LexicalGrammar, 'skip') exactly(t) ~'=' ~exactly(t) -> (t),
+
+  // a variant of the 'token' rule that does not accept line terminators
+  // before it reaches the token. Only used for '++' and '--' so it's safe
+  // to simply match the token using 'seq' without further checks
+  //noLineTermPunct :punct = foreign(LexicalGrammar, 'scanPunctNoLineTerminator'):lexed
+  //                        ?(lexed == punct) -> (punct),
+  noLineTermPunct :punct = foreign(LexicalGrammar, 'skipNoLine') seq(punct) -> (punct),
+  
+  // k(kw) parses an expected keyword
+  // since we can trust the caller of k that 'kw' really denotes a keyword,
+  // we don't require the lexer to verify this. scanKeyword will simply scan
+  // any identifier name, it's up to this rule to check whether the lexed
+  // identifier equals the expected keyword name
+  k :kw = foreign(LexicalGrammar, 'scanKeyword'):lexed ?(kw == lexed) -> (kw),
+
+  identifier = foreign(LexicalGrammar, 'scanIdentifier'):id -> (id),
+  literal = foreign(LexicalGrammar, 'scanLiteral'):l -> (l),
+  
+  noLineTermIdentifier = foreign(LexicalGrammar, 'scanIdentifierNoLineTerminator'):id -> (id),
+  noLineTerminator = foreign(LexicalGrammar,'skipNoLine'),
+  lineTerminator = foreign(LexicalGrammar, 'scanLineTerminator'),
+  
+  skipToEnd = foreign(LexicalGrammar,'skip') end,
+  
+  sc = noLineTerminator ';' // Note: don't use ";" as this is equivalent to token(";")
+                            // which would allow line terminators to be eaten as well
+     | noLineTerminator (lineTerminator | end | &'}')
+       // a semicolon is "automatically inserted" if a newline is reached,
+       // the end of the input stream is reached, or the offending token is '}'
+  
+}
+ES5Parser.initialize = function() {
+  // TODO: turn this into a constant by defining 2 parsers: NonStrictMode <: StrictMode
+  this.strictmode = false;
+  
+  this.inAllowed = true;
+  
+  // this function is used to construct ASTs
+  // note: the attributes of an AST are automatically augmented
+  // with standard attributes, e.g. the strictmode of the parser
+  this.ast = function(type, attributes, children) {
+    //attributes.strict = this.strictmode;
+    return mixinASTMethods([ type, attributes ].concat(children));
+  };
+  this.emptyAst = function() {
+    return mixinASTMethods([ "Empty" ]);
+  };
+};
