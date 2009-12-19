@@ -12,49 +12,99 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-function makeMembrane(target) {
-  var enabled = true;
-  var table = EphemeronTable(true);
+/**
+ * See <a href=
+ * "http://wiki.ecmascript.org/doku.php?do=show&id=strawman:proxiesv2#an_identity-preserving_membrane">Membrane example on the wiki</a>.
+ * 
+ * Written in proposed ES-Harmony + strawmen
+ * <ul>
+ * <li>catchalls / proxies
+ * <li>const functions
+ * <li>EphemeronTables
+ * </ul>
+ */
+const makeMembrane(wetTarget) {
+  let wet2dry = EphemeronTable(true);
+  let dry2wet = EphemeronTable(true);
   
-  function wrap(wrapped) {
-    if (wrapped !== Object(wrapped)) {
+  function asDry(wet) {
+    if (wet !== Object(wet)) {
       // primitives provide only irrevocable knowledge, so don't
       // bother wrapping it.
-      return wrapped;
+      return wet;
     }
-    var caretaker = table.get(target);
-    if (caretaker) { return caretaker; }
+    const dryResult = wet2dry.get(wet);
+    if (dryResult) { return dryResult; }
     
-    var targetHandler = handlerMaker(target);
-    var revokeHandler = Proxy.create({
-      get: function(rcvr, p) {
-        if (!enabled) { throw new Error("disabled"); }
-        return function() {
-          var args = [].slice.call(arguments, 0);
-          return wrap(targetHandler[p].apply(targetHandler, args.map(wrap)));
-        };
-      },
-    });
+    const wetHandler = handlerMaker(wet);
+    const dryRevokeHandler = Proxy.create(Object.freeze({
+      invoke: const(rcvr, name, dryArgs) {
+        const optWetHandler = dry2wet.get(dryRevokeHandler);
+        return asDry(optWetHandler[name](...dryArgs.map(asWet)));
+      }
+    }));
+    dry2wet.set(dryRevokeHandler, wetHandler);
           
-    if (typeof target === "function") {
-      function aTrap(self, args) {
-        return wrap(target.apply(wrap(self), args.map(wrap)));
+    if (typeof wet === "function") {
+      const aTrap(drySelf, dryArgs) {
+        return asDry(wet.apply(asWet(drySelf), dryArgs.map(asWet)));
       }
-      function cTrap(args) {
-        return wrap(new target(...args.map(wrap)));
+      const cTrap(dryArgs) {
+        return asDry(new wet(...dryArgs.map(asWet)));
       }
-      caretaker = Proxy.createFunction(revokeHandler, aTrap, cTrap);
+      dryResult = Proxy.createFunction(dryRevokeHandler, aTrap, cTrap);
     } else {
-      caretaker = Proxy.create(revokeHandler, wrap(Object.getPrototype(wrapped)));
+      dryResult = Proxy.create(dryRevokeHandler, 
+                               asDry(Object.getPrototype(wet)));
     }
-    table.set(target, caretaker);
-    return caretaker;
+    wet2dry.set(wet, dryResult);
+    dry2wet.set(dryResult, wet);
+    return dryResult;
   }
   
-  var gate = {
-    enable: function() { enabled = true; },
-    disable: function() { enabled = false; }
-  };
+  const asWet(dry) {
+    if (dry !== Object(dry)) {
+      // primitives provide only irrevocable knowledge, so don't
+      // bother wrapping it.
+      return dry;
+    }
+    const wetResult = dry2wet.get(dry);
+    if (wetResult) { return wetResult; }
+    
+    const dryHandler = handlerMaker(dry);
+    const wetRevokeHandler = Proxy.create(Object.freeze({
+      invoke: const(rcvr, name, wetArgs) {
+        const optDryHandler = wet2dry.get(wetRevokeHandler);
+        return asWet(optDryHandler[name](...wetArgs.map(asDry)));
+      }
+    }));
+    wet2dry.set(wetRevokeHandler, dryHandler);
+          
+    if (typeof dry === "function") {
+      const aTrap(wetSelf, wetArgs) {
+        return asWet(dry.apply(asDry(wetSelf), wetArgs.map(asDry)));
+      }
+      const cTrap(wetArgs) {
+        return asWet(new dry(...wetArgs.map(asDry)));
+      }
+      wetResult = Proxy.createFunction(wetRevokeHandler, aTrap, cTrap);
+    } else {
+      wetResult = Proxy.create(wetRevokeHandler, 
+                               asWet(Object.getPrototype(dry)));
+    }
+    dry2wet.set(dry, wetResult);
+    wet2dry.set(wetResult, dry);
+    return wetResult;
+  }
   
-  return { wrapper: wrap(target), gate: gate };
+  const gate = Object.freeze({
+    revoke: const() {
+      dry2wet = wet2dry = Object.freeze{
+        get: const(key) { throw new Error("revoked"); },
+        set: const(key, val) {}
+      };
+    }
+  });
+  
+  return Object.freeze({ wrapper: asDry(wetTarget), gate: gate });
 }
