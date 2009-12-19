@@ -27,7 +27,7 @@ const makeMembrane(wetTarget) {
   let wet2dry = EphemeronTable(true);
   let dry2wet = EphemeronTable(true);
   
-  function asDry(wet) {
+  const asDry(wet) {
     if (wet !== Object(wet)) {
       // primitives provide only irrevocable knowledge, so don't
       // bother wrapping it.
