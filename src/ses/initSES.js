@@ -111,18 +111,29 @@ function initSES(global, whitelist, verify, ObjTable) {
     };
   })();
 
+  /**
+   * Read the current value of base[name], and freeze that property as
+   * a data property to ensure that all further read of that same
+   * property from that base produce the same value.
+   * 
+   * <p>The frozen property should preserve the enumerability of the
+   * original property.
+   */
+  function read(base, name) {
+    var result = base[name];
+    Object.defineProperty(base, name, {
+      value: result, writable: false, configurable: false
+    });
+    return result;
+  }
+
   // initialize accessible global variables and root
   Object.keys(whitelist).forEach(function(name) {
     var desc = Object.getOwnPropertyDescriptor(global, name);
     if (desc) {
       var permit = whitelist[name];
       if (permit) {
-        var value = global[name];
-        Object.defineProperty(global, name, { 
-          value: value, 
-          writable: false,
-          configurable: false
-        });
+        var value = read(global, name);
         Object.defineProperty(root, name, { 
           value: value, 
           writable: false,
@@ -148,10 +159,7 @@ function initSES(global, whitelist, verify, ObjTable) {
     whiteTable.set(value, permit);
     if (typeof permit === 'object') {
       Object.keys(permit).forEach(function(name) {
-	var sub = value[name];
-	Object.defineProperty(value, name, {
-	  value: sub, writable: false, configurable: false
-	});
+	var sub = read(value, name);
 	register(sub, permit[name]);
       });
     }
@@ -179,10 +187,7 @@ function initSES(global, whitelist, verify, ObjTable) {
     if (isPrimitive(value)) { return; }
     Object.getOwnPropertyNames(value).forEach(function(name) {
       if (isPermitted(value, name)) {
-	var sub = value[name];
-	Object.defineProperty(value, name, {
-	  value: sub, writable: false, configurable: false
-	});
+	var sub = read(value, name);
         clean(sub);
       } else {
 	// Strict delete throws on failure
