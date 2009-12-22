@@ -13,13 +13,14 @@
 // limitations under the License.
 
 // @author tomvc
-load("../../third_party/json2.js");
-load("../../third_party/ometa/ometa-rhino.js");
-load("../../bin/es5parser.js");
-load("parsertests.js");
-load("unit.js");
 
-// instead of loading Prototype...
+load("load-ometa.js")
+load("src/parser/es5parser.js")
+load("third_party/json2.js");
+load("tests/parser/unit.js");
+load("tests/parser/parsertests.js");
+
+// instead of loading the entire Prototype library...
 Array.prototype.each = function(fun) {
   for (var i = 0; i < this.length; i++) {
     fun(this[i]);
@@ -27,6 +28,7 @@ Array.prototype.each = function(fun) {
   return undefined;
 };
 
+// switch second argument to 'true' if you want to see passing tests as well as failing tests
 var lextest = makeUnitTest("Lexer", false);
 this.unit = lextest;
 this.lexerTestSuite();

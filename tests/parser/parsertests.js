@@ -29,10 +29,9 @@ function report(msg) {
   $('msgpane').innerHTML = $('msgpane').innerHTML + "<br>" + msg;
 }
 	
-function lex(input, rule, args, trace) {
+function lex(input, rule, args) {
   args = args || [];
-  return (trace ? TracingLexicalGrammar : LexicalGrammar).
-				  matchAll(input, rule, args, function(parser, idx) {
+  return LexicalGrammar.matchAll(input, rule, args, function(parser, idx) {
 	if (!idx || idx < 0) idx = input.length - 1;
 	var spaces = new Array(input.length);
 	spaces[idx] = "^";
@@ -41,10 +40,9 @@ function lex(input, rule, args, trace) {
   });
 }
 
-function parse(input, rule, args, trace) {
+function parse(input, rule, args) {
   args = args || [];
-  return (trace ? TracingES5Parser : ES5Parser).
-				  matchAll(input, rule, args, function(parser, idx) {
+  return ES5Parser.matchAll(input, rule, args, function(parser, idx) {
 	if (!idx || idx < 0) idx = input.length - 1;
 	var spaces = new Array(input.length);
 	spaces[idx] = "^";
