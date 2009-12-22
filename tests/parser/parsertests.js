@@ -343,10 +343,10 @@ function parserTestSuite() {
   testExpression("new o", [ "NewExpr", {}, Expr("o") ]);
   testExpression("new o.m", [ "NewExpr", {}, [ "MemberExpr", {}, Expr("o"), Expr("'m'") ] ]);
   testExpression("new o.m(x)", [ "NewExpr", {},
-                                 [ "InvokeExpr", {}, Expr("o"), Expr("'m'"), Expr("x") ] ]);
+                                 [ "MemberExpr", {}, Expr("o"), Expr("'m'") ], Expr("x") ]);
   testExpression("new o.m(x,y)", [ "NewExpr", {},
-                                   [ "InvokeExpr", {}, Expr("o"), Expr("'m'"),
-                                                       Expr("x"), Expr("y") ] ]);
+                                   [ "MemberExpr", {}, Expr("o"), Expr("'m'") ],
+                                   Expr("x"), Expr("y") ]);
 
   // pre- and postfix increment and decrement (CountExpr)
   testExpression("++x", [ "CountExpr", { isPrefix: true,  op: "++" }, Expr("x") ]);
@@ -361,8 +361,10 @@ function parserTestSuite() {
   // no newlines before ++ allowed
   ensureNoMatch("x\n++", 'complete', ['Expression']);
   
+  // delete
+  testExpression("delete x", [ "DeleteExpr",{           }, Expr("x") ]);
+  
   // Unary Expressions
-  testExpression("delete x", [ "UnaryExpr", {op:"delete"}, Expr("x") ]);
   testExpression("void x",   [ "UnaryExpr", {op:"void"  }, Expr("x") ]);
   testExpression("+ x",      [ "UnaryExpr", {op:"+"     }, Expr("x") ]);
   testExpression("-x",       [ "UnaryExpr", {op:"-"     }, Expr("x") ]);

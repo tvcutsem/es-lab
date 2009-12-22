@@ -487,10 +487,7 @@ ometa ES5Parser {
   
   // @returns an AST
   MemberExpression = k("new") MemberExpression:mexp Arguments:args ->
-                     ( mexp.nodeType() === "MemberExpr"
-                       ? self.ast("NewExpr",{},
-                           [ self.ast("InvokeExpr",{},mexp.children().concat(args)) ])
-                       : self.ast("NewExpr",{},[mexp].concat(args)) )
+                     ( self.ast("NewExpr",{},[mexp].concat(args)) )
                    | MemberExpression:mexp "[" Expression:iexp "]" ->
                      ( self.ast("MemberExpr",{},[mexp,iexp]) )
                    | MemberExpression:mexp "." identifier:id ->
@@ -533,7 +530,7 @@ ometa ES5Parser {
                       ( self.ast("CountExpr",{isPrefix:false,op:"--"},[lexp]) )
                     | LeftHandSideExpression,
                     
-  UnaryExpression = k("delete")   UnaryExpression:uexp -> ( self.ast("UnaryExpr",{op:"delete"},[uexp]) )
+  UnaryExpression = k("delete")   UnaryExpression:uexp -> ( self.ast("DeleteExpr",{},[uexp]) )
                   | k("void")     UnaryExpression:uexp -> ( self.ast("UnaryExpr",{op:"void"},  [uexp]) )
                   | k("typeof")   UnaryExpression:uexp -> ( self.ast("TypeofExpr",{},[uexp]) )
                   | "++"          UnaryExpression:uexp ->
