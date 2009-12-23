@@ -254,7 +254,7 @@ function Stmt(str) { return parse(str,'Statement',[]); }
 function SrcE(str) { return parse(str,'SourceElement',[]); }
 
 function parserTestSuite() {
-
+  
   // This
   testExpression("this", [ "ThisExpr", {} ]);
 
@@ -671,6 +671,12 @@ function parserTestSuite() {
   // effectively count as line terminators
   testProgram("return /* \n */ 5;",
      ["Program", {}, ["ReturnStmt",{}] , Stmt("5;")]);
+
+  testProgram("/*/**/", ["Program", {}]);
+  testExpression("j / [a/*]/; [ /**/ ]",
+                 [ "BinaryExpr", {}, Expr("j"), Expr("[a]") ]);
+  testExpression("j\n/[a/*]/; [ /**/ ]",
+                 [ "BinaryExpr", {}, Expr("j"), Expr("[a]") ]);
 
   ensureNoMatch("if (a > b)\nelse c = d", 'Program', []);
   

@@ -76,15 +76,13 @@ ometa LexicalGrammar {
   
   Comment = MultiLineComment | SingleLineComment,
   
-  // In contrast to the spec, the rules for MultiLineCommentChars and PostAsteriskCommentChars
-  // do not allow 'PostAsteriskCommentChars' to be optional
   MultiLineComment = seq("/*") (MultiLineCommentChars | empty -> ""):cs seq("*/") -> (cs),
   MultiLineCommentChars = MultiLineNotAsteriskChar:c (MultiLineCommentChars | empty -> ""):cs ->
                           ( c + cs )
-                        | '*' PostAsteriskCommentChars:cs -> ( '*' + cs ),
+                        | '*' (PostAsteriskCommentChars | &seq("*/") -> ""):cs -> ( '*' + cs ),
   PostAsteriskCommentChars = MultiLineNotForwardSlashOrAsteriskChar:c
                              (MultiLineCommentChars | empty -> ""):cs -> ( c + cs )
-                           | '*' PostAsteriskCommentChars:cs -> ( '*' + cs ),
+                           | '*' (PostAsteriskCommentChars | &seq("*/") -> ""):cs -> ( '*' + cs ),
   MultiLineNotAsteriskChar = ~('*') SourceCharacter:c -> (c),
   MultiLineNotForwardSlashOrAsteriskChar = ~('/' | '*') SourceCharacter:c -> (c),
   SingleLineComment = seq("//") (SingleLineCommentChars | empty -> ""):cs -> (cs),
