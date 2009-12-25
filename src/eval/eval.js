@@ -1,4 +1,4 @@
- "use strict";
+"use strict";
 
 // Copyright (C) 2009 Google Inc.
 //
@@ -23,12 +23,150 @@
 (
 function(){
 
+  /////////////// general purpose utilities //////////////////
+
+  /**
+   * Assuming <tt>obj</tt> is an object written in the normal
+   * objects-as-closures style, this convenience method will freeze
+   * the object, all the enumerable methods of that object, and all
+   * the <tt>prototype</tt>s of those methods.
+   * 
+   * <p>For example, a defensive <tt>Point</tt> constructor can be
+   * written as <tt>
+   *   function Point(x, y) {
+   *     return methods({
+   *       toString: function() { return '&lt;' + x + ',' + y + '&gt;'; },
+   *       getX: function() { return x; },
+   *       getY: function() { return y; }
+   *     });
+   *   }
+   *   Object.freeze(Point.prototype);
+   *   Object.freeze(Point);
+   * </tt>
+   */
+  function methods(obj) {
+    for (var name in obj) {
+      var meth = obj[name];
+      if (typeof meth === 'function') {
+        if ('prototype' in meth) {
+          Object.freeze(meth.prototype);
+        }
+        Object.freeze(meth);
+      }
+    }
+    return Object.freeze(obj);
+  }
+
+  /**
+   * Assuming <tt>element</tt> is a valid JSONML term, this invokes a
+   * <tt>visit<i>element-type-name</i> method on the <tt>visitor</tt>
+   * with an attributes node as the first argument and
+   * <tt>element</tt>'s child elements as the remaining arguments.
+   * 
+   * <p>This code is adapted from jsonMLWalkers.js.
+   */ 
+  function visit(element, visitor) {
+    var args = element.slice(1);
+    if (Array.isArray(args[0])) {
+      args = [{}].concat(args);
+    }
+    //return visitor['visit' + element[0]](...args);
+    return visitor['visit' + element[0]].apply(visitor, args);
+  }
+
+  /**
+   * Static generic for <tt>Array.prototype.slice()</tt>.
+   * 
+   * <p><tt>slice(array, start, end)</tt> acts like
+   * <tt>array.slice(start, end)</tt> under the assumption that
+   * <tt>array</tt> is an array and has not overridden
+   * <tt>Array.prototype.slice()</tt>. 
+   */
   function slice(arrayLike, start, end) {
     return Array.prototype.slice.call(arrayLike, start, end);
   }
 
+  /**
+   * Static generic for <tt>Function.prototype.apply()</tt>.
+   * 
+   * <p><tt>apply(func, thisArg, args)</tt> acts like
+   * <tt>func.apply(thisArg, args)</tt> under the assumption that
+   * <tt>func</tt> is a function and has not overridden
+   * <tt>Function.prototype.apply()</tt>.
+   */
+  function apply(func, thisArg, args) {
+    return Function.prototype.apply.call(func, thisArg, args);
+  }
+
+  /**
+   * Adapted from Mike Samuel's "triangle of hackery" to emulate
+   * <tt>new ctor(...args)</tt>.
+   * 
+   * <p>The normal pattern for doing variable arity construction -- an
+   * <tt>var result = Object.create(ctor.prototype);</tt> followed by
+   * an <tt>apply(ctor, result, args);</tt> -- doesn't work on
+   * built-in constructors, especially <tt>Date</tt>. The triangle of
+   * hackery switches on the arity of <tt>args</tt> and manually
+   * performs a <tt>new</tt> for each arity from zero to
+   * twelve. Arrays aside, since the ES5-specified (and therefore the
+   * whitelisted) built in constructors have no case exceeding arity
+   * twelve, beyond that, if <tt>ctor !== Array</tt>, we fall back on
+   * the normal pattern, which should now be correct for non-built in
+   * constructors.
+   * 
+   * <p>Note that the this hackery fails in the following edge cases:
+   * <ul>
+   * <li><tt>ctor</tt> is a non-Array built-in constructor (say
+   *     <tt>Date</tt>), but is called with more than twelve
+   *     arguments. Additional arguments should be ignored without
+   *     effect. Instead, it will cause the triangle of hackery to
+   *     fall back on the normal pattern which will fail for some
+   *     built-in constructors. 
+   * <li><tt>ctor</tt> is a built-in Array constructor from a foreign
+   *     frame and called with more than twelve arguments. 
+   * </ul>
+   */
+  function applyNew(ctor, args) {
+    switch (args.length) {
+      case 0:  return new ctor();
+      case 1:  return new ctor(args[0]);
+      case 2:  return new ctor(args[0], args[1]);
+      case 3:  return new ctor(args[0], args[1], args[2]);
+      case 4:  return new ctor(args[0], args[1], args[2], args[3]);
+      case 5:  return new ctor(args[0], args[1], args[2], args[3], args[4]);
+      case 6:  return new ctor(args[0], args[1], args[2], args[3], args[4],
+                               args[5]);
+      case 7:  return new ctor(args[0], args[1], args[2], args[3], args[4],
+                               args[5], args[6]);
+      case 8:  return new ctor(args[0], args[1], args[2], args[3], args[4],
+                               args[5], args[6], args[7]);
+      case 9:  return new ctor(args[0], args[1], args[2], args[3], args[4],
+                               args[5], args[6], args[7], args[8]);
+      case 10: return new ctor(args[0], args[1], args[2], args[3], args[4],
+                               args[5], args[6], args[7], args[8], args[9]);
+      case 11: return new ctor(args[0], args[1], args[2], args[3], args[4],
+                               args[5], args[6], args[7], args[8], args[9],
+                               args[10]);
+      case 12: return new ctor(args[0], args[1], args[2], args[3], args[4],
+                               args[5], args[6], args[7], args[8], args[9],
+                               args[10], args[11]);
+      default: {
+        if (ctor === Array) {
+          // The above test fails if ctor is the Array constructor
+          // from a foreign frame.
+          return ctor.apply(undefined, args);
+        }
+        var result = Object.create(ctor.prototype);
+        apply(ctor, result, args);
+        return result;
+      }
+    }
+  }
+
+  /////////////// meta interpreter support //////////////////
+
   function unaryOp(op, x) {
-    return ({
+    return methods({
          "void": function() { return void x; },
          "+":    function() { return +x; },
          "-":    function() { return -x; },
@@ -38,7 +176,7 @@ function(){
   }
 
   function binaryOp(op, x, y) {
-    return ({
+    return methods({
          "*":          function() { return x * y; },
          "/":          function() { return x / y; },
          "%":          function() { return x % y; },
@@ -64,19 +202,67 @@ function(){
       })[op]();
   }
 
+  /////////////// Naming Environment //////////////////
+
+  function Environment(rep, thisArg) {
+    this.rep = rep;
+    this.thisArg = thisArg;
+  }
+  Environment.prototype = methods({
+    get: function(varName) {
+      return this.rep['var$' + varName];
+    },
+    set: function(varName, newVal) {
+      var mangle = 'var$' + varName;
+      var desc = Object.getOwnPropertyDescriptor(this.rep, mangle);
+      if (desc && desc.writable) {
+	this.rep[mangle] = newVal;
+	return true;
+      } else {
+	return false;
+      }
+    },
+    getThis: function() {
+      return this.thisArg;
+    },
+    getLabel: function(labelName) {
+      return this.rep['label$' + labelName];
+    },
+
+    nestFunction: function(atr) {
+
+    },
+    nestThis: function(atr, thisArg) {
+
+    },
+    nestLabel: function(atr, labelName) {
+
+    },
+    nestBlock: function(atr) {
+
+    },
+    nestStmt: function(atr) {
+
+    },
+    nestWith: function(atr, obj) {
+
+    }
+  });
+
+  /////////////// meta interpreter //////////////////
+
   function Evaluator(env) {
     this.env = env;
   }
-  Evaluator.prototype = {
+  Evaluator.prototype = methods({
     visitThisExpr:    function(atr) { return this.env.getThis(); },
     visitIdExpr:      function(atr) { return this.env.get(atr.name); },
     visitRegExpExpr:  function(atr) { return new RegExp(atr.body, 
                                                         atr.flags); },
     visitLiteralExpr: function(atr) { return atr.value; },
     visitArrayExpr: function(atr, var_args) {
-      var args = slice(arguments, 1);
       var result = [];
-      args.forEach(function(arg, i) {
+      slice(arguments, 1).forEach(function(arg, i) {
         if (arg[0] === 'Empty') {
           // TBD...
         } else {
@@ -86,11 +272,10 @@ function(){
       return result;
     },
     visitObjectExpr: function(atr, var_args) {
-      var args = slice(arguments, 1);
       var result = {};
       var that = this;
-      args.forEach(function(arg) {
-        return visit(arg, {
+      slice(arguments, 1).forEach(function(arg) {
+        return visit(arg, methods({
           visitDataProp: function(propAtr, propExpr) {
             result[propAtr.name] = visit(propExpr, that);
           },
@@ -108,7 +293,7 @@ function(){
               configurable: true
             });
           }
-        });
+        }));
       });
       return result;
     },
@@ -145,8 +330,9 @@ function(){
     visitCountExpr: function(atr, lValue) {
       var ref = evalRef(lValue, this.env);
       var val = ref.get();
-      ({ "++": function() { if (atr.isPrefix) { ++val; } else { val++; } },
-         "--": function() { if (atr.isPrefix) { --val; } else { val--; } }
+      methods({ 
+        "++": function() { if (atr.isPrefix) { ++val; } else { val++; } },
+        "--": function() { if (atr.isPrefix) { --val; } else { val--; } }
       })[atr.op]();
       ref.set(val);
       return val;
@@ -181,7 +367,7 @@ function(){
         ref.set(val);
         return val;
       }
-      var op = atr.op.substring(0, atr.op.length -1);
+      var op = (/^(.*)=$/).exec(op)[1];
       var result = binaryOp(op, ref.get(), val);
       ref.set(result);
       return result;
@@ -198,12 +384,12 @@ function(){
       var patts = slice(arguments, 1);
       var that = this;
       patts.forEach(function(patt){
-        visit(patt, {
+        visit(patt, methods({
           visitInitPatt: function(pAtr, lValue, rValue) {
             evalRef(lValue, that.env).set(visit(rValue, that));
           },
           visitIdPatt: function(pAtr) {}
-        });
+        }));
       });
     },
     visitEmptyStmt: function(atr) {},
@@ -215,41 +401,41 @@ function(){
       }
     },
     visitDoWhileStmt: function(atr, bodyStmt, condExpr) {
-      return label(this, 'break', function(breaker) {
+      return this.label('break', function(breaker) {
         do {
-          label(breaker, 'continue', function(continuer) {
+          breaker.label('continue', function(continuer) {
             visit(bodyStmt, continuer);
           });
         } while (visit(condExpr, breaker));
       });
     },
     visitWhileStmt: function(atr, condExpr, bodyStmt) {
-      return label(this, 'break', function(breaker) {
+      return this.label('break', function(breaker) {
         while (visit(condExpr, breaker)) {
-          label(breaker, 'continue', function(continuer) {
+          breaker.label('continue', function(continuer) {
             visit(bodyStmt, continuer);
           });
         }
       });
     },
     visitForStmt: function(atr, init, condExpr, incrExpr, bodyStmt) {
-      return label(this, 'break', function(breaker) {
+      return this.label('break', function(breaker) {
         for (visit(init, breaker); 
              visit(condExpr, breaker); 
              visit(incrExpr, breaker)) {
-          label(breaker, 'continue', function(continuer) {
+          breaker.label('continue', function(continuer) {
             visit(bodyStmt, continuer);
           });
         }
       });
     },
     visitForInStmt: function(atr, lValue, collExpr, bodyStmt) {
-      return label(this, 'break', function(breaker) {
+      return this.label('break', function(breaker) {
         var ref = evalRef(lValue, breaker);
         var coll = visit(collExpr, breaker);
         for (var v in coll) {
           ref.set(v);
-          label(breaker, 'continue', function(continuer) {
+          breaker.label('continue', function(continuer) {
             visit(bodyStmt, continuer);
           });
         }
@@ -257,28 +443,28 @@ function(){
     },
     visitContinueStmt: function(atr) {
       var label = atr.label || 'continue';
-      escape(env.getLabel(label));
+      escape(this.env.getLabel(label));
     },
     visitBreakStmt: function(atr) {
       var label = atr.label || 'continue';
-      escape(env.getLabel(label));
+      escape(this.env.getLabel(label));
     },
     visitReturnStmt: function(atr, optExpr) {
       if (optExpr) {
-        escape(env.getLabel('return'), visit(optExpr, this));
+        escape(this.env.getLabel('return'), visit(optExpr, this));
       } else {
-        escape(env.getLabel('return'));
+        escape(this.env.getLabel('return'));
       }
     },
     visitWithStmt: function(atr, headExpr, bodyStmt) {
-      var nest = new Evaluator(this.env.nestWith(visit(headExpr, this)));
+      var nest = new Evaluator(this.env.nestWith(atr, visit(headExpr, this)));
       return visit(bodyStmt, nest);
     },
     visitSwitchStmt: function(atr, headExpr, var_args) {
       // TBD...
     },
     visitLabelledStatement: function(atr, subStmt) {
-      label(this, atr.label, function(labeller) {
+      this.label(atr.label, function(labeller) {
         return visit(subStmt, labeller);
       });
     },
@@ -298,7 +484,7 @@ function(){
                                        unwindStmt) {
       // TBD...
     },
-    visitdebuggerStmt: function(atr) {
+    visitDebuggerStmt: function(atr) {
       debugger;
     },
 
@@ -308,7 +494,7 @@ function(){
       // the beginning of the containing block.
     },
     visitFunctionExpr: function(atr, namePatt, params, var_args) {
-      var nestEnv = eval.env.nestFunction(atr);
+      var nestEnv = this.env.nestFunction(atr);
       var nameRef;
       if (namePatt[0] === 'Empty') {
         nameRef = null;
@@ -317,25 +503,51 @@ function(){
       }
       var bodyStmts = slice(arguments, 3);        
       var result = function(var_args) {
+	var funcEnv = nestEnv.nestThis(atr, this);
         var paramPatts = slice(params, 2);
         var args = slice(arguments, 0);
         paramPatts.forEach(function(paramPatt, i) {
-          evalRef(paramPatt, nestEnv).set(args[i]);
+          evalRef(paramPatt, funcEnv).set(args[i]);
         });
-        return label(new Evaluator(nestEnv), 'return', function(returner) {
-	  bodyStmts.forEach(function(stmt) {
-	    visit(stmt, returner);
+        return new Evaluator(funcEnv).label('return', function(returner) {
+          bodyStmts.forEach(function(stmt) {
+            visit(stmt, returner);
           });
-	});
+        });
       };
       if (nameRef) { nameRef.set(result); }
       return result;
     }
-  };
+  });
+  Object.freeze(Evaluator.prototype);
+  Object.freeze(Evaluator);
 
   function eval(element, env) {
     return visit(element, new Evaluator(env));
   }
 
-  return eval;
+  function evalRef(lValue, env) {
+    return visit(element, methods({
+      visitIdExpr: function(atr) {
+        return methods({
+          get:    function()       { return env.get(atr.name); },
+          set:    function(newVal) { return env.set(atr.name, newVal); },
+          remove: function()       { return env.remove(atr.name); },
+          exists: function()       { return env.exists(atr.name); }          
+        });
+      },
+      visitMemberExpr: function(atr, baseExpr, propExpr) {
+        var base = visit(baseExpr, this);
+        var prop = visit(propExpr, this);
+        return methods({
+          get:    function()       { return base[prop]; },
+          set:    function(newVal) { base[prop] = val; return true; },
+          remove: function()       { return delete base[prop]; },
+          exists: function()       { return prop in base; }          
+        });
+      }
+    }));
+  }
+
+  return Object.freeze(eval);
 })();
