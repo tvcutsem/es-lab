@@ -41,7 +41,9 @@
       "call": true,
       "bind": true,
       "length": "*",
-      "prototype": "*"
+      "prototype": "*",
+      "caller": "**",
+      "arguments": "**"
     }
   },
   "Array": {

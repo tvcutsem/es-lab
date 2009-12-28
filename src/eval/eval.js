@@ -246,6 +246,9 @@ function(){
     },
     nestWith: function(atr, obj) {
 
+    },
+    nestCatch: function(atr, varName) {
+
     }
   });
 
