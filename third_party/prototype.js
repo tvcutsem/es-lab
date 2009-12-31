@@ -900,8 +900,7 @@ Object.extend(Array.prototype, {
 
   inspect: function() {
     return '[' + this.map(Object.inspect).join(', ') + ']';
-  },
-
+  }/*,  // Interacts badly with json2.js
   toJSON: function() {
     var results = [];
     this.each(function(object) {
@@ -910,6 +909,7 @@ Object.extend(Array.prototype, {
     });
     return '[' + results.join(', ') + ']';
   }
+*/
 });
 
 // use native browser JS 1.6 implementation if available
