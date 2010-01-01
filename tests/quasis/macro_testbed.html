@@ -7,7 +7,6 @@
 <script src="../../src/util/render.js"></script>
 <script src="../../src/quasis/hygienicmacro.js"></script>
 <script src="../../site/esparser/json2_mini.js"></script>
-<script src="../../site/esparser/prototype_mini.js"></script>
 <script src="../../site/esparser/lib_mini.js"></script>
 <script src="../../site/esparser/ometa-base_mini.js"></script>
 <script src="../../site/esparser/es5parser_mini.js"></script>
@@ -21,7 +20,7 @@ function expand(form) {
       updateButtons(form, false, 'Working\u2026');
       try {
         doExpand(eval('(0,' + form.elements.handler.value + ')'),
-                 form.elements.source.value, form.elements.output);
+                 form.elements.source.value, 'Program', form.elements.output);
       } catch (e) {
         throw e;
       } finally {
@@ -41,7 +40,8 @@ function updateButtons(form, enabled, text) {
   }
 }
 
-function doExpand(handler, code, output) {
+function doExpand(handler, code, production, output) {
+console.log('code=' + code + ', production=' + production);
   // HACK: find backquoted sections and replace with a marker,
   // instead of mucking around with ometa.
   var t = Date.now();
@@ -107,7 +107,7 @@ function doExpand(handler, code, output) {
     }
     code = code.substring(i);
   }
-  var ast = ES5Parser.matchAll(chunks.join(''), 'Program', [], function () {});
+  var ast = ES5Parser.matchAll(chunks.join(''), production, [], function () {});
   function walkAst(node) {
     if (node[0] === 'LiteralExpr' && node[1].type === 'string') {
       var m = node[1].value.match(/^##(\d+)$/);
@@ -115,8 +115,17 @@ function doExpand(handler, code, output) {
         var quasi = extracted[m[1]];
         var parts = [[], []];
         for (var i = 2, n = quasi.length; i < n; ++i) {
+          if (i & 1 && quasi[i][1].value.indexOf('`') >= 0) {
+            // Recurse to substitutions
+            doExpand(handler, quasi[i][1].value, 'Expression', quasi[i][1]);
+            quasi[i][1].value = '(' + quasi[i][1].value + ')';
+console.log('quasi[' + i + '][1].value before=' + quasi[i][1].value);
+          }
           parts[i & 1].push(quasi[i][1].value);
+console.log('quasi[' + i + '][1].value after=' + quasi[i][1].value);
         }
+console.log('parts=' + JSON.stringify(parts));
+       
         var out = ES5Parser.matchAll(
             hygienicMacro(quasi[1].name, handler, parts[0], parts[1]),
             'Program', [], function () {});
@@ -132,6 +141,7 @@ function doExpand(handler, code, output) {
   var expanded = walkAst(ast);
   try {
     output.value = renderEcmascript(expanded);
+    console.log(' result=' + output.value);
   } catch (e) { output.value = '' + e; throw e; }
 }
 </script>
@@ -160,7 +170,7 @@ function doExpand(handler, code, output) {
 <h2>Known Issues</h2>
 <ul>
   <li>Depends on ES5Parser which is very slow on TraceMonkey.  Use Chrome/Webkit.</li>
-  <li>Does not recurse to embedded quasis.
+  <li>Recurse to embedded quasis in reverse order.
   <li>Hacks around parser since parser does not support quasi syntax.
   <li>Does not work with more than one quasi type.
   <li>Ignores name of quasi function.
@@ -174,5 +184,5 @@ function doExpand(handler, code, output) {
 
 <hr>
 <address></address>
-<!-- hhmts start --> Last modified: Wed Dec 30 21:35:36 PST 2009 <!-- hhmts end -->
+<!-- hhmts start --> Last modified: Thu Dec 31 12:00:24 PST 2009 <!-- hhmts end -->
 </body> </html>
