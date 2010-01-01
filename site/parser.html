@@ -31,17 +31,10 @@
       this.original_unescape = window.unescape;
     </script>
     <script src="json2_mini.js"></script>
-    <script src="prototype_mini.js"></script>
     <script src="lib_mini.js"></script>
     <script src="ometa-base_mini.js"></script>
     <script src="es5parser_mini.js"></script>
     <script>
-
-// disable Prototype's support for 'toJSON()'
-// because otherwise JSON.stringify(ast,null,indent) will simply
-// invoke ast.toJSON(), returning a flat string disregarding the indentation
-Object.toJSON = undefined;
-Array.prototype.toJSON = undefined;
 
 function toggleVisible(id) {
   var style = document.getElementById(id).style
@@ -56,6 +49,8 @@ function makeVisible(id) {
 }
 
 var example = "function fac(n){\n  if (n < 1) { return 1; } else { return n * fac(n-1); } }";
+
+function $(id) { return document.getElementById(id); }
 
 function initializeThisPage() {
   $('workspaceForm').source.value      = $('workspaceForm').source.origValue = example;
