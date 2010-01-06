@@ -41,7 +41,6 @@ function updateButtons(form, enabled, text) {
 }
 
 function doExpand(handler, code, production, output) {
-console.log('code=' + code + ', production=' + production);
   // HACK: find backquoted sections and replace with a marker,
   // instead of mucking around with ometa.
   var t = Date.now();
@@ -119,12 +118,9 @@ console.log('code=' + code + ', production=' + production);
             // Recurse to substitutions
             doExpand(handler, quasi[i][1].value, 'Expression', quasi[i][1]);
             quasi[i][1].value = '(' + quasi[i][1].value + ')';
-console.log('quasi[' + i + '][1].value before=' + quasi[i][1].value);
           }
           parts[i & 1].push(quasi[i][1].value);
-console.log('quasi[' + i + '][1].value after=' + quasi[i][1].value);
         }
-console.log('parts=' + JSON.stringify(parts));
        
         var out = ES5Parser.matchAll(
             hygienicMacro(quasi[1].name, handler, parts[0], parts[1]),
@@ -141,7 +137,6 @@ console.log('parts=' + JSON.stringify(parts));
   var expanded = walkAst(ast);
   try {
     output.value = renderEcmascript(expanded);
-    console.log(' result=' + output.value);
   } catch (e) { output.value = '' + e; throw e; }
 }
 </script>
@@ -150,13 +145,13 @@ console.log('parts=' + JSON.stringify(parts));
 <button type=sumit>Expand</button>
 <table><tr valign=top><td>
 <h2>Handler</h2>
-<textarea cols=80 rows=15 name=handler>function defaultQuasi(literalPortions, readSubsts) {
+<textarea cols=80 rows=15 name=handler>function defaultQuasi(literals, readSubsts) {
   function str(s) { return ['LiteralExpr', {type: 'string', value: s}]; }
   var ctor = ['NewExpr', {},
                ['MemberExpr', {}, readSubsts[0], str('Interpolation')],
-               str(literalPortions[0])];
-  for (var i = 1, n = literalPortions.length; i < n; ++i) {
-    ctor.push(readSubsts[i], str(literalPortions[i]));
+               literals[0]];
+  for (var i = 1, n = literals.length; i < n; ++i) {
+    ctor.push(readSubsts[i], literals[i]);
   }
   return ctor;
 }</textarea>
@@ -184,5 +179,5 @@ console.log('parts=' + JSON.stringify(parts));
 
 <hr>
 <address></address>
-<!-- hhmts start --> Last modified: Thu Dec 31 12:00:24 PST 2009 <!-- hhmts end -->
+<!-- hhmts start --> Last modified: Tue Jan  5 21:04:29 HST 2010 <!-- hhmts end -->
 </body> </html>

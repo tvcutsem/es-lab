@@ -89,8 +89,16 @@ function hygienicMacro(qfnName, qfn, literalPortions, substitutions) {
     if (isWritable) { writeCaps.push(ocap); }
   }
 
+  // Pass literal portions as string literals so there is a place
+  // to embed source position info and other details.
+  var literals = [];
+  for (var i = 0, n = literalPortions.length; i < n; ++i) {
+    literals[i] = deepFreeze(
+        ['LiteralExpr', { type: 'string', value: literalPortions[i] }]);
+  }
+
   // Untrusted: may not be JSON.
-  var expandedQuasi = qfn(deepFreeze(arrayCopy(literalPortions)),
+  var expandedQuasi = qfn(deepFreeze(arrayCopy(literals)),
                           deepFreeze(arrayCopy(readCaps)));
 
   // Create a namer that will not introduce any names that conflict

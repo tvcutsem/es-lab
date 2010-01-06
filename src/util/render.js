@@ -55,7 +55,11 @@ function renderEcmascript(ast) {
         break;
       case 'IdExpr': case 'IdPatt': out.push(ast[1].name); break;
       case 'ThisExpr': out.push('this'); break;
-      case 'LiteralExpr': out.push(JSON.stringify(ast[1].value)); break;
+      case 'LiteralExpr':
+        var meta = ast[1];
+        out.push(meta.type === 'string'
+                 ? JSON.stringify(meta.value) : '' + meta.value);
+        break;
       case 'VarDecl':
         out.push('var ');
         for (var i = 2, n = ast.length; i < n; ++i) {
