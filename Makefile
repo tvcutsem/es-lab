@@ -39,7 +39,7 @@ jsmin :
 	@./jsmin < $< > $@
 
 # builds the parser playground website
-esparser: third_party/json2_mini.js third_party/prototype_mini.js third_party/ometa/lib_mini.js third_party/ometa/ometa-base_mini.js src/parser/es5parser_mini.js
+esparser: third_party/json2_mini.js third_party/ometa/lib_mini.js third_party/ometa/ometa-base_mini.js src/parser/es5parser_mini.js
 	@mkdir -p site/$@
 	@for file in $^; do mv -f $${file} site/$@/`basename $${file}` ; done ;
 	@cp -f site/parser.html site/$@/index.html
