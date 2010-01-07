@@ -248,6 +248,8 @@
       if (lValue[0] === 'IdExpr') {
         var atr = lValue[1];
         scope(atr).assignsName(atr);
+      } else if (lValue[0] !== 'MemberExpr') {
+        throw new SyntaxError('Invalid LeftHandSide expression: ' + lValue[0]);
       }
     }
     return Object.freeze({
@@ -256,7 +258,7 @@
       visitAssignExpr: function(atr, lValue, rExpr) { assigns(lValue); },
       visitCountExpr: function(atr, lValue) { assigns(lvalue); },
       visitForInStmt: function(atr, lValue, collExpr, bodyStmt) {
-        assigns(lValue);
+        if (lValue[0] !== 'VarDecl') { assigns(lValue); }
       },
       visitContinueStmt: function(atr) { 
         scope(atr).usesLabel(atr, atr.label || 'continue');
