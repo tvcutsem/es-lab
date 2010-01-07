@@ -278,6 +278,15 @@ ometa LexicalGrammar {
   MultiLineNotAsteriskCharNoNL = ~('*') ~LineTerminator SourceCharacter:c -> (c),
   MultiLineNotForwardSlashOrAsteriskCharNoNL = ~('/' | '*') ~LineTerminator SourceCharacter:c -> (c),
 
+  // see section 14.1: Directive Prologues and the Use Strict Directive
+  // like a StringLiteral but no EscapeSequence or LineContinuation allowed
+  // @returns the raw string value (not a String Literal AST)
+  DirectiveStringLiteral = '"' (StringCharacters('"') | empty -> ""):s '"' -> (s)
+                         | '\'' (StringCharacters("'") | empty -> ""):s '\'' -> (s),
+  StringCharacters :term = StringCharacter(term):c (StringCharacters(term) | empty -> ""):cs ->
+                           ( c.concat(cs) ),
+  StringCharacter :term = ~(exactly(term) | '\\' | LineTerminator) SourceCharacter:s -> (s),
+
   // used by parser to parse actual tokens
 
   // eat wspace, lineterminators and comments
@@ -314,7 +323,10 @@ ometa LexicalGrammar {
                                    Identifier:id -> (id),
 
   // @returns a literal token
-  scanLiteral = skip Literal:l -> (l)
+  scanLiteral = skip Literal:l -> (l),
+  
+  // @returns a string
+  scanDirective = skip DirectiveStringLiteral:l -> (l)
 }
 
 // turns an array into a set, represented as a map of elements -> boolean
@@ -796,16 +808,24 @@ ometa ES5Parser {
                       | identifier:id -> ([ self.ast("IdPatt",{name:id},[]) ]),
 
   // @returns an array of ASTs
-  FunctionBody = (SourceElements | empty -> []):src -> (src),
+  FunctionBody = (DirectivePrologue | empty -> []):prologue
+                   (SourceElements | empty -> []):src -> ( prologue.concat(src) ),
 
-  Program = (SourceElements | empty -> []):src skipToEnd ->
-            ( self.ast("Program",{},src) ),
+  Program = (DirectivePrologue | empty -> []):prologue
+              (SourceElements | empty -> []):src skipToEnd ->
+            ( self.ast("Program",{},prologue.concat(src) ) ),
 
   // @returns an array of ASTs
   SourceElements = SourceElements:elts SourceElement:e -> ( elts.concat([e]) )
                  | SourceElement:e -> ([e]),
 
   SourceElement = FunctionDeclaration | Statement,
+
+  // @returns an array of ASTs
+  DirectivePrologue = DirectivePrologue:p Directive:d -> ( p.concat([d]) )
+                    | Directive:d -> ([d]),
+  
+  Directive = directive:dir sc -> ( self.ast('PrologueDecl',{directive:dir},[]) ),
 
   // === Implementation-level rules (not part of the spec) ===
 
@@ -896,6 +916,7 @@ ometa ES5Parser {
 
   identifier = foreign(LexicalGrammar, 'scanIdentifier'):id -> (id),
   literal = foreign(LexicalGrammar, 'scanLiteral'):l -> (l),
+  directive = foreign(LexicalGrammar, 'scanDirective'):l -> (l),
 
   noLineTermIdentifier = foreign(LexicalGrammar, 'scanIdentifierNoLineTerminator'):id -> (id),
   noLineTerminator = foreign(LexicalGrammar,'skipNoLine'),
