@@ -520,6 +520,9 @@ function(){
       };
       if (nameRef) { nameRef.set(result); }
       return result;
+    },
+    visitPrologueDecl: function(atr) {
+      return atr.value; // prologue declarations are interpreted as string literals
     }
   });
   Object.freeze(Evaluator.prototype);
