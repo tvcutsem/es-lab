@@ -321,7 +321,7 @@ function parserTestSuite() {
                                                       [ "LiteralExpr",{type:"string",value: "n"}]],
                                   [ "LiteralExpr",{type:"string", value: "m"} ] ]);	  
 
-  // CallExpressions
+  // CallExpressions and InvokeExpressions
   testExpression("f()", [ "CallExpr",{},["IdExpr",{name:"f"}] ]);
   testExpression("f(x)", [ "CallExpr",{},["IdExpr",{name:"f"}], Expr("x") ]);
   testExpression("f(x,y)", [ "CallExpr",{},["IdExpr",{name:"f"}], Expr("x"), Expr("y") ]);
@@ -337,6 +337,14 @@ function parserTestSuite() {
   testExpression("f(x)(y)", [ "CallExpr", {},
                              [ "CallExpr",{}, Expr("f"), Expr("x") ],
                              Expr("y") ]);
+
+  // EvalExpressions (identify possible uses of a 'direct call' to eval)
+  testExpression("eval('x')", ["EvalExpr", {}, Expr("'x'") ]);
+  testExpression("(eval)('x')", ["EvalExpr", {}, Expr("'x'") ]);
+  testExpression("(1,eval)('x')",
+                 ["CallExpr", {},
+                   ["BinaryExpr", {op:","}, Expr("1"), Expr("eval") ],
+                   Expr("'x'") ]);
 
   // NewExpressions
   testExpression("new f()", [ "NewExpr", {}, ["IdExpr", { name: "f" } ] ]);
