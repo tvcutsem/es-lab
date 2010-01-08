@@ -330,6 +330,9 @@ function(){
       });
       return applyNew(base, args);
     },
+    visitEvalExpr: function(atr, var_args) {
+      // TBD ...
+    },
     visitCountExpr: function(atr, lValue) {
       var ref = evalRef(lValue, this.env);
       var val = ref.get();
