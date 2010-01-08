@@ -153,7 +153,7 @@ function hygienicMacro(qfnName, qfn, literalPortions, substitutions) {
   return requireWellFormedAst(hygienicQuasi);
 
   function requireWellFormedAst(ast) {
-    var src = renderEcmascript(ast);
+    var src = renderEcmascript(ast[0] === 'Program' ? ast : ['Program',{},ast]);
     var prog = ES5Parser.matchAll(src, 'Program', [], function () {});
     if (!prog) {
       throw new Error('Malformed parse tree rendered to "' + src + '"');

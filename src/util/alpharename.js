@@ -109,12 +109,9 @@ function alphaMap(inherited, ast) {
       var labelMap = {};
       labelMap['label ' + label] = namer();
       return merge(inherited, labelMap);
-    case 'TryCatchStmt':
-    case 'TryCatchFinallyStmt':
-      // HACK: Since the JSON does not have a separate node for CatchStmts, we
-      // need to use the parent map for the try and finally blocks.
+    case 'CatchClause':
       var exMap = {};
-      var exName = ast[3][1].name;
+      var exName = ast[2][1].name;
       exMap[exName] = namer();
       return merge(inherited, exMap);
     case 'WithStmt': throw new Error('Cannot alpha rename with statements');
@@ -179,12 +176,13 @@ function renameOne(parentAst, parentAlphaMap, ast, letScopedNames) {
     case 'FunctionDecl': case 'FunctionExpr': letScopedNames = EMPTY_SET; break;
     case 'IdExpr':
       if (astProps.name === 'eval' && parentAst && parentAst[0] === 'CallExpr'
-          && ast === parentAst[2]) {
+          && ast === parentAst[2]) {  // TODO: remove this once bug 9 fixed
         throw new Error('alpha renaming breaks eval operator');
       } else {
         substIdent('name', '', astProps, astAlphaMap);
         return ['IdExpr', astProps];
       }
+    case 'EvalExpr': throw new Error('alpha renaming breaks eval operator');
     case 'IdPatt':
       substIdent('name', '', astProps, astAlphaMap);
       return ['IdPatt', astProps];
@@ -205,20 +203,12 @@ function renameOne(parentAst, parentAlphaMap, ast, letScopedNames) {
         throw new Error('Split initialization of "' + ast[2][1].name + '"');
       }
       break;
-    case 'TryCatchStmt': case 'TryCatchFinallyStmt':
-      var newLetScopedNames = set_union(
-          letScopedNames, set_singleton(ast[3][1].name));
-      var out = [
+    case 'CatchClause':
+      letScopedNames = set_union(letScopedNames, set_singleton(ast[2][1].name));
+      return [
           ast[0], astProps,
-          renameOne(ast, parentAlphaMap, ast[2], letScopedNames),
-          // Deal with problem described in astAlphaMap for same cases by using
-          // the alpha map only for the exception name and catch body.
-          renameOne(ast, astAlphaMap, ast[3], newLetScopedNames),
-          renameOne(ast, astAlphaMap, ast[4], newLetScopedNames)];
-      if (ast.length > 5) {
-        out[5] = renameOne(ast, parentAlphaMap, ast[5], letScopedNames);
-      }
-      return out;
+          renameOne(ast, astAlphaMap, ast[2], letScopedNames),
+          renameOne(ast, astAlphaMap, ast[3], letScopedNames)];
   }
   var renamedCopy = [ast[0]];
   if (astProps) {

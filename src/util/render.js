@@ -40,9 +40,19 @@ function renderEcmascript(ast) {
     var type = ast[0];
     switch (type) {
       case 'Program':
+        var couldBePrologue = true;
         for (var i = 2, n = ast.length; i < n; ++i) {
           if (i > 2) { endStatement(); }
-          renderStmt(ast[i]);
+          var part = ast[i];
+          if (couldBePrologue) {
+            console.log('part=' + JSON.stringify(part));
+            if (part[0] === 'LiteralExpr' && 'string' === part[1].type) {
+              parenthesize(part, true);
+              continue;
+            }
+            couldBePrologue = false;
+          }
+          renderStmt(part);
         }
         break;
       case 'BlockStmt':
@@ -80,6 +90,14 @@ function renderEcmascript(ast) {
         out.push('(');
         for (var i = 3, n = ast.length; i < n; ++i) {
           if (i !== 3) { out.push(','); }
+          render(ast[i]);
+        }
+        out.push(')');
+        break;
+      case 'EvalExpr':
+        out.push('eval(');
+        for (var i = 2, n = ast.length; i < n; ++i) {
+          if (i !== 2) { out.push(','); }
           render(ast[i]);
         }
         out.push(')');
@@ -123,6 +141,9 @@ function renderEcmascript(ast) {
           renderStmt(ast[2][i]);
         }
         out.push(STMT_END);
+        break;
+      case "PrologueDecl":
+        out.push(JSON.stringify(ast[1].directive));
         break;
       case 'FunctionDecl': case 'FunctionExpr':
         var isExpr = type === 'FunctionExpr';
@@ -250,23 +271,19 @@ function renderEcmascript(ast) {
         out.push(')');
         renderStmt(ast[3]);
         break;
-      case 'TryCatchFinallyStmt':
-      case 'TryCatchStmt':
+      case 'TryStmt':
         out.push('try ');
         renderStmt(ast[2]);
-        out.push(' catch (');
-        render(ast[3]);
-        out.push(')');
-        renderStmt(ast[4]);
-        if (ast.length > 5) {
+        renderStmt(ast[3]);
+        if (ast.length > 4) {
           out.push(' finally ');
-          renderStmt(ast[5]);
+          renderStmt(ast[4]);
         }
         break;
-      case 'TryFinallyStmt':
-        out.push('try ');
-        renderStmt(ast[2]);
-        out.push(' finally ');
+      case 'CatchClause':
+        out.push(' catch (');
+        render(ast[2]);
+        out.push(')');
         renderStmt(ast[3]);
         break;
       case 'SwitchStmt':

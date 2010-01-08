@@ -1,6 +1,6 @@
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
 <html> <head>
-<title></title>
+<title>Hygienic Macros</title>
 <script src="../../src/util/sets.js"></script>
 <script src="../../src/util/freevars.js"></script>
 <script src="../../src/util/alpharename.js"></script>
@@ -35,8 +35,8 @@
   }
   return out;
 }</td>
-  <tr><td>cat``<td>""</tr>
-  <tr><td>cat`foo`<td>"foo"</tr>
+  <tr><td>cat``<td>("")</tr>
+  <tr><td>cat`foo`<td>("foo")</tr>
   <tr><th colspan=2>Free names in substitutions can appear free in output</tr>
   <tr><td>cat`foo${bar}baz`<td>"foo"+(bar+"baz")</tr>
   <tr><td>cat`foo${bar}baz$boo`<td>("foo"+(bar+"baz"))+(boo+"")</tr>
@@ -255,5 +255,5 @@
 
 <hr>
 <address></address>
-<!-- hhmts start --> Last modified: Tue Jan  5 20:58:16 HST 2010 <!-- hhmts end -->
+<!-- hhmts start --> Last modified: Thu Jan  7 20:50:11 HST 2010 <!-- hhmts end -->
 </body> </html>

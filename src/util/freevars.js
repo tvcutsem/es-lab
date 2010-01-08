@@ -47,12 +47,8 @@ var_scoped_decls = function (ast) {
     case 'IdPatt':
       names = set_singleton(ast[1].name);
       break;
-    case 'TryCatchStmt': case 'TryCatchFinallyStmt':
-      names = EMPTY_SET;
-      for (var i = 2, n = ast.length; i < n; ++i) {
-        if (i === 3) { continue; }
-        names = set_union(names, var_scoped_decls(ast[i]));
-      }
+    case 'CatchClause':
+      names = var_scoped_decls(ast[3]);
       break;
     default:
       names = EMPTY_SET;
@@ -99,14 +95,15 @@ required_names = function (ast, opt_exclusions) {
       }
       names = set_difference(names, decls);
       break;
-    case 'TryCatchStmt': case 'TryCatchFinallyStmt':
-      // children are 2: try-body, 3: ex-name, 4: catch-body, 5: finally-body
+    case 'TryStmt':
+      var ex = ast[3];
+      var exName = ex[0] === 'CatchClause'
+          ? set_singleton(ex[2][1].name) : EMPTY_SET;
       names = set_union(
           required_names(ast[2], opt_exclusions),
-          set_difference(required_names(ast[4], opt_exclusions),
-                         set_singleton(ast[3][1].name)));
-      if (ast.length > 5) {  // has finally clause
-        names = set_union(names, required_names(ast[5], opt_exclusions));
+          set_difference(required_names(ast[3], opt_exclusions), exName));
+      if (ast.length > 4) {  // has finally clause
+        names = set_union(names, required_names(ast[4], opt_exclusions));
       }
       break;
     default:
