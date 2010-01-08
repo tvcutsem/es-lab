@@ -34,7 +34,7 @@ function(){
    * <p>For example, a defensive <tt>Point</tt> constructor can be
    * written as <tt>
    *   function Point(x, y) {
-   *     return methods({
+   *     return object({
    *       toString: function() { return '&lt;' + x + ',' + y + '&gt;'; },
    *       getX: function() { return x; },
    *       getY: function() { return y; }
@@ -44,7 +44,7 @@ function(){
    *   Object.freeze(Point);
    * </tt>
    */
-  function methods(obj) {
+  function object(obj) {
     for (var name in obj) {
       var meth = obj[name];
       if (typeof meth === 'function') {
@@ -166,7 +166,7 @@ function(){
   /////////////// meta interpreter support //////////////////
 
   function unaryOp(op, x) {
-    return methods({
+    return object({
          "void": function() { return void x; },
          "+":    function() { return +x; },
          "-":    function() { return -x; },
@@ -176,7 +176,7 @@ function(){
   }
 
   function binaryOp(op, x, y) {
-    return methods({
+    return object({
          "*":          function() { return x * y; },
          "/":          function() { return x / y; },
          "%":          function() { return x % y; },
@@ -208,7 +208,7 @@ function(){
     this.rep = rep;
     this.thisArg = thisArg;
   }
-  Environment.prototype = methods({
+  Environment.prototype = object({
     get: function(varName) {
       return this.rep['var$' + varName];
     },
@@ -257,7 +257,7 @@ function(){
   function Evaluator(env) {
     this.env = env;
   }
-  Evaluator.prototype = methods({
+  Evaluator.prototype = object({
     visitThisExpr:    function(atr) { return this.env.getThis(); },
     visitIdExpr:      function(atr) { return this.env.get(atr.name); },
     visitRegExpExpr:  function(atr) { return new RegExp(atr.body, 
@@ -278,7 +278,7 @@ function(){
       var result = {};
       var that = this;
       slice(arguments, 1).forEach(function(arg) {
-        return visit(arg, methods({
+        return visit(arg, object({
           visitDataProp: function(propAtr, propExpr) {
             result[propAtr.name] = visit(propExpr, that);
           },
@@ -333,7 +333,7 @@ function(){
     visitCountExpr: function(atr, lValue) {
       var ref = evalRef(lValue, this.env);
       var val = ref.get();
-      methods({ 
+      object({ 
         "++": function() { if (atr.isPrefix) { ++val; } else { val++; } },
         "--": function() { if (atr.isPrefix) { --val; } else { val--; } }
       })[atr.op]();
@@ -387,7 +387,7 @@ function(){
       var patts = slice(arguments, 1);
       var that = this;
       patts.forEach(function(patt){
-        visit(patt, methods({
+        visit(patt, object({
           visitInitPatt: function(pAtr, lValue, rValue) {
             evalRef(lValue, that.env).set(visit(rValue, that));
           },
@@ -530,9 +530,9 @@ function(){
   }
 
   function evalRef(lValue, env) {
-    return visit(element, methods({
+    return visit(element, object({
       visitIdExpr: function(atr) {
-        return methods({
+        return object({
           get:    function()       { return env.get(atr.name); },
           set:    function(newVal) { return env.set(atr.name, newVal); },
           remove: function()       { return env.remove(atr.name); },
@@ -542,7 +542,7 @@ function(){
       visitMemberExpr: function(atr, baseExpr, propExpr) {
         var base = visit(baseExpr, this);
         var prop = visit(propExpr, this);
-        return methods({
+        return object({
           get:    function()       { return base[prop]; },
           set:    function(newVal) { base[prop] = val; return true; },
           remove: function()       { return delete base[prop]; },
