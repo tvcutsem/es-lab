@@ -773,15 +773,16 @@ ometa ES5Parser {
                  | k("throw") Expression:e sc -> ( self.ast("ThrowStmt",{},[e]) ),
 
   TryStatement = k("try") Block:b Catch:c Finally:f ->
-                 ( self.ast("TryCatchFinallyStmt",{},[b,c.excId,c.block,f]) )
+                 ( self.ast("TryStmt",{},[b,c,f]) )
                | k("try") Block:b Finally:f ->
-                 ( self.ast("TryFinallyStmt",{},[b,f]) )
+                 ( self.ast("TryStmt",{},[b,self.emptyAst(),f]) )
                | k("try") Block:b Catch:c ->
-                 ( self.ast("TryCatchStmt",{},[b,c.excId,c.block]) ),
+                 ( self.ast("TryStmt",{},[b,c]) ),
 
-  // @returns an object { excId: IdPatt, block: Block }
-  Catch = k("catch") "(" identifier:id ")" Block:b -> ( {excId: self.ast("IdPatt",{name:id},[]),
-                                                      block: b } ),
+  // @returns a CatchClause AST
+  Catch = k("catch") "(" identifier:id ")" Block:b ->
+          ( self.ast("CatchClause", {},
+              [self.ast("IdPatt",{name:id},[]), b]) ),
 
   // @returns a Block AST
   Finally = k("finally") Block:b -> ( b ),

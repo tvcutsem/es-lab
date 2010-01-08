@@ -582,19 +582,22 @@ function parserTestSuite() {
  
   // try-catch statements
   testStatement("try { s1; } catch (e) { s2; }",
-                ["TryCatchStmt",{},
+                ["TryStmt",{},
                   ["BlockStmt",{},Stmt("s1;")],
-                  ["IdPatt",{name:"e"}],
-                  ["BlockStmt",{},Stmt("s2;")] ]);
+                  [ "CatchClause", {},
+                    ["IdPatt",{name:"e"}],
+                    ["BlockStmt",{},Stmt("s2;")] ] ]);
   testStatement("try { s1; } finally { s2; }",
-                ["TryFinallyStmt",{},
+                ["TryStmt",{},
                   ["BlockStmt",{},Stmt("s1;")],
+                  ["Empty"],
                   ["BlockStmt",{},Stmt("s2;")] ]); 
   testStatement("try { s1; } catch (e) { s2; } finally { s3; }",
-                ["TryCatchFinallyStmt",{},
+                ["TryStmt",{},
                   ["BlockStmt",{},Stmt("s1;")],
-                  ["IdPatt",{name:"e"}],
-                  ["BlockStmt",{},Stmt("s2;")],
+                  [ "CatchClause", {},
+                    ["IdPatt",{name:"e"}],
+                    ["BlockStmt",{},Stmt("s2;")] ],
                   ["BlockStmt",{},Stmt("s3;")] ]);
   
   // debugger statement
