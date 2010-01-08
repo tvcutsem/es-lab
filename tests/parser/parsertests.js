@@ -83,6 +83,14 @@ function lexerTestSuite() {
 	  unit.reCompare(/^failed to match:.*/,
 				   lex(input,rule,args), "Input should not match: "+input);
   };
+  
+  function checkRegExp(input, body, flags) {
+  	var token = lex(input, 'RegularExpressionLiteral', []);
+  	unit.ok(typeof(token) == "object", "parsing '"+input+"': "+token);
+  	unit.compare("regexp", token.type, "token type for '"+input+"' is regexp");
+  	unit.compare(body, token.value.body, "regexp body for '"+input+"'");
+  	unit.compare(flags, token.value.flags, "regexp flags for '"+input+"'");
+  };
 		  
   unit.compare("foo!@#^&$1234", lex('//foo!@#^&$1234\nbar','Comment') , "single-line comment" );
   unit.compare(" abcd!@#@$* { } && null", lex('/* abcd!@#@$* { } && null*/', 'Comment'), "multi-line comment");
@@ -172,14 +180,8 @@ function lexerTestSuite() {
   
   checkLiteral("null", null, "null", 'Literal');
   
-  (function () {
-	var input = "/abc[a-z]*def/g";
-	var token = lex(input, 'RegularExpressionLiteral', []);
-	unit.ok(typeof(token) == "object", "parsing '"+input+"': "+token);
-	unit.compare("regexp", token.type, "token type for '"+input+"' is regexp");
-	unit.compare("abc[a-z]*def", token.value.body, "regexp body for '"+input+"'");
-	unit.compare("g", token.value.flags, "regexp flags for '"+input+"'");
-  })();
+  checkRegExp("/abc[a-z]*def/g", "abc[a-z]*def", "g");
+  checkRegExp("/\\b/", "\\b", "");
 
   unit.testDone();
 };

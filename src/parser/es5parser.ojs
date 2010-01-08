@@ -252,7 +252,7 @@ ometa LexicalGrammar {
   RegularExpressionChar = ~('\\' | '/' | '[') RegularExpressionNonTerminator
                         | RegularExpressionBackslashSequence
                         | RegularExpressionClass,
-  RegularExpressionBackslashSequence = '\\' NonTerminator:nt -> ( "\\"+nt ),
+  RegularExpressionBackslashSequence = '\\' RegularExpressionNonTerminator:nt -> ( "\\"+nt ),
   RegularExpressionNonTerminator = ~(LineTerminator) SourceCharacter,
   RegularExpressionClass = '[' RegularExpressionClassChars:cs ']' -> ("["+cs+"]" ),
   RegularExpressionClassChars = RegularExpressionClassChars:cs RegularExpressionClassChar:c ->
