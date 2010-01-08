@@ -525,7 +525,7 @@ ometa ES5Parser {
                  | MemberExpression:mexp Arguments:args ->
                    ( mexp.nodeType() === "MemberExpr"
                      ? self.ast("InvokeExpr",{},mexp.children().concat(args)) :
-                       mexp.nodeType() === "IdExpr" && mexp.attributes().name === "eval"
+                       mexp.nodeType() === "IdExpr" && mexp.attributes().name === "eval" && args.length===1
                        // identify possible 'direct call' to eval, cf. 15.1.2.1.1
                        ? self.ast("EvalExpr",{},args) :
                          self.ast("CallExpr",{},[mexp].concat(args)) ),
