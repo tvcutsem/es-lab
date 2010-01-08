@@ -657,25 +657,25 @@ function parserTestSuite() {
   // Directive Prologues
   testProgram('"use strict"; \'bla\'\n foo',
               ["Program", {},
-                ["PrologueDecl", { "directive":"use strict" } ],
-                ["PrologueDecl", { "directive":"bla" } ],
+                ["PrologueDecl", { "value": "use strict","directive":"use strict" } ],
+                ["PrologueDecl", { "value": "bla", "directive":"bla" } ],
                 ["IdExpr", { "name":"foo" } ] ]);
   testExpression('function() { "use strict"; \'bla\'\n foo }',
               ["FunctionExpr", {},
                 ["Empty"],
                 ["ParamDecl",{}],
-                ["PrologueDecl", { "directive":"use strict" } ],
-                ["PrologueDecl", { "directive":"bla" } ],
+                ["PrologueDecl", { "value":"use strict","directive":"use strict" } ],
+                ["PrologueDecl", { "value":"bla","directive":"bla" } ],
                 ["IdExpr", { "name":"foo" } ] ]);
-  testProgram('"use\ strict";',
+  testProgram('"use\\ strict";',
               ["Program", {},
-                ["PrologueDecl", { "directive":"use\ strict" } ] ]);
+                ["PrologueDecl", { value: "use strict", directive:"use\\ strict" } ] ]);
   testProgram('foo; "use strict";',
               ["Program", {},
                   ["IdExpr", {"name":"foo"} ],
                   ["LiteralExpr",
-                    {"type":"string",
-                     "value":"use strict"} ] ]);
+                    {type:"string",
+                     value:"use strict"} ] ]);
 
   // examples from the spec (sec 7.9.2)
   testProgram("{ 1 \n 2 } 3", // semicolon inserted after 1,2 and 3

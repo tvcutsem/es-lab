@@ -279,14 +279,16 @@ ometa LexicalGrammar {
   MultiLineNotForwardSlashOrAsteriskCharNoNL = ~('/' | '*') ~LineTerminator SourceCharacter:c -> (c),
 
   // see section 14.1: Directive Prologues and the Use Strict Directive
-  // like a StringLiteral but no EscapeSequence or LineContinuation allowed
+  // Some directives (like the Use Strict Directive) may require access to the
+  // raw string value, without interpretation of EscapeSequences or LineContinuations
   // @returns the raw string value (not a String Literal AST)
-  DirectiveStringLiteral = '"' (StringCharacters('"') | empty -> ""):s '"' -> (s)
-                         | '\'' (StringCharacters("'") | empty -> ""):s '\'' -> (s),
-  StringCharacters :term = StringCharacter(term):c (StringCharacters(term) | empty -> ""):cs ->
-                           ( c.concat(cs) ),
-  StringCharacter :term = ~(exactly(term) | '\\' | LineTerminator) SourceCharacter:s -> (s),
-
+  RawStringLiteral = '"' (RawStringCharacters('"') | empty -> ""):s '"' -> (s)
+                   | '\'' (RawStringCharacters("'") | empty -> ""):s '\'' -> (s),
+  RawStringCharacters :term = RawStringCharacter(term):c
+                                (RawStringCharacters(term) | empty -> ""):cs ->
+                              ( c.concat(cs) ),
+  RawStringCharacter :term = ~exactly(term) SourceCharacter:s -> (s),
+  
   // used by parser to parse actual tokens
 
   // eat wspace, lineterminators and comments
@@ -325,8 +327,10 @@ ometa LexicalGrammar {
   // @returns a literal token
   scanLiteral = skip Literal:l -> (l),
   
-  // @returns a string
-  scanDirective = skip DirectiveStringLiteral:l -> (l)
+  // @returns an object {value: string, directive: string}
+  // where 'value' contains the interpreted string value
+  // and 'directive' contains the uninterpreted ('raw') string value
+  scanDirective = skip &(RawStringLiteral):raw StringLiteral:l -> ({value:l.value, directive:raw})
 }
 
 // turns an array into a set, represented as a map of elements -> boolean
@@ -825,7 +829,7 @@ ometa ES5Parser {
   DirectivePrologue = DirectivePrologue:p Directive:d -> ( p.concat([d]) )
                     | Directive:d -> ([d]),
   
-  Directive = directive:dir sc -> ( self.ast('PrologueDecl',{directive:dir},[]) ),
+  Directive = directive:dir sc -> ( self.ast('PrologueDecl',dir,[]) ),
 
   // === Implementation-level rules (not part of the spec) ===
 
