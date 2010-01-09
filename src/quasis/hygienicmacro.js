@@ -16,18 +16,12 @@
  * <p>
  * This code relies on other modules to function correctly to preserve
  * its security properties.  Specifically, <ol>
- * <li>It relies on {@code Object.freeze} to preserve the integrity of
- *     capabilities, and so cannot preserve its security properties on
- *     versions of EcmaScript < 5.  This could be corrected by passing
- *     a copy of capabilities to the handler, and replacing that copy
- *     with the original post alpha-rename.
  * <li>It relies on "freevars.js" to not undercount free identifiers.
  *     "freevars.js" is known to be incorrect around "with" blocks
  *     but not in a way that undercounts.
- * <li>It relies on "alpharename.js" to copy the parse tree, and to
- *     correctly distinguish read contexts from write contexts when
- *     exempting capabilities from renaming.  It does not rely on it
- *     to function correctly otherwise.
+ * <li>It relies on "alpharename.js" to copy the parse tree.
+ * <li>It relies on isWriteContext to correctly distinguish read contexts from
+ *     write contexts.
  * <li>It relies on ES5Parser to make the same token-boundary decisions as
  *     the built-in interpreter's parser.  This can be corrected by
  *     returning the parse tree directly instead of returning the rendered
@@ -60,10 +54,9 @@ function hygienicMacro(qfnName, qfn, literalPortions, substitutions) {
   if (typeof qfnName !== 'string') { throw new Error('qfnName: ' + qfnName); }
   if (typeof qfn !== 'function') { throw new Error('qfn: ' + qfn); }
 
-  // Parse substitutions and generate a list of read and write capabilities
-  // to grant to qfn.
-  var readCaps = [ ['IdExpr', { name: qfnName } ] ];
-  var writeCaps = [];
+  // Parse substitutions.
+  var subAsts = [ ['IdExpr', { name: qfnName } ] ];
+  var writable = [ false ];
   for (var i = 0, n = substitutions.length; i < n; ++i) {
     var sub = '' + substitutions[i];
     var isWritable = false;
@@ -80,47 +73,42 @@ function hygienicMacro(qfnName, qfn, literalPortions, substitutions) {
       // QuasiSubstitution grammar, this will parse as '(' Expression ')'.
       prod = 'PrimaryExpression';
     }
-    // We rely on deepFreeze to ensure that ocap expresses macro author intent.
-    var ocap = deepFreeze(ES5Parser.matchAll(sub, prod, [], function () {}));
-    if (!ocap) {
-      throw new Error('Failed to parse substitution "' + sub + '"');
-    }
-    readCaps.push(ocap);
-    if (isWritable) { writeCaps.push(ocap); }
+    // Parsing has to return something that correctly expresses user intent.
+    var ast = ES5Parser.matchAll(sub, prod, [], function () {});
+    if (!ast) { throw new Error('Failed to parse substitution "' + sub + '"'); }
+    subAsts[i + 1] = ast;
+    writable[i + 1] = isWritable;
   }
 
   // Pass literal portions as string literals so there is a place
-  // to embed source position info and other details.
-  var literals = [];
+  // to embed source position info and other details, and pass
+  // placeholders for substitutions.
+  var literals = [], substs = [];
   for (var i = 0, n = literalPortions.length; i < n; ++i) {
-    literals[i] = deepFreeze(
-        ['LiteralExpr', { type: 'string', value: literalPortions[i] }]);
+    literals[i] = ['LiteralExpr', {type: 'string', value: literalPortions[i]}];
+    substs[i] = ['Subst', { index: i }];
   }
 
-  // Untrusted: may not be JSON.
-  var expandedQuasi = qfn(deepFreeze(arrayCopy(literals)),
-                          deepFreeze(arrayCopy(readCaps)));
+  // Untrusted.  Output may not be JSON.
+  var expandedQuasi = qfn(literals, substs);
 
   // Create a namer that will not introduce any names that conflict
   // with identifiers used in caps.
   var namer = (function () {
-    var freeCaps = EMPTY_SET;  // All free names in the substitutions.
-    for (var i = 0, n = readCaps.length; i < n; ++i) {
-      var ocap = readCaps[i];
-      freeCaps = set_union(
-          freeCaps, set_union(free_names(ocap), free_labels(ocap)));
+    var free = EMPTY_SET;  // All free names in the substitutions.
+    for (var i = 0, n = subAsts.length; i < n; ++i) {
+      var ast = subAsts[i];
+      free = set_union(free, set_union(free_names(ast), free_labels(ast)));
     }
-    var freeCapMap = {};
-    for (var i = freeCaps.length; --i >= 0;) {
-      freeCapMap[freeCaps[i]] = true;
-    }
+    var freeMap = {};
+    for (var i = free.length; --i >= 0;) { freeMap[free[i]] = true; }
     var nameCounter = 0;
     return function () {
       var name;
       do {
         name = '$' + nameCounter;
         if (nameCounter === ++nameCounter) { throw 'overflow'; }
-      } while (name in freeCapMap);
+      } while (name in freeMap);
       return name;
     };
   })();
@@ -128,19 +116,16 @@ function hygienicMacro(qfnName, qfn, literalPortions, substitutions) {
   // The renamer copies the tree, so this output is guaranteed valid JSON
   // without sharp edges such as getters/setters that camoflage bad data.
   // It is not guaranteed to be a well-formed parse tree.
-  var hygienicQuasi = alphaRename(expandedQuasi, namer, readCaps, writeCaps);
+  var hygienicQuasi = alphaRename(expandedQuasi, namer);
   // We do not rely on the alpha renamer to function correctly to preserve
-  // security properties, but do rely on it return valid JSON given valid
-  // JSON, and do rely on it to not allow a writeCap where only a readCap
-  // is allowed.
+  // security properties, but do rely on it return valid JSON given valid JSON.
 
-  // Check that the alpha renamed result has no free variables besides those
-  // in capabilities.
-  var freeNamesInQuasi = free_names(hygienicQuasi, readCaps);
+  // Check that the alpha renamed result has no free variables.
+  var freeNamesInQuasi = free_names(hygienicQuasi);
   if (freeNamesInQuasi.length !== 0) {
     throw new Error('Free variables ' + freeNamesInQuasi);
   }
-  var freeLabelsInQuasi = free_labels(hygienicQuasi, readCaps);
+  var freeLabelsInQuasi = free_labels(hygienicQuasi);
   if (freeLabelsInQuasi.length !== 0) {
     throw new Error('Free labels ' + freeLabelsInQuasi);
   }
@@ -150,7 +135,27 @@ function hygienicMacro(qfnName, qfn, literalPortions, substitutions) {
   // We still cannot trust that the AST is well-formed.  We do a render and
   // reparse followed by a structural similarity check to enforce
   // well-formedness.
-  return requireWellFormedAst(hygienicQuasi);
+  return requireWellFormedAst(reconstitute(null, hygienicQuasi));
+
+  // Replace ['Subst', { index: ... }] nodes with the ASTs from the input.
+  function reconstitute(parentAst, ast) {
+    if (ast[0] === 'Subst') {
+      var index = +ast[1].index;
+      if (index !== (index >>> 0) && index < subAsts.length) {
+        throw new Error('Invalid substitution');
+      } else if (!writable[index] && isWriteContext(parentAst, ast)) {
+        throw new Error('${' + renderEcmascript(subAsts[index])
+                         + '} used in assignment.');
+      }
+      return subAsts[index];
+    }
+    if (ast.length <= 2) { return ast; }
+    var copy = [ast[0], ast[1]];
+    for (var i = 2, n = ast.length; i < n; ++i) {
+      copy[i] = reconstitute(ast, ast[i]);
+    }
+    return copy;
+  }
 
   function requireWellFormedAst(ast) {
     var src = renderEcmascript(ast[0] === 'Program' ? ast : ['Program',{},ast]);
@@ -210,21 +215,12 @@ function hygienicMacro(qfnName, qfn, literalPortions, substitutions) {
     }
   }
 
-  function deepFreeze(jsonObj) {
-    if (typeof jsonObj !== 'object' || !jsonObj) { return; }
-    Object.freeze(jsonObj);
-    for (var i = 0, n = jsonObj.length || 0; i < n; ++i) {
-      deepFreeze(jsonObj[i]);
+  function isWriteContext(parentAst, ast) {
+    if (!parentAst) { return false; }  // conservative.
+    switch (parentAst[0]) {
+      case 'CountExpr': return true;
+      case 'AssignExpr': case 'ForInStmt': return ast === parentAst[2];
+      default: return false;
     }
-    // We could descend into named properties of objects, but this would
-    // increase the risk of inf. loops and the alpha renamer is careful not
-    // to copy non-primitive properties of JSON AST attribute maps.
-    return jsonObj;
-  }
-
-  function arrayCopy(arr) {
-    var out = [];
-    for (var i = arr.length; --i >= 0;) { out[i] = arr[i]; }
-    return out;
   }
 }

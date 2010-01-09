@@ -67,8 +67,7 @@ var LOOP_DEFAULTS = set_union(DEFAULT_LABEL, set_singleton('continue default'));
 var IMPLIED_BY_FN = set_union(ARGUMENTS, THIS);
 var RETURN = set_singleton('return');
 
-required_names = function (ast, opt_exclusions) {
-  if (opt_exclusions && opt_exclusions.indexOf(ast) >= 0) { return EMPTY_SET; }
+required_names = function (ast) {
   var names;
   switch (ast[0]) {
     case 'IdExpr': names = set_singleton(ast[1].name); break;
@@ -79,7 +78,7 @@ required_names = function (ast, opt_exclusions) {
       names = EMPTY_SET;
       // Function body
       for (var i = 4, n = ast.length; i < n; ++i) {
-        names = set_union(names, required_names(ast[i], opt_exclusions));
+        names = set_union(names, required_names(ast[i]));
       }
       names = set_difference(names, IMPLIED_BY_FN);
       var decls = EMPTY_SET;
@@ -100,16 +99,16 @@ required_names = function (ast, opt_exclusions) {
       var exName = ex[0] === 'CatchClause'
           ? set_singleton(ex[2][1].name) : EMPTY_SET;
       names = set_union(
-          required_names(ast[2], opt_exclusions),
-          set_difference(required_names(ast[3], opt_exclusions), exName));
+          required_names(ast[2]),
+          set_difference(required_names(ast[3]), exName));
       if (ast.length > 4) {  // has finally clause
-        names = set_union(names, required_names(ast[4], opt_exclusions));
+        names = set_union(names, required_names(ast[4]));
       }
       break;
     default:
       names = EMPTY_SET;
       for (var i = 2, n = ast.length; i < n; ++i) {
-        names = set_union(names, required_names(ast[i], opt_exclusions));
+        names = set_union(names, required_names(ast[i]));
       }
       break;
   }
@@ -177,9 +176,9 @@ free_labels = required_labels = function (ast) {
   return labels;
 };
 
-free_names = function (ast, opt_exclusions) {
+free_names = function (ast) {
   return set_union(
-      required_names(ast, opt_exclusions),
+      required_names(ast),
       set_union(let_scoped_decls(ast), var_scoped_decls(ast)));
 };
 

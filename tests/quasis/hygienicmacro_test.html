@@ -23,7 +23,7 @@
 
 <table id=tests>
   <tr><th>Quasi<th>Expanded</tr>
-  <tr><td colspan=2>function cat(literals, readCaps) {
+  <tr><td colspan=2>function cat(literals, substs) {
   function plus(a, b) { return ['BinaryExpr', { op: '+' }, a, b]; }
   function unesc(lit) {
     var s = lit[1].value;
@@ -31,7 +31,7 @@
   }
   var out = unesc(literals[0]);
   for (var i = 1, n = literals.length; i < n; ++i) {
-    out = plus(out, plus(readCaps[i], unesc(literals[i])));
+    out = plus(out, plus(substs[i], unesc(literals[i])));
   }
   return out;
 }</td>
@@ -41,103 +41,109 @@
   <tr><td>cat`foo${bar}baz`<td>"foo"+(bar+"baz")</tr>
   <tr><td>cat`foo${bar}baz$boo`<td>("foo"+(bar+"baz"))+(boo+"")</tr>
   <tr><th colspan=2>but other free names are rejected</tr>
-  <tr><td colspan=2>function looseI(literals, readCaps) {
+  <tr><td colspan=2>function looseI(literals, substs) {
   var varI = ['IdExpr', { name: 'i' }];
   return ['ForStmt', {},
-          ['AssignExpr', { op: '=' }, varI, readCaps[1]],
-          ['BinaryExpr', { op: '<' }, varI, readCaps[2]],
+          ['AssignExpr', { op: '=' }, varI, substs[1]],
+          ['BinaryExpr', { op: '<' }, varI, substs[2]],
           ['CountExpr', { op: '++', isPrefix: true }, varI],
-          ['CallExpr', {}, readCaps[3], varI]];
+          ['CallExpr', {}, substs[3], varI]];
 }</tr>
   <tr><td>looseI`${0}-${n}:$count`<td>throws Error: Free variables [i]</tr>
-  <tr><td colspan=2>function looseI2(literals, readCaps) {
+  <tr><td colspan=2>function looseI2(literals, substs) {
   var varI = ['IdExpr', { name: 'i' }];
   var varN = ['IdExpr', { name: 'n' }];
   return ['CallExpr', {},
           ['FunctionExpr', {}, ['Empty'], ['ParamDecl', {}],
            ['ForStmt', {},
             ['BinaryExpr', { op: ',' },
-             ['AssignExpr', { op: '=' }, varI, readCaps[1]],
-             ['AssignExpr', { op: '=' }, varN, readCaps[2]]],
+             ['AssignExpr', { op: '=' }, varI, substs[1]],
+             ['AssignExpr', { op: '=' }, varN, substs[2]]],
             ['BinaryExpr', { op: '<' }, varI, varN],
             ['CountExpr', { op: '++', isPrefix: true }, varI],
-            ['CallExpr', {}, readCaps[3], varI]]]];
+            ['CallExpr', {}, substs[3], varI]]]];
 }</tr>
   <tr><td>looseI2`${0}-${n}:$count`<td>throws Error: Free variables [i, n]</tr>
   <tr><th colspan=2>Local names that conflict with free names are hygienized</tr>
-  <tr><td colspan=2>function looseIFixed(literals, readCaps) {
+  <tr><td colspan=2>function looseIFixed(literals, substs) {
   var varI = ['IdExpr', { name: 'i' }];
   var varN = ['IdExpr', { name: 'n' }];
   return ['CallExpr', {},
           ['FunctionExpr', {}, ['Empty'], ['ParamDecl', {}],
            ['ForStmt', {},
             ['VarDecl', {},
-             ['InitPatt', {}, ['IdPatt', { name: 'i' }], readCaps[1]],
-             ['InitPatt', {}, ['IdPatt', { name: 'n' }], readCaps[2]]],
+             ['InitPatt', {}, ['IdPatt', { name: 'i' }], substs[1]],
+             ['InitPatt', {}, ['IdPatt', { name: 'n' }], substs[2]]],
             ['BinaryExpr', { op: '<' }, varI, varN],
             ['CountExpr', { op: '++', isPrefix: true }, varI],
-            ['CallExpr', {}, readCaps[3], varI]]]];
+            ['CallExpr', {}, substs[3], varI]]]];
 }</tr>
   <tr><td>looseIFixed`${0}-${n}:${count}`</td>
       <td>(function (){for (var $0=0,$1=n;$0<$1;++$0)count($0)})()</tr>
   <tr><th colspan=2>Granting access to a property does not grant access to the object</tr>
-  <tr><td colspan=2>function useProp(literals, readCaps) {
-  return ['AssignExpr', {op:'='}, readCaps[1], ['LiteralExpr', {type:'number', value:1}]];
+  <tr><td colspan=2>function useProp(literals, substs) {
+  return ['AssignExpr', {op:'='}, substs[1], ['LiteralExpr', {type:'number', value:1}]];
 }</tr>
   <tr><td>useProp`${=x.y}`<td>x["y"]=1</tr>
-  <tr><td colspan=2>function breakProp(literals, readCaps) {
-  return ['AssignExpr', {op:'='}, readCaps[1][2], ['LiteralExpr', {type:'number', value:1}]];
+  <tr><td colspan=2>function breakProp(literals, substs) {
+  return ['AssignExpr', {op:'='}, ['IdExpr', { name: 'x' }], ['LiteralExpr', {type:'number', value:1}]];
 }</tr>
   <tr><td>breakProp`${=x.y}`<td>throws Error: Free variables [x]</tr>
   <tr><th colspan=2>Malformed ASTs are rejected</tr>
-  <tr><td colspan=2>function malAst(literals, readCaps) {
-  return ['UnaryExpr', { op: 'alert("Hello, World!") * ' }, readCaps[1]];
+  <tr><td colspan=2>function malAst(literals, substs) {
+  return ['UnaryExpr', { op: 'alert("Hello, World!") * ' }, substs[1]];
 }</tr>
   <tr><td>malAst`${1}`<td>throws Error: Malformed parse tree ["UnaryExpr",{"op":"alert(\"Hello, World!\") * "},["LiteralExpr",{"type":"number","value":1}]] produced {{ alert("Hello, World!") * 1 }} but cannot reconcile with {{ (alert("Hello, World!"))*1 }}</tr>
   <tr><th colspan=2>Assignment to read only capabilities rejected, but with '=' prefix, is allowed.</tr>
-  <tr><td colspan=2>function lazySet1(literals, readCaps) {
+  <tr><td colspan=2>function lazySet1(literals, substs) {
   return ['FunctionExpr', {}, ['IdPatt', { name: 'f' }], ['ParamDecl', {}],
           ['ReturnStmt', {},
-           ['AssignExpr', { op: '=' }, readCaps[1], readCaps[2]]]];
+           ['AssignExpr', { op: '=' }, substs[1], substs[2]]]];
 }</tr>
   <tr><td>lazySet1`${foo}$bar`<td>throws Error: ${foo} used in assignment.</tr>
   <tr><td>lazySet1`${=foo}$bar`<td>(function $0(){return foo=bar})</tr>
-  <tr><td colspan=2>function lazySet2(literals, readCaps) {
+  <tr><td colspan=2>function lazySet2(literals, substs) {
   return ['FunctionExpr', {}, ['IdPatt', { name: 'f' }], ['ParamDecl', {}],
           ['ReturnStmt', {},
-           ['AssignExpr', { op: '+=' }, readCaps[1], readCaps[2]]]];
+           ['AssignExpr', { op: '+=' }, substs[1], substs[2]]]];
 }</tr>
   <tr><td>lazySet2`${foo}$bar`<td>throws Error: ${foo} used in assignment.</tr>
   <tr><td>lazySet2`${=foo}$bar`<td>(function $0(){return foo+=bar})</tr>
-  <tr><td colspan=2>function lazyIncr(literals, readCaps) {
+  <tr><td colspan=2>function lazyIncr(literals, substs) {
   return ['FunctionExpr', {}, ['IdPatt', { name: 'f' }], ['ParamDecl', {}],
           ['ReturnStmt', {},
-           ['CountExpr', { isPrefix: true, op: '++' }, readCaps[1]]]];
+           ['CountExpr', { isPrefix: true, op: '++' }, substs[1]]]];
 }</tr>
   <tr><td>lazyIncr`${foo}`<td>throws Error: ${foo} used in assignment.</tr>
   <tr><td>lazyIncr`${=foo}`<td>(function $0(){return ++foo})</tr>
-  <tr><th colspan=2>Sometimes a quasi expansion needs a little help from its friends</tr>
-  <tr><td colspan=2>function needsHelp(literals, readCaps) {
+  <tr><td colspan=2>function lazyIter(literals, substs) {
+  return ['FunctionExpr', {}, ['IdPatt', { name: 'f' }], ['ParamDecl', {}],
+          ['ForInStmt', {}, substs[1], ['ObjectExpr', {}], ['BlockStmt', {}]]];
+}</tr>
+  <tr><td>lazyIter`${foo}`<td>throws Error: ${foo} used in assignment.</tr>
+  <tr><td>lazyIter`${=foo}`<td>(function $0(){for (foo in {}){}})</tr>
+  <tr><th colspan=2>Sometimes an expansion needs a little help from its friends</tr>
+  <tr><td colspan=2>function needsHelp(literals, substs) {
   function str(s) { return ['LiteralExpr', { type: 'string', value: '' + s }]; }
   function plus(a, b) { return ['BinaryExpr', { op: '+' }, a, b]; }
   function unesc(lit) { return lit[1].value.replace(/\\(.)/g, '$1'); }
   function esc(ast) {
-    return ['CallExpr', {}, ['MemberExpr', {}, readCaps[0], str('escape')], ast];
+    return ['CallExpr', {}, ['MemberExpr', {}, substs[0], str('escape')], ast];
   }
   var out = str(unesc(literals[0]));
   for (var i = 1, n = literals.length; i < n; ++i) {
-    out = plus(out, plus(esc(readCaps[i]), str(unesc(literals[i]))));
+    out = plus(out, plus(esc(substs[i]), str(unesc(literals[i]))));
   }
   return out;
 }</tr>
   <tr><td>needsHelp`===$foo===$bar===`</td>
       <td>("==="+((needsHelp["escape"](foo))+"==="))+((needsHelp["escape"](bar))+"===")</tr>
   <tr><th colspan=2>Handlers can't return or jump to containing labels</tr>
-  <tr><td colspan=2>function returner(literals, readCaps) {
+  <tr><td colspan=2>function returner(literals, substs) {
   return ['ReturnStmt', {}];
 }</tr>
   <tr><td>returner`${foo}`</td><td>throws Error: Free labels [return]</tr>
-  <tr><td colspan=2>function breaker(literals, readCaps) {
+  <tr><td colspan=2>function breaker(literals, substs) {
   return ['BreakStmt', { label: 'foo' }];
 }</tr>
   <tr><td>breaker`${foo}`</td><td>throws Error: Free labels [foo]</tr>
@@ -255,5 +261,5 @@
 
 <hr>
 <address></address>
-<!-- hhmts start --> Last modified: Thu Jan  7 20:50:11 HST 2010 <!-- hhmts end -->
+<!-- hhmts start --> Last modified: Fri Jan  8 17:09:54 PST 2010 <!-- hhmts end -->
 </body> </html>

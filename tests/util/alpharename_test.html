@@ -64,9 +64,6 @@ td { font-family: monospace; white-space: pre }
   <tr><td>with (o) { k = 1; }<td>throws Error: Cannot alpha rename with statements</tr>
   <tr><td>try { e = foo(); } catch (e) { var e = bar(); } return e;</td>
       <td>throws Error: Split initialization of "e"</td>
-  <tr><th colspan=4>The 3rd "o" is explicitly exempted preserving hygiene</tr>
-  <tr><td>var o = 1; alert(o * OCAP(o));</td>
-      <td>var $0=1;alert($0*o)</td></tr>
   <tr><th colspan=4>Property names not rewritten</tr>
   <tr><td>var a, b, c, d; a.b = { d: c, b: a }; c['d'] = a.b(c)</td>
       <td>var $0,$1,$2,$3;$0["b"]={"d":$2,"b":$0};$2["d"]=($0["b"]($2))</tr>
@@ -123,27 +120,9 @@ td { font-family: monospace; white-space: pre }
       var passed = true;
       var freeIdents = '';
       if (ast) {
-        var ocaps = [];
-        function findOcaps(ast) {
-          for (var i = 2, n = ast.length; i < n; ++i) {
-            var child = ast[i];
-            if (child[0] === 'CallExpr' && child[2][1].name === 'OCAP') {
-              ocaps.push(ast[i] = child[3]);
-            } else {
-              findOcaps(child);
-            }
-          }
-        }
-        findOcaps(ast);
-        if (ocaps.length) {
-          while (cells[0].firstChild) {
-            cells[0].removeChild(cells[0].firstChild);
-          }
-          cells[0].appendChild(document.createTextNode(renderEcmascript(ast)));
-        }
         var actual;
         try {
-          var renamed = alphaRename(ast, makeNamer(), ocaps);
+          var renamed = alphaRename(ast, makeNamer());
           freeIdents = '' + set_union(free_names(renamed), free_labels(renamed));
           actual = renderEcmascript(renamed);
         } catch (e) {
@@ -174,5 +153,5 @@ td { font-family: monospace; white-space: pre }
 
 <hr>
 <address></address>
-<!-- hhmts start --> Last modified: Thu Dec 31 11:09:02 PST 2009 <!-- hhmts end -->
+<!-- hhmts start --> Last modified: Fri Jan  8 16:25:32 PST 2010 <!-- hhmts end -->
 </body> </html>
