@@ -65,9 +65,11 @@ ometa LexicalGrammar {
   SourceCharacter = char,
 
   // 7: Goal production in contexts where a leading '/' or '/=' is permitted
+  // Note: not used by the parser
   InputElementDiv = Whitespace | LineTerminator | Comment | Token | DivPunctuator,
 
   // 7: Goal production in contexts where a leading '/' or '/=' is not permitted
+  // Note: not used by the parser
   InputElementRegExp = Whitespace | LineTerminator | Comment | Token | RegularExpressionLiteral,
 
   Whitespace = uc('SP') | uc('TAB') | uc('VT') | uc('FF') | uc('NBSP') | uc('BOM') | uc('USP'),
@@ -89,7 +91,8 @@ ometa LexicalGrammar {
   SingleLineCommentChars = SingleLineCommentChar:c (SingleLineCommentChars | empty -> ""):cs ->
                            (c + cs),
   SingleLineCommentChar = ~LineTerminator SourceCharacter:c -> (c),
-
+  
+  // Note: not currently used by the parser
   Token = IdentifierName | Punctuator | NumericLiteral | StringLiteral,
 
   Identifier = IdentifierName:n ~checkReservedWord(n) -> (n),
@@ -129,7 +132,7 @@ ometa LexicalGrammar {
           | ``delete''   | ``instanceof''| ``try''):kwname -> (kwname),*/
 
   // Alternative (faster) keyword rule
-  Keyword = IdentifierName:n ?(self.isKeyword(n)) -> (n),
+  // Keyword = IdentifierName:n ?(self.isKeyword(n)) -> (n),
 
   /*FutureReservedWord false:strict = (``class''| ``enum''  | ``extends''| ``super''
                                   |  ``const''| ``export''| ``import''):kwname -> (kwname),
@@ -139,6 +142,7 @@ ometa LexicalGrammar {
                                  |  ``yield''):kwname -> (kwname),*/
 
   // Alternative (faster) future reserved word rule
+  // Note: rule not currently used by the parser, only by the unit tests
   FutureReservedWord :strict = IdentifierName:n ?(self.isFutureReservedWord(n,strict)) -> n,
 
   // Note: beware of the ordering of punctuators with a common prefix!
@@ -146,6 +150,7 @@ ometa LexicalGrammar {
   // E.g. if '+' would come before ``++'' then the string "++5"
   // would be parsed as "+(+(5))" rather than "++(5)"
   // Punctuators comprised of more characters are prioritized
+  // Note: this rule are not currently used by the parser
   Punctuator = (``>>>=''
              | ``>>='' | ``>>>'' | ``==='' | ``!==''| ``<<=''
              | ``+=''  | ``-=''  | ``*=''  | ``%='' | ``>=''
@@ -156,6 +161,7 @@ ometa LexicalGrammar {
              | '.'     | ';'     | ','     | '<'    | '>'   | '!'
              | '~'     | '='     | '&'     | '|'    | '^'   | '?'
              | ':'     | '*'     | '%'     | '+'    | '-'):symbol -> (symbol),
+  // Note: this rule are not currently used by the parser
   DivPunctuator = (``/='' | '/'):symbol -> (symbol),
 
   Literal = NullLiteral | BooleanLiteral | NumericLiteral
@@ -311,11 +317,12 @@ ometa LexicalGrammar {
   scanKeyword = skip IdentifierName:n -> (n),
 
   // @returns a string
+  // Note: not currently used by the parser, only by the unit tests
   scanPunctuator = skip (Punctuator | DivPunctuator):t -> (t),
 
   // @returns a string
-  scanPunctNoLineTerminator = skipNoLine // does not accept LineTerminators
-                              (Punctuator | DivPunctuator):t -> (t),
+  // scanPunctNoLineTerminator = skipNoLine // does not accept LineTerminators
+  //                            (Punctuator | DivPunctuator):t -> (t),
 
   // @returns a string
   scanIdentifier = skip Identifier:id -> (id),
@@ -365,51 +372,11 @@ LexicalGrammar.isFutureReservedWord = function(k,isStrict) {
             !Object.prototype.hasProperty(k);
   }
 };
-LexicalGrammar.initialize = function() {
-  this.strictmode = false;
-};
 
 // === Expression Parser ===
 
-/* abstract syntax trees (ASTs) are stored in JSONML format
-   and are of the form:
-    [ "Type",
-      { key : value properties },
-      childNode1,
-      childNode2,
-      ... ]
-
-   By convention, the last 4 letters of "Type" represent a subtype:
-	 - Expressions: *Expr
-	 - Statements: *Stmt
-	 - Declarations: *Decl
-	 - Property definitions: *Prop
-	 - Patterns: *Patt
-	 - Case | DefaultCase: *Case (only within a SwitchStmt)
-	 - Empty marker: "Empty" (for elisions in Array-literals and omitted parts of a For-statement)
-
-   ASTs are created by invoking self.ast("Type", attributes, [childNode1, childNode2, ...])
-   where self is a reference to the current Grammar.
-
-   Note that ASTs are created as live objects that can be stored in JSONML
-   format simply by invoking JSON.stringify(ast)
-
-   For literal ASTs:
-    type: string // the type of literal
-    value: object // the value of the parsed literal
-   For break, continue and labelled statements:
-    label: string
-   For unary, binary and assignment operators
-    op: string
-   For identifiers, function declarations
-    name: string
-
-   Useful optional properties:
-    strict: boolean // whether or not this AST occurs in strict code
-    line: number // line number
-    column: number // column number
-    // alternatively span: [ [l1,c1], [l2,c2] ] but this is not valid JSONML
-*/
+// abstract syntax trees (ASTs) are stored in JSONML format. For details see:
+// http://code.google.com/p/es-lab/wiki/JsonMLASTFormat
 
 // this function adds accessors to an AST object,
 // making it easier to manipulate the datastructure
@@ -940,16 +907,11 @@ ometa ES5Parser {
 
 }
 ES5Parser.initialize = function() {
-  // TODO: turn this into a constant by defining 2 parsers: NonStrictMode <: StrictMode
   this.strictmode = false;
-
   this.inAllowed = true;
 
   // this function is used to construct ASTs
-  // note: the attributes of an AST are automatically augmented
-  // with standard attributes, e.g. the strictmode of the parser
   this.ast = function(type, attributes, children) {
-    //attributes.strict = this.strictmode;
     return mixinASTMethods([ type, attributes ].concat(children));
   };
   this.emptyAst = function() {
