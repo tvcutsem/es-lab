@@ -18,33 +18,33 @@
 // === A.1 Lexical Grammar (Scanner) ===
 
 // TODO: currently restricted to the ASCII subset of Unicode...
-// Note: hex and regexp literals not used in this lexer because Ometa/JS does not support them
+// Note: regexp literals not used in this lexer because Ometa/JS does not support them
 var UnicodeCategories = {
     // each function in this object = f(CharCode) -> Boolean
-    'ZWNJ' : function(c) { return c ==  8204 /*0x200C*/; },
-    'ZWJ'  : function(c) { return c ==  8205 /*0x200D*/; },
-    'TAB'  : function(c) { return c ==     9 /*0x0009*/; },
-    'VT'   : function(c) { return c ==    11 /*0x000B*/; },
-    'FF'   : function(c) { return c ==    12 /*0x000C*/; },
-    'SP'   : function(c) { return c ==    32 /*0x0020*/; },
-    'NBSP' : function(c) { return c ==   160 /*0x00A0*/; },
-    'BOM'  : function(c) { return c == 65279 /*0xFEFF*/; },
+    'ZWNJ' : function(c) { return c ==  0x200C; },
+    'ZWJ'  : function(c) { return c ==  0x200D; },
+    'TAB'  : function(c) { return c ==  0x0009; },
+    'VT'   : function(c) { return c ==  0x000B; },
+    'FF'   : function(c) { return c ==  0x000C; },
+    'SP'   : function(c) { return c ==  0x0020; },
+    'NBSP' : function(c) { return c ==  0x00A0; },
+    'BOM'  : function(c) { return c ==  0xFEFF; },
     'USP'  : function(c) { return false; }, // apart from SP and NBSP completely out of ASCII range
-    'LF'   : function(c) { return c ==    10 /*0x000A*/; },
-    'CR'   : function(c) { return c ==    13 /*0x000D*/; },
-    'LS'   : function(c) { return c ==  8232 /*0x2028*/; },
-    'PS'   : function(c) { return c ==  8233 /*0x2029*/; },
+    'LF'   : function(c) { return c ==  0x000A; },
+    'CR'   : function(c) { return c ==  0x000D; },
+    'LS'   : function(c) { return c ==  0x2028; },
+    'PS'   : function(c) { return c ==  0x2029; },
     'L'    : function(c) { // L = Lu, Ll, Lt, Lm, Lo
-      return (65 /*0x0041*/ <= c && c <= 90 /*0x005A*/) || // Lu
-             (97 /*0x0061*/ <= c && c <= 122 /*0x007A*/);  // Ll
+      return (0x0041 <= c && c <= 0x005A) || // Lu
+             (0x0061 <= c && c <= 0x007A);  // Ll
       },     //(false) ||  // Lt, completely out of ASCII range
              //(false) ||  // Lm, completely out of ASCII range
              //(false); }, // Lo, completely out of ASCII range
     'Nl'   : function(c) { return false; }, // completely out of ASCII range
     'Mn'   : function(c) { return false; }, // completely out of ASCII range
     'Mc'   : function(c) { return false; }, // completely out of ASCII range
-    'Nd'   : function(c) { return 48 <= c && c <= 57; }, // 0x0030 <= c <= 0x0039
-    'Pc'   : function(c) { return c == 95 /*0x005F*/; }  // _ is only char in ASCII range
+    'Nd'   : function(c) { return 0x0030 <= c && c <= 0x0039; },
+    'Pc'   : function(c) { return c == 0x005F; }  // _ is only char in ASCII range
 };
 
 // Literal tokens are represented as objects of the form { type: String, value: String }
