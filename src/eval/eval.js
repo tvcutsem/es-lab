@@ -59,7 +59,7 @@ function(){
 
   /**
    * Assuming <tt>element</tt> is a valid JSONML term, this invokes a
-   * <tt>visit<i>element-type-name</i> method on the <tt>visitor</tt>
+   * <tt>visit<i>element-type-name</i></tt> method on the <tt>visitor</tt>
    * with an attributes node as the first argument and
    * <tt>element</tt>'s child elements as the remaining arguments.
    * 
@@ -216,10 +216,10 @@ function(){
       var mangle = 'var$' + varName;
       var desc = Object.getOwnPropertyDescriptor(this.rep, mangle);
       if (desc && desc.writable) {
-	this.rep[mangle] = newVal;
-	return true;
+        this.rep[mangle] = newVal;
+        return true;
       } else {
-	return false;
+        return false;
       }
     },
     getThis: function() {
@@ -308,11 +308,12 @@ function(){
     visitInvokeExpr: function(atr, baseExpr, propExpr, var_args) {
       var base = visit(baseExpr, this);
       var prop = visit(propExpr, this);
+      var meth = base[prop];
       var that = this;
       var args = slice(arguments, 3).map(function(argExpr) {
         return visit(argExpr, that);
       });
-      return Function.prototype.apply.call(base[prop], base, args);
+      return Function.prototype.apply.call(meth, base, args);
     },
     visitCallExpr: function(atr, baseExpr, var_args) {
       var base = visit(baseExpr, this);
@@ -336,12 +337,12 @@ function(){
     visitCountExpr: function(atr, lValue) {
       var ref = evalRef(lValue, this.env);
       var val = ref.get();
-      object({ 
-        "++": function() { if (atr.isPrefix) { ++val; } else { val++; } },
-        "--": function() { if (atr.isPrefix) { --val; } else { val--; } }
+      var result = object({ 
+        "++": function() { return atr.isPrefix ? ++val : val++; },
+        "--": function() { return atr.isPrefix ? --val : val--; }
       })[atr.op]();
       ref.set(val);
-      return val;
+      return result;
     },
     visitDeleteExpr: function(atr, lValue) {
       var ref = evalRef(lValue, this.env);
@@ -452,7 +453,7 @@ function(){
       escape(this.env.getLabel(label));
     },
     visitBreakStmt: function(atr) {
-      var label = atr.label || 'continue';
+      var label = atr.label || 'break';
       escape(this.env.getLabel(label));
     },
     visitReturnStmt: function(atr, optExpr) {
@@ -477,18 +478,23 @@ function(){
     visitThrowStmt: function(atr, errExpr) {
       throw visit(errExpr, this);
     },
-    visitTryCatchStmt: function(atr, tryStmt, 
-                                errPatt, catchStmt) {
+    visitTryStmt: function(atr, tryStmt, optCatchClause, unwindStmt) {
       // TBD...
-    },
-    visitTryFinallyStmt: function(atr, tryStmt, 
-                                  unwindStmt) {
-      // TBD...
-    },
-    visitTryCatchFinallyStmt: function(atr, tryStmt, 
-                                       errPatt, catchStmt, 
-                                       unwindStmt) {
-      // TBD...
+      try {
+        return visit(tryStmt, this);
+      } catch (e) {
+        if (optCatchClause[0] === 'Empty') {
+          throw e;
+        } else {
+          var errPatt = optCatchClause[2];
+          var catchStmt = optCatchClause[3];
+          return eval(catchStmt, this.env.nestCatch(catchStmt[1], errPatt.name));
+        }
+      } finally {
+        if (unwindStmt) {
+          visit(unwindStmt, this);
+        }
+      }
     },
     visitDebuggerStmt: function(atr) {
       debugger;
@@ -509,7 +515,7 @@ function(){
       }
       var bodyStmts = slice(arguments, 3);        
       var result = function(var_args) {
-	var funcEnv = nestEnv.nestThis(atr, this);
+	      var funcEnv = nestEnv.nestThis(atr, this);
         var paramPatts = slice(params, 2);
         var args = slice(arguments, 0);
         paramPatts.forEach(function(paramPatt, i) {
