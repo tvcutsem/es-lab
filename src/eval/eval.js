@@ -345,11 +345,14 @@ function(){
       return result;
     },
     visitDeleteExpr: function(atr, lValue) {
+      //xxx: delete operator works on any expression, not only lValue
+      //but evalRef can only deal with lValues 
       var ref = evalRef(lValue, this.env);
       return ref.remove();
     },
     visitTypeofExpr: function(atr, xExpr) {
-      var ref = evalRef(lValue, this.env);
+      //xxx: evalRef expects an lValue as first argument
+      var ref = evalRef(xExpr, this.env);
       return ref.exists() ? typeof ref.get() : 'undefined';
     },
     visitUnaryExpr: function(atr, xExpr) {
@@ -367,9 +370,9 @@ function(){
     visitConditionalExpr: function(atr, xExpr, yExpr, zExpr) {
       return visit(xExpr, this) ? visit(yExpr, this) : visit(zExpr, this);
     },
-    visitAssignExpr: function(atr, lValue, rValue) {
+    visitAssignExpr: function(atr, lValue, aExpr) {
       var ref = evalRef(lValue, this.env);
-      var val = visit(rValue, this);
+      var val = visit(aExpr, this);
       if (atr.op === '=') {
         ref.set(val);
         return val;
@@ -392,8 +395,10 @@ function(){
       var that = this;
       patts.forEach(function(patt){
         visit(patt, object({
-          visitInitPatt: function(pAtr, lValue, rValue) {
-            evalRef(lValue, that.env).set(visit(rValue, that));
+          visitInitPatt: function(pAtr, idPatt, expr) {
+            //xxx: evalRef has no case for IdPatt, only IdExpr
+            // should probably be: that.env.set(idPatt.name, visit(expr, that));
+            evalRef(idPatt, that.env).set(visit(expr, that));
           },
           visitIdPatt: function(pAtr) {}
         }));
@@ -479,7 +484,6 @@ function(){
       throw visit(errExpr, this);
     },
     visitTryStmt: function(atr, tryStmt, optCatchClause, unwindStmt) {
-      // TBD...
       try {
         return visit(tryStmt, this);
       } catch (e) {
@@ -552,8 +556,8 @@ function(){
         });
       },
       visitMemberExpr: function(atr, baseExpr, propExpr) {
-        var base = visit(baseExpr, this);
-        var prop = visit(propExpr, this);
+        var base = visit(baseExpr, this);//xxx: shouldn't baseExpr be visited by the general-purpose visitor?
+        var prop = visit(propExpr, this);//xxx: shouldn't propExpr be visited by the general-purpose visitor?
         return object({
           get:    function()       { return base[prop]; },
           set:    function(newVal) { base[prop] = val; return true; },
