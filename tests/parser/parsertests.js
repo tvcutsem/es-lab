@@ -70,7 +70,7 @@ function lexerTestSuite() {
   };
   
   function checkKeyword(input) {
-	  var output = lex(input, 'scanKeyword', []);
+	  var output = lex(input, 'scanKeyword', [input]);
 	  unit.compare(input, output, "keyword: '"+input+"'");
   };
   

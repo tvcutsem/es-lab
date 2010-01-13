@@ -309,13 +309,14 @@ ometa LexicalGrammar {
   scanLineTerminator = LineTerminator | ~MultiLineCommentNoNL MultiLineComment,
 
   // @returns a string
-  // since the parser indicates to the lexer that it expects a keyword,
-  // the lexer does not need to actually verify that a scanned identifier
-  // is a keyword. This rule is thus an ad hoc, faster version of the
-  // more general rule:
+  // As the parser indicates to the lexer what keyword it expects,
+  // the scanner does not need a rule listing all possible keywords.
+  // The scanner will simply scan any legal identifier name and then
+  // check whether the lexed identifier equals the expected keyword name
+  // This rule is thus an ad hoc, faster version of the more general rule:
   //   scanKeyword = skip (Keyword | FutureReservedWord(self.strictmode)):t -> (t),
-  scanKeyword = skip IdentifierName:n -> (n),
-
+  scanKeyword :kw = skip IdentifierName:n ?(kw === n) -> (kw),
+  
   // @returns a string
   // Note: not currently used by the parser, only by the unit tests
   scanPunctuator = skip (Punctuator | DivPunctuator):t -> (t),
@@ -883,11 +884,7 @@ ometa ES5Parser {
   noLineTermPunct :punct = foreign(LexicalGrammar, 'skipNoLine') seq(punct) -> (punct),
 
   // k(kw) parses an expected keyword
-  // since we can trust the caller of k that 'kw' really denotes a keyword,
-  // we don't require the lexer to verify this. scanKeyword will simply scan
-  // any identifier name, it's up to this rule to check whether the lexed
-  // identifier equals the expected keyword name
-  k :kw = foreign(LexicalGrammar, 'scanKeyword'):lexed ?(kw == lexed) -> (kw),
+  k :kw = foreign(LexicalGrammar, 'scanKeyword', kw),
 
   identifier = foreign(LexicalGrammar, 'scanIdentifier'):id -> (id),
   literal = foreign(LexicalGrammar, 'scanLiteral'):l -> (l),
