@@ -216,19 +216,16 @@
       subScopeExpr(scope2)(bodyStmt);
       return true;
     },
-    visitTryCatchStmt: function(atr, tStmt, errPatt, cStmt) {
+    visitTryStmt: function(atr, tStmt, catchClause, fStmt) {
       visitThrough(this, tStmt);
-      var scope2 = this.scope.nestCatch(atr);
-      if (errPatt[0] === 'IdPatt') { scope2.defineLetName(errPatt[1]); };
-      subScopeFunc(scope2)(cStmt);
-      return true;
-    },
-    visitTryCatchFinallyStmt: function(atr, tStmt, errPatt, cStmt, fStmt) {
-      visitThrough(this, tStmt);
-      var scope2 = this.scope.nestCatch(atr);
-      if (errPatt[0] === 'IdPatt') { scope2.defineLetName(errPatt[1]); };
-      subScopeFunc(scope2)(cStmt);
-      visitThrough(this, fStmt);
+      if (catchClause[0] === 'CatchClause') {
+        var errPatt = catchClause[2];
+        var cStmt = catchClause[3];
+        var scope2 = this.scope.nestCatch(catchClause[1]);
+        if (errPatt[0] === 'IdPatt') { scope2.defineLetName(errPatt[1]); };
+        subScopeFunc(scope2)(cStmt);
+      }
+      if (fStmt) { visitThrough(this, fStmt); }
       return true;
     }
   });
