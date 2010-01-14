@@ -18,7 +18,6 @@
 // === A.1 Lexical Grammar (Scanner) ===
 
 // TODO: currently restricted to the ASCII subset of Unicode...
-// Note: regexp literals not used in this lexer because Ometa/JS does not support them
 var UnicodeCategories = {
     // each function in this object = f(CharCode) -> Boolean
     'ZWNJ' : function(c) { return c ==  0x200C; },
@@ -166,8 +165,6 @@ ometa LexicalGrammar {
 
   Literal = NullLiteral | BooleanLiteral | NumericLiteral
           | StringLiteral | RegularExpressionLiteral, // spec forgot Regexp literals in appendix?
-  // TODO: even though 'null' is a valid JSON value, it may not be valid JSONML
-  // if it's not valid JSONML, consider dropping the 'value' attribute of a null literal
   NullLiteral = ``null'' -> (literal("null", null)),
   BooleanLiteral = (``true'' -> true | ``false'' -> false):b -> (literal("boolean",b)),
 
