@@ -15,10 +15,13 @@
 // OMeta/JS parser for Ecmascript 5
 // @author Tom Van Cutsem
 
+// dependencies of this file: 'unicode.js'
+
 // === A.1 Lexical Grammar (Scanner) ===
 
-// TODO: currently restricted to the ASCII subset of Unicode...
-var UnicodeCategories = {
+// A variant of UnicodeCategories restricted to the ASCII subset of Unicode...
+// see the file unicode.js for the real thing
+/*var UnicodeCategories = {
     // each function in this object = f(CharCode) -> Boolean
     'ZWNJ' : function(c) { return c ==  0x200C; },
     'ZWJ'  : function(c) { return c ==  0x200D; },
@@ -44,7 +47,7 @@ var UnicodeCategories = {
     'Mc'   : function(c) { return false; }, // completely out of ASCII range
     'Nd'   : function(c) { return 0x0030 <= c && c <= 0x0039; },
     'Pc'   : function(c) { return c == 0x005F; }  // _ is only char in ASCII range
-};
+};*/
 
 // Literal tokens are represented as objects of the form { type: String, value: String }
 // Literal tokens represent number, string, boolean, null and regular expression literals
@@ -53,8 +56,6 @@ function literal(t, val) {
 };
 
 // some regular expressions for faster identifier and whitespace parsing
-var ucLetterRE = new RegExp("[a-zA-Z]");
-var ucDigitRE = new RegExp("\\d");
 var ucSpacesRE = new RegExp("\\s");
 
 // A.1 Lexical Grammar
@@ -71,7 +72,7 @@ ometa LexicalGrammar {
   // Note: not used by the parser
   InputElementRegExp = Whitespace | LineTerminator | Comment | Token | RegularExpressionLiteral,
 
-  Whitespace = uc('SP') | uc('TAB') | uc('VT') | uc('FF') | uc('NBSP') | uc('BOM') | uc('USP'),
+  Whitespace = uc('SP') | uc('TAB') | uc('VT') | uc('FF') | uc('NBSP') | uc('BOM') | uc('Zs'),
   LineTerminator = uc('LF') | uc('CR') | uc('LS') | uc('PS'),
   LineTerminatorSequence = uc('LF') | ~uc('LF') uc('CR') | uc('LS') | uc('PS') | uc('CR') uc('LF'),
 
@@ -101,9 +102,9 @@ ometa LexicalGrammar {
   IdentifierPart = IdentifierStart | UnicodeCombiningMark
                  | UnicodeDigit | UnicodeConnectorPunctuation
                  | uc('ZWNJ') | uc('ZWJ'),
-  UnicodeLetter = char:x ?(ucLetterRE.test(x)) -> x /* uc('L') | uc('Nl')*/, // efficiency shortcut
+  UnicodeLetter = uc('L') | uc('Nl'),
   UnicodeCombiningMark = uc('Mn') | uc('Mc'),
-  UnicodeDigit = char:x ?(ucDigitRE.test(x)) -> x /* uc('Nd') */, // efficiency shortcut
+  UnicodeDigit = uc('Nd'),
   UnicodeConnectorPunctuation = uc('Pc'),
 
   checkReservedWord :id = ?(self.isKeyword(id) || self.isFutureReservedWord(id,self.strictmode) ||
@@ -269,7 +270,7 @@ ometa LexicalGrammar {
   // === Implementation-level rules (not part of the spec) ===
 
   // uc(category) -> accepts only unicode characters x that fall within the given unicode category
-  uc :id = char:x ?(UnicodeCategories[id](x.charCodeAt(0))) -> (x),
+  uc :id = char:x ?(UnicodeCategories[id].test(x)) -> (x),
 
   MultiLineCommentNoNL = seq("/*") (MultiLineCommentCharsNoNL | empty -> ""):cs seq("*/") -> (cs),
   MultiLineCommentCharsNoNL = MultiLineNotAsteriskCharNoNL:c (MultiLineCommentCharsNoNL | empty -> ""):cs ->

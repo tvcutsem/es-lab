@@ -15,6 +15,7 @@
 // @author tomvc
 
 load("load-ometa.js")
+load("src/parser/unicode.js")
 load("src/parser/es5parser.js")
 load("third_party/json2.js");
 load("tests/parser/unit.js");

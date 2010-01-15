@@ -108,7 +108,10 @@ function lexerTestSuite() {
   checkIdentifier("x", "x+5");	  
   checkIdentifier("x", "x y");	  
   checkIdentifier("xyz123", "xyz123");	  
-  checkIdentifier("x1y1z1", "x1y1z1");	  
+  checkIdentifier("x1y1z1", "x1y1z1");
+  
+  checkIdentifier("foo\u00D8bar", "fooØbar"); // Unicode
+  checkIdentifier("fooØbar", "fooØbar"); // Unicode
   
   ensureNoMatch("while",'Identifier',[]);
   checkKeyword("while");
