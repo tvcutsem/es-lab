@@ -14,6 +14,7 @@
 
 es5parser_in = src/parser/es5parser.ojs
 es5parser_out = $(es5parser_in:%.ojs=%.js)
+# beware: these dependencies are deleted upon make clean
 es5parser_deps = third_party/json2_mini.js \
                  third_party/ometa/lib_mini.js \
                  third_party/ometa/ometa-base_mini.js \
@@ -56,4 +57,4 @@ esparser: $(bundle)
 
 # delete all generated files except site/esparser
 clean:
-	rm -rf $(es5parser_out) jsmin *_mini.js $(bundle)
+	rm -rf $(es5parser_out) jsmin $(es5parser_deps) 
