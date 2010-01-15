@@ -242,7 +242,7 @@ function toAst(jsonAst) {
 }
 
 function testExpression(source, ast) {
-  testRule(source, 'complete', ['Expression'], ast);
+  testRule(source, 'ExpressionOnly', [], ast);
 }
 function testStatement(source, ast) {
   testRule(source, 'complete', ['Statement'], ast);
@@ -254,7 +254,7 @@ function testProgram(source, ast) {
   testRule(source, 'Program', [], ast);
 }
 
-function Expr(str) { return parse(str,'Expression',[]); }
+function Expr(str) { return parse(str,'ExpressionOnly',[]); }
 function Stmt(str) { return parse(str,'Statement',[]); }
 function SrcE(str) { return parse(str,'SourceElement',[]); }
 
@@ -519,9 +519,8 @@ function parserTestSuite() {
                                  ["Empty"] , ["Empty"], Stmt("{}") ]);
   ensureNoMatch("for (x in b; c; u) {}", 'Statement', []); // 'in' not allowed in initialization
 
-  // TODO: problem, parser does not accept nested 'in' expressions
-  //testStatement("for ((x in b); c; u) {}", [ "ForStmt", {}, Expr("(x in b)"), Expr("c"), Expr("u"),
-  //                                       Stmt("{}") ]);
+  testStatement("for ((x in b); c; u) {}", [ "ForStmt", {}, Expr("(x in b)"), Expr("c"), Expr("u"),
+                                         Stmt("{}") ]);
 
   // for-in statement without variable declaration
   testStatement("for (x in a) ;", [ "ForInStmt",{}, Expr("x"), Expr("a"), Stmt(";") ]);

@@ -25,6 +25,11 @@ if(this.hasOwnProperty(name))
 r.push(name)
 return r}
 Object.prototype.hasProperty=function(p){return this[p]!=undefined}
+isImmutable=function(x){return x===null||x===undefined||x.isImmutable()}
+Object.prototype.isImmutable=function(){return false}
+Boolean.prototype.isImmutable=function(){return true}
+Number.prototype.isImmutable=function(){return true}
+String.prototype.isImmutable=function(){return true}
 Object.prototype.isNumber=function(){return false}
 Number.prototype.isNumber=function(){return true}
 Object.prototype.isString=function(){return false}
@@ -81,3 +86,9 @@ ws.nextPutAll("\"")
 return ws.contents()}
 function tempnam(s){return(s?s:"_tmpnam_")+tempnam.n++}
 tempnam.n=0
+getTag=function(x){return(x===null||x===undefined)?x:x.getTag()}
+Object.prototype.getTag=(function(){var numIds=0
+return function(){return this.hasOwnProperty("_id_")?this._id_:this._id_="R"+numIds++}})()
+Boolean.prototype.getTag=function(){return this?"Btrue":"Bfalse"}
+String.prototype.getTag=function(){return"S"+this}
+Number.prototype.getTag=function(){return"N"+this}

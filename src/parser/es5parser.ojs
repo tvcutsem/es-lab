@@ -405,7 +405,7 @@ ometa ES5Parser {
                                                   value: litToken.value}, []) )
                     | ArrayLiteral
                     | ObjectLiteral
-                    | "(" Expression:e ")" -> (e),
+                    | "(" Expression(true):e ")" -> (e),
 
   // @returns an ArrayExpr AST
   ArrayLiteral = "[" ElementList:elts "," (Elision | empty -> []):elis "]" ->
@@ -416,9 +416,9 @@ ometa ES5Parser {
                      ( self.ast("ArrayExpr",{}, elis) ),
 
   // @returns an array of ASTs
-  ElementList = ElementList:elts "," (Elision | empty -> []):elis AssignmentExpression:exp ->
+  ElementList = ElementList:elts "," (Elision | empty -> []):elis AssignmentExpression(true):exp ->
                 ( elts.concat(elis.concat([ exp ])) )
-              | (Elision | empty -> []):elis AssignmentExpression:exp ->
+              | (Elision | empty -> []):elis AssignmentExpression(true):exp ->
                 ( elis.concat([exp]) ),
 
   // @returns an array of ["Empty"] leaf nodes
@@ -453,7 +453,7 @@ ometa ES5Parser {
                                         [self.ast("IdPatt",{name:arg},[])]) ].concat(body)
                                     )
                                   ]) )
-                     | PropertyName:n ":" AssignmentExpression:exp ->
+                     | PropertyName:n ":" AssignmentExpression(true):exp ->
                        ( self.ast("DataProp",{name:n},[exp]) ),
 
   // @returns a string
@@ -467,7 +467,7 @@ ometa ES5Parser {
   // @returns an AST
   MemberExpression = k("new") MemberExpression:mexp Arguments:args ->
                      ( self.ast("NewExpr",{},[mexp].concat(args)) )
-                   | MemberExpression:mexp "[" Expression:iexp "]" ->
+                   | MemberExpression:mexp "[" Expression(true):iexp "]" ->
                      ( self.ast("MemberExpr",{},[mexp,iexp]) )
                    | MemberExpression:mexp "." LexicalGrammar.scanIdentifier:id ->
                      ( self.ast("MemberExpr",{},[mexp,
@@ -480,7 +480,7 @@ ometa ES5Parser {
                 | k("new") NewExpression:exp -> ( self.ast("NewExpr",{},[exp]) ),
 
   // @returns an AST
-  CallExpression = CallExpression:cexp "[" Expression:iexp "]" ->
+  CallExpression = CallExpression:cexp "[" Expression(true):iexp "]" ->
                    ( self.ast("MemberExpr",{},[cexp,iexp]) )
                  | CallExpression:cexp "." LexicalGrammar.scanIdentifier:id ->
                    ( self.ast("MemberExpr",{},[cexp,
@@ -500,9 +500,9 @@ ometa ES5Parser {
             | "(" ArgumentList:args ")" -> (args),
 
   // @returns an array of ASTs
-  ArgumentList = ArgumentList:args "," AssignmentExpression:exp ->
+  ArgumentList = ArgumentList:args "," AssignmentExpression(true):exp ->
                  ( args.concat([ exp ]) )
-               | AssignmentExpression:exp -> ([ exp ]),
+               | AssignmentExpression(true):exp -> ([ exp ]),
 
   LeftHandSideExpression = CallExpression | NewExpression,
 
@@ -548,73 +548,70 @@ ometa ES5Parser {
                     ( self.ast("BinaryExpr",{op:">>"},[sexp,aexp]) )
                   | AdditiveExpression,
 
-  // Note: the 'NoIn' rules are not implemented by parameterizing the
-  // following rules. Instead we use a mutable 'inAllowed' flag.
-  // It would be easy to parameterize the following rules with a :NoIn
-  // parameter. However, OMeta/JS does not memoize left-recursive rules
-  // with arguments.
-
-  RelationalExpression = RelationalExpression:rexp noEqDbl("<") ShiftExpression:sexp ->
+  // Since this grammar assumes OMeta/JS memoizes left-recursive rules,
+  // we parametrize RelationalExpression with a boolean "In" flag that
+  // signifies whether or not an expression of the form (e1 in e2) is allowed
+  RelationalExpression :In = RelationalExpression(In):rexp noEqDbl("<") ShiftExpression:sexp ->
 				( self.ast("BinaryExpr",{op:"<"},[rexp,sexp]) )
-			  | RelationalExpression:rexp noEqDbl(">") ShiftExpression:sexp ->
+			  | RelationalExpression(In):rexp noEqDbl(">") ShiftExpression:sexp ->
 				( self.ast("BinaryExpr",{op:">"},[rexp,sexp]) )
-			  | RelationalExpression:rexp "<=" ShiftExpression:sexp ->
+			  | RelationalExpression(In):rexp "<=" ShiftExpression:sexp ->
 				( self.ast("BinaryExpr",{op:"<="},[rexp,sexp]) )
-			  | RelationalExpression:rexp ">=" ShiftExpression:sexp ->
+			  | RelationalExpression(In):rexp ">=" ShiftExpression:sexp ->
 				( self.ast("BinaryExpr",{op:">="},[rexp,sexp]) )
-			  | RelationalExpression:rexp k("instanceof") ShiftExpression:sexp ->
+			  | RelationalExpression(In):rexp k("instanceof") ShiftExpression:sexp ->
 				( self.ast("BinaryExpr",{op:"instanceof"},[rexp,sexp]) )
-			  | ?(self.inAllowed) RelationalExpression:rexp k("in") ShiftExpression:sexp ->
+			  | ?(In) RelationalExpression(true):rexp k("in") ShiftExpression:sexp ->
 				( self.ast("BinaryExpr",{op:"in"},[rexp,sexp]) )
 			  | ShiftExpression,
 
-  EqualityExpression =
-      EqualityExpression:eexp noEq("==") RelationalExpression:rexp ->
+  EqualityExpression :In =
+      EqualityExpression(In):eexp noEq("==") RelationalExpression(In):rexp ->
 			( self.ast("BinaryExpr",{op:"=="},[eexp,rexp]) )
-		  | EqualityExpression:eexp noEq("!=") RelationalExpression:rexp ->
+		  | EqualityExpression(In):eexp noEq("!=") RelationalExpression(In):rexp ->
 			( self.ast("BinaryExpr",{op:"!="},[eexp,rexp]) )
-		  | EqualityExpression:eexp "===" RelationalExpression:rexp ->
+		  | EqualityExpression(In):eexp "===" RelationalExpression(In):rexp ->
 			( self.ast("BinaryExpr",{op:"==="},[eexp,rexp]) )
-		  | EqualityExpression:eexp "!==" RelationalExpression:rexp ->
+		  | EqualityExpression(In):eexp "!==" RelationalExpression(In):rexp ->
 			( self.ast("BinaryExpr",{op:"!=="},[eexp,rexp]) )
-		  | RelationalExpression,
+		  | RelationalExpression(In),
 
-  BitwiseANDExpression = BitwiseANDExpression:aexp noEqDbl("&") EqualityExpression:eexp ->
+  BitwiseANDExpression :In = BitwiseANDExpression(In):aexp noEqDbl("&") EqualityExpression(In):eexp ->
 						 ( self.ast("BinaryExpr",{op:"&"},[aexp,eexp]) )
-					   | EqualityExpression,
+					   | EqualityExpression(In),
 
-  BitwiseXORExpression = BitwiseXORExpression:xexp noEqChar("^") BitwiseANDExpression:aexp ->
+  BitwiseXORExpression :In = BitwiseXORExpression(In):xexp noEqChar("^") BitwiseANDExpression(In):aexp ->
 						 ( self.ast("BinaryExpr",{op:"^"},[xexp,aexp]) )
-					   | BitwiseANDExpression,
+					   | BitwiseANDExpression(In),
 	
-  BitwiseORExpression = BitwiseORExpression:oexp noEqDbl("|") BitwiseXORExpression:xexp ->
+  BitwiseORExpression :In = BitwiseORExpression(In):oexp noEqDbl("|") BitwiseXORExpression(In):xexp ->
 						 ( self.ast("BinaryExpr",{op:"|"},[oexp,xexp]) )
-					   | BitwiseXORExpression,
+					   | BitwiseXORExpression(In),
 	
-  LogicalANDExpression = LogicalANDExpression:aexp "&&" BitwiseORExpression:oexp ->
+  LogicalANDExpression :In = LogicalANDExpression(In):aexp "&&" BitwiseORExpression(In):oexp ->
 						 ( self.ast("LogicalAndExpr",{},[aexp,oexp]) )
-					   | BitwiseORExpression,
+					   | BitwiseORExpression(In),
 
-  LogicalORExpression = LogicalORExpression:oexp "||" LogicalANDExpression:aexp ->
+  LogicalORExpression :In = LogicalORExpression(In):oexp "||" LogicalANDExpression(In):aexp ->
 						( self.ast("LogicalOrExpr",{},[oexp,aexp]) )
-					  | LogicalANDExpression,
+					  | LogicalANDExpression(In),
 
-  ConditionalExpression = LogicalORExpression:oexp "?"
-                            AssignmentExpression:texp ":" AssignmentExpression:fexp ->
-                          ( self.ast("ConditionalExpr",{},[oexp,texp,fexp]) )
-                        | LogicalORExpression,
+  ConditionalExpression :In = LogicalORExpression(In):oexp "?"
+                                AssignmentExpression(In):texp ":" AssignmentExpression(In):fexp ->
+                              ( self.ast("ConditionalExpr",{},[oexp,texp,fexp]) )
+                            | LogicalORExpression(In),
 
-  AssignmentExpression = LeftHandSideExpression:lexp
-                           AssignmentOperator:op AssignmentExpression:aexp ->
+  AssignmentExpression :In = LeftHandSideExpression:lexp
+                           AssignmentOperator:op AssignmentExpression(In):aexp ->
                            ( self.ast("AssignExpr",{op:op},[lexp,aexp]) )
-                       | ConditionalExpression,
+                       | ConditionalExpression(In),
 
   AssignmentOperator = simpleAssignPunct | ">>>=" | "<<=" | ">>="
                      | "*=" | "/=" | "%=" | "+=" | "-=" | "&=" | "^=" | "|=",
 
-  Expression = Expression:exp "," AssignmentExpression:aexp ->
+  Expression :In = Expression(In):exp "," AssignmentExpression(In):aexp ->
                ( self.ast("BinaryExpr",{op:","},[exp,aexp]) )
-             | AssignmentExpression,
+             | AssignmentExpression(In),
 
   // A.4 Statements
 
@@ -647,53 +644,53 @@ ometa ES5Parser {
                 | Statement:stmt -> ( [stmt] ),
 
   // @returns a Var AST
-  VariableStatement = k("var") VariableDeclarationList:vars sc ->
+  VariableStatement = k("var") VariableDeclarationList(true):vars sc ->
                       ( self.ast("VarDecl",{},vars) ),
 
   // @returns an array of ASTs
-  VariableDeclarationList = VariableDeclarationList:vs "," VariableDeclaration:v ->
-                            ( vs.concat([v]) )
-                          | VariableDeclaration:v -> ( [v] ),
+  VariableDeclarationList :In = VariableDeclarationList(In):vs "," VariableDeclaration(In):v ->
+                                ( vs.concat([v]) )
+                              | VariableDeclaration(In):v -> ( [v] ),
 
   // @returns an AST
-  VariableDeclaration = LexicalGrammar.scanIdentifier:id Initialiser:init ->
-                        ( self.ast("InitPatt",{},
-                                   [self.ast("IdPatt",{name:id},[]),init]) )
-                      | LexicalGrammar.scanIdentifier:id -> (self.ast("IdPatt",{name:id}, [])),
+  VariableDeclaration :In = LexicalGrammar.scanIdentifier:id Initialiser(In):init ->
+                            ( self.ast("InitPatt",{},
+                                       [self.ast("IdPatt",{name:id},[]),init]) )
+                          | LexicalGrammar.scanIdentifier:id -> (self.ast("IdPatt",{name:id}, [])),
 
   // @returns an AST
-  Initialiser = simpleAssignPunct AssignmentExpression:exp -> ( exp ),
+  Initialiser :In = simpleAssignPunct AssignmentExpression(In):exp -> ( exp ),
 
   // @returns an AST
   EmptyStatement = ";" -> ( self.ast("EmptyStmt",{},[]) ), // note: this semicolon eats newlines
 
   // @returns an Expression AST
-  ExpressionStatement = ~("{" | k("function")) Expression:exp sc -> ( exp ),
+  ExpressionStatement = ~("{" | k("function")) Expression(true):exp sc -> ( exp ),
 
   // @returns an AST
-  IfStatement = k("if") "(" Expression:bexp ")" Statement:tstmt k("else") Statement:fstmt ->
+  IfStatement = k("if") "(" Expression(true):bexp ")" Statement:tstmt k("else") Statement:fstmt ->
                 ( self.ast("IfStmt",{},[bexp,tstmt,fstmt]) )
-              | k("if") "(" Expression:bexp ")" Statement:tstmt ->
+              | k("if") "(" Expression(true):bexp ")" Statement:tstmt ->
                 ( self.ast("IfStmt",{},[bexp, tstmt, self.ast("EmptyStmt",{},[])]) ),
 
   // @returns an AST
-  IterationStatement = k("do") Statement:s k("while") "(" Expression:e ")" sc ->
+  IterationStatement = k("do") Statement:s k("while") "(" Expression(true):e ")" sc ->
                        ( self.ast("DoWhileStmt",{},[s,e]) )
-                     | k("while") "(" Expression:e ")" Statement:s ->
+                     | k("while") "(" Expression(true):e ")" Statement:s ->
                        ( self.ast("WhileStmt",{},[e,s]) )
-                     | k("for") "(" (NoIn('Expression') | empty -> self.emptyAst()):init ";"
-                         (Expression | empty -> self.emptyAst()):cond ";"
-                         (Expression | empty -> self.emptyAst()):update ")" Statement:s ->
+                     | k("for") "(" (Expression(false) | empty -> self.emptyAst()):init ";"
+                         (Expression(true) | empty -> self.emptyAst()):cond ";"
+                         (Expression(true) | empty -> self.emptyAst()):update ")" Statement:s ->
                        ( self.ast("ForStmt",{},[init,cond,update,s]) )
-                     | k("for") "(" k("var") NoIn('VariableDeclarationList'):vars ";"
-                         (Expression | empty -> self.emptyAst()):cond ";"
-                         (Expression | empty -> self.emptyAst()):update ")" Statement:s ->
+                     | k("for") "(" k("var") VariableDeclarationList(false):vars ";"
+                         (Expression(true) | empty -> self.emptyAst()):cond ";"
+                         (Expression(true) | empty -> self.emptyAst()):update ")" Statement:s ->
                        ( self.ast("ForStmt",{},[self.ast("VarDecl",{},vars),cond,update,s]) )
                      | k("for") "(" LeftHandSideExpression:lhs k("in")
-                          Expression:e ")" Statement:s ->
+                          Expression(true):e ")" Statement:s ->
                        ( self.ast("ForInStmt",{},[lhs,e,s]) )
-                     | k("for") "(" k("var") NoIn('VariableDeclaration'):v k("in")
-                          Expression:e ")" Statement:s ->
+                     | k("for") "(" k("var") VariableDeclaration(false):v k("in")
+                          Expression(true):e ")" Statement:s ->
                        ( self.ast("ForInStmt",{},[ self.ast("VarDecl",{},[v]),e,s]) ),
 
   ContinueStatement = k("continue") sc -> ( self.ast("ContinueStmt",{},[]) )
@@ -706,13 +703,13 @@ ometa ES5Parser {
 
   ReturnStatement = k("return") sc ->
                       ( self.ast("ReturnStmt",{},[]) )
-                  | k("return") noLineTerminator Expression:exp sc ->
+                  | k("return") noLineTerminator Expression(true):exp sc ->
                       ( self.ast("ReturnStmt",{},[exp]) ),
 
-  WithStatement = k("with") "(" Expression:e ")" Statement:s ->
+  WithStatement = k("with") "(" Expression(true):e ")" Statement:s ->
                   ( self.ast("WithStmt",{},[e,s]) ),
 
-  SwitchStatement = k("switch") "(" Expression:e ")" CaseBlock:cases ->
+  SwitchStatement = k("switch") "(" Expression(true):e ")" CaseBlock:cases ->
                     ( self.ast("SwitchStmt",{},[e].concat(cases)) ),
 
   // @return an array of ASTs
@@ -725,7 +722,7 @@ ometa ES5Parser {
   CaseClauses = CaseClauses:clauses CaseClause:clause -> (clauses.concat([clause]))
               | CaseClause:clause -> ([ clause ]),
 
-  CaseClause = k("case") Expression:e ":" (StatementList | empty -> []):stmts ->
+  CaseClause = k("case") Expression(true):e ":" (StatementList | empty -> []):stmts ->
                ( self.ast("Case",{},[e].concat(stmts)) ),
 
   DefaultClause = k("default") ":" (StatementList | empty -> []):stmts ->
@@ -736,7 +733,7 @@ ometa ES5Parser {
 
   ThrowStatement = k("throw") noLineTerminator
                               LexicalGrammar.scanLineTerminator ~empty // fails explicitly
-                 | k("throw") Expression:e sc -> ( self.ast("ThrowStmt",{},[e]) ),
+                 | k("throw") Expression(true):e sc -> ( self.ast("ThrowStmt",{},[e]) ),
 
   TryStatement = k("try") Block:b Catch:c Finally:f ->
                  ( self.ast("TryStmt",{},[b,c,f]) )
@@ -804,29 +801,16 @@ ometa ES5Parser {
   // === Implementation-level rules (not part of the spec) ===
 
   // useful for parsing only expressions and making sure the parser sees all input
-  ExpressionOnly = Expression:e skipToEnd -> (e),
+  ExpressionOnly = Expression(true):e skipToEnd -> (e),
 
   // higher-order rule that parses a rule and ensures there is no lingering input
   complete :rule = apply(rule):res skipToEnd -> (res),
-
-  // higher-order rule that, before applying the rule, saves the current value
-  // of the inAllowed flag, sets it to false, parses the given rule, then restores
-  // the flag to its previous value, and returns the result of parsing the rule
-  // TODO: the rule is currently too strict, e.g. it prevents:
-  //  for ( (x in b) ; c; u ) { }
-  // even though 'in' may not occur as a top-level expression in the initialization clause,
-  // it should still be allowed in a nested expression!
-  NoIn :rule = (empty -> {var cur = self.inAllowed; self.inAllowed = false; cur}):prev
-               apply(rule):res
-               (empty -> (self.inAllowed = prev)) -> res
-             // if 'rule' fails, make sure to reset the flag
-             | (empty -> (self.inAllowed = prev)) ~empty, // fail explicitly
 
   // In OMeta, terms of the syntactic form "name" are translated into
   // an invocation of the 'token' rule, with the text between quotes passed as
   // an argument, i.e. token("name"). In this parser, the term "name" instructs
   // the LexicalGrammar to parse a specific punctuator:
-  // token :punct = foreign(LexicalGrammar, 'scanPunctuator'):lexed ?(punct == lexed) -> (punct),
+  // token :punct = LexicalGrammar.scanPunctuator:lexed ?(punct == lexed) -> (punct),
 
   // The above scanPunctuator rule turns out to be one of the main bottlenecks
   // of the parsing process, so we replace it by a set of more efficient rules:
@@ -897,7 +881,6 @@ ometa ES5Parser {
 }
 ES5Parser.initialize = function() {
   this.strictmode = false;
-  this.inAllowed = true;
 
   // this function is used to construct ASTs
   this.ast = function(type, attributes, children) {
@@ -907,4 +890,8 @@ ES5Parser.initialize = function() {
     return mixinASTMethods([ "Empty" ]);
   };
 };
+// indicate to OMeta to memoize parameterized rules
+// this is crucial for the ES5 Parser, as many of its *Expression
+// rules are left-recursive and parameterized with a boolean parameter
+// indicating whether an "in-expression" is allowed or not
 ES5Parser.memoizeParameterizedRules();
