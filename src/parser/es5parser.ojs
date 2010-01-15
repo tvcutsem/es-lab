@@ -893,5 +893,6 @@ ES5Parser.initialize = function() {
 // indicate to OMeta to memoize parameterized rules
 // this is crucial for the ES5 Parser, as many of its *Expression
 // rules are left-recursive and parameterized with a boolean parameter
-// indicating whether an "in-expression" is allowed or not
+// indicating whether an "in-expression" is allowed or not.
+// see http://tinlizzie.org/ometa-js/#Memoizing_Parameterized_Rules
 ES5Parser.memoizeParameterizedRules();
