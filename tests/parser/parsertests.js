@@ -350,7 +350,7 @@ function parserTestSuite() {
                  ["CallExpr", {},
                    ["BinaryExpr", {op:","}, Expr("1"), Expr("eval") ],
                    Expr("'x'") ]);
-  testExpression("eval(x,y)", ["CallExpr", {}, ["IdExpr",{name:"eval"}], Expr("x"), Expr("y") ]);
+  testExpression("eval(x,y)", ["EvalExpr", {}, Expr("x"), Expr("y") ]);
 
   // NewExpressions
   testExpression("new f()", [ "NewExpr", {}, ["IdExpr", { name: "f" } ] ]);
