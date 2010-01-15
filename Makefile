@@ -14,6 +14,12 @@
 
 es5parser_in = src/parser/es5parser.ojs
 es5parser_out = $(es5parser_in:%.ojs=%.js)
+es5parser_deps = third_party/json2_mini.js \
+                 third_party/ometa/lib_mini.js \
+                 third_party/ometa/ometa-base_mini.js \
+                 src/parser/unicode_mini.js \
+                 src/parser/es5parser_mini.js
+bundle = site/esparser/bundle.js
 
 # the javascript shell to use
 js = v8 #rhino
@@ -38,13 +44,16 @@ jsmin :
 %_mini.js: %.js jsmin
 	@./jsmin < $< > $@
 
+$(bundle): $(es5parser_deps)
+	@mkdir -p "$$(dirname $@)"
+	@(for file in $^; do echo // $$file; cat "$${file}"; echo; echo; done) > $@
+
 # builds the parser playground website
-esparser: third_party/json2_mini.js third_party/ometa/lib_mini.js third_party/ometa/ometa-base_mini.js src/parser/es5parser_mini.js src/parser/unicode_mini.js
-	@mkdir -p site/$@
+esparser: $(bundle)
 	@for file in $^; do mv -f $${file} site/$@/`basename $${file}` ; done ;
 	@cp -f site/parser.html site/$@/index.html
 	@echo 'generated site/$@'
 
 # delete all generated files except site/esparser
 clean:
-	rm -rf $(es5parser_out) jsmin *_mini.js
+	rm -rf $(es5parser_out) jsmin *_mini.js $(bundle)
