@@ -113,6 +113,9 @@ function lexerTestSuite() {
   ensureNoMatch("while",'Identifier',[]);
   checkKeyword("while");
   checkKeyword("class");
+  checkKeyword("do");
+  ensureNoMatch("doit",'scanKeyword',['do']);
+  checkIdentifier("doit", "doit");
   unit.compare("class", lex("class", 'FutureReservedWord',[true]),
 			   "class keyword in strict mode");
   unit.compare("implements", lex("implements", 'FutureReservedWord', [true]),

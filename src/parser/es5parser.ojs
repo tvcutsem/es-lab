@@ -128,7 +128,7 @@ ometa LexicalGrammar {
           | ``continue'' | ``for''       | ``switch''     | ``while''
           | ``debugger'' | ``function''  | ``this''       | ``with''
           | ``default''  | ``if''        | ``throw''
-          | ``delete''   | ``instanceof''| ``try''):kwname -> (kwname),*/
+          | ``delete''   | ``instanceof''| ``try''):kwname ~IdentifierPart -> (kwname),*/
 
   // Alternative (faster) keyword rule
   // Keyword = IdentifierName:n ?(self.isKeyword(n)) -> (n),
@@ -221,7 +221,7 @@ ometa LexicalGrammar {
                         | LineContinuation,
   LineContinuation = '\\' LineTerminatorSequence -> (""),
   EscapeSequence = CharacterEscapeSequence
-                 | ~(&DecimalDigit) '0' -> ( String.fromCharCode(0000) ) /*\u0000*/
+                 | ~DecimalDigit '0' -> ( String.fromCharCode(0000) ) /*\u0000*/
                  | HexEscapeSequence
                  | UnicodeEscapeSequence,
   CharacterEscapeSequence = SingleEscapeCharacter
@@ -371,7 +371,7 @@ LexicalGrammar.isFutureReservedWord = function(k,isStrict) {
   }
 };
 
-// === Expression Parser ===
+// === ECMAScript 5 Parser ===
 
 // abstract syntax trees (ASTs) are stored in JSONML format. For details see:
 // http://code.google.com/p/es-lab/wiki/JsonMLASTFormat
@@ -395,9 +395,9 @@ ometa ES5Parser {
 
   // @returns an AST
   PrimaryExpression = k("this") -> (self.ast("ThisExpr", {}, []))
-                    | identifier:id ->
+                    | LexicalGrammar.scanIdentifier:id ->
                       (self.ast("IdExpr",{name:id}, []))
-                    | literal:litToken ->
+                    | LexicalGrammar.scanLiteral:litToken ->
                       ( litToken.type === "regexp"
                         ? self.ast("RegExpExpr",{body:  litToken.value.body,
                                                  flags: litToken.value.flags}, [])
@@ -438,13 +438,13 @@ ometa ES5Parser {
                            | PropertyAssignment:p -> ([ p ]),
 
   // @returns a *Prop AST
-  PropertyAssignment = identifier:id ?(id == "get") PropertyName:n
+  PropertyAssignment = LexicalGrammar.scanIdentifier:id ?(id == "get") PropertyName:n
                        "(" ")" "{" FunctionBody:body "}" ->
                        ( self.ast("GetterProp",{name:n},
                                   [ self.ast("FunctionExpr",{},
                                              [self.emptyAst(),
                                               self.ast("ParamDecl",{},[])].concat(body)) ]) )
-                     | identifier:id ?(id == "set") PropertyName:n
+                     | LexicalGrammar.scanIdentifier:id ?(id == "set") PropertyName:n
                        "(" PropertySetParameterList:arg ")" "{" FunctionBody:body "}" ->
                        ( self.ast("SetterProp",{name:n},
                                   [ self.ast("FunctionExpr",{},
@@ -457,19 +457,19 @@ ometa ES5Parser {
                        ( self.ast("DataProp",{name:n},[exp]) ),
 
   // @returns a string
-  PropertyName = identifier:id -> (id)
-               | literal:l ?(l.type == "string") -> (l.value)
-               | literal:l ?(l.type == "number") -> ( parseFloat(l.value) ),
+  PropertyName = LexicalGrammar.scanIdentifier:id -> (id)
+               | LexicalGrammar.scanLiteral:l ?(l.type == "string") -> (l.value)
+               | LexicalGrammar.scanLiteral:l ?(l.type == "number") -> ( parseFloat(l.value) ),
 
   // @returns a string (the identifier name)
-  PropertySetParameterList = identifier:id -> (id),
+  PropertySetParameterList = LexicalGrammar.scanIdentifier:id -> (id),
 
   // @returns an AST
   MemberExpression = k("new") MemberExpression:mexp Arguments:args ->
                      ( self.ast("NewExpr",{},[mexp].concat(args)) )
                    | MemberExpression:mexp "[" Expression:iexp "]" ->
                      ( self.ast("MemberExpr",{},[mexp,iexp]) )
-                   | MemberExpression:mexp "." identifier:id ->
+                   | MemberExpression:mexp "." LexicalGrammar.scanIdentifier:id ->
                      ( self.ast("MemberExpr",{},[mexp,
                                                self.ast("LiteralExpr",{type:"string",value:id},[])]) )
                    | FunctionExpression
@@ -482,7 +482,7 @@ ometa ES5Parser {
   // @returns an AST
   CallExpression = CallExpression:cexp "[" Expression:iexp "]" ->
                    ( self.ast("MemberExpr",{},[cexp,iexp]) )
-                 | CallExpression:cexp "." identifier:id ->
+                 | CallExpression:cexp "." LexicalGrammar.scanIdentifier:id ->
                    ( self.ast("MemberExpr",{},[cexp,
                               self.ast("Literal",{type:"string",value:id},[])]) )
                  | CallExpression:cexp Arguments:args ->
@@ -656,10 +656,10 @@ ometa ES5Parser {
                           | VariableDeclaration:v -> ( [v] ),
 
   // @returns an AST
-  VariableDeclaration = identifier:id Initialiser:init ->
+  VariableDeclaration = LexicalGrammar.scanIdentifier:id Initialiser:init ->
                         ( self.ast("InitPatt",{},
                                    [self.ast("IdPatt",{name:id},[]),init]) )
-                      | identifier:id -> (self.ast("IdPatt",{name:id}, [])),
+                      | LexicalGrammar.scanIdentifier:id -> (self.ast("IdPatt",{name:id}, [])),
 
   // @returns an AST
   Initialiser = simpleAssignPunct AssignmentExpression:exp -> ( exp ),
@@ -697,11 +697,11 @@ ometa ES5Parser {
                        ( self.ast("ForInStmt",{},[ self.ast("VarDecl",{},[v]),e,s]) ),
 
   ContinueStatement = k("continue") sc -> ( self.ast("ContinueStmt",{},[]) )
-                    | k("continue") noLineTermIdentifier:id sc ->
+                    | k("continue") LexicalGrammar.scanIdentifierNoLineTerminator:id sc ->
                       ( self.ast("ContinueStmt",{label:id},[]) ),
 
   BreakStatement = k("break") sc -> ( self.ast("BreakStmt",{},[]) )
-                 | k("break") noLineTermIdentifier:id sc ->
+                 | k("break") LexicalGrammar.scanIdentifierNoLineTerminator:id sc ->
                       ( self.ast("BreakStmt",{label:id},[]) ),
 
   ReturnStatement = k("return") sc ->
@@ -731,10 +731,11 @@ ometa ES5Parser {
   DefaultClause = k("default") ":" (StatementList | empty -> []):stmts ->
                   ( self.ast("DefaultCase",{}, stmts) ),
 
-  LabelledStatement = identifier:id ":" Statement:s ->
+  LabelledStatement = LexicalGrammar.scanIdentifier:id ":" Statement:s ->
                       ( self.ast("LabelledStmt",{ label: id },[s]) ),
 
-  ThrowStatement = k("throw") noLineTerminator lineTerminator ~empty // fails explicitly
+  ThrowStatement = k("throw") noLineTerminator
+                              LexicalGrammar.scanLineTerminator ~empty // fails explicitly
                  | k("throw") Expression:e sc -> ( self.ast("ThrowStmt",{},[e]) ),
 
   TryStatement = k("try") Block:b Catch:c Finally:f ->
@@ -745,7 +746,7 @@ ometa ES5Parser {
                  ( self.ast("TryStmt",{},[b,c]) ),
 
   // @returns a CatchClause AST
-  Catch = k("catch") "(" identifier:id ")" Block:b ->
+  Catch = k("catch") "(" LexicalGrammar.scanIdentifier:id ")" Block:b ->
           ( self.ast("CatchClause", {},
               [self.ast("IdPatt",{name:id},[]), b]) ),
 
@@ -756,14 +757,14 @@ ometa ES5Parser {
 
   // A.5 Functions and Programs
 
-  FunctionDeclaration = k("function") identifier:id
+  FunctionDeclaration = k("function") LexicalGrammar.scanIdentifier:id
                         "(" (FormalParameterList | empty -> []):formals ")"
                         "{" FunctionBody:body "}" ->
                         ( self.ast("FunctionDecl",{},
                                    [self.ast("IdPatt",{name:id},[]),
                                     self.ast("ParamDecl",{},formals)].concat(body)) ),
 
-  FunctionExpression = k("function") identifier:id
+  FunctionExpression = k("function") LexicalGrammar.scanIdentifier:id
                        "(" (FormalParameterList | empty -> []):formals ")"
                        "{" FunctionBody:body "}" ->
                        ( self.ast("FunctionExpr",{},
@@ -776,9 +777,9 @@ ometa ES5Parser {
                                    self.ast("ParamDecl",{},formals)].concat(body)) ),
 
   // @returns an array of ASTs
-  FormalParameterList = FormalParameterList:formals "," identifier:id ->
+  FormalParameterList = FormalParameterList:formals "," LexicalGrammar.scanIdentifier:id ->
                         ( formals.concat([ self.ast("IdPatt",{name:id},[]) ]) )
-                      | identifier:id -> ([ self.ast("IdPatt",{name:id},[]) ]),
+                      | LexicalGrammar.scanIdentifier:id -> ([ self.ast("IdPatt",{name:id},[]) ]),
 
   // @returns an array of ASTs
   FunctionBody = (DirectivePrologue | empty -> []):prologue
@@ -798,7 +799,7 @@ ometa ES5Parser {
   DirectivePrologue = DirectivePrologue:p Directive:d -> ( p.concat([d]) )
                     | Directive:d -> ([d]),
   
-  Directive = directive:dir sc -> ( self.ast('PrologueDecl',dir,[]) ),
+  Directive = LexicalGrammar.scanDirective:dir sc -> ( self.ast('PrologueDecl',dir,[]) ),
 
   // === Implementation-level rules (not part of the spec) ===
 
@@ -838,23 +839,23 @@ ometa ES5Parser {
   // ``--''   | ``<='' | ``&=''  | ``|='' | ``^='' | ``&&'' |
   // ``||''   | '{'    | '}'     | '('    | ')'    | '['    | ']' |
   // '.'      | ';'    | ','     | '~'    | '?'    | ':'
-  token :punct = foreign(LexicalGrammar, 'skip') seq(punct) -> (punct),
+  token :punct = LexicalGrammar.skip seq(punct) -> (punct),
 
   // for all other punctuators, an additional check is required to
   // distinguish the punctuator from a longer punctuator with the same prefix
 
   //``>>'' 	avoid: >>> >>>=
-  shiftRightPunct = foreign(LexicalGrammar, 'skip') ``>>'' ~'>' -> (">>"),
+  shiftRightPunct = LexicalGrammar.skip ``>>'' ~'>' -> (">>"),
 
   //'='  	  avoid: == ===
-  simpleAssignPunct = foreign(LexicalGrammar, 'skip') '=' ~'=' -> ("="),
+  simpleAssignPunct = LexicalGrammar.skip '=' ~'=' -> ("="),
 
   //``=='' 	avoid: ===				
   //``!='' 	avoid: !==				
   //``>>>'' avoid: >>>=
   //``<<''  avoid: <<=
   // no Compare or Assignment Punctuator
-  noEq :t = foreign(LexicalGrammar, 'skip') seq(t) ~'=' -> (t),
+  noEq :t = LexicalGrammar.skip seq(t) ~'=' -> (t),
 
   //'!'  	  avoid: != !==		
   //'*' 	  avoid: *=				
@@ -862,7 +863,7 @@ ometa ES5Parser {
   //'^'  	  avoid: ^=
   //'/'     avoid: /=
   // no Compare or Assignment Single-character Punctuator
-  noEqChar :t = foreign(LexicalGrammar, 'skip') exactly(t) ~'=' -> (t),
+  noEqChar :t = LexicalGrammar.skip exactly(t) ~'=' -> (t),
 
   //  '&'  	avoid: &= &&		
   //  '|'  	avoid: |= ||		
@@ -871,31 +872,25 @@ ometa ES5Parser {
   //  '+' 	avoid: += ++		
   //  '-' 	avoid: -= --			
   // no Assignment single-character punctuator (excludes doubles)
-  noEqDbl :t = foreign(LexicalGrammar, 'skip') exactly(t) ~'=' ~exactly(t) -> (t),
+  noEqDbl :t = LexicalGrammar.skip exactly(t) ~'=' ~exactly(t) -> (t),
 
   // a variant of the 'token' rule that does not accept line terminators
   // before it reaches the token. Only used for '++' and '--' so it's safe
   // to simply match the token using 'seq' without further checks
   //noLineTermPunct :punct = foreign(LexicalGrammar, 'scanPunctNoLineTerminator'):lexed
   //                        ?(lexed == punct) -> (punct),
-  noLineTermPunct :punct = foreign(LexicalGrammar, 'skipNoLine') seq(punct) -> (punct),
+  noLineTermPunct :punct = LexicalGrammar.skipNoLine seq(punct) -> (punct),
 
   // k(kw) parses an expected keyword
-  k :kw = foreign(LexicalGrammar, 'scanKeyword', kw),
+  k :kw = LexicalGrammar.scanKeyword(kw),
 
-  identifier = foreign(LexicalGrammar, 'scanIdentifier'):id -> (id),
-  literal = foreign(LexicalGrammar, 'scanLiteral'):l -> (l),
-  directive = foreign(LexicalGrammar, 'scanDirective'):l -> (l),
+  noLineTerminator = LexicalGrammar.skipNoLine,
 
-  noLineTermIdentifier = foreign(LexicalGrammar, 'scanIdentifierNoLineTerminator'):id -> (id),
-  noLineTerminator = foreign(LexicalGrammar,'skipNoLine'),
-  lineTerminator = foreign(LexicalGrammar, 'scanLineTerminator'),
-
-  skipToEnd = foreign(LexicalGrammar,'skip') end,
+  skipToEnd = LexicalGrammar.skip end,
 
   sc = noLineTerminator ';' // Note: don't use ";" as this is equivalent to token(";")
                             // which would allow line terminators to be eaten as well
-     | noLineTerminator (lineTerminator | end | &'}')
+     | noLineTerminator (LexicalGrammar.scanLineTerminator | end | &'}')
        // a semicolon is "automatically inserted" if a newline is reached,
        // the end of the input stream is reached, or the offending token is '}'
 
@@ -912,3 +907,4 @@ ES5Parser.initialize = function() {
     return mixinASTMethods([ "Empty" ]);
   };
 };
+ES5Parser.memoizeParameterizedRules();
