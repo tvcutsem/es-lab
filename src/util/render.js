@@ -86,8 +86,12 @@ function renderEcmascript(ast) {
         out.push('new ');
         // $fall-through$
       case 'CallExpr':
-        parenthesize(ast[2], PRECEDENCE_1[ast[2][0]] !== true);
-        out.push('(');
+        if (ast[2][0] !== 'IdExpr' || 'eval' !== ast[2][1].name) {
+          parenthesize(ast[2], PRECEDENCE_1[ast[2][0]] !== true);
+          out.push('(');
+        } else {
+          out.push('(0,eval)(');  // Do not convert a CallExpr to an EvalExpr.
+        }
         for (var i = 3, n = ast.length; i < n; ++i) {
           if (i !== 3) { out.push(','); }
           render(ast[i]);

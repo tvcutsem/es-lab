@@ -71,6 +71,12 @@ required_names = function (ast) {
   var names;
   switch (ast[0]) {
     case 'IdExpr': names = set_singleton(ast[1].name); break;
+    case 'EvalExpr':
+      names = set_singleton('eval');
+      for (var i = 2, n = ast.length; i < n; ++i) {
+        names = set_union(names, required_names(ast[i]));
+      }
+      break;
     case 'ThisExpr': names = THIS; break;
     case 'FunctionDecl': case 'FunctionExpr':
       var nameOrEmpty = ast[2];

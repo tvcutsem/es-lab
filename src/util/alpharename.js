@@ -152,18 +152,10 @@ function renameOne(parentAst, parentAlphaMap, ast, letScopedNames) {
   var n = ast.length;
   switch (ast[0]) {
     case 'FunctionDecl': case 'FunctionExpr': letScopedNames = EMPTY_SET; break;
-    case 'IdExpr':
-      if (astProps.name === 'eval' && parentAst && parentAst[0] === 'CallExpr'
-          && ast === parentAst[2]) {  // TODO: remove this once bug 9 fixed
-        throw new Error('alpha renaming breaks eval operator');
-      } else {
-        substIdent('name', '', astProps, astAlphaMap);
-        return ['IdExpr', astProps];
-      }
-    case 'EvalExpr': throw new Error('alpha renaming breaks eval operator');
-    case 'IdPatt':
+    case 'IdExpr': case 'IdPatt':
       substIdent('name', '', astProps, astAlphaMap);
-      return ['IdPatt', astProps];
+      return [ast[0], astProps];
+    case 'EvalExpr': throw new Error('alpha renaming breaks eval operator');
     case 'LabelledStmt': case 'BreakStmt': case 'ContinueStmt':
       substIdent('label', 'label ', astProps, astAlphaMap);
       break;
