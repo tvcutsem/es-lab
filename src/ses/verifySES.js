@@ -250,6 +250,7 @@
       }
     }
     return Object.freeze({
+      // xxx what about visitEvalExpr? (uses 'eval')?
       visitThisExpr: function(atr) { scope(atr).usesThis(atr); },
       visitIdExpr: function(atr) { scope(atr).usesName(atr); },
       visitAssignExpr: function(atr, lValue, rExpr) { assigns(lValue); },

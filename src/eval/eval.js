@@ -331,7 +331,7 @@ function(){
       });
       return applyNew(base, args);
     },
-    visitEvalExpr: function(atr, progExpr) {
+    visitEvalExpr: function(atr, var_args) {
       // TBD ...
     },
     visitCountExpr: function(atr, lValue) {
