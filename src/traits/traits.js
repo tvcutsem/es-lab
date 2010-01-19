@@ -55,39 +55,6 @@
 // Object props take precedence over trait props.
 // Trait props take precedence over the composite's prototype's props.
 
-// TODO:
-// - is 'compose' commutative? not sure because it's defined in an imperative way.
-//   that is, is:                   equivalent to:      ? 
-//     compose(x, T1, advice1);       compose(x, T2, advice2);
-//     compose(x, T2, advice2);       compose(x, T1, advice1);
-//  This is ugly because the commutativity is very implicit, and only holds when 'x'
-//  is not modified in between, and only holds for compose calls to the same 'x'.
-//  They should be thought of as 'grouped' and the composition should be thought of as atomic.
-//  Also, the result should still be thought of as a trait.
-//  Also, use(x,T1); use(x,T2); should be prohibited, instead
-//   'use' should compose an object with 1 single composite trait.
-//
-//   compose(t,T1,adv1); compose(t,T2,adv2); use(x,t); // x << (T1 + T2)
-//     is not equivalent to:
-//   use(x,T1,adv1); use(x,T2,adv2);   // x << T1 << T2
-//    where O << T implies that T is mixed in with O, but if O already defines a prop in T, O's prop wins (no conflict)
-//    if both T1 and T2 define a property 'a', the first case will signal a conflict,
-//    whereas the second case will add 'T1.a' to x, and then discard T2.a as it's already present in (x << T1)
-//
-// - try a 'diamond' setup to test whether isSameDesc is effective
-
-// alternative designs:
-// - allowing traits to declare required methods and checking required methods at composition-time
-//    what about defining a special object called 'required' such that incomplete traits can write:
-// var EnumerableTrait = {
-//   each: required, // signals that 'each' is a required method
-//   map: function(f) { var m = []; this.each(function(e) { m.push(f(e)) }); return m; }
-// }
-// the 'compose' and 'use' functions could check whether a property has the value 'required' and treat
-// it specially
-
-// - explicitly raising a conflict exception at use-composition-time (not at compose-composition-time)
-
 /**
  * Assuming <tt>obj</tt> is an object written in the normal
  * objects-as-closures style, this convenience method will freeze
@@ -194,25 +161,6 @@ function compose(self, trait, opt_composition) {
   return self;
 }
 
-// TODO: compose vs use: it would be better to discriminate between
-// them automatically based on whether 'composite'
-// is itself a trait or the final non-trait composite.
-// Alternatively: determine overriding on a per-property based on
-// whether 'selfDesc' denotes a previously
-// imported trait property, or a property defined by 'self' itself
-
-// alternatively: group trait compositions into use blocks
-// conflicts only signalled within a use block
-// e.g. if T1, T2 both define a property named 'a', then in
-// use { T1, T2 } , 'a' would be bound to a conflict
-// but in use {T1,...} ; use {T2, ...} T1's 'a' will shadow T2's 'a'
-// in other words: trait import is commutative within use blocks, but use blocks themselves
-// are not commutative
-
-// T = compose(T1, T2, ..., advice); // T1 + T2 + ... -> T, with + commut. and assoc.
-// use(O, T1, T2, ..., advice); // O << (T1 + T2 + ...) -> O', with << not commut. or assoc.
-//  problem: how does the advice now relate to the individual traits?
-
 // use is like compose, except that composite methods take strict precedence
 // over trait methods (that is: name clashes result in the trait method
 // being 'overridden' by the composite method, rather than in a conflict)
@@ -225,47 +173,3 @@ function use(composite, trait, advice) {
     exclude: (advice.exclude || []).concat([composite])
   });
 }
-
-/*
-Alternative design based on the formal model of traits:
-compose(T1, T2) -> T1 + T2 where + is commut. and assoc. (but: flag conflicts upon name clash instead of annihilating)
-alias(T, {old: "new"}) -> T[new->old] (if new in T, flag new as conflict?)
-exclude(T, ["x"]) -> T - {x}
-use(O, T) -> like O + T except that instead of conflicts, T.m gets overridden by O.m (so non-commutative)
-
-What is needed is a good syntax to combine these operators on multiple traits at once
-composite = compose(
-  {trait: T1, alias: {...}, exclude: [...]},
-  {trait: T2, alias: {...}, exclude: [...]},
-  ...);
-
-use(self, compose({trait: T1}, {trait: T2}, ...))
-// since use should be called only once on an object, and only after the object has
-// defined its own methods, it makes sense for 'use' to freeze the object
-// this means 'use' can be called only once per 'self'. This forces all composition
-// to happen through compose, which is commutative, associative, detects conflicts, and is more declarative
-// since it is independent of trait ordering
-use(self, T) -> object(self + T)
-
-function makeParticleTrait(self, radius, moveRate, dx, dy) {
-  return compose(
-    {trait: {
-      animate: function() { return self.move(dx, dy); }
-    }},
-    {trait: makeCircleTrait(self,radius)},
-    {trait: makeAnimationTrait(self, moveRate),
-     alias: { start: 'startMoving' },
-     exclude: [ 'stop' ]
-    });
-}
-
-function makeParticleMorph(radius, moveRate, dx, dy) {
-   var self = {};
-   return use(self, makeParticleTrait(self, radius, moveRate, dx, dy));
-}
-
-// this-based version would become:
-function makeParticleMorph(radius, moveRate, dx, dy) {
-   return use({}, makeParticleTrait(radius, moveRate, dx, dy));
-}
-*/

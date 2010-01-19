@@ -66,20 +66,6 @@
 // Object props take precedence over trait props.
 // Trait props take precedence over the composite's prototype's props.
 
-// TODO:
-// - try a 'diamond' setup to test whether isSameDesc is effective
-// alternative designs:
-// - allowing traits to declare required methods and checking required methods at composition-time
-//    what about defining a special object called 'required' such that incomplete traits can write:
-// var EnumerableTrait = {
-//   each: required, // signals that 'each' is a required method
-//   map: function(f) { var m = []; this.each(function(e) { m.push(f(e)) }); return m; }
-// }
-// the 'compose' and 'use' functions could check whether a property has the value 'required' and treat
-// it specially
-// - explicitly raising a conflict exception at use-composition-time (not at compose-composition-time)
-
-
 /**
  * Assuming <tt>obj</tt> is an object written in the normal
  * objects-as-closures style, this convenience method will freeze
@@ -149,13 +135,11 @@ function makeSet(namesOrObjects) {
   return set;
 }
 
-/*
-Alternative design based on the formal model of traits:
-compose(T1, T2) -> T1 + T2 where + is commut. and assoc. (but: flag conflicts upon name clash instead of annihilating)
-alias(T, {old: "new"}) -> T[new->old] (if new in T, flag new as conflict?)
-exclude(T, ["x"]) -> T - {x}
-use(O, T) -> like O + T except that instead of conflicts, T.m gets overridden by O.m (so non-commutative)
-*/
+// Alternative design based on the formal model of traits:
+//  compose(T1, T2) -> T1 + T2 where + is commut. and assoc. (but: flag conflicts upon name clash instead of annihilating)
+//  alias(T, {old: "new"}) -> T[new->old] (if new in T, flag new as conflict?)
+//  exclude(T, ["x"]) -> T - {x}
+//  use(O, T) -> like O + T except that instead of conflicts, T.m gets overridden by O.m (so non-commutative)
 
 // var composite = compose(
 //  {trait: T1, alias: {...}, exclude: [...]},
@@ -167,10 +151,11 @@ use(O, T) -> like O + T except that instead of conflicts, T.m gets overridden by
 // Name clashes are marked as 'conflict' properties
 // The ordering of the argument traits is not important
 function compose(var_args) {
-	var traitDescriptions = Array.prototype.slice.call(var_args, 0);
+	var traitDescriptions = Array.prototype.slice.call(arguments, 0);
   var compositeTrait = {};
 	traitDescriptions.forEach(function (td) {
-		var trait = td.trait || throw new Error("trait description without 'trait' property: "+td);		
+		if (!td.trait) throw new Error("trait description without 'trait' property: "+td);
+		var trait = td.trait;
 	  var aliases = td.alias || {};
 	  var exclusions = makeSet(td.exclude || []);
 
@@ -197,7 +182,6 @@ function compose(var_args) {
 	
   return compositeTrait;
 }
-
 
 // var frozenComposite = use(self, compose({trait: T1}, {trait: T2}, ...));
 //
