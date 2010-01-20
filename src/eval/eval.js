@@ -1,5 +1,3 @@
-"use strict";
-
 // Copyright (C) 2009 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+var IS_THIS_SHADOWED = false;
+
+function isBuiltinEval(eval) {
+  // Must be non-strict or couldn't use "eval" as a parameter name.
+  var IS_THIS_SHADOWED = {};
+  return IS_THIS_SHADOWED === eval('IS_THIS_SHADOWED');
+}
+
 /**
  * A "reify eval, absorb apply" style meta-interpreter for ES5.
  * 
@@ -22,6 +28,7 @@
  */
 (
 function(){
+  "use strict";
 
   /////////////// general purpose utilities //////////////////
 
@@ -55,23 +62,6 @@ function(){
       }
     }
     return Object.freeze(obj);
-  }
-
-  /**
-   * Assuming <tt>element</tt> is a valid JSONML term, this invokes a
-   * <tt>visit<i>element-type-name</i></tt> method on the <tt>visitor</tt>
-   * with an attributes node as the first argument and
-   * <tt>element</tt>'s child elements as the remaining arguments.
-   * 
-   * <p>This code is adapted from jsonMLWalkers.js.
-   */ 
-  function visit(element, visitor) {
-    var args = element.slice(1);
-    if (Array.isArray(args[0])) {
-      args = [{}].concat(args);
-    }
-    //return visitor['visit' + element[0]](...args);
-    return visitor['visit' + element[0]].apply(visitor, args);
   }
 
   /**
@@ -165,6 +155,10 @@ function(){
 
   /////////////// meta interpreter support //////////////////
 
+  function parseAndVerifyProgram(src) {
+    // TBD
+  }
+
   function unaryOp(op, x) {
     return object({
          "void": function() { return void x; },
@@ -204,6 +198,8 @@ function(){
 
   /////////////// Naming Environment //////////////////
 
+  // Nested scope chain is absorbed into the prototype inheritance
+  // chain of the 'rep' object.
   function Environment(rep, thisArg) {
     this.rep = rep;
     this.thisArg = thisArg;
@@ -229,16 +225,18 @@ function(){
       return this.rep['label$' + labelName];
     },
 
-    nestFunction: function(atr) {
+    nestFunction: function(atr, statements) {
 
     },
-    nestThis: function(atr, thisArg) {
-
+    nestThis: function(atr, newThisArg) {
+      return new Environment(this.rep, newThisArg);
     },
-    nestLabel: function(atr, labelName) {
-
+    nestLabel: function(atr, labelName, ejector) {
+      var newRep = Object.create(this.rep);
+      newRep['label$' + labelName] = ejector;
+      return new Environment(newRep, this.thisArg);
     },
-    nestBlock: function(atr) {
+    nestBlock: function(atr, statements) {
 
     },
     nestStmt: function(atr) {
@@ -249,6 +247,9 @@ function(){
     },
     nestCatch: function(atr, varName) {
 
+    },
+    nestProgram: function(atr, statements) {
+      
     }
   });
 
@@ -269,7 +270,7 @@ function(){
         if (arg[0] === 'Empty') {
           // TBD...
         } else {
-          result[i] = visit(arg, this);
+          result[i] = visit(this, arg);
         }
       });
       return result;
@@ -278,7 +279,7 @@ function(){
       var result = {};
       var that = this;
       slice(arguments, 1).forEach(function(arg) {
-        return visit(arg, object({
+        return visit(object({
           visitDataProp: function(propAtr, propExpr) {
             result[propAtr.name] = visit(propExpr, that);
           },
@@ -296,43 +297,52 @@ function(){
               configurable: true
             });
           }
-        }));
+        }), arg);
       });
       return result;
     },
     visitMemberExpr: function(atr, baseExpr, propExpr) {
-      var base = visit(baseExpr, this);
-      var prop = visit(propExpr, this);
+      var base = visit(this, baseExpr);
+      var prop = visit(this, propExpr);
       return base[prop];
     },
     visitInvokeExpr: function(atr, baseExpr, propExpr, var_args) {
-      var base = visit(baseExpr, this);
-      var prop = visit(propExpr, this);
+      var base = visit(this, baseExpr);
+      var prop = visit(this, propExpr);
       var meth = base[prop];
       var that = this;
       var args = slice(arguments, 3).map(function(argExpr) {
-        return visit(argExpr, that);
+        return visit(that, argExpr);
       });
       return Function.prototype.apply.call(meth, base, args);
     },
     visitCallExpr: function(atr, baseExpr, var_args) {
-      var base = visit(baseExpr, this);
+      var base = visit(this, baseExpr);
       var that = this;
       var args = slice(arguments, 2).map(function(argExpr) {
-        return visit(argExpr, that);
+        return visit(that, argExpr);
       });
       return Function.prototype.apply.call(base, undefined, args);
     },
     visitNewExpr: function(atr, baseExpr, var_args) {
-      var base = visit(baseExpr, this);
+      var base = visit(this, baseExpr);
       var that = this;
       var args = slice(arguments, 2).map(function(argExpr) {
-        return visit(argExpr, that);
+        return visit(that, argExpr);
       });
       return applyNew(base, args);
     },
     visitEvalExpr: function(atr, var_args) {
-      // TBD ...
+      var evalFun = this.env.get("eval");
+      var args = slice(arguments, 1).map(function(argExpr) {
+        return visit(that, argExpr);
+      });
+      if (isBuiltinEval(evalFun)) {
+        var program = parseAndVerifyProgram(args[0]);
+        metaEval(program, this.env.nestProgram(atr, program.slice(2)));
+      } else {
+        return Function.prototype.apply.call(evalFun, undefined, args);
+      }
     },
     visitCountExpr: function(atr, lValue) {
       var ref = evalRef(lValue, this.env);
@@ -344,35 +354,40 @@ function(){
       ref.set(val);
       return result;
     },
-    visitDeleteExpr: function(atr, lValue) {
-      //xxx: delete operator works on any expression, not only lValue
-      //but evalRef can only deal with lValues 
-      var ref = evalRef(lValue, this.env);
-      return ref.remove();
+    visitDeleteExpr: function(atr, xExpr) {
+      var optRef = evalRef(xExpr, this.env);
+      return optRef ? optRef.remove() : true;
     },
     visitTypeofExpr: function(atr, xExpr) {
-      //xxx: evalRef expects an lValue as first argument
-      var ref = evalRef(xExpr, this.env);
-      return ref.exists() ? typeof ref.get() : 'undefined';
+      var optRef = evalRef(xExpr, this.env);
+      if (optRef) {
+        if (optRef.exists()) {
+          return typeof optRef.get();
+        } else {
+          return 'undefined';
+        }
+      } else {
+        return typeof visit(this, xExpr);
+      }
     },
     visitUnaryExpr: function(atr, xExpr) {
-      return unaryOp(atr.op, visit(xExpr, this));
+      return unaryOp(atr.op, visit(this, xExpr));
     },
     visitBinaryExpr: function(atr, xExpr, yExpr) {
-      return binaryOp(atr.op, visit(xExpr, this), visit(yExpr, this));
+      return binaryOp(atr.op, visit(this, xExpr), visit(this, yExpr));
     },
     visitLogicalAndExpr: function(atr, xExpr, yExpr) {
-      return visit(xExpr, this) && visit(yExpr, this);
+      return visit(this, xExpr) && visit(this, yExpr);
     },
     visitLogicalOrExpr: function(atr, xExpr, yExpr) {
-      return visit(xExpr, this) || visit(yExpr, this);
+      return visit(this, xExpr) || visit(this, yExpr);
     },
     visitConditionalExpr: function(atr, xExpr, yExpr, zExpr) {
-      return visit(xExpr, this) ? visit(yExpr, this) : visit(zExpr, this);
+      return visit(this, xExpr) ? visit(this, yExpr) : visit(this, zExpr);
     },
     visitAssignExpr: function(atr, lValue, aExpr) {
       var ref = evalRef(lValue, this.env);
-      var val = visit(aExpr, this);
+      var val = visit(this, aExpr);
       if (atr.op === '=') {
         ref.set(val);
         return val;
@@ -385,58 +400,56 @@ function(){
 
     visitBlockStmt: function(atr, var_args) {
       var stmts = slice(arguments, 1);
-      var nest = new Evaluator(this.env.nestBlock(atr));
+      var nest = new Evaluator(this.env.nestBlock(atr, stmts));
       var result;
-      stmts.forEach(function(stmt) { result = visit(stmt, nest); });
+      stmts.forEach(function(stmt) { result = visit(nest, stmt); });
       return result;
     },
     visitVarDecl: function(atr, var_args) {
       var patts = slice(arguments, 1);
       var that = this;
       patts.forEach(function(patt){
-        visit(patt, object({
+        visit(object({
           visitInitPatt: function(pAtr, idPatt, expr) {
-            //xxx: evalRef has no case for IdPatt, only IdExpr
-            // should probably be: that.env.set(idPatt.name, visit(expr, that));
-            evalRef(idPatt, that.env).set(visit(expr, that));
+            that.env.set(idPatt.name, visit(expr, that));
           },
           visitIdPatt: function(pAtr) {}
-        }));
+        }), patt);
       });
     },
     visitEmptyStmt: function(atr) {},
     visitIfStmt: function(atr, condExpr, thenStmt, elseStmt) {
       if (visit(condExpr, this)) {
-        return eval(thenStmt, this.env.nestStmt(thenStmt[1]));
+        return metaEval(thenStmt, this.env.nestStmt(thenStmt[1]));
       } else {
-        return eval(elseStmt, this.env.nestStmt(elseStmt[1]));
+        return metaEval(elseStmt, this.env.nestStmt(elseStmt[1]));
       }
     },
     visitDoWhileStmt: function(atr, bodyStmt, condExpr) {
       return this.label('break', function(breaker) {
         do {
           breaker.label('continue', function(continuer) {
-            visit(bodyStmt, continuer);
+            visit(continuer, bodyStmt);
           });
-        } while (visit(condExpr, breaker));
+        } while (visit(breaker, condExpr));
       });
     },
     visitWhileStmt: function(atr, condExpr, bodyStmt) {
       return this.label('break', function(breaker) {
-        while (visit(condExpr, breaker)) {
+        while (visit(breaker, condExpr)) {
           breaker.label('continue', function(continuer) {
-            visit(bodyStmt, continuer);
+            visit(continuer, bodyStmt);
           });
         }
       });
     },
     visitForStmt: function(atr, init, condExpr, incrExpr, bodyStmt) {
       return this.label('break', function(breaker) {
-        for (visit(init, breaker); 
-             visit(condExpr, breaker); 
-             visit(incrExpr, breaker)) {
+        for (visit(breaker, init); 
+             visit(breaker, condExpr); 
+             visit(breaker, incrExpr)) {
           breaker.label('continue', function(continuer) {
-            visit(bodyStmt, continuer);
+            visit(continuer, bodyStmt);
           });
         }
       });
@@ -444,11 +457,11 @@ function(){
     visitForInStmt: function(atr, lValue, collExpr, bodyStmt) {
       return this.label('break', function(breaker) {
         var ref = evalRef(lValue, breaker);
-        var coll = visit(collExpr, breaker);
+        var coll = visit(breaker, collExpr);
         for (var v in coll) {
           ref.set(v);
           breaker.label('continue', function(continuer) {
-            visit(bodyStmt, continuer);
+            visit(continuer, bodyStmt);
           });
         }
       });
@@ -463,40 +476,40 @@ function(){
     },
     visitReturnStmt: function(atr, optExpr) {
       if (optExpr) {
-        escape(this.env.getLabel('return'), visit(optExpr, this));
+        escape(this.env.getLabel('return'), visit(this, optExpr));
       } else {
         escape(this.env.getLabel('return'));
       }
     },
     visitWithStmt: function(atr, headExpr, bodyStmt) {
-      var nest = new Evaluator(this.env.nestWith(atr, visit(headExpr, this)));
-      return visit(bodyStmt, nest);
+      var nest = new Evaluator(this.env.nestWith(atr, visit(this, headExpr)));
+      return visit(nest, bodyStmt);
     },
     visitSwitchStmt: function(atr, headExpr, var_args) {
       // TBD...
     },
     visitLabelledStatement: function(atr, subStmt) {
       this.label(atr.label, function(labeller) {
-        return visit(subStmt, labeller);
+        return visit(labeller, subStmt);
       });
     },
     visitThrowStmt: function(atr, errExpr) {
-      throw visit(errExpr, this);
+      throw visit(this, errExpr);
     },
     visitTryStmt: function(atr, tryStmt, optCatchClause, unwindStmt) {
       try {
-        return visit(tryStmt, this);
+        return visit(this, tryStmt);
       } catch (e) {
         if (optCatchClause[0] === 'Empty') {
           throw e;
         } else {
           var errPatt = optCatchClause[2];
           var catchStmt = optCatchClause[3];
-          return eval(catchStmt, this.env.nestCatch(catchStmt[1], errPatt.name));
+          return metaEval(catchStmt, this.env.nestCatch(catchStmt[1], errPatt.name));
         }
       } finally {
         if (unwindStmt) {
-          visit(unwindStmt, this);
+          visit(this, unwindStmt);
         }
       }
     },
@@ -510,14 +523,14 @@ function(){
       // the beginning of the containing block.
     },
     visitFunctionExpr: function(atr, namePatt, params, var_args) {
-      var nestEnv = this.env.nestFunction(atr);
+      var bodyStmts = slice(arguments, 3);        
+      var nestEnv = this.env.nestFunction(atr, bodyStmts);
       var nameRef;
       if (namePatt[0] === 'Empty') {
         nameRef = null;
       } else {
         nameRef = evalRef(namePatt, nestEnv);
       }
-      var bodyStmts = slice(arguments, 3);        
       var result = function(var_args) {
 	      var funcEnv = nestEnv.nestThis(atr, this);
         var paramPatts = slice(params, 2);
@@ -527,7 +540,7 @@ function(){
         });
         return new Evaluator(funcEnv).label('return', function(returner) {
           bodyStmts.forEach(function(stmt) {
-            visit(stmt, returner);
+            visit(returner, stmt);
           });
         });
       };
@@ -541,12 +554,12 @@ function(){
   Object.freeze(Evaluator.prototype);
   Object.freeze(Evaluator);
 
-  function eval(element, env) {
-    return visit(element, new Evaluator(env));
+  function metaEval(element, env) {
+    return visit(new Evaluator(env), element);
   }
 
-  function evalRef(lValue, env) {
-    return visit(element, object({
+  function evalRef(expr, env) {
+    return visit(object({
       visitIdExpr: function(atr) {
         return object({
           get:    function()       { return env.get(atr.name); },
@@ -556,17 +569,18 @@ function(){
         });
       },
       visitMemberExpr: function(atr, baseExpr, propExpr) {
-        var base = visit(baseExpr, this);//xxx: shouldn't baseExpr be visited by the general-purpose visitor?
-        var prop = visit(propExpr, this);//xxx: shouldn't propExpr be visited by the general-purpose visitor?
+        var base = metaEval(baseExpr, env);
+        var prop = metaEval(propExpr, env);
         return object({
           get:    function()       { return base[prop]; },
           set:    function(newVal) { base[prop] = val; return true; },
           remove: function()       { return delete base[prop]; },
           exists: function()       { return prop in base; }          
         });
-      }
-    }));
+      },
+      doesNotVisit: function(element) { return false; }
+    }), expr);
   }
 
-  return Object.freeze(eval);
+  return Object.freeze(metaEval);
 })();
