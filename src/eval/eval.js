@@ -157,6 +157,7 @@ function(){
 
   function parseAndVerifyProgram(src) {
     // TBD
+    ES5Parser.matchAll(src, 'Program', [])
   }
 
   function unaryOp(op, x) {
@@ -239,14 +240,13 @@ function(){
     nestBlock: function(atr, statements) {
 
     },
-    nestStmt: function(atr) {
-
-    },
     nestWith: function(atr, obj) {
 
     },
-    nestCatch: function(atr, varName) {
-
+    nestCatch: function(atr, varName, ex) {
+      var newRep = Object.create(this.rep);
+      newRep['var$' + varName] = ex;
+      return new Environment(newRep, this.thisArg);
     },
     nestProgram: function(atr, statements) {
       
@@ -420,9 +420,9 @@ function(){
     visitEmptyStmt: function(atr) {},
     visitIfStmt: function(atr, condExpr, thenStmt, elseStmt) {
       if (visit(condExpr, this)) {
-        return metaEval(thenStmt, this.env.nestStmt(thenStmt[1]));
+        return visit(this, thenStmt);
       } else {
-        return metaEval(elseStmt, this.env.nestStmt(elseStmt[1]));
+        return visit(this, elseStmt);
       }
     },
     visitDoWhileStmt: function(atr, bodyStmt, condExpr) {
@@ -505,7 +505,7 @@ function(){
         } else {
           var errPatt = optCatchClause[2];
           var catchStmt = optCatchClause[3];
-          return metaEval(catchStmt, this.env.nestCatch(catchStmt[1], errPatt.name));
+          return metaEval(catchStmt, this.env.nestCatch(catchStmt[1], errPatt.name, e));
         }
       } finally {
         if (unwindStmt) {
