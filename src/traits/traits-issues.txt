@@ -55,3 +55,20 @@ it specially
 - preprocessing traits:
 composing using Object.defineProperties instead of Object.defineProperty*
 could preprocess traits to be stored as a property descriptor map instead of as an object 
+
+using partial evaluation / static analysis it should be possible to 'compile away' object, compose, alias and exclude into an object literal (with conflicts being signalled statically)
+-> would have the same performance characteristics of a class-based system with ad hoc syntax
+
+- define a collections lib with these operators
+
+'traits' are simply objects
+4 operators:
+- object: obj -> frozen obj and fixes 'this' binding
+- compose: obj1 x obj2 x ... x objN -> objN+1
+- alias: map<string,string> x obj -> obj
+- exclude: list<string|obj> x obj -> obj
+we don't need the with operator from the Traits model because we have a computed exclude.
+
+compose(obj, { noisy: true })
+
+{ prop: required } -> signals a required property (always overridden)

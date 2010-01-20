@@ -20,7 +20,7 @@
 load('traits-alt.js');
 load('../../tests/parser/unit.js');
 
-function makeCircleTrait(self, radius) {
+function makeCircleTrait(radius) {
   return {
     move: function(dx, dy) {
       return 'moved '+dx+','+dy;
@@ -28,31 +28,56 @@ function makeCircleTrait(self, radius) {
   };
 }
 
-function makeAnimationTrait(self, refreshRate) {
+function makeAnimationTrait(refreshRate) {
   function setTimeout(f,r) { return f(); } // fake setTimeout
   return {
     start: function() {
-      return setTimeout(function() { return self.animate(); }, refreshRate);
+      var that = this;
+      return setTimeout(function() { return that.animate(); }, refreshRate);
     },
     stop: function() { print('timer reset'); }
   }
 }
 
-function makeParticleTrait(self, radius, moveRate, dx, dy) {
+function makeParticleTrait(radius, moveRate, dx, dy) {
   return compose(
     {trait: {
-      animate: function() { return self.move(dx, dy); }
+      animate: function() { return this.move(dx, dy); }
     }},
-    {trait: makeCircleTrait(self,radius)},
-    {trait: makeAnimationTrait(self, moveRate),
+    {trait: makeCircleTrait(radius)},
+    {trait: makeAnimationTrait(moveRate),
      alias: { start: 'startMoving' },
-     exclude: [ 'stop'].concat([Object.keys(obj) ])
+     exclude: [ 'stop']
     });
+    
+    
+  return compose {
+    { animate: function() { ... } },
+    makeCircleTrait(radius),
+    makeAnimationTrait(moveRate) alias start -> startMoving
+                                 exclude stop
+  };
+  
+  return compose(
+    { foo: required,
+      animate: function() {...}},
+    makeCircleTrait(radius),
+    alias({start: 'startMoving'}, 
+          exclude(['stop'], makeAnimationTrait(moveRate)))
+  );
+  
+  var t = compose(...);
+  
+  function Car(color) {
+    return object(compose(T1,T2,{
+      
+    });
+  }
+  
 }
 
 function makeParticleMorph(radius, moveRate, dx, dy) {
-   var self = {};
-   return use(self, makeParticleTrait(self, radius, moveRate, dx, dy));
+   return complete(makeParticleTrait(radius, moveRate, dx, dy));
 }
 
 // this-based version would become:
