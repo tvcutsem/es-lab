@@ -35,7 +35,13 @@
     }
     var mangle = 'visit' + element[0];
     //return visitor[mangle](...args);
-    return visitor[mangle].apply(visitor, args);
+    if (mangle in visitor) {
+      return visitor[mangle].apply(visitor, args);      
+    } else if ('doesNotVisit' in visitor) {
+      return visitor.doesNotVisit(element);
+    } else {
+      throw new Error('visitor did not understand: ' + mangle);
+    }
   }
   exports.visit = visit;
   
