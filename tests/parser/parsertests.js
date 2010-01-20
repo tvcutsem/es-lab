@@ -75,7 +75,7 @@ function lexerTestSuite() {
   };
   
   function checkPunct(input) {
-	  var output = lex(input, 'scanPunctuator', []);
+	  var output = lex(input, 'scanPunctuator', [input]);
 	  unit.compare(input, output, "punctuator: '"+input+"'");
   };
   
@@ -115,7 +115,8 @@ function lexerTestSuite() {
   
   ensureNoMatch("while",'Identifier',[]);
   checkKeyword("while");
-  checkKeyword("class");
+  // scanKeyword does not work for Future reserved keywords
+  ensureNoMatch("class", 'scanKeyword', ['class']);
   checkKeyword("do");
   ensureNoMatch("doit",'scanKeyword',['do']);
   checkIdentifier("doit", "doit");

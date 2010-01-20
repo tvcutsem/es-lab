@@ -115,14 +115,14 @@ function profileFunDeclSeries(min, max) {
 }
 
 function timePunctuators(i) {
-  var expr = "(a && b || c && !d) ? (x++, --y) : (a >> b, a <<<= b)";
+  var expr = "(a && b || c && !d) ? (x++, --y) : (a >> b, a >>>= b)";
   console.time("Punctuator try "+i);
   res = parse(expr, 'ExpressionOnly', []);
   console.timeEnd("Punctuator try "+i);
   return res;
 }
 
-function profilePunctuators(numRuns) {
+function timePunctuatorSeries(numRuns) {
   return runSeries(0,numRuns,function (i) {
     return timePunctuators(i);
   });
@@ -136,7 +136,7 @@ function timeKeywords(i) {
   return res;
 }
 
-function profileKeywords(numRuns) {
+function timeKeywordSeries(numRuns) {
   return runSeries(0,numRuns,function (i) {
     return timeKeywords(i);
   });
