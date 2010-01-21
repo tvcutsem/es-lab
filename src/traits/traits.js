@@ -222,7 +222,7 @@ var Traits = (function(){
    *
    *        options.failOnIncomplete: is a boolean indicating whether
    *          the call to object should fail noisily if a required property
-   *          is not present in the trait (default: true)
+   *          is not present in the trait (default: false)
    *
    * @returns a frozen object with the same own properties as trait.
    *          All methods or accessors defined on the result are frozen
