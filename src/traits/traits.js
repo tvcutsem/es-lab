@@ -12,164 +12,276 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// An ES5 implementation of Traits as defined in:
-// "Traits: Composable units of Behavior"
-//   (Scharli et. al, ECOOP 2003)
-//   http://scg.unibe.ch/archive/papers/Scha03aTraits.pdf
+// See http://code.google.com/p/es-lab/wiki/Traits
+// for background on traits and a description of this library
 
-// but closer to the object-based, lexically nestable traits defined in:
-// "Adding State and Visibility Control to Traits using Lexical Nesting"
-//   (Van Cutsem et. al, ECOOP 2009)
-//   http://prog.vub.ac.be/Publications/2009/vub-prog-tr-09-04.pdf
+var Traits = (function(){
 
-// A trait can be any object. It can define state, but it is advised to
-// always expose stateful traits via 'maker' functions, to prevent a stateful
-// trait from being composed multiple times with different objects.
-// (this is possible, but state is then shared between the two composers,
-//  which may result in very bad interactions)
+  // == Ancillary functions ==
 
-// When a trait is imported, all of its properties are imported into a composite.
-// The lexical scope of imported methods remains intact.
-// Traits may call back on the composite using 'this', or may be parameterized
-// with the composite explicitly to support a more robust alternative to 'this'.
-// Required methods are assumed to be found in the composite.
-// At composition time, the composer can choose to alias or exclude trait properties.
-// Properties inherited from multiple traits result in a 'conflict' property that,
-// upon use, raises an exception.
-
-// Interaction between prototype-delegation (inheritance) and traits:
-// When importing a trait object, only the trait's own properties are imported.
-// Traits are not assumed to have a useful prototype, and should only be composed
-// according to recursive trait composition, not according to prototype-inheritance.
-// When a non-trait object composes with traits, the trait properties will override
-// any properties inherited from the object's prototype. However, the composite object
-// still has a prototype and prototype-delegation of composites should still work as expected.
-
-// Objects are composed using two composition operators:
-//   compose(compositeTrait, trait, advice)
-//   use(compositeObject, trait, advice)
-
-// The difference between both operators is that 'compose' treats name clashes as conflicts,
-// whereas 'use' lets composite properties take precedence over trait properties.
-
-// Object props take precedence over trait props.
-// Trait props take precedence over the composite's prototype's props.
-
-/**
- * Assuming <tt>obj</tt> is an object written in the normal
- * objects-as-closures style, this convenience method will freeze
- * the object, all the enumerable methods of that object, and all
- * the <tt>prototype</tt>s of those methods.
- * 
- * <p>For example, a defensive <tt>Point</tt> constructor can be
- * written as <tt>
- *   function Point(x, y) {
- *     return object({
- *       toString: function() { return '&lt;' + x + ',' + y + '&gt;'; },
- *       getX: function() { return x; },
- *       getY: function() { return y; }
- *     });
- *   }
- *   Object.freeze(Point.prototype);
- *   Object.freeze(Point);
- * </tt>
- */
-function object(obj) {
-  for (var name in obj) {
-    var meth = obj[name];
-    if (typeof meth === 'function') {
-      if ('prototype' in meth) {
-        Object.freeze(meth.prototype);
-      }
-      Object.freeze(meth);
-    }
+  function makeConflictAccessor(name) {
+    var accessor = function(var_args) {
+      throw new Error("Conflicting property: "+name);
+    };
+    accessor.isConflict = true;
+    Object.freeze(accessor.prototype);
+    return Object.freeze(accessor);
+  };
+  
+  function isConflictingProp(pd) {
+    return (pd.get && pd.get.isConflict);
   }
-  return Object.freeze(obj);
-}
+  
+  function makeConflictingPropDesc(name) {
+    var conflict = makeConflictAccessor(name);
+    return Object.freeze({
+     get: conflict,
+     set: conflict,
+     enumerable: false,
+     configurable: true
+    });
+  }
 
-
-function conflict(name) { throw new Error("trait conflict: "+name) }
-function makeConflictDesc(name) {
-  return Object.freeze({
-   get: function() { return conflict(name) },
-   set: function(val) { return conflict(name) },
-   enumerable: false,
-   configurable: true
-  });
-}
-
-function isSameDesc(desc1, desc2) {
-  return (   desc1.get === desc2.get
-          && desc1.set === desc2.set
-          && desc1.value === desc2.value // TODO: deal with NaN and -0
-          && desc1.writable === desc2.writable
-          && desc1.enumerable === desc2.enumerable
-          && desc1.configurable === desc2.configurable);
-}
-
-// turns an array of names or objects into an object mapping
-// each of these names (or all own properties of each of these objects) to 'true'.
-// (the object can be used as a set by invoking set.hasOwnProperty(element))
-function makeSet(namesOrObjects) {
-  var set = {};
-  namesOrObjects.forEach(function (nameOrObject) {
-    if (typeof nameOrObject === "string") {
-      set[nameOrObject] = true;      
-    } else { // nameOrObject presumed to be an object
-      Object.getOwnPropertyNames(nameOrObject).forEach(function (name) {
-        set[name] = true;
-      });
+  // Note: isSameDesc should return true if both
+  // desc1 and desc2 represent a 'required' property
+  // (otherwise two composed required properties would be turned into a conflict)
+  function isSameDesc(desc1, desc2) {
+    return (   desc1.get === desc2.get
+            && desc1.set === desc2.set
+            && desc1.value === desc2.value // TODO: deal with NaN and -0
+            // TODO: do the following attributes really matter?
+            && desc1.writable === desc2.writable
+            && desc1.enumerable === desc2.enumerable
+            && desc1.configurable === desc2.configurable);
+  }
+  
+  /* forAllOwnPropertiesOf(obj, function(name, pd) {
+   *   ...  
+   * })
+   *
+   * iterate over all own properties, also non-enumerable ones
+   */
+  function forAllOwnPropertiesOf(obj, doFun) {
+    return Object.getOwnPropertyNames(obj).forEach(function (name) {
+      return doFun(name, Object.getOwnPropertyDescriptor(obj, name));
+    });
+  }
+  
+  function definePropsAndFreeze(obj, props) {
+    Object.defineProperties(obj, props);
+    return Object.freeze(obj);
+  }
+  
+  function freezeAndBind(meth, self) {
+    if ('prototype' in meth) {
+      Object.freeze(meth.prototype);
     }
-  });
-  return set;
-}
+    return Object.freeze(meth.bind(self)); 
+  }
 
-// composite = compose(composite, trait, {
-//  alias: { oldName: newName, ... },
-//  exclude: [ excludedName, excludedObject, ... ],
-// })
-//
-// compose 'trait' with 'composite' such that:
-//  trait.oldName becomes trait.newName in the composite
-//  trait.excludedName does not become part of the composite
-//  no own property name of excludedObject becomes part of the composite
-//
-// 'compose' modifies 'composite' in-place, and returns the modified composite
-function compose(self, trait, opt_composition) {
-   var composition = opt_composition || {};
-   var aliases     = composition.alias || {};
-   var exclusions  = makeSet(composition.exclude || []);
-   
-   Object.getOwnPropertyNames(trait).forEach(function (traitProp) {
-     var traitDesc = Object.getOwnPropertyDescriptor(trait, traitProp);
-     if (aliases.hasOwnProperty(traitProp)) {
-       traitProp = aliases[traitProp]; // rename property
-     }
-     if (exclusions.hasOwnProperty(traitProp)) return; // skip
+  /* makeSet(['foo', {bar:0}, ...]) => { foo: true, bar: true, ...}
+   *
+   * makeSet returns an object whose own properties represent a set.
+   *
+   * Each string in the namesOrObjects array is added to the set, as well
+   * as all of the own (enumerable and non-enumerable) properties of any
+   * object in the namesOrObjects array.
+   *
+   * To test whether an element is in the set, perform:
+   *   set.hasOwnProperty(element)
+   */
+  function makeSet(namesOrObjects) {
+    var set = {};
+    namesOrObjects.forEach(function (nameOrObject) {
+      if (typeof nameOrObject === "string") {
+        set[nameOrObject] = true;      
+      } else { // nameOrObject presumed to be an object
+        Object.getOwnPropertyNames(nameOrObject).forEach(function (name) {
+          // note: getOwnPropertyNames rather than keys such that we
+          // also include the non-enumerable own properties of the object
+          set[name] = true;
+        });
+      }
+    });
+    return Object.freeze(set);
+  }
 
-     var selfDesc = Object.getOwnPropertyDescriptor(self, traitProp);
-     if (selfDesc) { // composite has a conflicting slot
-       if (isSameDesc(selfDesc, traitDesc)) {
-         // it's the same as the trait's slot, no problem
-       } else {
-         Object.defineProperty(self, traitProp, makeConflictDesc(traitProp));           
-       }
-     } else {
-       Object.defineProperty(self, traitProp, traitDesc);
-     }
-  });
-  return self;
-}
+  // == singleton object to be used as the placeholder for a required property ==
+  
+  var required = Object.freeze({ comment: 'required trait property' });
 
-// use is like compose, except that composite methods take strict precedence
-// over trait methods (that is: name clashes result in the trait method
-// being 'overridden' by the composite method, rather than in a conflict)
-//
-// use(c, t, advice) === compose(c, t, advice U {exclude: c})
-function use(composite, trait, advice) {
-  advice = advice || {};
-  return compose(composite, trait, {
-    alias: advice.alias || {},
-    exclude: (advice.exclude || []).concat([composite])
-  });
-}
+  // == The four composition operators ==
+
+  /* var newTrait = compose(trait_1, trait_2, ..., trait_N)
+   *
+   * @param trait_i any object, but presumably an object used as a trait
+   * @returns a new trait containing the combined own properties of
+   *          all the trait_i.
+   * 
+   * If two or more traits have own properties with the same name, the new
+   * trait will contain a 'conflict' property for that name. 'compose' is
+   * a commutative and associative operation, and the order of its
+   * arguments is not significant.
+   *
+   * If 'compose' is invoked with < 2 arguments, then:
+   *   compose(trait_1) returns a trait equivalent to trait_1
+   *   compose() returns a trait equivalent to Object.freeze({})
+   */
+  function compose(var_args) {
+    var traits = Array.prototype.slice.call(arguments, 0);
+    var newTrait = {};
+    var properties = {};
+    
+    traits.forEach(function (trait) {
+      forAllOwnPropertiesOf(trait, function (name, pd) {
+        if (properties.hasOwnProperty(name) &&
+            (properties[name].value !== required)) {
+          
+          // a non-required property with the same name was previously defined
+          // this is not a conflict if pd represents a 'required' property itself:
+          if (pd.value === required) {
+            return; // skip this property, the required property is now present
+          }
+            
+          if (!isSameDesc(properties[name], pd)) {
+            // a distinct, non-required property with the same name
+            // was previously defined by another trait => mark as conflicting property
+            properties[name] = makeConflictingPropDesc(name); 
+          } // else,
+          // properties are not in conflict if they refer to the same value
+          
+        } else {
+          properties[name] = pd;
+        }
+      });
+    });
+    
+    return definePropsAndFreeze(newTrait, properties);
+  }
+
+  /* var newTrait = exclude(['name', obj, ...], trait)
+   *
+   * @param namesOrObjects a list of strings denoting property names or
+   *        objects.
+   * @param trait any object, but presumably an object used as a trait
+   * @returns a new trait with the same own properties as the original trait,
+   *          except those properties whose name appears in nameOrObjects
+   *          or is an own property of an object that appears in nameOrObjects
+   */
+  function exclude(namesOrObjects, trait) {
+    // note: we could make exclude return a function (trait) { ... }
+    // such that it can partially-evaluate its first argument, reusing
+    // the created exclusion set on mutiple traits. The downside is that
+    // for one-off use, one would need to write: exclude([...])(trait)
+    var exclusions = makeSet(namesOrObjects);
+    var newTrait = {};
+    var properties = {};
+    
+    forAllOwnPropertiesOf(trait, function (name, pd) {
+      if (!exclusions.hasOwnProperty(name)) {
+        properties[name] = pd;
+      }
+    });
+    
+    return definePropsAndFreeze(newTrait, properties);
+  }
+
+  /* var newTrait = alias({ oldName: 'newName', ... }, trait)
+   *
+   * @param aliases an object whose own properties serve as a mapping from
+            old names to new names.
+   * @param trait any object, but presumably an object used as a trait
+   * @returns a new trait with the same own properties as the original trait,
+   *          except that all own properties whose name is an own property
+   *          of aliases will be renamed to aliases[name]
+   */
+  function alias(aliases, trait) {
+    var newTrait = {};
+    var properties = {};
+    
+    forAllOwnPropertiesOf(trait, function (name, pd) {
+      var newName = aliases.hasOwnProperty(name) ? String(aliases[name]) : name;
+      properties[newName] = pd;
+    });
+    
+    return definePropsAndFreeze(newTrait, properties);
+  }
+
+  /**
+   * var obj = object(trait, {extend: proto, failOnConflicts: true, ...})
+   *
+   * @param trait any Javascript object, but mostly an object presumed
+   *              to be a trait.
+   * @param options an optional object where
+   *
+   *        options.extend: denotes the prototype of obj (default: Object.prototype)
+   *
+   *        options.failOnConflicts: is a boolean indicating whether
+   *          the call to object should fail noisily if a conflicting property
+   *          remains (default: false).
+   *
+   *        options.failOnIncomplete: is a boolean indicating whether
+   *          the call to object should fail noisily if a required property
+   *          is not present in the trait (default: true)
+   *
+   * @returns a frozen object with the same own properties as trait.
+   *          All methods or accessors defined on the result are frozen
+   *          and their 'this' value is bound to obj.
+   *
+   * @throws 'Missing required property' if {failOnIncomplete:true} and
+   *         the trait still contains a required property.
+   * @throws 'Remaining conflicting property' if {failOnConflicts:true} and
+   *         the trait still contains a conflicting property.
+   */
+  function object(trait, optOptions) {
+    var options = optOptions || {};
+    var parent = options.extend || Object.prototype; // 'extends' not allowed :(
+    var failOnConflicts = options.failOnConflicts || false;
+    var failOnIncomplete = options.failOnIncomplete || true;
+    var self = Object.create(parent);
+    var properties = {};
+  
+    forAllOwnPropertiesOf(trait, function (name, pd) {
+      if ('value' in pd) { // data property
+        // check for remaining 'required' properties
+        if (pd.value === required) {
+          if (failOnIncomplete) {
+            throw new Error('Missing required property: '+name);
+          } else {
+            return; // drop missing required property
+          }
+        }
+        
+        // freeze all function properties and their prototype
+        if (typeof pd.value === 'function') {
+          // bind 'this' in trait method to the composite object
+          pd.value = freezeAndBind(pd.value, self);
+        }
+      } else { // accessor property
+        
+        // check for remaining conflicting properties
+        if (isConflictingProp(pd) && failOnConflicts) {
+          throw new Error('Remaining conflicting property: '+name);
+          // if !failOnConflicts, leave the conflicting property in the composite
+        }
+        
+        if (pd.get) { pd.get = freezeAndBind(pd.get, self); }
+        if (pd.set) { pd.set = freezeAndBind(pd.set, self); }
+      }
+      
+      properties[name] = pd;
+    });
+  
+    return definePropsAndFreeze(self, properties);
+  }
+
+  // expose the public API of this module
+  return {
+      object: object,
+     compose: compose,
+       alias: alias,
+     exclude: exclude,
+    required: required
+  };
+  
+})();

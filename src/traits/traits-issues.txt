@@ -69,6 +69,10 @@ using partial evaluation / static analysis it should be possible to 'compile awa
 - exclude: list<string|obj> x obj -> obj
 we don't need the with operator from the Traits model because we have a computed exclude.
 
-compose(obj, { noisy: true })
+object(obj, { extends: parent, failOnConflicts: true })
+// with EphemeronTables can build branding -> { implements: [list-of-brands] }
+// this would allow a test: brand.isBranded(obj)
+
+what about branding individual traits? MarkM: would be unreliable since traits are themselves incomplete and meant to be used as reusable building blocks. Only complete objects should be branded.
 
 { prop: required } -> signals a required property (always overridden)

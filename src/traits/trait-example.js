@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// An example to test trait composition, from the paper:
+// An example to the traits.js library, from the paper:
 // "Adding State and Visibility Control to Traits using Lexical Nesting"
 //   (Van Cutsem et. al, ECOOP 2009)
 //   http://prog.vub.ac.be/Publications/2009/vub-prog-tr-09-04.pdf
@@ -20,7 +20,12 @@
 load('traits.js');
 load('../../tests/parser/unit.js');
 
-function makeCircleTrait(self, radius) {
+var T = Traits;
+
+// fake setTimeout
+function setTimeout(f,r) { return f(); }
+
+function makeCircleMorph(radius) {
   return {
     move: function(dx, dy) {
       return 'moved '+dx+','+dy;
@@ -28,32 +33,29 @@ function makeCircleTrait(self, radius) {
   };
 }
 
-function makeAnimationTrait(self, refreshRate) {
-  function setTimeout(f,r) { return f(); } // fake setTimeout
+function makeAnimationTrait(refreshRate) {
   return {
+    animate: T.required, // to be provided by my composite
     start: function() {
-      return setTimeout(function() { return self.animate(); }, refreshRate);
+      var that = this;
+      return setTimeout(function() { return that.animate(); }, refreshRate);
     },
     stop: function() { print('timer reset'); }
-  }
+  };
 }
 
-function makeParticleTrait(self, radius, moveRate, dx, dy) {
-   var resultTrait = {
-     animate: function() { return self.move(dx, dy); }
-   };
-   compose(resultTrait, makeCircleTrait(self, radius));
-   compose(resultTrait, makeAnimationTrait(self, moveRate), {
-     alias: { start: 'startMoving' },
-     exclude: [ 'stop' ]
-   });
-   return resultTrait;
+function makeParticleTrait(radius, moveRate, dx, dy) {
+   return T.compose(
+     { animate: function() { return this.move(dx, dy); } },
+     T.alias({ start: 'startMoving' },
+             T.exclude(['stop'], makeAnimationTrait(moveRate))));
 }
+
+
 
 function makeParticleMorph(radius, moveRate, dx, dy) {
-   var self = {};
-   use(self, makeParticleTrait(self, radius, moveRate, dx, dy));
-   return object(self);
+   return T.object(makeParticleTrait(radius, moveRate, dx, dy),
+                   { extend: makeCircleMorph(radius) });
 }
 
 var unit = makeUnitTest('Traits', true);
@@ -62,4 +64,5 @@ var m = makeParticleMorph(2.0, 1.0, 1, 1);
 unit.compare('moved 1,1', m.startMoving(), 'startMoving returns moved');
 unit.ok(!('start' in m), 'start not present in m');
 unit.ok(!('stop' in m), 'stop not present in m');
+unit.compare('moved 2,3', m.move(2,3));
 unit.testDone();
