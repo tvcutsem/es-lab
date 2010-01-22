@@ -15,6 +15,8 @@
 // See http://code.google.com/p/es-lab/wiki/Traits
 // for background on traits and a description of this library
 
+// TODO: trait: turn data props bound to functions into explicit 'methods'
+
 var Traits = (function(){
 
   // == Ancillary functions ==
@@ -48,6 +50,7 @@ var Traits = (function(){
         };
       
   var freeze = Object.freeze || function(obj) { return obj; };
+  var getPrototypeOf = Object.getPrototypeOf || function(obj) { return Object.prototype };
   var getOwnPropertyNames = Object.getOwnPropertyNames ||
       function(obj) {
         var props = [];
@@ -167,17 +170,25 @@ var Traits = (function(){
 
   // == The public API methods ==
 
-  /* var newTrait = trait({ foo:required, ... })
+  /**
+   * var newTrait = trait({ foo:required, ... })
    *
-   * @param object any object, mostly specified using an object literal
+   * @param object an object record (in principle an object literal)
    * @returns a new trait describing all of the own properties of the object
    *   (both enumerable and non-enumerable)
+   * @throws an exception if the object passed to 'trait' has a prototype
+   *         other than Object.prototype
    *
    * As a general rule, 'trait' should always be invoked with an
    * object *literal*, since the object merely serves as a record
    * descriptor. Both its identity and its prototype chain are completely ignored.
+   * 
    */
   function trait(obj) {
+    if (getPrototypeOf(obj) !== Object.prototype) {
+      throw new Error("trait expects only object records");
+    }
+    
     var map = {};
     forEach(getOwnPropertyNames(obj), function (name) {
       var pd = getOwnPropertyDescriptor(obj, name);
@@ -189,7 +200,8 @@ var Traits = (function(){
     return map;
   }
 
-  /* var newTrait = compose(trait_1, trait_2, ..., trait_N)
+  /**
+   * var newTrait = compose(trait_1, trait_2, ..., trait_N)
    *
    * @param trait_i any object, but presumably an object used as a trait
    * @returns a new trait containing the combined own properties of
@@ -242,6 +254,8 @@ var Traits = (function(){
    * @param trait a trait some properties of which should be excluded.
    * @returns a new trait with the same own properties as the original trait,
    *          except those properties whose name appears in names
+   
+   * Note: exclude(A, exclude(B,t)) is equivalent to exclude(A U B, t)
    */
   function exclude(names, trait) {
     var exclusions = makeSet(names);
@@ -257,6 +271,15 @@ var Traits = (function(){
     return freeze(newTrait);
   }
   
+  /**
+   * var newTrait = override(dominantTrait, recessiveTrait)
+   *
+   * @returns a new trait with all of the properties of dominantTrait
+   *          and all of the properties of recessiveTrait not in dominantTrait
+   *
+   * Note: override is associative:
+   *   override(t1, override(t2, t3)) is equivalent to override(override(t1, t2), t3)
+   */
   function override(frontT, backT) {
     var newTrait = {};
     // first copy all of backT's properties into newTrait
@@ -275,7 +298,8 @@ var Traits = (function(){
     return freeze(newTrait);
   }
 
-  /* var newTrait = alias({ oldName: 'newName', ... }, trait)
+  /**
+   * var newTrait = alias({ oldName: 'newName', ... }, trait)
    *
    * @param aliases an object whose own properties serve as a mapping from
             old names to new names.
@@ -283,6 +307,8 @@ var Traits = (function(){
    * @returns a new trait with the same own properties as the original trait,
    *          except that all own properties whose name is an own property
    *          of aliases will be renamed to aliases[name]
+   *
+   * Note: alias(A, alias(B, t)) is equivalent to alias(\n -> A(B(n)), t)
    */
   function alias(aliases, trait) {
     var newTrait = {};

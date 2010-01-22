@@ -51,19 +51,13 @@ function makeParticleTrait(radius, moveRate, dx, dy) {
              T.exclude(['stop'], makeAnimationTrait(moveRate))));
 }
 
-// TODO: note exclude(A, exclude(B,t)) eqv exclude(A U B, t)
-// alias(A, alias(B, t)) eqv alias(\n -> A(B(n)), t)
-// override is associative so override(t1, override(t2, t3)) eqv override(override(t1, t2), t3)
-// trait(object(pmap, {failOn*:true})) fail-stop-eqv pmap (except binding/freezing of methods)
-// object(trait({...})) eqv Object.freeze({...}) (except binding/freezing of methods)
-// object(trait({foo:required})) is not eqv to {foo:required}
-
 function makeParticleMorph(radius, moveRate, dx, dy) {
    return T.object(T.override(makeParticleTrait(radius, moveRate, dx, dy),
                               makeCircleTrait(radius))); // prioritized composition
 }
+
 /*
-// TODO: super pattern
+// TODO: document super pattern
 function makeParticleMorph(radius, moveRate, dx, dy) {
    var superT = makeCircleTrait(radius);
    return T.object(override(makeParticleTrait(object(superT), radius, moveRate, dx, dy),
