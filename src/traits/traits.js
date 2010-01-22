@@ -351,7 +351,7 @@ var Traits = (function(){
   function object(trait, optOptions) {
     var options = optOptions || {};
     var failOnConflicts = options.failOnConflicts || false;
-    var failOnIncomplete = options.failOnIncomplete || true;
+    var failOnIncomplete = options.failOnIncomplete || false;
     var self = {};
     var properties = {};
   
