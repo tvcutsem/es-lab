@@ -31,7 +31,7 @@ function report(msg) {
 	
 function lex(input, rule, args) {
   args = args || [];
-  return LexicalGrammar.matchAll(input, rule, args, function(parser, idx) {
+  return ES5Parser.matchAll(input, rule, args, function(parser, idx) {
 	if (!idx || idx < 0) idx = input.length - 1;
 	var spaces = new Array(input.length);
 	spaces[idx] = "^";
@@ -70,12 +70,12 @@ function lexerTestSuite() {
   };
   
   function checkKeyword(input) {
-	  var output = lex(input, 'scanKeyword', [input]);
+	  var output = lex(input, 'k', [input]);
 	  unit.compare(input, output, "keyword: '"+input+"'");
   };
   
   function checkPunct(input) {
-	  var output = lex(input, 'scanPunctuator', [input]);
+	  var output = lex(input, 'token', [input]);
 	  unit.compare(input, output, "punctuator: '"+input+"'");
   };
   
@@ -115,10 +115,10 @@ function lexerTestSuite() {
   
   ensureNoMatch("while",'Identifier',[]);
   checkKeyword("while");
-  // scanKeyword does not work for Future reserved keywords
-  ensureNoMatch("class", 'scanKeyword', ['class']);
+  // 'k(kw)' does not work for Future reserved keywords
+  ensureNoMatch("class", 'k', ['class']);
   checkKeyword("do");
-  ensureNoMatch("doit",'scanKeyword',['do']);
+  ensureNoMatch("doit",'k',['do']);
   checkIdentifier("doit", "doit");
   unit.compare("class", lex("class", 'FutureReservedWord',[true]),
 			   "class keyword in strict mode");
