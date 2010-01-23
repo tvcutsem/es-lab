@@ -1,25 +1,31 @@
 Traits: TODO
 
 - try a 'diamond' setup to test whether isSameDesc works.
-
-- operator to test whether an object 'is an instance of' a particular trait?
- with EphemeronTables can build branding -> { implements: [list-of-brands] }
- this would allow a test: brand.isBranded(obj)
-
-What about branding individual traits? MarkM: would be unreliable since traits are themselves incomplete and meant to be used as reusable building blocks. Only complete objects should be branded.
-
-- preprocessing traits:
-could preprocess intermediate traits to be represented as a property descriptor map instead of as an object
-
-Using partial evaluation / static analysis it should be possible to 'compile away' object, compose, alias and exclude into an object literal (with conflicts being signalled statically)
--> would have the same performance characteristics of a class-based system with ad hoc syntax
-
 - define a collections lib with these operators
+- more unit tests
 
-'traits' are simply objects
-4 operators:
-- object: obj -> frozen obj and fixes 'this' binding
-- compose: obj1 x obj2 x ... x objN -> objN+1
-- alias: map<string,string> x obj -> obj
-- exclude: list<string|obj> x obj -> obj
-we don't need the with operator from the Traits model because we have a computed exclude.
+
+Redesign:
+- rename object to instantiate/build/make
+- redefine object as instantiate + trait
+
+Discussion with Alex:
+- the need for extends: to hook up object into prototype chain
+for one thing: it allows 'live' changes where all objects constructed from a trait inherit form a mutable object
+- alias and exclude folded into a single 'resolve' operator: map strings to falsy values to exclude them
+- override: variable-arity function? (since it's associative anyway, precedence from left to right)
+- the need for open, malleable, flexible objects:
+
+introduce a single flag to control multiple choices: 'open:' or 'incomplete:'
+
+'open: true' is for abstract or malleable objects and implies
+  failOnIncomplete: false,
+  failOnConflict: false,
+  frozen & frozen methods: false,
+  bind methods: false
+
+'open: false' (default) is for high-integrity or final objects
+  failOnIncomplete: true,
+  failOnConflict: true,
+  frozen & frozen methods: true,
+  bind methods: true
