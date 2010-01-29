@@ -52,8 +52,8 @@ function makeParticleTrait(radius, moveRate, dx, dy) {
 }
 
 function makeParticleMorph(radius, moveRate, dx, dy) {
-   return T.object(T.override(makeParticleTrait(radius, moveRate, dx, dy),
-                              makeCircleTrait(radius))); // prioritized composition
+   return T.build(T.override(makeParticleTrait(radius, moveRate, dx, dy),
+                             makeCircleTrait(radius))); // prioritized composition
 }
 
 /*

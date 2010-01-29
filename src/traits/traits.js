@@ -78,7 +78,20 @@ var Traits = (function(){
           }
         }
       };
-      
+  var create = Object.create || 
+      function(proto, propMap) {
+        var self;
+        function dummy() {};
+        dummy.prototype = proto || Object.prototype;
+        self = new dummy();
+        if (propMap) {
+          defineProperties(self, propMap);          
+        }
+        return self;
+      };
+  
+  // end of ES3 - ES5 compatibility functions
+  
   function makeConflictAccessor(name) {
     var accessor = function(var_args) {
       throw new Error("Conflicting property: "+name);
@@ -203,7 +216,7 @@ var Traits = (function(){
   /**
    * var newTrait = compose(trait_1, trait_2, ..., trait_N)
    *
-   * @param trait_i any object, but presumably an object used as a trait
+   * @param trait_i a trait object
    * @returns a new trait containing the combined own properties of
    *          all the trait_i.
    * 
@@ -214,7 +227,7 @@ var Traits = (function(){
    *
    * If 'compose' is invoked with < 2 arguments, then:
    *   compose(trait_1) returns a trait equivalent to trait_1
-   *   compose() returns a trait equivalent to Object.freeze({})
+   *   compose() returns an empty trait
    */
   function compose(var_args) {
     var traits = slice(arguments, 0);
@@ -270,6 +283,40 @@ var Traits = (function(){
     
     return freeze(newTrait);
   }
+
+  /**
+   * var newTrait = override(trait_1, trait_2, ..., trait_N)
+   *
+   * @returns a new trait with all of the combined properties of the argument traits.
+   *          In contrast to 'compose', 'override' immediately resolves all conflicts
+   *          resulting from this composition by overriding the properties of later
+   *          traits. Trait priority is from left to right. I.e. the properties of the
+   *          leftmost trait are never overridden.
+   *
+   *  override is associative:
+   *    override(t1,t2,t3) is equivalent to override(t1, override(t2, t3)) or
+   *    to override(override(t1, t2), t3)
+   *  override is not commutative: override(t1,t2) is not equivalent to override(t2,t1)
+   *
+   * override() returns an empty trait
+   * override(trait_1) returns a trait equivalent to trait_1
+   */
+  function override(var_args) {
+    var traits = slice(arguments, 0);
+    var newTrait = {};
+    forEach(traits, function (trait) {
+      forEach(getOwnPropertyNames(trait), function (name) {
+        var pd = trait[name];
+        // add this trait's property to the composite trait only if
+        // - the trait does not yet have this property
+        // - or, the trait does have the property, but it's a required property
+        if (!hasOwnProperty(newTrait, name) || newTrait[name].required) {
+          newTrait[name] = pd;
+        }
+      });
+    });
+    return freeze(newTrait);
+  }
   
   /**
    * var newTrait = override(dominantTrait, recessiveTrait)
@@ -280,7 +327,7 @@ var Traits = (function(){
    * Note: override is associative:
    *   override(t1, override(t2, t3)) is equivalent to override(override(t1, t2), t3)
    */
-  function override(frontT, backT) {
+  /*function override(frontT, backT) {
     var newTrait = {};
     // first copy all of backT's properties into newTrait
     forEach(getOwnPropertyNames(backT), function (name) {
@@ -296,14 +343,14 @@ var Traits = (function(){
     });
     
     return freeze(newTrait);
-  }
+  }*/
 
   /**
    * var newTrait = alias({ oldName: 'newName', ... }, trait)
    *
    * @param aliases an object whose own properties serve as a mapping from
             old names to new names.
-   * @param trait any object, but presumably an object used as a trait
+   * @param trait a trait object
    * @returns a new trait with the same own properties as the original trait,
    *          except that all own properties whose name is an own property
    *          of aliases will be renamed to aliases[name]
@@ -324,82 +371,144 @@ var Traits = (function(){
     
     return freeze(newTrait);
   }
+  
+  /**
+   * var newTrait = resolve({ oldName: 'newName', excludeName: undefined, ... }, trait)
+   *
+   * This is a convenience function combining aliasing and exclusion. It can be implemented
+   * as <tt>alias(aliases, exclude(exclusions, trait))</tt> where aliases is the subset of
+   * mappings from oldName to newName and exclusions is an array of all the keys that map
+   * to undefined (or another falsy value).
+   *
+   * @param resolutions an object whose own properties serve as a mapping from
+            old names to new names, or to undefined if the property should be excluded
+   * @param trait a trait object
+   * @returns a new trait with the same own properties as the original trait,
+   *          except that all own properties whose name is an own property
+   *          of resolutions will be renamed to resolutions[name], or will be
+   *          excluded from newTrait if resolutions[name] === undefined.
+   */
+  function resolve(resolutions, trait) {
+    var aliases = {};
+    var exclusions = [];
+    // preprocess aliases and excluded properties
+    for (var name in resolutions) {
+      if (hasOwnProperty(resolutions, name)) {
+        if (resolutions[name]) { // name -> alias
+          aliases[name] = resolutions[name];
+        } else { // name -> undefined
+          exclusions.push(name);
+        }
+      }
+    }
+    return alias(aliases, exclude(exclusions, trait));
+  }
 
   /**
-   * var obj = object(trait, { failOnConflicts: true, ... })
+   * var obj = build(trait, { extend: proto, ... })
    *
    * @param trait a trait object to be turned into a complete object
-   * @param options an optional object where
+   * @param options an optional object where:
    *
-   *        options.failOnConflicts: is a boolean indicating whether
-   *          the call to object should fail noisily if a conflicting property
-   *          remains (default: false).
+   *    options.extend: denotes the prototype of the completed object
+   *      (default: Object.prototype)
    *
-   *        options.failOnIncomplete: is a boolean indicating whether
-   *          the call to object should fail noisily if a required property
-   *          is not present in the trait (default: false)
+   *    options.open: is a boolean indicating whether this object
+   *      should be considered 'open' or 'closed' (default: false)
    *
-   * @returns a frozen object having all of the properties of the trait.
-   *          All methods or accessors defined on the result are frozen
-   *          and their 'this' value is bound to obj.
+   *     'open: true' is for abstract or malleable objects and implies
+   *       - no exception is thrown if 'trait' still contains required properties
+   *         (the properties are simply dropped from the composite object)
+   *       - no exception is thrown if 'trait' still contains conflicting properties
+   *         (these properties remain as conflicting properties in the composite object)
+   *       - neither the object nor its accessor and method properties are frozen
+   *       - the 'this' pseudovariable in all accessors and methods of the object is
+   *         left unbound.
    *
-   * @throws 'Missing required property' if {failOnIncomplete:true} and
+   *     'open: false' (default) is for high-integrity or final objects
+   *       - an exception is thrown if 'trait' still contains required properties
+   *       - an exception is thrown if 'trait' still contains conflicting properties
+   *       - the object is and all of its accessor and method properties are frozen
+   *       - the 'this' pseudovariable in all accessors and methods of the object is
+   *         bound to the composed object.
+   *
+   * @returns an object with all of the properties described by the trait.
+   *
+   * @throws 'Missing required property' if {open:false} and
    *         the trait still contains a required property.
-   * @throws 'Remaining conflicting property' if {failOnConflicts:true} and
+   * @throws 'Remaining conflicting property' if {open:false} and
    *         the trait still contains a conflicting property.
    */
-  function object(trait, optOptions) {
+  function build(trait, optOptions) {
     var options = optOptions || {};
-    var failOnConflicts = options.failOnConflicts || false;
-    var failOnIncomplete = options.failOnIncomplete || false;
-    var self = {};
+    var isClosed = !options.open;
+    var self = create(options.extend ? options.extend : Object.prototype);
     var properties = {};
   
-    forEach(getOwnPropertyNames(trait), function (name) {
-      var pd = trait[name];
-      if ('value' in pd) { // data property
-        // check for remaining 'required' properties
-        if (pd.required) {
-          if (failOnIncomplete) {
-            throw new Error('Missing required property: '+name);
-          } else {
-            return; // drop missing required property
-          }
-        }
-        
-        // freeze all function properties and their prototype
-        if (typeof pd.value === 'function') {
-          // bind 'this' in trait method to the composite object
-          pd.value = freezeAndBind(pd.value, self);
-        }
-      } else { // accessor property
-        
-        // check for remaining conflicting properties
-        if (pd.conflict && failOnConflicts) {
+    if (isClosed) {
+      // closed objects
+      forEach(getOwnPropertyNames(trait), function (name) {
+        var pd = trait[name];
+        if (pd.required) { // check for remaining 'required' properties
+          throw new Error('Missing required property: '+name);
+        } else if (pd.conflict) { // check for remaining conflicting properties
           throw new Error('Remaining conflicting property: '+name);
-          // if !failOnConflicts, leave the conflicting property in the composite
+        } else if ('value' in pd) { // data property
+          // freeze all function properties and their prototype
+          if (typeof pd.value === 'function') {
+            // bind 'this' in trait method to the composite object
+            properties[name] = {
+              value: freezeAndBind(pd.value, self),
+              enumerable: pd.enumerable,
+              configurable: pd.configurable,
+              writable: pd.writable
+            };
+          } else {
+            properties[name] = pd;
+          }
+        } else { // accessor property
+          properties[name] = {
+            get: pd.get ? freezeAndBind(pd.get, self) : undefined,
+            set: pd.set ? freezeAndBind(pd.set, self) : undefined,
+            enumerable: pd.enumerable,
+            configurable: pd.configurable,
+            writable: pd.writable            
+          };
         }
-        
-        if (pd.get) { pd.get = freezeAndBind(pd.get, self); }
-        if (pd.set) { pd.set = freezeAndBind(pd.set, self); }
-      }
-      
-      properties[name] = pd;
-    });
-  
-    defineProperties(self, properties);
-    return freeze(self);
+      });
+
+      defineProperties(self, properties);
+      return freeze(self); 
+    } else {
+      // open objects
+      forEach(getOwnPropertyNames(trait), function (name) {
+        var pd = trait[name];
+        if (pd.required) {
+          return; // drop missing required property
+        }
+        // if (pd.conflict) {} // leave conflicting properties in the composite
+        properties[name] = pd;
+      });
+
+      defineProperties(self, properties);
+      return self;
+    }
   }
+
+  /** A shorthand for build(trait({...})) */
+  function object(record) { return build(trait(record)) }
 
   // expose the public API of this module
   return {
        trait: trait,
-      object: object,
      compose: compose,
-       alias: alias,
-     exclude: exclude,
+     resolve: resolve,
     override: override,
-    required: required
+       build: build,
+    required: required,
+       alias: alias,   // not essential, cf. resolve
+     exclude: exclude, // not essential, cf. resolve
+      object: object   // not essential, cf. build + trait
   };
   
 })();

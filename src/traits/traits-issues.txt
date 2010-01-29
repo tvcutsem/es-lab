@@ -2,19 +2,21 @@ Traits: TODO
 
 - try a 'diamond' setup to test whether isSameDesc works.
 - define a collections lib with these operators
-- more unit tests
+- more unit tests (compare property maps)
 
+it could be useful to add an isEquivalent function to the API:
+isEquivalent(t1,t2) -> boolean
 
 Redesign:
-- rename object to instantiate/build/make
-- redefine object as instantiate + trait
++ rename object to instantiate/build/make
++ redefine object as instantiate + trait
 
 Discussion with Alex:
-- the need for extends: to hook up object into prototype chain
-for one thing: it allows 'live' changes where all objects constructed from a trait inherit form a mutable object
-- alias and exclude folded into a single 'resolve' operator: map strings to falsy values to exclude them
 - override: variable-arity function? (since it's associative anyway, precedence from left to right)
-- the need for open, malleable, flexible objects:
++ the need for extends: to hook up object into prototype chain
+for one thing: it allows 'live' changes where all objects constructed from a trait inherit form a mutable object
++ alias and exclude folded into a single 'resolve' operator: map strings to falsy values to exclude them
++ the need for open, malleable, flexible objects:
 
 introduce a single flag to control multiple choices: 'open:' or 'incomplete:'
 
