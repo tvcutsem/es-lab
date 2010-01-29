@@ -4,8 +4,12 @@ Traits: TODO
 - define a collections lib with these operators
 - more unit tests (compare property maps)
 
-it could be useful to add an isEquivalent function to the API:
-isEquivalent(t1,t2) -> boolean
+- alternative API: if we would represent traits as functions, we could use the new operator to instantiate traits. We could still provide a to_property_map(trait) -> pdmap function as well.
+What about refactoring compose, resolve, override to be defined as methods on traits?
+
+var T = trait({...});
+var T3 = T.compose(T2);
+var o = new T3({ extend: proto }); // or T3(options) without new
 
 Redesign:
 + rename object to instantiate/build/make

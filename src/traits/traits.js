@@ -498,6 +498,30 @@ var Traits = (function(){
   /** A shorthand for build(trait({...})) */
   function object(record) { return build(trait(record)) }
 
+  /**
+   * Tests whether two traits are equivalent. T1 is equivalent to T2 iff
+   * both describe the same set of property names and for all property
+   * names n, T1[n] is equivalent to T2[n]. Two property descriptors are
+   * equivalent if they have the same value, accessors and attributes.
+   *
+   * @return a boolean indicating whether the two argument traits are equivalent.
+   */
+  function eqv(trait1, trait2) {
+    var names1 = getOwnPropertyNames(trait1);
+    var names2 = getOwnPropertyNames(trait2);
+    var name;
+    if (names1.length !== names2.length) {
+      return false;
+    }
+    for (var i = 0; i < names1.length; i++) {
+      name = names1[i];
+      if (!isSameDesc(trait1[name], trait2[name])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   // expose the public API of this module
   return {
        trait: trait,
@@ -506,6 +530,7 @@ var Traits = (function(){
     override: override,
        build: build,
     required: required,
+         eqv: eqv,
        alias: alias,   // not essential, cf. resolve
      exclude: exclude, // not essential, cf. resolve
       object: object   // not essential, cf. build + trait
