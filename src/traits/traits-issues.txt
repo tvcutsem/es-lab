@@ -1,37 +1,27 @@
 Traits: TODO
-
 - try a 'diamond' setup to test whether isSameDesc works.
 - define a collections lib with these operators
 - more unit tests (compare property maps)
 
 - alternative API: if we would represent traits as functions, we could use the new operator to instantiate traits. We could still provide a to_property_map(trait) -> pdmap function as well.
+
 What about refactoring compose, resolve, override to be defined as methods on traits?
 
 var T = trait({...});
 var T3 = T.compose(T2);
 var o = new T3({ extend: proto }); // or T3(options) without new
 
-Redesign:
-+ rename object to instantiate/build/make
-+ redefine object as instantiate + trait
+Pro:
+- methods do not pollute an importer's namespace (only need to make available a 'trait' constructor, all other methods are defined on traits)
+- we could use a method named 'new' to write trait.new(options) rather than 'build(trait,options)'.
+- we can write 'new trait(options)', such that trait instantiation is more close to regular object instantiation in JS.
 
-Discussion with Alex:
-- override: variable-arity function? (since it's associative anyway, precedence from left to right)
-+ the need for extends: to hook up object into prototype chain
-for one thing: it allows 'live' changes where all objects constructed from a trait inherit form a mutable object
-+ alias and exclude folded into a single 'resolve' operator: map strings to falsy values to exclude them
-+ the need for open, malleable, flexible objects:
+Con:
+- methods make the composition operators look asymmetric as they seem to 'prioritize' the first argument. Might be OK if we rename them and remove variable arity: t1.composeWith(t2), t1.overrideWith(t2), t1.resolve({...}), t1.new(options), t1.eqv(t2)
+- traits are no longer property descriptor maps. We need conversion functions to convert between traits and pdmaps:
+asTrait(pdMap) -> trait
+trait.toPropertyDescriptorMap() -> pdMap
+- exposing traits as constructors may only cause additional confusion. Also, stateful traits may cause confusion in combination with 'new', e.g. 'new makePointTrait(x,y)' is wrong! Should be: 'new (makePointTrait(x,y))(options)' or simply '(makePointTrait(x,y))(options)'
 
-introduce a single flag to control multiple choices: 'open:' or 'incomplete:'
-
-'open: true' is for abstract or malleable objects and implies
-  failOnIncomplete: false,
-  failOnConflict: false,
-  frozen & frozen methods: false,
-  bind methods: false
-
-'open: false' (default) is for high-integrity or final objects
-  failOnIncomplete: true,
-  failOnConflict: true,
-  frozen & frozen methods: true,
-  bind methods: true
+- rename 'build' to 'create'? To be consistent with Object.create
+(when importing Trait module, one would simply state: Trait.create)

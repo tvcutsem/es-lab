@@ -154,9 +154,6 @@ var Traits = (function(){
   }
   
   function freezeAndBind(meth, self) {
-    if ('prototype' in meth) {
-      freeze(meth.prototype);
-    }
     return freeze(bindThis(meth, self)); 
   }
 
@@ -196,6 +193,16 @@ var Traits = (function(){
    * object *literal*, since the object merely serves as a record
    * descriptor. Both its identity and its prototype chain are completely ignored.
    * 
+   * Data properties bound to function objects in the argument will be flagged
+   * as 'method' properties. The prototype of these function objects is frozen.
+   * 
+   * Data properties bound to the 'required' singleton exported by this module
+   * will be marked as 'required' properties.
+   *
+   * The <tt>trait</tt> function is pure if no other code can witness the
+   * side-effects of freezing the prototypes of the methods. If <tt>trait</tt>
+   * is invoked with an object literal whose methods are represented as
+   * in-place anonymous functions, this should normally be the case.
    */
   function trait(obj) {
     if (getPrototypeOf(obj) !== Object.prototype) {
@@ -207,6 +214,11 @@ var Traits = (function(){
       var pd = getOwnPropertyDescriptor(obj, name);
       if (pd.value === required) {
         pd = makeRequiredPropDesc(name);
+      } else if (typeof pd.value === 'function') {
+        pd.method = true;
+        if ('prototype' in pd.value) {
+          freeze(pd.value.prototype);
+        }
       }
       map[name] = pd;
     });
@@ -455,7 +467,7 @@ var Traits = (function(){
           throw new Error('Remaining conflicting property: '+name);
         } else if ('value' in pd) { // data property
           // freeze all function properties and their prototype
-          if (typeof pd.value === 'function') {
+          if (pd.method) { // the property is meant to be used as a method
             // bind 'this' in trait method to the composite object
             properties[name] = {
               value: freezeAndBind(pd.value, self),
@@ -496,7 +508,7 @@ var Traits = (function(){
   }
 
   /** A shorthand for build(trait({...})) */
-  function object(record) { return build(trait(record)) }
+  function object(record, options) { return build(trait(record), options) }
 
   /**
    * Tests whether two traits are equivalent. T1 is equivalent to T2 iff

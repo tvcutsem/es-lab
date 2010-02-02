@@ -18,7 +18,7 @@
 //   http://prog.vub.ac.be/Publications/2009/vub-prog-tr-09-04.pdf
 
 load('traits.js');
-load('../../tests/parser/unit.js');
+load('../../tests/unit.js');
 
 var T = Traits;
 
