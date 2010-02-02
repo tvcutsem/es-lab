@@ -23,12 +23,12 @@ load('../../tests/unit.js');
 // fake setTimeout
 function setTimeout(f,r) { return f(); }
 
-function makeCircleTrait(radius) {
-  return Trait.trait({
+function makeCircle(radius) {
+  return {
     move: function(dx, dy) {
       return 'moved '+dx+','+dy;
     }
-  });
+  };
 }
 
 function makeAnimationTrait(refreshRate) {
@@ -45,14 +45,14 @@ function makeAnimationTrait(refreshRate) {
 function makeParticleTrait(radius, moveRate, dx, dy) {
    return Trait.compose(
      Trait.trait({ animate: function() { return this.move(dx, dy); } }),
-     Trait.resolve({ start: 'startMoving', stop: undefined },
+     Trait.resolve({ start: 'startMoving',
+                      stop: undefined },
                    makeAnimationTrait(moveRate)));
 }
 
 function makeParticleMorph(radius, moveRate, dx, dy) {
-   return Trait.create(Object.prototype,
-     Trait.override(makeParticleTrait(radius, moveRate, dx, dy),
-                    makeCircleTrait(radius)));
+   return Trait.create(makeCircle(radius),
+                       makeParticleTrait(radius, moveRate, dx, dy));
 }
 
 /*

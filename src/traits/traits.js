@@ -457,7 +457,9 @@ var Trait = (function(){
       // closed objects
       forEach(getOwnPropertyNames(trait), function (name) {
         var pd = trait[name];
-        if (pd.required) { // check for remaining 'required' properties
+        // check for remaining 'required' properties
+        // Note: it's OK for the prototype to provide the properties
+        if (pd.required && !(name in proto)) {
           throw new Error('Missing required property: '+name);
         } else if (pd.conflict) { // check for remaining conflicting properties
           throw new Error('Remaining conflicting property: '+name);
