@@ -3,9 +3,13 @@ Traits: TODO
 - define a collections lib with these operators
 - more unit tests (compare property maps)
 
-- alternative API: if we would represent traits as functions, we could use the new operator to instantiate traits. We could still provide a to_property_map(trait) -> pdmap function as well.
+- alternative API: represent traits as function objects instead of as property maps
 
-What about refactoring compose, resolve, override to be defined as methods on traits?
+if we would represent traits as functions, we could use the new operator or function calls to instantiate traits.
+
+We could still provide a to_property_map(trait) -> pdmap function as well.
+
+We could also refactor compose, resolve, override to be defined as methods on the trait function objects:
 
 var T = trait({...});
 var T3 = T.compose(T2);
@@ -22,6 +26,4 @@ Con:
 asTrait(pdMap) -> trait
 trait.toPropertyDescriptorMap() -> pdMap
 - exposing traits as constructors may only cause additional confusion. Also, stateful traits may cause confusion in combination with 'new', e.g. 'new makePointTrait(x,y)' is wrong! Should be: 'new (makePointTrait(x,y))(options)' or simply '(makePointTrait(x,y))(options)'
-
-- rename 'build' to 'create'? To be consistent with Object.create
-(when importing Trait module, one would simply state: Trait.create)
+- we lose the analogy between Trait.create(proto, pdmap) and Object.create(proto, pdmap)

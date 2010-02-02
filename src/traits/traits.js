@@ -15,9 +15,7 @@
 // See http://code.google.com/p/es-lab/wiki/Traits
 // for background on traits and a description of this library
 
-// TODO: trait: turn data props bound to functions into explicit 'methods'
-
-var Traits = (function(){
+var Trait = (function(){
 
   // == Ancillary functions ==
   
@@ -78,7 +76,7 @@ var Traits = (function(){
           }
         }
       };
-  var create = Object.create || 
+  var Object_create = Object.create || 
       function(proto, propMap) {
         var self;
         function dummy() {};
@@ -417,13 +415,11 @@ var Traits = (function(){
   }
 
   /**
-   * var obj = build(trait, { extend: proto, ... })
+   * var obj = create(proto, trait, options)
    *
+   * @param proto denotes the prototype of the completed object
    * @param trait a trait object to be turned into a complete object
    * @param options an optional object where:
-   *
-   *    options.extend: denotes the prototype of the completed object
-   *      (default: Object.prototype)
    *
    *    options.open: is a boolean indicating whether this object
    *      should be considered 'open' or 'closed' (default: false)
@@ -451,10 +447,10 @@ var Traits = (function(){
    * @throws 'Remaining conflicting property' if {open:false} and
    *         the trait still contains a conflicting property.
    */
-  function build(trait, optOptions) {
+  function create(proto, trait, optOptions) {
     var options = optOptions || {};
     var isClosed = !options.open;
-    var self = create(options.extend ? options.extend : Object.prototype);
+    var self = Object_create(proto);
     var properties = {};
   
     if (isClosed) {
@@ -507,8 +503,10 @@ var Traits = (function(){
     }
   }
 
-  /** A shorthand for build(trait({...})) */
-  function object(record, options) { return build(trait(record), options) }
+  /** A shorthand for create(Object.prototype, trait({...}), options) */
+  function object(record, options) {
+    return create(Object.prototype, trait(record), options);
+  }
 
   /**
    * Tests whether two traits are equivalent. T1 is equivalent to T2 iff
@@ -540,12 +538,12 @@ var Traits = (function(){
      compose: compose,
      resolve: resolve,
     override: override,
-       build: build,
+      create: create,
     required: required,
          eqv: eqv,
        alias: alias,   // not essential, cf. resolve
      exclude: exclude, // not essential, cf. resolve
-      object: object   // not essential, cf. build + trait
+      object: object   // not essential, cf. create + trait
   };
   
 })();

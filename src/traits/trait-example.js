@@ -20,13 +20,11 @@
 load('traits.js');
 load('../../tests/unit.js');
 
-var T = Traits;
-
 // fake setTimeout
 function setTimeout(f,r) { return f(); }
 
 function makeCircleTrait(radius) {
-  return T.trait({
+  return Trait.trait({
     move: function(dx, dy) {
       return 'moved '+dx+','+dy;
     }
@@ -34,8 +32,8 @@ function makeCircleTrait(radius) {
 }
 
 function makeAnimationTrait(refreshRate) {
-  return T.trait({
-    animate: T.required, // to be provided by my composite
+  return Trait.trait({
+    animate: Trait.required, // to be provided by my composite
     start: function() {
       var that = this;
       return setTimeout(function() { return that.animate(); }, refreshRate);
@@ -45,22 +43,23 @@ function makeAnimationTrait(refreshRate) {
 }
 
 function makeParticleTrait(radius, moveRate, dx, dy) {
-   return T.compose(
-     T.trait({ animate: function() { return this.move(dx, dy); } }),
-     T.alias({ start: 'startMoving' },
-             T.exclude(['stop'], makeAnimationTrait(moveRate))));
+   return Trait.compose(
+     Trait.trait({ animate: function() { return this.move(dx, dy); } }),
+     Trait.resolve({ start: 'startMoving', stop: undefined },
+                   makeAnimationTrait(moveRate)));
 }
 
 function makeParticleMorph(radius, moveRate, dx, dy) {
-   return T.build(T.override(makeParticleTrait(radius, moveRate, dx, dy),
-                             makeCircleTrait(radius))); // prioritized composition
+   return Trait.create(Object.prototype,
+     Trait.override(makeParticleTrait(radius, moveRate, dx, dy),
+                    makeCircleTrait(radius)));
 }
 
 /*
 // TODO: document super pattern
 function makeParticleMorph(radius, moveRate, dx, dy) {
    var superT = makeCircleTrait(radius);
-   return T.object(override(makeParticleTrait(object(superT), radius, moveRate, dx, dy),
+   return Trait.object(override(makeParticleTrait(object(superT), radius, moveRate, dx, dy),
                             superT)); // prioritized composition
 }
 */
