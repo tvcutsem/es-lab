@@ -132,7 +132,7 @@ function lexerTestSuite() {
   checkPunct("/");
   ensureNoMatch("/",'InputElementRegExp',[]);
   checkPunct("++");
-  
+
   checkLiteral("number", 5, "5");
   checkLiteral("number", 5.5, "5.5");
   checkLiteral("number", 0, "0");
@@ -148,7 +148,7 @@ function lexerTestSuite() {
   checkLiteral("number", 0.5e3, "0.5e3");	  
   checkLiteral("number", 55, "55");	  
   checkLiteral("number", 123, "123");	  
-  checkLiteral("number", 55.55, "55.55");	  
+  checkLiteral("number", 55.55, "55.55");
   checkLiteral("number", 55.55e10, "55.55e10");
   checkLiteral("number", 123.456, "123.456");
   checkLiteral("number", 12, "12 3");

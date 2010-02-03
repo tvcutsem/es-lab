@@ -95,7 +95,7 @@ ometa ES5Parser {
                              (MultiLineCommentChars | empty -> ""):cs -> ( c + cs )
                            || '*' (PostAsteriskCommentChars | &seq("*/") -> ""):cs -> ( '*' + cs ),
   MultiLineNotAsteriskChar = ~('*') SourceCharacter:c -> (c),
-  MultiLineNotForwardSlashOrAsteriskChar = ~('/' || '*') SourceCharacter:c -> (c),
+  MultiLineNotForwardSlashOrAsteriskChar = ~('/' | '*') SourceCharacter:c -> (c),
   SingleLineComment = seq("//") (SingleLineCommentChars | empty -> ""):cs -> (cs),
   SingleLineCommentChars = SingleLineCommentChar:c (SingleLineCommentChars | empty -> ""):cs ->
                            (c + cs),
@@ -178,25 +178,28 @@ ometa ES5Parser {
   // For semantics on how decimal literals are constructed, see section 7.8.3
 
   // Note that the ordering of HexIntegerLiteral and DecimalLiteral is reversed w.r.t. the spec
-  // This is intentional: the order DecimalLiteral || HexIntegerLiteral will parse
+  // This is intentional: the order DecimalLiteral | HexIntegerLiteral will parse
   // '0x...' as a decimal literal '0' followed by 'x...'
-  NumericLiteral = (HexIntegerLiteral || DecimalLiteral):l -> (literal("number",l)),
+  NumericLiteral = (HexIntegerLiteral | DecimalLiteral):l -> (literal("number",l)),
 
   // DecimalDigits produces objects of the form {val: aNumber, len: aNumber }
   // The 'len' attribute describes the number of characters in the parsed numeral
   // This is required for interpreting fractional literals
+  // Note: no exclusive choice, e.g. the input '5.5' will satisfy
+  // both rules #1 and #3 (even though #3 only eats '5')
   DecimalLiteral = DecimalIntegerLiteral:l '.'
                      (DecimalDigits | empty -> {val:0,len:0}):d (ExponentPart | empty -> 0):e ->
                      ( (l + (d.val * Math.pow(10,-d.len))) * Math.pow(10,e) )
-                 || '.' DecimalDigits:d (ExponentPart | empty -> 0):e ->
+                 | '.' DecimalDigits:d (ExponentPart | empty -> 0):e ->
                      ( (d.val * Math.pow(10, -d.len)) * Math.pow(10,e) )
-                 || DecimalIntegerLiteral:l (ExponentPart | empty -> 0):e ->
+                 | DecimalIntegerLiteral:l (ExponentPart | empty -> 0):e ->
                      ( l * Math.pow(10,e) ),
+                     
   DecimalIntegerLiteral = NonZeroDigit:z (DecimalDigits | empty -> {val:0,len:0}):d ->
                           ( (z * Math.pow(10,d.len)) + d.val )
                         || '0'->0,
   DecimalDigits = DecimalDigits:ds DecimalDigit:d -> ({ val: (ds.val * 10 + d), len: ds.len+1 })
-                || DecimalDigit:d -> ({val: d, len: 1}),
+                | DecimalDigit:d -> ({val: d, len: 1}),
   DecimalDigit = '0'->0 || '1'->1 || '2'->2 || '3'->3 || '4'->4 || '5'->5 || '6'->6 || '7'->7 || '8'->8 || '9'->9,
   NonZeroDigit = '1'->1 || '2'->2 || '3'->3 || '4'->4 || '5'->5 || '6'->6 || '7'->7 || '8'->8 || '9'->9,
 
@@ -207,8 +210,8 @@ ometa ES5Parser {
                 || '-' DecimalDigits:ds -> (-(ds.val)),
 
   HexIntegerLiteral = HexIntegerLiteral:l HexDigit:d -> ( (l * 16) + d )
-                    || ``0x'' HexDigit:d -> (d)
-                    || ``0X'' HexDigit:d -> (d),
+                    | ``0x'' HexDigit:d -> (d)
+                    | ``0X'' HexDigit:d -> (d),
   HexDigit = '0'->0 || '1'->1 || '2'->2 || '3'->3 || '4'->4 || '5'->5 || '6'->6 || '7'->7 || '8'->8 || '9'->9
            || 'a'->10 || 'b'->11 || 'c'->12 || 'd'->13 || 'e'->14 || 'f'->15
            || 'A'->10 || 'B'->11 || 'C'->12 || 'D'->13 || 'E'->14 || 'F'->15,
@@ -398,12 +401,12 @@ ometa ES5Parser {
   // @returns an array of ASTs
   ElementList = ElementList:elts "," (Elision | empty -> []):elis AssignmentExpression(true):exp ->
                 ( elts.concat(elis.concat([ exp ])) )
-              || (Elision | empty -> []):elis AssignmentExpression(true):exp ->
+              | (Elision | empty -> []):elis AssignmentExpression(true):exp ->
                 ( elis.concat([exp]) ),
 
   // @returns an array of ["Empty"] leaf nodes
   Elision = Elision:es "," -> ( es.concat([ this.emptyAst() ]) )
-          || "," -> ( [ this.emptyAst() ] ),
+          | "," -> ( [ this.emptyAst() ] ),
 
   // @returns an ObjectExpr AST
   ObjectLiteral = "{" PropertyNameAndValueList:ps "," "}" ->
@@ -415,7 +418,7 @@ ometa ES5Parser {
   // @returns an array of ASTs
   PropertyNameAndValueList = PropertyNameAndValueList:ps "," PropertyAssignment:p ->
                              ( ps.concat([ p ]) )
-                           || PropertyAssignment:p -> ([ p ]),
+                           | PropertyAssignment:p -> ([ p ]),
 
   // @returns a *Prop AST
   PropertyAssignment = scanIdentifier:id ?(id == "get") PropertyName:n
@@ -447,27 +450,27 @@ ometa ES5Parser {
   // @returns an AST
   MemberExpression = k("new") MemberExpression:mexp Arguments:args ->
                      ( this.ast("NewExpr",{},[mexp].concat(args)) )
-                   || MemberExpression:mexp "[" Expression(true):iexp "]" ->
+                   | MemberExpression:mexp "[" Expression(true):iexp "]" ->
                      ( this.ast("MemberExpr",{},[mexp,iexp]) )
-                   || MemberExpression:mexp "." scanIdentifier:id ->
+                   | MemberExpression:mexp "." scanIdentifier:id ->
                      ( this.ast("MemberExpr",{},[mexp,
                                                this.ast("LiteralExpr",{type:"string",value:id},[])]) )
-                   || FunctionExpression
-                   || PrimaryExpression,
+                   | FunctionExpression
+                   | PrimaryExpression,
 
   // @returns an AST
   NewExpression = MemberExpression
-                || k("new") NewExpression:exp -> ( this.ast("NewExpr",{},[exp]) ),
+                | k("new") NewExpression:exp -> ( this.ast("NewExpr",{},[exp]) ),
 
   // @returns an AST
   CallExpression = CallExpression:cexp "[" Expression(true):iexp "]" ->
                    ( this.ast("MemberExpr",{},[cexp,iexp]) )
-                 || CallExpression:cexp "." scanIdentifier:id ->
+                 | CallExpression:cexp "." scanIdentifier:id ->
                    ( this.ast("MemberExpr",{},[cexp,
                               this.ast("Literal",{type:"string",value:id},[])]) )
-                 || CallExpression:cexp Arguments:args ->
+                 | CallExpression:cexp Arguments:args ->
                                  ( this.ast("CallExpr",{},[cexp].concat(args)) )
-                 || MemberExpression:mexp Arguments:args ->
+                 | MemberExpression:mexp Arguments:args ->
                    ( mexp.nodeType() === "MemberExpr"
                      ? this.ast("InvokeExpr",{},mexp.children().concat(args)) :
                        mexp.nodeType() === "IdExpr" && mexp.attributes().name === "eval"
@@ -482,15 +485,16 @@ ometa ES5Parser {
   // @returns an array of ASTs
   ArgumentList = ArgumentList:args "," AssignmentExpression(true):exp ->
                  ( args.concat([ exp ]) )
-               || AssignmentExpression(true):exp -> ([ exp ]),
+               | AssignmentExpression(true):exp -> ([ exp ]),
 
-  LeftHandSideExpression = CallExpression || NewExpression,
+  LeftHandSideExpression = CallExpression
+                         | NewExpression,
 
   PostfixExpression = LeftHandSideExpression:lexp scanPunctNoLineTerminator("++") ->
                       ( this.ast("CountExpr",{isPrefix:false,op:"++"},[lexp]) )
-                    || LeftHandSideExpression:lexp scanPunctNoLineTerminator("--") ->
+                    | LeftHandSideExpression:lexp scanPunctNoLineTerminator("--") ->
                       ( this.ast("CountExpr",{isPrefix:false,op:"--"},[lexp]) )
-                    || LeftHandSideExpression,
+                    | LeftHandSideExpression,
 
   UnaryExpression = k("delete")   UnaryExpression:uexp -> ( this.ast("DeleteExpr",{},[uexp]) )
                   || k("void")     UnaryExpression:uexp -> ( this.ast("UnaryExpr",{op:"void"},  [uexp]) )
@@ -507,90 +511,90 @@ ometa ES5Parser {
 
   MultiplicativeExpression = MultiplicativeExpression:mexp "*" UnaryExpression:uexp ->
                              ( this.ast("BinaryExpr",{op:"*"},[mexp,uexp]) )
-                           || MultiplicativeExpression:mexp "/" UnaryExpression:uexp ->
+                           | MultiplicativeExpression:mexp "/" UnaryExpression:uexp ->
                              ( this.ast("BinaryExpr",{op:"/"},[mexp,uexp]) )
-                           || MultiplicativeExpression:mexp "%" UnaryExpression:uexp ->
+                           | MultiplicativeExpression:mexp "%" UnaryExpression:uexp ->
                              ( this.ast("BinaryExpr",{op:"%"},[mexp,uexp]) )
-                           || UnaryExpression,
+                           | UnaryExpression,
 
   AdditiveExpression = AdditiveExpression:aexp "+" MultiplicativeExpression:mexp ->
 					             ( this.ast("BinaryExpr",{op:"+"},[aexp,mexp]) )
-				             || AdditiveExpression:aexp "-" MultiplicativeExpression:mexp ->
+				             | AdditiveExpression:aexp "-" MultiplicativeExpression:mexp ->
 					             ( this.ast("BinaryExpr",{op:"-"},[aexp,mexp]) )
-					           || MultiplicativeExpression,
+					           | MultiplicativeExpression,
 
   ShiftExpression = ShiftExpression:sexp "<<" AdditiveExpression:aexp ->
                     ( this.ast("BinaryExpr",{op:"<<"},[sexp,aexp]) )
-                  || ShiftExpression:sexp ">>>" AdditiveExpression:aexp ->
+                  | ShiftExpression:sexp ">>>" AdditiveExpression:aexp ->
                     ( this.ast("BinaryExpr",{op:">>>"},[sexp,aexp]) )
-                  || ShiftExpression:sexp ">>" AdditiveExpression:aexp ->
+                  | ShiftExpression:sexp ">>" AdditiveExpression:aexp ->
                     ( this.ast("BinaryExpr",{op:">>"},[sexp,aexp]) )
-                  || AdditiveExpression,
+                  | AdditiveExpression,
 
   // Since this grammar assumes OMeta/JS memoizes left-recursive rules,
   // we parametrize RelationalExpression with a boolean "In" flag that
   // signifies whether or not an expression of the form (e1 in e2) is allowed
   RelationalExpression :In = RelationalExpression(In):rexp "<" ShiftExpression:sexp ->
-				( this.ast("BinaryExpr",{op:"<"},[rexp,sexp]) )
-			  || RelationalExpression(In):rexp ">" ShiftExpression:sexp ->
-				( this.ast("BinaryExpr",{op:">"},[rexp,sexp]) )
-			  || RelationalExpression(In):rexp "<=" ShiftExpression:sexp ->
-				( this.ast("BinaryExpr",{op:"<="},[rexp,sexp]) )
-			  || RelationalExpression(In):rexp ">=" ShiftExpression:sexp ->
-				( this.ast("BinaryExpr",{op:">="},[rexp,sexp]) )
-			  || RelationalExpression(In):rexp k("instanceof") ShiftExpression:sexp ->
-				( this.ast("BinaryExpr",{op:"instanceof"},[rexp,sexp]) )
-			  || ?(In) RelationalExpression(true):rexp k("in") ShiftExpression:sexp ->
-				( this.ast("BinaryExpr",{op:"in"},[rexp,sexp]) )
-			  || ShiftExpression,
+				  ( this.ast("BinaryExpr",{op:"<"},[rexp,sexp]) )
+			  | RelationalExpression(In):rexp ">" ShiftExpression:sexp ->
+				  ( this.ast("BinaryExpr",{op:">"},[rexp,sexp]) )
+			  | RelationalExpression(In):rexp "<=" ShiftExpression:sexp ->
+				  ( this.ast("BinaryExpr",{op:"<="},[rexp,sexp]) )
+			  | RelationalExpression(In):rexp ">=" ShiftExpression:sexp ->
+				  ( this.ast("BinaryExpr",{op:">="},[rexp,sexp]) )
+			  | RelationalExpression(In):rexp k("instanceof") ShiftExpression:sexp ->
+				  ( this.ast("BinaryExpr",{op:"instanceof"},[rexp,sexp]) )
+			  | ?(In) RelationalExpression(true):rexp k("in") ShiftExpression:sexp ->
+				  ( this.ast("BinaryExpr",{op:"in"},[rexp,sexp]) )
+			  | ShiftExpression,
 
   EqualityExpression :In =
-      EqualityExpression(In):eexp "==" RelationalExpression(In):rexp ->
-			( this.ast("BinaryExpr",{op:"=="},[eexp,rexp]) )
-		  || EqualityExpression(In):eexp "!=" RelationalExpression(In):rexp ->
-			( this.ast("BinaryExpr",{op:"!="},[eexp,rexp]) )
-		  || EqualityExpression(In):eexp "===" RelationalExpression(In):rexp ->
-			( this.ast("BinaryExpr",{op:"==="},[eexp,rexp]) )
-		  || EqualityExpression(In):eexp "!==" RelationalExpression(In):rexp ->
-			( this.ast("BinaryExpr",{op:"!=="},[eexp,rexp]) )
-		  || RelationalExpression(In),
+        EqualityExpression(In):eexp "==" RelationalExpression(In):rexp ->
+			  ( this.ast("BinaryExpr",{op:"=="},[eexp,rexp]) )
+		  | EqualityExpression(In):eexp "!=" RelationalExpression(In):rexp ->
+			  ( this.ast("BinaryExpr",{op:"!="},[eexp,rexp]) )
+		  | EqualityExpression(In):eexp "===" RelationalExpression(In):rexp ->
+			  ( this.ast("BinaryExpr",{op:"==="},[eexp,rexp]) )
+		  | EqualityExpression(In):eexp "!==" RelationalExpression(In):rexp ->
+			  ( this.ast("BinaryExpr",{op:"!=="},[eexp,rexp]) )
+		  | RelationalExpression(In),
 
   BitwiseANDExpression :In = BitwiseANDExpression(In):aexp "&" EqualityExpression(In):eexp ->
-						 ( this.ast("BinaryExpr",{op:"&"},[aexp,eexp]) )
-					   || EqualityExpression(In),
+						   ( this.ast("BinaryExpr",{op:"&"},[aexp,eexp]) )
+					   | EqualityExpression(In),
 
   BitwiseXORExpression :In = BitwiseXORExpression(In):xexp "^" BitwiseANDExpression(In):aexp ->
-						 ( this.ast("BinaryExpr",{op:"^"},[xexp,aexp]) )
-					   || BitwiseANDExpression(In),
+						   ( this.ast("BinaryExpr",{op:"^"},[xexp,aexp]) )
+					   | BitwiseANDExpression(In),
 	
   BitwiseORExpression :In = BitwiseORExpression(In):oexp "|" BitwiseXORExpression(In):xexp ->
-						 ( this.ast("BinaryExpr",{op:"|"},[oexp,xexp]) )
-					   || BitwiseXORExpression(In),
+						   ( this.ast("BinaryExpr",{op:"|"},[oexp,xexp]) )
+					   | BitwiseXORExpression(In),
 	
   LogicalANDExpression :In = LogicalANDExpression(In):aexp "&&" BitwiseORExpression(In):oexp ->
-						 ( this.ast("LogicalAndExpr",{},[aexp,oexp]) )
-					   || BitwiseORExpression(In),
+						   ( this.ast("LogicalAndExpr",{},[aexp,oexp]) )
+					   | BitwiseORExpression(In),
 
   LogicalORExpression :In = LogicalORExpression(In):oexp "||" LogicalANDExpression(In):aexp ->
-						( this.ast("LogicalOrExpr",{},[oexp,aexp]) )
-					  || LogicalANDExpression(In),
+						   ( this.ast("LogicalOrExpr",{},[oexp,aexp]) )
+					   | LogicalANDExpression(In),
 
   ConditionalExpression :In = LogicalORExpression(In):oexp "?"
                                 AssignmentExpression(In):texp ":" AssignmentExpression(In):fexp ->
                               ( this.ast("ConditionalExpr",{},[oexp,texp,fexp]) )
-                            || LogicalORExpression(In),
+                            | LogicalORExpression(In),
 
   AssignmentExpression :In = LeftHandSideExpression:lexp
-                           AssignmentOperator:op AssignmentExpression(In):aexp ->
-                           ( this.ast("AssignExpr",{op:op},[lexp,aexp]) )
-                       || ConditionalExpression(In),
+                               AssignmentOperator:op AssignmentExpression(In):aexp ->
+                             ( this.ast("AssignExpr",{op:op},[lexp,aexp]) )
+                           | ConditionalExpression(In),
 
   AssignmentOperator = "=" || ">>>=" || "<<=" || ">>="
                      || "*=" || "/=" || "%=" || "+=" || "-=" || "&=" || "^=" || "|=",
 
   Expression :In = Expression(In):exp "," AssignmentExpression(In):aexp ->
-               ( this.ast("BinaryExpr",{op:","},[exp,aexp]) )
-             || AssignmentExpression(In),
+                   ( this.ast("BinaryExpr",{op:","},[exp,aexp]) )
+                 | AssignmentExpression(In),
 
   // A.4 Statements
 
@@ -620,7 +624,7 @@ ometa ES5Parser {
   // @returns an array of ASTs
   StatementList = StatementList:stmts Statement:stmt ->
                   ( stmts.concat([ stmt ]) )
-                || Statement:stmt -> ( [stmt] ),
+                | Statement:stmt -> ( [stmt] ),
 
   // @returns a Var AST
   VariableStatement = k("var") VariableDeclarationList(true):vars sc ->
@@ -629,13 +633,13 @@ ometa ES5Parser {
   // @returns an array of ASTs
   VariableDeclarationList :In = VariableDeclarationList(In):vs "," VariableDeclaration(In):v ->
                                 ( vs.concat([v]) )
-                              || VariableDeclaration(In):v -> ( [v] ),
+                              | VariableDeclaration(In):v -> ( [v] ),
 
   // @returns an AST
   VariableDeclaration :In = scanIdentifier:id Initialiser(In):init ->
                             ( this.ast("InitPatt",{},
                                        [this.ast("IdPatt",{name:id},[]),init]) )
-                          || scanIdentifier:id -> (this.ast("IdPatt",{name:id}, [])),
+                          | scanIdentifier:id -> (this.ast("IdPatt",{name:id}, [])),
 
   // @returns an AST
   Initialiser :In = "=" AssignmentExpression(In):exp -> ( exp ),
@@ -644,12 +648,12 @@ ometa ES5Parser {
   EmptyStatement = ";" -> ( this.ast("EmptyStmt",{},[]) ), // note: this semicolon eats newlines
 
   // @returns an Expression AST
-  ExpressionStatement = ~("{" || k("function")) Expression(true):exp sc -> ( exp ),
+  ExpressionStatement = ~("{" | k("function")) Expression(true):exp sc -> ( exp ),
 
   // @returns an AST
   IfStatement = k("if") "(" Expression(true):bexp ")" Statement:tstmt k("else") Statement:fstmt ->
                 ( this.ast("IfStmt",{},[bexp,tstmt,fstmt]) )
-              || k("if") "(" Expression(true):bexp ")" Statement:tstmt ->
+              | k("if") "(" Expression(true):bexp ")" Statement:tstmt ->
                 ( this.ast("IfStmt",{},[bexp, tstmt, this.ast("EmptyStmt",{},[])]) ),
 
   // @returns an AST
@@ -672,17 +676,17 @@ ometa ES5Parser {
                           Expression(true):e ")" Statement:s ->
                        ( this.ast("ForInStmt",{},[ this.ast("VarDecl",{},[v]),e,s]) ),
 
-  ContinueStatement = k("continue") sc -> ( this.ast("ContinueStmt",{},[]) )
+  ContinueStatement =  k("continue") sc -> ( this.ast("ContinueStmt",{},[]) )
                     || k("continue") scanIdentifierNoLineTerminator:id sc ->
                       ( this.ast("ContinueStmt",{label:id},[]) ),
 
-  BreakStatement = k("break") sc -> ( this.ast("BreakStmt",{},[]) )
+  BreakStatement =  k("break") sc -> ( this.ast("BreakStmt",{},[]) )
                  || k("break") scanIdentifierNoLineTerminator:id sc ->
                       ( this.ast("BreakStmt",{label:id},[]) ),
 
   ReturnStatement = k("return") sc ->
                       ( this.ast("ReturnStmt",{},[]) )
-                  || k("return") skipNoLine Expression(true):exp sc ->
+                  | k("return") skipNoLine Expression(true):exp sc ->
                       ( this.ast("ReturnStmt",{},[exp]) ),
 
   WithStatement = k("with") "(" Expression(true):e ")" Statement:s ->
@@ -699,7 +703,7 @@ ometa ES5Parser {
 
   // @return an array of ASTs
   CaseClauses = CaseClauses:clauses CaseClause:clause -> (clauses.concat([clause]))
-              || CaseClause:clause -> ([ clause ]),
+              | CaseClause:clause -> ([ clause ]),
 
   CaseClause = k("case") Expression(true):e ":" (StatementList | empty -> []):stmts ->
                ( this.ast("Case",{},[e].concat(stmts)) ),
@@ -716,9 +720,9 @@ ometa ES5Parser {
 
   TryStatement = k("try") Block:b Catch:c Finally:f ->
                  ( this.ast("TryStmt",{},[b,c,f]) )
-               || k("try") Block:b Finally:f ->
+               | k("try") Block:b Finally:f ->
                  ( this.ast("TryStmt",{},[b,this.emptyAst(),f]) )
-               || k("try") Block:b Catch:c ->
+               | k("try") Block:b Catch:c ->
                  ( this.ast("TryStmt",{},[b,c]) ),
 
   // @returns a CatchClause AST
@@ -756,7 +760,7 @@ ometa ES5Parser {
   // @returns an array of ASTs
   FormalParameterList = FormalParameterList:formals "," scanIdentifier:id ->
                         ( formals.concat([ this.ast("IdPatt",{name:id},[]) ]) )
-                      || scanIdentifier:id -> ([ this.ast("IdPatt",{name:id},[]) ]),
+                      | scanIdentifier:id -> ([ this.ast("IdPatt",{name:id},[]) ]),
 
   // @returns an array of ASTs
   FunctionBody = (DirectivePrologue | empty -> []):prologue
@@ -768,13 +772,13 @@ ometa ES5Parser {
 
   // @returns an array of ASTs
   SourceElements = SourceElements:elts SourceElement:e -> ( elts.concat([e]) )
-                 || SourceElement:e -> ([e]),
+                 | SourceElement:e -> ([e]),
 
   SourceElement = FunctionDeclaration || Statement,
 
   // @returns an array of ASTs
   DirectivePrologue = DirectivePrologue:p Directive:d -> ( p.concat([d]) )
-                    || Directive:d -> ([d]),
+                    | Directive:d -> ([d]),
   
   Directive = scanDirective:dir sc -> ( this.ast('PrologueDecl',dir,[]) ),
 
@@ -871,5 +875,4 @@ ES5Parser.memoizeParameterizedRules();
 // verifying that OR's are exclusive is useful while debugging the grammar, but
 // they are extremely expensive in production use
 // see http://tinlizzie.org/ometa-js/#xor_perf
-// TODO: parser currently does not yet work when XORs are enabled.
 ES5Parser.disableXORs();
