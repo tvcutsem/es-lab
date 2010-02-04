@@ -1,7 +1,22 @@
 Traits: TODO
-- try a 'diamond' setup to test whether isSameDesc works.
 - define a collections lib with these operators
-- more unit tests (compare property maps)
+Traits:
+TEnumerable
+TIndexable?
+TMagnitude (Measurable?)
+TComparable
+(search other languages for more examples)
+Collections:
+Sequence
+  Array [ Indexable sequence? ]
+Map
+  Hash & TreeMap?
+
+- we should rename the function 'trait' to 'new'
+then we can write: Trait.new({...})
+problem: ES3 does not allow 'new' to be a literal property (keyword), even rhino does not allow it yet
+
+
 
 - alternative API: represent traits as function objects instead of as property maps
 
@@ -27,19 +42,3 @@ asTrait(pdMap) -> trait
 trait.toPropertyDescriptorMap() -> pdMap
 - exposing traits as constructors may only cause additional confusion. Also, stateful traits may cause confusion in combination with 'new', e.g. 'new makePointTrait(x,y)' is wrong! Should be: 'new (makePointTrait(x,y))(options)' or simply '(makePointTrait(x,y))(options)'
 - we lose the analogy between Trait.create(proto, pdmap) and Object.create(proto, pdmap)
-
-
-
-Collections example:
-
-Traits:
-Enumerable
-Indexable?
-Magnitude (Measurable?)
-
-
-Collections:
-Sequence
-  Array [ Indexable sequence? ]
-Map
-  Hash & TreeMap?
