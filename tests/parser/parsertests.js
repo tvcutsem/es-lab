@@ -110,8 +110,12 @@ function lexerTestSuite() {
   checkIdentifier("xyz123", "xyz123");	  
   checkIdentifier("x1y1z1", "x1y1z1");
   
-  checkIdentifier("foo\u00D8bar", "fooØbar"); // Unicode
-  checkIdentifier("fooØbar", "fooØbar"); // Unicode
+  checkIdentifier("foo\u00D8bar", "foo\u00D8bar"); // Unicode
+  //removed below test because it makes the unit tests depend on
+  //the interpreted input encoding of this text file
+  //the test succeeds under V8, but fails under Firefox using
+  //UTF-8 encoding. It succeeds under FF using UTF-16 little endian
+  //checkIdentifier("fooØbar", "fooØbar"); // Unicode
   
   ensureNoMatch("while",'Identifier',[]);
   checkKeyword("while");
