@@ -143,12 +143,18 @@ var Trait = (function(){
   // desc1 and desc2 represent a 'required' property
   // (otherwise two composed required properties would be turned into a conflict)
   function isSameDesc(desc1, desc2) {
-    return (   desc1.get === desc2.get
-            && desc1.set === desc2.set
-            && identical(desc1.value, desc2.value)
-            && desc1.enumerable === desc2.enumerable
-            && desc1.required === desc2.required
-            && desc1.conflict === desc2.conflict);
+    // for conflicting properties, don't compare values because
+    // the conflicting property values are never equal
+    if (desc1.conflict && desc2.conflict) {
+      return true;
+    } else {
+      return (   desc1.get === desc2.get
+              && desc1.set === desc2.set
+              && identical(desc1.value, desc2.value)
+              && desc1.enumerable === desc2.enumerable
+              && desc1.required === desc2.required
+              && desc1.conflict === desc2.conflict); 
+    }
   }
   
   function freezeAndBind(meth, self) {
@@ -356,37 +362,55 @@ var Trait = (function(){
   }*/
 
   /**
-   * var newTrait = alias({ oldName: 'newName', ... }, trait)
+   * var newTrait = rename(map, trait)
    *
-   * @param aliases an object whose own properties serve as a mapping from
+   * @param map an object whose own properties serve as a mapping from
             old names to new names.
    * @param trait a trait object
    * @returns a new trait with the same own properties as the original trait,
    *          except that all own properties whose name is an own property
-   *          of aliases will be renamed to aliases[name]
+   *          of map will be renamed to map[name]
    *
-   * Note: alias(A, alias(B, t)) is equivalent to alias(\n -> A(B(n)), t)
+   * rename({a: 'b'}, t) eqv compose(exclude(['a'],t),
+                                     { b: t[a] })
+   *
+   * Note: rename(A, rename(B, t)) is equivalent to rename(\n -> A(B(n)), t)
+   * Note: rename is not associative with exclude
+   *
+   * If one of the new names is already defined in 'trait', the renamed
+   * property will generate a conflict.
    */
-  function alias(aliases, trait) {
-    var newTrait = {};
-    
-    forEach(getOwnPropertyNames(trait), function (name) {
-      // required properties are not aliased but ignored
-      if (hasOwnProperty(aliases, name) && !trait[name].required) {
-        newTrait[aliases[name]] = trait[name];
-      } else {
-        newTrait[name] = trait[name];
+  function rename(map, trait) {
+    var renamedTrait = {};
+    var keys = getOwnPropertyNames(map);
+    forEach(keys, function (name) {
+      if (hasOwnProperty(trait, name) && !trait[name].required) {
+        var alias = map[name];
+        if (hasOwnProperty(renamedTrait, alias)) {
+          // could happen if 2 props are mapped to the same alias
+          renamedTrait[alias] = makeConflictingPropDesc(alias);
+        } else {
+          renamedTrait[alias] = trait[name];          
+        }
       }
     });
+    // renamedTrait now contains all valid renamed properies
+    // now compose these new properties with the existing trait
+    // if any of the aliases conflict with existing trait names,
+    // the renamed properties will be marked as conflicts
     
-    return freeze(newTrait);
+    // Also, exclude all renamed property names from the original trait
+    // (without this step, our 'rename' operator would coincide with the 'alias'
+    // operator in the original traits model)
+    return freeze(compose(exclude(keys, trait),
+                          renamedTrait));
   }
   
   /**
    * var newTrait = resolve({ oldName: 'newName', excludeName: undefined, ... }, trait)
    *
-   * This is a convenience function combining aliasing and exclusion. It can be implemented
-   * as <tt>alias(aliases, exclude(exclusions, trait))</tt> where aliases is the subset of
+   * This is a convenience function combining renaming and exclusion. It can be implemented
+   * as <tt>rename(map, exclude(exclusions, trait))</tt> where map is the subset of
    * mappings from oldName to newName and exclusions is an array of all the keys that map
    * to undefined (or another falsy value).
    *
@@ -396,22 +420,30 @@ var Trait = (function(){
    * @returns a new trait with the same own properties as the original trait,
    *          except that all own properties whose name is an own property
    *          of resolutions will be renamed to resolutions[name], or will be
-   *          excluded from newTrait if resolutions[name] === undefined.
+   *          excluded from newTrait if resolutions[name] is falsy.
+   *
+   * Note, it's important to _first_ exclude, _then_ rename, since exclude
+   * and rename are not associative, for example:
+   * rename({a: 'b'}, exclude(['b'], trait({ a:1,b:2 }))) eqv trait({b:1})
+   * exclude(['b'], rename({a: 'b'}, trait({ a:1,b:2 }))) eqv trait({})
+   *
+   * writing resolve({a:'b', b: undefined},trait({a:1,b:2})) makes it clear that
+   * what is meant is to simply drop the old 'b' and rename 'a' to 'b'
    */
   function resolve(resolutions, trait) {
-    var aliases = {};
+    var renames = {};
     var exclusions = [];
-    // preprocess aliases and excluded properties
+    // preprocess renamed and excluded properties
     for (var name in resolutions) {
       if (hasOwnProperty(resolutions, name)) {
-        if (resolutions[name]) { // name -> alias
-          aliases[name] = resolutions[name];
+        if (resolutions[name]) { // old name -> new name
+          renames[name] = resolutions[name];
         } else { // name -> undefined
           exclusions.push(name);
         }
       }
     }
-    return alias(aliases, exclude(exclusions, trait));
+    return rename(renames, exclude(exclusions, trait));
   }
 
   /**
@@ -424,6 +456,13 @@ var Trait = (function(){
    *    options.open: is a boolean indicating whether this object
    *      should be considered 'open' or 'closed' (default: false)
    *
+   *     'open: false' (default) is for high-integrity or final objects
+   *       - an exception is thrown if 'trait' still contains required properties
+   *       - an exception is thrown if 'trait' still contains conflicting properties
+   *       - the object is and all of its accessor and method properties are frozen
+   *       - the 'this' pseudovariable in all accessors and methods of the object is
+   *         bound to the composed object.
+   *
    *     'open: true' is for abstract or malleable objects and implies
    *       - no exception is thrown if 'trait' still contains required properties
    *         (the properties are simply dropped from the composite object)
@@ -433,12 +472,6 @@ var Trait = (function(){
    *       - the 'this' pseudovariable in all accessors and methods of the object is
    *         left unbound.
    *
-   *     'open: false' (default) is for high-integrity or final objects
-   *       - an exception is thrown if 'trait' still contains required properties
-   *       - an exception is thrown if 'trait' still contains conflicting properties
-   *       - the object is and all of its accessor and method properties are frozen
-   *       - the 'this' pseudovariable in all accessors and methods of the object is
-   *         bound to the composed object.
    *
    * @returns an object with all of the properties described by the trait.
    *
@@ -527,13 +560,13 @@ var Trait = (function(){
     }
     for (var i = 0; i < names1.length; i++) {
       name = names1[i];
-      if (!isSameDesc(trait1[name], trait2[name])) {
+      if (!trait2[name] || !isSameDesc(trait1[name], trait2[name])) {
         return false;
       }
     }
     return true;
   }
-
+  
   // expose the public API of this module
   return {
        trait: trait,
@@ -543,8 +576,6 @@ var Trait = (function(){
       create: create,
     required: required,
          eqv: eqv,
-       alias: alias,   // not essential, cf. resolve
-     exclude: exclude, // not essential, cf. resolve
       object: object   // not essential, cf. create + trait
   };
   

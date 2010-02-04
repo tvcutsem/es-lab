@@ -27,17 +27,18 @@ this.makeUnitTest = function(name, verbose) {
     var msg = ((bool) ? (passed++, "pass: ") : "fail: ") + message
                 + (failmsg ? " ("+failmsg+")" : "");
     if (verbose || !bool) { print(msg) };
+    return bool;
   };
   
   return {
     ok : function(bool, message) {
-      test(bool, message); 
+      return test(bool, message); 
     },
     compare: function(expected, actual, message) {
-      test(expected === actual, message, "expected: "+expected+", got: "+actual);
+      return test(expected === actual, message, "expected: "+expected+", got: "+actual);
     },
     reCompare: function(regexp, actual, message) {
-      test(typeof actual === "string" && actual.match(regexp)!==undefined,
+      return test(typeof actual === "string" && actual.match(regexp)!==undefined,
            message,
            "string "+actual+" did not match "+regexp);
     },

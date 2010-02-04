@@ -17,8 +17,8 @@
 //   (Van Cutsem et. al, ECOOP 2009)
 //   http://prog.vub.ac.be/Publications/2009/vub-prog-tr-09-04.pdf
 
-load('traits.js');
-load('../../tests/unit.js');
+load('traits.js'); // provides Trait
+load('../../tests/unit.js'); // provides makeUnitTest
 
 // fake setTimeout
 function setTimeout(f,r) { return f(); }
