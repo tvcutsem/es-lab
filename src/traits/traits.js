@@ -570,6 +570,7 @@ var Trait = (function(){
   // expose the public API of this module
   return {
        trait: trait,
+       'new': trait, // in ES5, can write Trait.new({...}), much nicer than Trait.trait({...})
      compose: compose,
      resolve: resolve,
     override: override,

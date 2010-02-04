@@ -12,12 +12,6 @@ Sequence
 Map
   Hash & TreeMap?
 
-- we should rename the function 'trait' to 'new'
-then we can write: Trait.new({...})
-problem: ES3 does not allow 'new' to be a literal property (keyword), even rhino does not allow it yet
-
-
-
 - alternative API: represent traits as function objects instead of as property maps
 
 if we would represent traits as functions, we could use the new operator or function calls to instantiate traits.
