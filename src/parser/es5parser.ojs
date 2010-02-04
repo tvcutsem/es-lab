@@ -133,8 +133,8 @@ ometa ES5Parser {
 
   FutureReservedWord false:strict = (``class''| ``enum''  | ``extends''| ``super''
                                   |  ``const''| ``export''| ``import''):kwname ~IdentifierPart -> (kwname),
-  FutureReservedWord true:strict = FutureReservedWord(false)
-                                 | (``implements''| ``let''    | ``private''  | ``public''
+  FutureReservedWord true:strict = (FutureReservedWord(false)
+                                 |  ``implements''| ``let''    | ``private''  | ``public''
                                  |  ``interface'' | ``package''| ``protected''| ``static''
                                  |  ``yield''):kwname ~IdentifierPart -> (kwname),
 
