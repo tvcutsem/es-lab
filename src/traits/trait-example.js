@@ -32,7 +32,7 @@ function makeCircle(radius) {
 }
 
 function makeAnimationTrait(refreshRate) {
-  return Trait.trait({
+  return Trait({
     animate: Trait.required, // to be provided by my composite
     start: function() {
       var that = this;
@@ -44,7 +44,7 @@ function makeAnimationTrait(refreshRate) {
 
 function makeParticleTrait(radius, moveRate, dx, dy) {
    return Trait.compose(
-     Trait.trait({ animate: function() { return this.move(dx, dy); } }),
+     Trait({ animate: function() { return this.move(dx, dy); } }),
      Trait.resolve({ start: 'startMoving',
                       stop: undefined },
                    makeAnimationTrait(moveRate)));
@@ -59,7 +59,7 @@ function makeParticleMorph(radius, moveRate, dx, dy) {
 // TODO: document super pattern
 function makeParticleMorph(radius, moveRate, dx, dy) {
    var superT = makeCircleTrait(radius);
-   return Trait.object(override(makeParticleTrait(object(superT), radius, moveRate, dx, dy),
+   return Trait.object(override(makeParticleTrait(Trait.object(superT), radius, moveRate, dx, dy),
                             superT)); // prioritized composition
 }
 */

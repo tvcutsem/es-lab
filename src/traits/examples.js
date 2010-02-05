@@ -20,7 +20,7 @@ load('traits.js'); // provides Trait
 // where Sequence is an object c that understands c.push(elem)
 // in order to append an element to the sequence
 function makeEnumerableTrait(makeSeq) {
-  return Trait.trait({
+  return Trait({
     // this.forEach(fun) passes each element and index to fun
     forEach: Trait.required,
     // this.reverseEach(f) -> pass elements to f in reverse order
@@ -97,7 +97,7 @@ var TEnumerable = makeEnumerableTrait(function() { return []; });
 // a comparable trait that works on partially ordered data
 // note: if two elements are incomparable, the relational operators
 // will answer 'false' and the min and max operators will answer 'undefined'
-var TComparable = Trait.trait({
+var TComparable = Trait({
   '<': Trait.required, // this['<'](other) -> boolean
  '==': Trait.required, // this['=='](other) -> boolean
   
@@ -142,7 +142,7 @@ function makeInterval(min, max) {
     Trait.compose(
       TEnumerable,
       TComparable,
-      Trait.trait({
+      Trait({
         start: min,
         end: max,
         size: max - min - 1,

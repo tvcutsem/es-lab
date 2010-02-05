@@ -1,21 +1,19 @@
 Traits: TODO
 - define a collections lib with these operators
-Traits:
-TEnumerable
-TIndexable?
-TMagnitude (Measurable?)
-TComparable
-(search other languages for more examples)
+TIndexable? (search other languages for more examples)
 Collections:
 Sequence
   Array [ Indexable sequence? ]
 Map
   Hash & TreeMap?
 
-- alternative API: represent traits as function objects instead of as property maps
+- Trait.new({...}) on ES5 is potentially confusing: does this create a trait or an instance of the trait?
+Better: use Trait as a constructor: Trait({...}) generates a new trait, Trait.create generates a new instance of a trait. So Trait({...}) is equivalent to the old 'Trait.trait({...})'.
 
+- Trait.object({...}) -> would make more sense for users just to write object({...}). Bring 'object' into importer's scope by default? Maybe not... keep it clean... importer can always write var object = Trait.object;
+
+- alternative API: represent traits as function objects instead of as property maps (currently not pursued, disadvantages outweigh advantages)
 if we would represent traits as functions, we could use the new operator or function calls to instantiate traits.
-
 We could still provide a to_property_map(trait) -> pdmap function as well.
 
 We could also refactor compose, resolve, override to be defined as methods on the trait function objects:

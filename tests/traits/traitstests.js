@@ -21,9 +21,7 @@
   load('../unit.js'); // provides makeUnitTest
   
   var unit = makeUnitTest('Traits', false);
-  
-  var trait = Trait.trait;
-  
+    
   // == ancillary functions to compare the structure of two traits ==
   
   function testEqv(trait1, trait2, id) {    
@@ -134,10 +132,10 @@
   
   // test eqv
   (function() {
-    var T1 = trait({a:0,  b:Trait.required, c:testMethod});
-    var T2 = trait({b: Trait.required, a:0, c:testMethod});
-    var T3 = trait({a: 0, b:Trait.required, c:testMethod, d:'foo'});
-    var T4 = trait({a: 0, b:Trait.required, d:'foo' });
+    var T1 = Trait({a:0,  b:Trait.required, c:testMethod});
+    var T2 = Trait({b: Trait.required, a:0, c:testMethod});
+    var T3 = Trait({a: 0, b:Trait.required, c:testMethod, d:'foo'});
+    var T4 = Trait({a: 0, b:Trait.required, d:'foo' });
     unit.ok(Trait.eqv(T1,T1), "eqv is reflexive");
     unit.ok(Trait.eqv(T1,T2) , "T1 eqv T2");
     unit.ok(Trait.eqv(T1,T2) && Trait.eqv(T2,T1), "eqv is symmetric");
@@ -145,30 +143,40 @@
     unit.ok(!Trait.eqv(T1,T4), "T1 ! eqv T4");
   })();
   
-  testEqv(trait({}), {}, "empty trait");
+  testEqv(Trait({}), {}, "empty trait");
   
-  testEqv(trait(
+  testEqv(Trait(
           { a: 0,
             b: testMethod }),
           { a: dataP(0),
             b: methodP(testMethod) },
           "simple trait");
   
-  testEqv(trait(
+  testEqv(Trait(
           { a: Trait.required,
             b: 1 }),
           { a: requiredP(),
             b: dataP(1) },
           "simple trait with required prop");
   
-  testEqv(trait({a: 0, b: 1, c: Trait.required}),
-          trait({b: 1, c: Trait.required, a: 0}),
+  testEqv(Trait({a: 0, b: 1, c: Trait.required}),
+          Trait({b: 1, c: Trait.required, a: 0}),
           "ordering of trait properties is irrelevant");
   
+  (function() {
+    // note: only works for ES5 or ES3 implementations that support accessor syntax
+    var record = {get a() {}, set a(v) {} };
+    var get = Object.getOwnPropertyDescriptor(record,'a').get;
+    var set = Object.getOwnPropertyDescriptor(record,'a').set;
+    testEqv(Trait(record),
+            { a: accessorP(get,set) },
+            "trait with accessor property");
+  })();
+  
   testEqv(Trait.compose(
-            trait({ a: 0,
+            Trait({ a: 0,
                     b: 1 }),
-            trait({ c: 2,
+            Trait({ c: 2,
                     d: testMethod })),
           { a: dataP(0),
             b: dataP(1),
@@ -177,9 +185,9 @@
           "simple composition");
   
   testEqv(Trait.compose(
-            trait({ a: 0,
+            Trait({ a: 0,
                     b: 1 }),
-            trait({ a: 2,
+            Trait({ a: 2,
                     c: testMethod })),
           { a: conflictP('a'),
             b: dataP(1),
@@ -187,9 +195,9 @@
           "composition with conflict");
   
   testEqv(Trait.compose(
-            trait({ a: 0,
+            Trait({ a: 0,
                     b: 1 }),
-            trait({ a: 0,
+            Trait({ a: 0,
                     c: testMethod })),
           { a: dataP(0),
             b: dataP(1),
@@ -197,9 +205,9 @@
           "composition of identical props does not cause conflict");
   
   testEqv(Trait.compose(
-            trait({ a: Trait.required,
+            Trait({ a: Trait.required,
                     b: 1 }),
-            trait({ a: Trait.required,
+            Trait({ a: Trait.required,
                     c: testMethod })),
           { a: requiredP(),
             b: dataP(1),
@@ -207,58 +215,58 @@
           "composition with identical required props");
   
   testEqv(Trait.compose(
-            trait({ a: Trait.required,
+            Trait({ a: Trait.required,
                     b: 1 }),
-            trait({ a: testMethod })),
+            Trait({ a: testMethod })),
           { a: methodP(testMethod),
             b: dataP(1) },
           "composition satisfying a required prop");
   
   testEqv(Trait.compose(
-            Trait.compose(trait({ a: 1 }), trait({ a: 2 })),
-            trait({ b: 0 })),
+            Trait.compose(Trait({ a: 1 }), Trait({ a: 2 })),
+            Trait({ b: 0 })),
           { a: conflictP('a'),
             b: dataP(0) },
           "compose is neutral wrt conflicts");
 
   testEqv(Trait.compose(
-            Trait.compose(trait({ a: 1 }), trait({ a: 2 })),
-            trait({ a: Trait.required })),
+            Trait.compose(Trait({ a: 1 }), Trait({ a: 2 })),
+            Trait({ a: Trait.required })),
           { a: conflictP('a') },
           "conflicting prop overrides required prop");
 
   testEqv(Trait.compose(
-            trait({ a: 0, b: 1 }),
-            trait({ c: 2, d: testMethod })),
+            Trait({ a: 0, b: 1 }),
+            Trait({ c: 2, d: testMethod })),
           Trait.compose(
-            trait({ c: 2, d: testMethod}),
-            trait({ a: 0, b: 1 })),
+            Trait({ c: 2, d: testMethod}),
+            Trait({ a: 0, b: 1 })),
           "compose is commutative");
 
   testEqv(Trait.compose(
-            trait({ a: 0, b: 1, c: 3, e: Trait.required }),
-            trait({ c: 2, d: testMethod })),
+            Trait({ a: 0, b: 1, c: 3, e: Trait.required }),
+            Trait({ c: 2, d: testMethod })),
           Trait.compose(
-            trait({ c: 2, d: testMethod}),
-            trait({ a: 0, b: 1, c: 3, e: Trait.required })),
+            Trait({ c: 2, d: testMethod}),
+            Trait({ a: 0, b: 1, c: 3, e: Trait.required })),
           "compose is commutative, also for required/conflicting props");
             
   testEqv(Trait.compose(
-            trait({ a: 0, b: 1, c: 3, d: Trait.required }),
+            Trait({ a: 0, b: 1, c: 3, d: Trait.required }),
             Trait.compose(
-              trait({ c: 3, d: Trait.required }),
-              trait({ c: 2, d: testMethod, e: 'foo' }))),
+              Trait({ c: 3, d: Trait.required }),
+              Trait({ c: 2, d: testMethod, e: 'foo' }))),
           Trait.compose(
             Trait.compose(
-              trait({ a: 0, b: 1, c: 3, d: Trait.required }),
-              trait({ c: 3, d: Trait.required })),
-            trait({ c: 2, d: testMethod, e: 'foo' })),
+              Trait({ a: 0, b: 1, c: 3, d: Trait.required }),
+              Trait({ c: 3, d: Trait.required })),
+            Trait({ c: 2, d: testMethod, e: 'foo' })),
           "compose is associative");
   
   testEqv(Trait.compose(
-            Trait.compose(trait({ b: 2 }), trait({ a: 1 })),
-            Trait.compose(trait({ c: 3 }), trait({ a: 1 })),
-            trait({ d: 4 })),
+            Trait.compose(Trait({ b: 2 }), Trait({ a: 1 })),
+            Trait.compose(Trait({ c: 3 }), Trait({ a: 1 })),
+            Trait({ d: 4 })),
           { a: dataP(1),
             b: dataP(2),
             c: dataP(3),
@@ -266,67 +274,67 @@
           "diamond import of same prop does not generate conflict");
   
   testEqv(Trait.resolve({},
-            trait({ a: 1, b: Trait.required, c: testMethod })),
+            Trait({ a: 1, b: Trait.required, c: testMethod })),
           { a: dataP(1),
             b: requiredP(),
             c: methodP(testMethod) },
           "resolve with empty resolutions has no effect");
   
   testEqv(Trait.resolve({ a: 'A', c: 'C' },
-            trait({ a: 1, b: Trait.required, c: testMethod })),
+            Trait({ a: 1, b: Trait.required, c: testMethod })),
           { A: dataP(1),
             b: requiredP(),
             C: methodP(testMethod) },
           "resolve: renaming");
 
   testEqv(Trait.resolve({ a: 'b' },
-            trait({ a: 1, b: 2 })),
+            Trait({ a: 1, b: 2 })),
           { b: conflictP('b') },
           "resolve: renaming to conflicting name causes conflict, ordering 1");
   
   testEqv(Trait.resolve({ a: 'b' },
-            trait({ b: 2, a: 1 })),
+            Trait({ b: 2, a: 1 })),
           { b: conflictP('b') },
           "resolve: renaming to conflicting name causes conflict, ordering 2");
   
   testEqv(Trait.resolve({ a: undefined },
-            trait({ a: 1, b: 2 })),
+            Trait({ a: 1, b: 2 })),
           { b: dataP(2) },
           "resolve: simple exclusion");
   
   testEqv(Trait.resolve({ a: undefined, b: undefined },
-            trait({ a: 1, b: 2 })),
+            Trait({ a: 1, b: 2 })),
           { },
           "resolve: exclusion to empty trait");
 
   testEqv(Trait.resolve({ a: undefined, b: 'c' },
-            trait({ a: 1, b: 2 })),
+            Trait({ a: 1, b: 2 })),
           { c: dataP(2) },
           "resolve: exclusion and renaming of disjoint props");
 
   testEqv(Trait.resolve({ a: undefined, b: 'a' },
-            trait({ a: 1, b: 2 })),
+            Trait({ a: 1, b: 2 })),
           { a: dataP(2) },
           "resolve: exclusion and renaming of overlapping props");
 
   testEqv(Trait.resolve({ a: 'c', b: 'c' },
-            trait({ a: 1, b: 2 })),
+            Trait({ a: 1, b: 2 })),
           { c: conflictP('c') },
           "resolve: renaming to a common alias causes conflict");
 
   testEqv(Trait.resolve({ a: 'c', d: 'c' },
-            trait({ a: 1, b: 2 })),
+            Trait({ a: 1, b: 2 })),
           { c: dataP(1),
             b: dataP(2) },
           "resolve: renaming of non-existent props has no effect");
 
   testEqv(Trait.resolve({ b: undefined },
-            trait({ a: 1 })),
+            Trait({ a: 1 })),
           { a: dataP(1) },
           "resolve: exclusion of non-existent props has no effect");
             
   testEqv(Trait.resolve({ a: 'c', b: undefined },
-            trait({ a: Trait.required, b: Trait.required, c:'foo', d:1 })),
+            Trait({ a: Trait.required, b: Trait.required, c:'foo', d:1 })),
           { a: requiredP(),
             b: requiredP(),
             c: dataP('foo'),
@@ -334,8 +342,8 @@
           "resolve is neutral w.r.t. required properties");
   
   testEqv(Trait.override(
-            trait({a: 1, b: 2 }),
-            trait({c: 3, d: testMethod })),
+            Trait({a: 1, b: 2 }),
+            Trait({c: 3, d: testMethod })),
           { a: dataP(1),
             b: dataP(2),
             c: dataP(3),
@@ -343,25 +351,25 @@
           "override of mutually exclusive traits");
 
   testEqv(Trait.override(
-            trait({a: 1, b: 2 }),
-            trait({c: 3, d: testMethod })),
+            Trait({a: 1, b: 2 }),
+            Trait({c: 3, d: testMethod })),
           Trait.compose(
-            trait({d: testMethod, c: 3 }),
-            trait({b: 2, a: 1 })),
+            Trait({d: testMethod, c: 3 }),
+            Trait({b: 2, a: 1 })),
           "override of mutually exclusive traits is compose");
             
   testEqv(Trait.override(
-            trait({a: 1, b: 2 }),
-            trait({a: 3, c: testMethod })),
+            Trait({a: 1, b: 2 }),
+            Trait({a: 3, c: testMethod })),
           { a: dataP(1),
             b: dataP(2),
             c: methodP(testMethod) },
           "override of overlapping traits");
           
   testEqv(Trait.override(
-            trait({a: 1, b: 2 }),
-            trait({b: 4, c: 3 }),
-            trait({a: 3, c: testMethod, d: 5 })),
+            Trait({a: 1, b: 2 }),
+            Trait({b: 4, c: 3 }),
+            Trait({a: 3, c: testMethod, d: 5 })),
           { a: dataP(1),
             b: dataP(2),
             c: dataP(3),
@@ -369,8 +377,8 @@
           "three-way override of overlapping traits");
 
   testEqv(Trait.override(
-            trait({a: Trait.required, b: 2 }),
-            trait({a: 1, c: testMethod })),
+            Trait({a: Trait.required, b: 2 }),
+            Trait({a: 1, c: testMethod })),
           { a: dataP(1),
             b: dataP(2),
             c: methodP(testMethod) },
@@ -378,93 +386,126 @@
   
   unit.ok(!Trait.eqv(
              Trait.override(
-               trait({a: 1, b: 2}),
-               trait({a: 3, c: 4})),
+               Trait({a: 1, b: 2}),
+               Trait({a: 3, c: 4})),
              Trait.override(
-               trait({a: 3, c: 4}),
-               trait({a: 1, b: 2}))),
+               Trait({a: 3, c: 4}),
+               Trait({a: 1, b: 2}))),
           "override is not commutative");
   
   testEqv(Trait.override(
             Trait.override(
-              trait({a: 1, b: 2}),
-              trait({a: 3, c: 4, d: 5})),
-            trait({a: 6, c: 7, e: 8})),
+              Trait({a: 1, b: 2}),
+              Trait({a: 3, c: 4, d: 5})),
+            Trait({a: 6, c: 7, e: 8})),
           Trait.override(
-            trait({a: 1, b: 2}),
+            Trait({a: 1, b: 2}),
             Trait.override(
-              trait({a: 3, c: 4, d: 5}),
-              trait({a: 6, c: 7, e: 8}))),
+              Trait({a: 3, c: 4, d: 5}),
+              Trait({a: 6, c: 7, e: 8}))),
           "override is associative");
   
   // create
-  var o1 = Trait.create(Object.prototype,
-                        trait({a:1, b:function() {return this.a; }}));
-  if (Object.getPrototypeOf) {
-    unit.compare(Object.prototype, Object.getPrototypeOf(o1), "o1 prototype");
-  }
-  unit.compare(1, o1.a, 'o1.a');
-  unit.compare(1, o1.b(), 'o1.b()');
-  unit.compare(2, getOwnPropertyNames(o1).length, 'Object.keys(o1).length === 2');
+  (function(){
+    var o1 = Trait.create(Object.prototype,
+                          Trait({a:1, b:function() {return this.a; }}));
+    if (Object.getPrototypeOf) {
+      unit.compare(Object.prototype, Object.getPrototypeOf(o1), "o1 prototype");
+    }
+    unit.compare(1, o1.a, 'o1.a');
+    unit.compare(1, o1.b(), 'o1.b()');
+    unit.compare(2, getOwnPropertyNames(o1).length, 'Object.keys(o1).length === 2');
+  })();
   
   // create with prototype
-  var o2 = Trait.create(Array.prototype, trait({}));
-  if (Object.getPrototypeOf) {
-    unit.compare(Array.prototype, Object.getPrototypeOf(o2), "o2 prototype");
-  }
+  (function(){
+    var o2 = Trait.create(Array.prototype, Trait({}));
+    if (Object.getPrototypeOf) {
+      unit.compare(Array.prototype, Object.getPrototypeOf(o2), "o2 prototype");
+    }
+  })();
   
   // - create open:false -
   
   // exception for incomplete required properties
   try {
     Trait.create(Object.prototype,
-                 trait({ foo: Trait.required }), {open:false})
+                 Trait({ foo: Trait.required }), {open:false})
     unit.ok(false, 'expected create to complain about missing required props');
   } catch(e) {
-    // TODO: test exception string?
+    unit.compare('Error: Missing required property: foo', e.toString(), 'required prop error');
   }
   
   // exception for unresolved conflicts
   try {
     Trait.create(Object.prototype,
-                 Trait.compose(trait({ a: 0 }), trait({ a: 1 })), {open:false})
+                 Trait.compose(Trait({ a: 0 }), Trait({ a: 1 })), {open:false})
     unit.ok(false, 'expected create to complain about unresolved conflicts');
   } catch(e) {
-    // TODO: test exception string?
+    unit.compare('Error: Remaining conflicting property: a', e.toString(), 'conflicting prop error');
   }
   
-  // verify object and methods frozen
-  // verify 'this' bound
+  (function(){
+    var o3 = Trait.create(Object.prototype, Trait({ m: function() { return this; } }), {open:false});
+    // verify object and methods frozen in ES5
+    if (Object.freeze) {
+      unit.ok(Object.isFrozen(o3), 'closed create freezes object');
+      // TODO: Object.isFrozen is broken on Rhino, reports 'false' on frozen function objects,
+      // even though the function is effectively frozen (can't add new properties)
+      // unit.ok(Object.isFrozen(o3.m), 'closed create freezes methods');
+    }
+    unit.compare(o3, o3.m(), 'this refers to composite object');
+    // verify 'this' bound in ES5
+    if (Function.prototype.bind) {
+      unit.compare(o3, o3.m.call({}), 'this bound to composite object');
+    }
+  })();
   
   // - create open:true -
   
   // verify that required properties are dropped
-  try {
-    var o4 = Trait.create(Object.prototype,
-                 trait({ foo: Trait.required }), {open:true});
-    unit.ok(!('foo' in o4), 'required property dropped');
-  } catch(e) {
-    unit.ok(false, 'did not expect create to complain about required props');
-  }
+  (function(){
+    try {
+      var o4 = Trait.create(Object.prototype,
+                   Trait({ foo: Trait.required }), {open:true});
+      unit.ok(!('foo' in o4), 'required property dropped');
+    } catch(e) {
+      unit.ok(false, 'did not expect create to complain about required props');
+    }
+  })();
   
   // verify that conflicting properties are present
-  try {
-    var o5 = Trait.create(Object.prototype,
-                 Trait.compose(trait({ a: 0 }), trait({ a: 1 })), {open:true});
-    unit.ok('a' in o5, 'conflicting property present');
+  (function(){
     try {
-      (o5.a, o5.a()); // accessor or data prop
-      unit.ok(false, 'expected conflicting prop to cause exception');
-    } catch (e) {}
-  } catch(e) {
-    unit.ok(false, 'did not expect create to complain about conflicting props');
-  }
+      var o5 = Trait.create(Object.prototype,
+                   Trait.compose(Trait({ a: 0 }), Trait({ a: 1 })), {open:true});
+      unit.ok('a' in o5, 'conflicting property present');
+      try {
+        (o5.a, o5.a()); // accessor or data prop
+        unit.ok(false, 'expected conflicting prop to cause exception');
+      } catch (e) {
+        unit.compare('Error: Conflicting property: a', e.toString(), 'conflicting prop access error');
+      }
+    } catch(e) {
+      unit.ok(false, 'did not expect create to complain about conflicting props');
+    }
+  })();
   
-  // verify that object and methods are not frozen
-  // verify 'this' unbound
-  
-  // TODO: test accessor properties
-  
+  (function(){
+    var o6 = Trait.create(Object.prototype, Trait({ m: function() { return this; } }), {open:true});
+    // verify that object and methods are not frozen in ES5
+    if (Object.freeze) {
+      unit.ok(!(Object.isFrozen(o6)), 'open create does not freeze object');
+      unit.ok(!(Object.isFrozen(o6.m)), 'open create does not freeze methods');
+    }
+    unit.compare(o6, o6.m(), 'this refers to composite object');
+    // verify 'this' unbound in ES5
+    if (Function.prototype.bind) {
+      var fakethis = {};
+      unit.compare(fakethis, o6.m.call(fakethis), 'this not bound to composite object');
+    }
+  })();
+    
   return unit.testDone();
   
 })();

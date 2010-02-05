@@ -158,7 +158,7 @@ var Trait = (function(){
   }
   
   function freezeAndBind(meth, self) {
-    return freeze(bindThis(meth, self)); 
+    return freeze(bindThis(meth, self));
   }
 
   /* makeSet(['foo', ...]) => { foo: true, ...}
@@ -482,7 +482,7 @@ var Trait = (function(){
    */
   function create(proto, trait, optOptions) {
     var options = optOptions || {};
-    var isClosed = !options.open;
+    var isClosed = !(options.open);
     var self = Object_create(proto);
     var properties = {};
   
@@ -568,16 +568,17 @@ var Trait = (function(){
   }
   
   // expose the public API of this module
-  return {
-       trait: trait, // deprecated
-       'new': trait, // in ES5, can write Trait.new({...}), much nicer than Trait.trait({...})
-     compose: compose,
-     resolve: resolve,
-    override: override,
-      create: create,
-    required: required,
-         eqv: eqv,
-      object: object   // not essential, cf. create + trait
-  };
+  function Trait(record) {
+    // calling Trait as a function creates a new atomic trait
+    return trait(record);
+  }
+  Trait.required = required;
+  Trait.compose = compose;
+  Trait.resolve = resolve;
+  Trait.override = override;
+  Trait.create = create;
+  Trait.eqv = eqv;
+  Trait.object = object; // not essential, cf. create + trait
+  return Trait;
   
 })();
