@@ -572,13 +572,13 @@ var Trait = (function(){
     // calling Trait as a function creates a new atomic trait
     return trait(record);
   }
-  Trait.required = required;
-  Trait.compose = compose;
-  Trait.resolve = resolve;
-  Trait.override = override;
-  Trait.create = create;
-  Trait.eqv = eqv;
-  Trait.object = object; // not essential, cf. create + trait
-  return Trait;
+  Trait.required = freeze(required);
+  Trait.compose = freeze(compose);
+  Trait.resolve = freeze(resolve);
+  Trait.override = freeze(override);
+  Trait.create = freeze(create);
+  Trait.eqv = freeze(eqv);
+  Trait.object = freeze(object); // not essential, cf. create + trait
+  return freeze(Trait);
   
 })();
