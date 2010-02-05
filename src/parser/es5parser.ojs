@@ -87,26 +87,27 @@ ometa ES5Parser {
 
   Comment = MultiLineComment || SingleLineComment,
 
-  MultiLineComment = seq("/*") (MultiLineCommentChars | empty -> ""):cs seq("*/") -> (cs),
-  MultiLineCommentChars = MultiLineNotAsteriskChar:c (MultiLineCommentChars | empty -> ""):cs ->
-                          ( c + cs )
-                        || '*' (PostAsteriskCommentChars | &seq("*/") -> ""):cs -> ( '*' + cs ),
-  PostAsteriskCommentChars = MultiLineNotForwardSlashOrAsteriskChar:c
-                             (MultiLineCommentChars | empty -> ""):cs -> ( c + cs )
-                           || '*' (PostAsteriskCommentChars | &seq("*/") -> ""):cs -> ( '*' + cs ),
+  MultiLineComment = seq("/*") (MultiLineCommentChars | empty -> ""):cs seq("*/") -> cs,
+  MultiLineCommentChars = <MultiLineNotAsteriskChar (MultiLineCommentChars | empty -> "")>
+                        || <'*' (PostAsteriskCommentChars | &seq("*/") -> "")>,// -> ( '*' + cs ),
+  PostAsteriskCommentChars = <MultiLineNotForwardSlashOrAsteriskChar
+                              (MultiLineCommentChars | empty -> "")>
+                           || <'*' (PostAsteriskCommentChars | &seq("*/") -> "")>,
   MultiLineNotAsteriskChar = ~('*') SourceCharacter:c -> (c),
   MultiLineNotForwardSlashOrAsteriskChar = ~('/' | '*') SourceCharacter:c -> (c),
   SingleLineComment = seq("//") (SingleLineCommentChars | empty -> ""):cs -> (cs),
-  SingleLineCommentChars = SingleLineCommentChar:c (SingleLineCommentChars | empty -> ""):cs ->
-                           (c + cs),
+  SingleLineCommentChars = <SingleLineCommentChar (SingleLineCommentChars | empty -> "")>,
   SingleLineCommentChar = ~LineTerminator SourceCharacter:c -> (c),
   
   // Note: not currently used by the parser
   Token = IdentifierName || Punctuator || NumericLiteral || StringLiteral,
 
   Identifier = IdentifierName:n ~checkReservedWord(n) -> (n),
-  IdentifierName = IdentifierName:first IdentifierPart:rest -> ( first+rest )
+  // <...> is OMeta's "consumed-by" operator: the value of the rule is all
+  // the input it consumed
+  IdentifierName = <IdentifierName IdentifierPart>
                  | IdentifierStart,
+                 
   IdentifierStart = UnicodeLetter || '$' || '_' || '\\' UnicodeEscapeSequence,
   IdentifierPart = IdentifierStart | UnicodeCombiningMark
                  | UnicodeDigit | UnicodeConnectorPunctuation
@@ -256,8 +257,8 @@ ometa ES5Parser {
   // body and flags are left uninterpreted while parsing (they are parsed as strings)
   RegularExpressionLiteral = '/' RegularExpressionBody:b '/' RegularExpressionFlags:f ->
                              ( literal("regexp",{body:b,flags:f}) ),
-  RegularExpressionBody = RegularExpressionFirstChar:c RegularExpressionChars:cs -> (c+cs),
-  RegularExpressionChars = RegularExpressionChars:cs RegularExpressionChar:c -> (cs+c)
+  RegularExpressionBody = <RegularExpressionFirstChar RegularExpressionChars>,
+  RegularExpressionChars = <RegularExpressionChars RegularExpressionChar>
                          | empty -> (""),
   RegularExpressionFirstChar = ~('*' ||'\\' || '/' || '[') RegularExpressionNonTerminator
                              || RegularExpressionBackslashSequence
@@ -267,13 +268,12 @@ ometa ES5Parser {
                         || RegularExpressionClass,
   RegularExpressionBackslashSequence = '\\' RegularExpressionNonTerminator:nt -> ( "\\"+nt ),
   RegularExpressionNonTerminator = ~(LineTerminator) SourceCharacter,
-  RegularExpressionClass = '[' RegularExpressionClassChars:cs ']' -> ("["+cs+"]" ),
-  RegularExpressionClassChars = RegularExpressionClassChars:cs RegularExpressionClassChar:c ->
-                                ( cs+c )
+  RegularExpressionClass = <'[' RegularExpressionClassChars ']'>,
+  RegularExpressionClassChars = <RegularExpressionClassChars RegularExpressionClassChar>
                               | empty -> (""),
   RegularExpressionClassChar = ~(']' || '\\') RegularExpressionNonTerminator
                              || RegularExpressionBackslashSequence,
-  RegularExpressionFlags = RegularExpressionFlags:fs IdentifierPart:f -> ( fs+f )
+  RegularExpressionFlags = <RegularExpressionFlags IdentifierPart>
                          | empty -> (""),
 
   // === Implementation-level rules (not part of the spec) ===
