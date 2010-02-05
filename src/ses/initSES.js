@@ -47,7 +47,8 @@
  *        <i>root accessible primordial</i>, which is provided as the
  *        <tt>this</tt> binding for hermetic eval calls -- emulating
  *        the safe subset of the normal global object.
- * @param whitelist :Record(Permit) where Permit = true | "*" |
+ * @param whitelist :Record(Permit) 
+ *            where Permit = true | "*" | Record(Permit).
  *        Describes the subset of naming paths starting from the root
  *        that should be accessible. The <i>accessible primordials</i>
  *        are this root plus all values found by navigating these paths
@@ -65,8 +66,9 @@
  * @param ObjTable :F([],Record({get: F([Object], any), set: F([Object, any])}))
  *        A constructor of object tables, where an object table maps
  *        from objects-as-keys to values. The proposed EphemeronTable,
- *        if available, would be an excellent choice, but leakier
- *        tables are fine.
+ *        if available, would be an excellent choice; but leakier
+ *        tables are fine since these tables become unreachable after
+ *        initialization anyway. 
  */
 function initSES(global, whitelist, verify, ObjTable) {
 
@@ -76,6 +78,15 @@ function initSES(global, whitelist, verify, ObjTable) {
   
   if (function(){return this;}()) { fail('Requires at least ES5 support'); }
 
+  /**
+   * Code being eval'ed sees <tt>root</tt> as its <tt>this</tt>, as if
+   * <tt>root</tt> were the global object. 
+   * 
+   * <p>Root's properties are exactly the whitelistes global variable
+   * references. These properties, both as they appear on the global
+   * object and on this root object, are frozen and so cannot
+   * diverge. This preserves the illusion.
+   */
   var root = {};
 
   // Repair phase -- monkey patch safe replacements

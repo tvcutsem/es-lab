@@ -59,6 +59,7 @@
     // Catch simple context-dependent violations of ES5-strict.
     visitThrough(es5StrictPass1Visitor, analysis.tree);
 
+    // Record definitions by scope.
     analysis.scopes = []; // Records each node's Scope object by preOrder:
     analysis.freeIdExprs = []; // Records all free IdExprs
     var topScope = Scope.top(analysis, whitelist.keys());
@@ -66,6 +67,7 @@
     visitThrough(topScopeDefsVisitor, analysis.tree);
     if (!scopes[0]) { scopes[0] = topScope; }
 
+    // Match uses to definitions by scope.
     var scopeUsesVisitor = new ScopeUsesVisitor(analysis);
     visitThrough(scopeUsesVisitor, analysis.tree);
 

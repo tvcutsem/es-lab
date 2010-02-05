@@ -20,22 +20,105 @@
 
 'use strict';
 
-var hop = Object.prototype.hasOwnProperty;
+// originals
+var O = {};
+O.getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+O.getOwnPropertyNames = Object.getOwnPropertyNames;
+O.defineProperty = Object.defineProperty;
+O.seal = Object.seal;
+O.freeze = Object.freeze;
+O.preventExtensions = Object.preventExtensions;
+O.keys = Object.keys;
+O.prototype_hasOwnProperty = Object.prototype.hasOwnProperty;
+O.prototype_propertyIsEnumerable = Object.prototype.propertyIsEnumerable;
+var F = {};
+F.prototype_toString = Function.prototype.toString;
+
+Object.getPropertyDescriptor = function(obj, name) {
+  while (obj !== null) {
+    var result = Object.getOwnPropertyDescriptor(obj, name);
+    if (result) { return result; }
+    obj = Object.getPrototypeOf(obj);
+  }
+  return undefined;
+};
+O.getPropertyDescriptor = Object.getPropertyDescriptor;
+
+Object.defineProperties = function(obj, pmap) {
+  for (var name in pmap) {
+    Object.defineProperty(obj, name, pmap[name]);
+  }
+};
+O.defineProperties = Object.defineProperties;
+
+var endsWith__ = (/__$/);
+
+function Name(name) {
+  name = String(name);
+  if (endsWith__.test(name)) {
+    throw new TypeError('Must not end in double underbar: ' + name);
+  }
+  return name;
+}
+
+function nameOk(name) {
+  return !endsWith__.test(name);
+}
 
 var metaMirandas = {
   handler___: null,
-  delete___: function(name) { return delete this[name]; },
-  has___: function(name) { return name in this; },
-  hasOwn___: function(name) { return hop.call(this, name); },
-  get___: function(name) { return this[name]; },
-  set___: function(name, val) { this[name] = val; return true; },
-  invoke___: function(name, args) { return this[name].apply(this, args); },
-  enumerate___: function() {
-    var result = [];
-    for (var name in this) { result.push(name); }
-    return Object.freeze(result);
+
+  getOwnProperty___: function(name) {
+    return O.getOwnPropertyDescriptor(this, Name(name));
   },
-  fix___: function() {}
+  getProperty___: function(name) {
+    return O.getPropertyDescriptor(this, Name(name));
+  },
+  defineOwnProperty___: function(name, desc) {
+    return O.defineProperty(this, Name(name), desc);
+  },
+  delete___: function(name) { 
+    return delete this[Name(name)]; 
+  },
+  getOwnPropertyNames___: function() { 
+    return O.getOwnPropertyNames(this).filter(nameOk); 
+  },
+  enumerate___: function() {
+    var result = this.enumerateOwn___();
+    var optParent = Object.getPrototypeOf(this);
+    if (optParent) {
+      result.push.apply(result, optParent.enumerate___());
+    }
+    return result;
+  },
+  fix___: function() { return undefined; },
+
+  has___: function(name) {
+    name = Name(name);
+    if (this.hasOwn__(name)) {
+      return true;
+    }
+    var optParent = Object.getPrototypeOf(this);
+    if (optParent) {
+      return optParent.has__(name);
+    }
+    return false;
+  },
+  hasOwn___: function(name) { 
+    return O.prototype_hasOwnProperty.call(this, Name(name)); 
+  },
+  get___: function(name) {
+    return this[Name(name)]; 
+  },
+  set___: function(name, val) { 
+    this[Name(name)] = val; return true; 
+  },
+  invoke___: function(name, args) { 
+    return this[Name(name)].apply(this, args); 
+  },
+  enumerateOwn___: function() {
+    return O.keys(this).filter(nameOk);
+  }  
 };
 
 Object.keys(metaMirandas).forEach(function(name) {
@@ -99,20 +182,9 @@ var Proxy = {
 
 /// Monkey patch primordials
 
-var OGOP = Object.getOwnProperty;
-var OGP = Object.getProperty;
-var ODOP = Object.defineProperty;
-var OGOPN = Object.getOwnPropertyNames;
-var OK = Object.keys;
-var OF = Object.freeze;
-var OS = Object.seal;
-var OP = Object.preventExtensions;
-var OPHOP = Object.prototype.hasOwnProperty;
-var FPT = Function.prototype.toString;
-
 Object.getOwnProperty = function(obj, name) {
   if (obj.handler___) { return obj.handler___.getOwnProperty(name); }
-  return OGOP(obj, name);
+  return O.getOwnProperty(obj, name);
 };
 
 // ...
