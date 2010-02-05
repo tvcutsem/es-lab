@@ -35,19 +35,31 @@ function makeEnumerableTrait(makeSeq) {
       return seq;
     },
     every: function(pred) {
-      this.forEach(function(e,i) {
-        if (!pred(e,i)) {
-          return false;
-        }
-      });
+      var escape = {};
+      try {
+        this.forEach(function(e,i) {
+          if (!pred(e,i)) {
+            throw escape; // force non-local exit
+          }
+        }); 
+      } catch(e) {
+        if (e !== escape) throw e;
+        return false;
+      }
       return true;
     },
     some: function(pred) {
-      this.forEach(function(e,i) {
-        if (pred(e,i)) {
-          return true;
-        }
-      });
+      var escape = {};
+      try {
+        this.forEach(function(e,i) {
+          if (pred(e,i)) {
+            throw escape; // force non-local exit
+          }
+        }); 
+      } catch(e) {
+        if (e !== escape) throw e;
+        return true;
+      }
       return false;
     },
     filter: function(pred) {
@@ -102,7 +114,7 @@ var TComparable = Trait.trait({
     return !(this['=='](other));  
   },
   between: function(min, max) { // inclusive between
-    return min['>='](this) && this['<='](max);
+    return min['<='](this) && this['<='](max);
   },
   min: function(aMagnitude) {
     if (this['<='](aMagnitude)) {
@@ -124,7 +136,7 @@ var TComparable = Trait.trait({
   }
 });
 
-// represents a closed interval [min, max]
+// represents an open interval [min, max[
 function makeInterval(min, max) {  
   return Trait.create(Object.prototype,
     Trait.compose(
@@ -133,19 +145,19 @@ function makeInterval(min, max) {
       Trait.trait({
         start: min,
         end: max,
-        size: max - min,
-        toString: function() { return '['+min+','+max+']'; },
-        '<': function(ival) { return max < ival.start; },
+        size: max - min - 1,
+        toString: function() { return '['+min+','+max+'['; },
+        '<': function(ival) { return max <= ival.start; },
         '==': function(ival) { return min === ival.start && max === ival.end; },
-        contains: function(e) { return (min <= e) && (e <= max); },
+        contains: function(e) { return (min <= e) && (e < max); },
         forEach: function(consumer) {
-          for (var i = min; i <= max; i++) {
+          for (var i = min; i < max; i++) {
             consumer(i,i-min);
           }
         },
         reverseEach: function(consumer) {
-          for (var i = max; i >= min; i--) {
-            consumer(i,max-i);
+          for (var i = max - 1; i >= min; i--) {
+            consumer(i,max-1-i);
           }        
         }
       })));
@@ -163,11 +175,11 @@ function testTraits() {
     }
   }
   
-  var i1 = makeInterval(0,5);
-  var i2 = makeInterval(7,9);
+  var i1 = makeInterval(0,6);
+  var i2 = makeInterval(7,10);
   
   unit.compare(0, i1.start, "start");
-  unit.compare(5, i1.end, "end");
+  unit.compare(6, i1.end, "end");
   
   unit.compare(true, i1['<'](i2), "<");
   unit.compare(false, i1['=='](i2), "i1 == i2");
@@ -194,16 +206,16 @@ function testTraits() {
   
   unit.compare(true, i1.between(i1,i1), 'i1 between i1 and i1');
   unit.compare(true, i1.between(i1,i2), 'i1 between i1 and i2');
-  unit.compare(false, makeInterval(2,4).between(i1,i2), '[2,4] between i1 and i2');
-  unit.compare(true, makeInterval(6,6).between(i1,i2), '[6,6] between i1 and i2');
+  unit.compare(false, makeInterval(2,4).between(i1,i2), '[2,4[ between i1 and i2');
+  unit.compare(true, makeInterval(6,7).between(i1,i2), '[6,7[ between i1 and i2');
 
   unit.compare(i1, i1.min(i2), "i1 min i2");
   unit.compare(i1, i2.min(i1), "i2 min i1");
   unit.compare(i2, i1.max(i2), "i1 max i2");
   unit.compare(i2, i2.max(i1), "i2 max i1");
-  unit.compare(undefined, i1.min(makeInterval(3,7)), "i1 min [3,7]");
+  unit.compare(undefined, i1.min(makeInterval(3,7)), "i1 min [3,7[");
 
-  unit.compare('[0,5]',''+i1, "i1 toString");
+  unit.compare('[0,6[',''+i1, "i1 toString");
 
   testSameArray([0,1,2,3,4,5], i1.asSequence(), 'i1.asSequence');
 
@@ -221,7 +233,7 @@ function testTraits() {
   testSameArray(i1.asSequence(), i1.filter(function(e) { return true; }));
   
   unit.compare(15, i1.reduce(function(sum, e) { return sum+e; }, 0), 'i1.reduce sum');
-  unit.compare(3, i1.reduce(function(sum, e, i) { return sum+i; }, 0), 'i1.reduce sum idx');
+  unit.compare(3, i2.reduce(function(sum, e, i) { return sum+i; }, 0), 'i2.reduce sum idx');
   unit.compare('foo',
     makeInterval(0,0).reduce(function(tot,nxt) { return 'bar'; },'foo'),
     '[0,0].reduce');
@@ -231,6 +243,7 @@ function testTraits() {
   unit.compare('543210',
     i1.reduceRight(function(str,e) { return str+e; }, ''),
     'i1.reduceRight append');
+  unit.compare(3, i2.reduceRight(function(sum, e, i) { return sum+i; }, 0), 'i2.reduceRight sum idx');
   
   return unit.testDone();
 }
