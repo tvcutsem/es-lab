@@ -88,17 +88,16 @@ ometa ES5Parser {
   Comment = MultiLineComment || SingleLineComment,
 
   MultiLineComment = seq("/*") (MultiLineCommentChars | empty -> ""):cs seq("*/") -> cs,
-  MultiLineCommentChars = <MultiLineNotAsteriskChar (MultiLineCommentChars | empty -> "")>
-                        || <'*' (PostAsteriskCommentChars | &seq("*/") -> "")>,// -> ( '*' + cs ),
-  PostAsteriskCommentChars = <MultiLineNotForwardSlashOrAsteriskChar
-                              (MultiLineCommentChars | empty -> "")>
-                           || <'*' (PostAsteriskCommentChars | &seq("*/") -> "")>,
-  MultiLineNotAsteriskChar = ~('*') SourceCharacter:c -> (c),
-  MultiLineNotForwardSlashOrAsteriskChar = ~('/' | '*') SourceCharacter:c -> (c),
+  MultiLineCommentChars = <MultiLineNotAsteriskChar (MultiLineCommentChars | empty)>
+                       || <'*' (PostAsteriskCommentChars | &seq("*/"))>,
+  PostAsteriskCommentChars = MultiLineNotForwardSlashOrAsteriskChar (MultiLineCommentChars | empty)
+                          || '*' (PostAsteriskCommentChars | &seq("*/")),
+  MultiLineNotAsteriskChar = ~('*') SourceCharacter,
+  MultiLineNotForwardSlashOrAsteriskChar = ~('/' || '*') SourceCharacter,
   SingleLineComment = seq("//") (SingleLineCommentChars | empty -> ""):cs -> (cs),
-  SingleLineCommentChars = <SingleLineCommentChar (SingleLineCommentChars | empty -> "")>,
-  SingleLineCommentChar = ~LineTerminator SourceCharacter:c -> (c),
-  
+  SingleLineCommentChars = SingleLineCommentChar:c (SingleLineCommentChars | empty -> ""):cs -> (c + cs),
+  SingleLineCommentChar = ~LineTerminator SourceCharacter:c -> c,
+    
   // Note: not currently used by the parser
   Token = IdentifierName || Punctuator || NumericLiteral || StringLiteral,
 
@@ -266,10 +265,10 @@ ometa ES5Parser {
   RegularExpressionChar = ~('\\' || '/' || '[') RegularExpressionNonTerminator
                         || RegularExpressionBackslashSequence
                         || RegularExpressionClass,
-  RegularExpressionBackslashSequence = '\\' RegularExpressionNonTerminator:nt -> ( "\\"+nt ),
+  RegularExpressionBackslashSequence = '\\' RegularExpressionNonTerminator,
   RegularExpressionNonTerminator = ~(LineTerminator) SourceCharacter,
-  RegularExpressionClass = <'[' RegularExpressionClassChars ']'>,
-  RegularExpressionClassChars = <RegularExpressionClassChars RegularExpressionClassChar>
+  RegularExpressionClass = '[' RegularExpressionClassChars ']',
+  RegularExpressionClassChars = RegularExpressionClassChars RegularExpressionClassChar
                               | empty -> (""),
   RegularExpressionClassChar = ~(']' || '\\') RegularExpressionNonTerminator
                              || RegularExpressionBackslashSequence,
@@ -282,25 +281,21 @@ ometa ES5Parser {
   uc :id = char:x ?(UnicodeCategories[id].test(x)) -> (x),
 
   MultiLineCommentNoNL = seq("/*") (MultiLineCommentCharsNoNL | empty -> ""):cs seq("*/") -> (cs),
-  MultiLineCommentCharsNoNL = MultiLineNotAsteriskCharNoNL:c (MultiLineCommentCharsNoNL | empty -> ""):cs ->
-                          ( c + cs )
-                        || '*' PostAsteriskCommentCharsNoNL:cs -> ( '*' + cs ),
-  PostAsteriskCommentCharsNoNL = MultiLineNotForwardSlashOrAsteriskCharNoNL:c
-                             (MultiLineCommentCharsNoNL | empty -> ""):cs -> ( c + cs )
-                           || '*' PostAsteriskCommentCharsNoNL:cs -> ( '*' + cs ),
-  MultiLineNotAsteriskCharNoNL = ~('*') ~LineTerminator SourceCharacter:c -> (c),
-  MultiLineNotForwardSlashOrAsteriskCharNoNL = ~('/' || '*') ~LineTerminator SourceCharacter:c -> (c),
+  MultiLineCommentCharsNoNL = <MultiLineNotAsteriskCharNoNL (MultiLineCommentCharsNoNL | empty)>
+                           || <'*' PostAsteriskCommentCharsNoNL>,
+  PostAsteriskCommentCharsNoNL = MultiLineNotForwardSlashOrAsteriskCharNoNL (MultiLineCommentCharsNoNL | empty)
+                              || '*' PostAsteriskCommentCharsNoNL,
+  MultiLineNotAsteriskCharNoNL = ~('*') ~LineTerminator SourceCharacter,
+  MultiLineNotForwardSlashOrAsteriskCharNoNL = ~('/' || '*') ~LineTerminator SourceCharacter,
 
   // see section 14.1: Directive Prologues and the Use Strict Directive
   // Some directives (like the Use Strict Directive) may require access to the
   // raw string value, without interpretation of EscapeSequences or LineContinuations
   // @returns the raw string value (not a String Literal AST)
   RawStringLiteral = '"' (RawStringCharacters('"') | empty -> ""):s '"' -> (s)
-                   || '\'' (RawStringCharacters("'") | empty -> ""):s '\'' -> (s),
-  RawStringCharacters :term = RawStringCharacter(term):c
-                                (RawStringCharacters(term) | empty -> ""):cs ->
-                              ( c.concat(cs) ),
-  RawStringCharacter :term = ~exactly(term) SourceCharacter:s -> (s),
+                  || '\'' (RawStringCharacters("'") | empty -> ""):s '\'' -> (s),
+  RawStringCharacters :term = <RawStringCharacter(term) (RawStringCharacters(term) | empty)>,
+  RawStringCharacter :term = ~exactly(term) SourceCharacter,
   
   // used by parser to parse actual tokens
 

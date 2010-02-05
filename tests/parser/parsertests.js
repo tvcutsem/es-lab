@@ -93,9 +93,11 @@ function lexerTestSuite() {
   };
 		  
   unit.compare("foo!@#^&$1234", lex('//foo!@#^&$1234\nbar','Comment') , "single-line comment" );
+  unit.compare("", lex('//','Comment') , "empty single-line comment" );
   unit.compare(" abcd!@#@$* { } && null", lex('/* abcd!@#@$* { } && null*/', 'Comment'), "multi-line comment");
   unit.compare("foo\nbar", lex('/*foo\nbar*/', 'Comment'), "multi-line comment with newlines");
   unit.compare("x*x", lex('/*x*x*/', 'Comment'), "multi-line comment with *");
+  unit.compare("", lex('/**/','Comment') , "empty multi-line comment" );
 			  
   checkIdentifier("x", "x");
   checkIdentifier("_x", "_x");
@@ -190,9 +192,12 @@ function lexerTestSuite() {
   checkLiteral("boolean", false, "false");
   
   checkLiteral("null", null, "null", 'Literal');
-  
+
+  checkRegExp("/a/", "a", "");
+  checkRegExp("/abc/", "abc", "");  
   checkRegExp("/abc[a-z]*def/g", "abc[a-z]*def", "g");
   checkRegExp("/\\b/", "\\b", "");
+  checkRegExp("/[a-zA-Z]/", "[a-zA-Z]", "");
 
   unit.testDone();
 };
