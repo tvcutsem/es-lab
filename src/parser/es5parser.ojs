@@ -87,23 +87,22 @@ ometa ES5Parser {
 
   Comment = MultiLineComment || SingleLineComment,
 
-  MultiLineComment = seq("/*") (MultiLineCommentChars | empty -> ""):cs seq("*/") -> cs,
-  MultiLineCommentChars = <MultiLineNotAsteriskChar (MultiLineCommentChars | empty)>
-                       || <'*' (PostAsteriskCommentChars | &seq("*/"))>,
+  // <...> is OMeta's "consumed-by" operator: the value of <...> is the input it consumed
+  MultiLineComment = seq("/*") <(MultiLineCommentChars | empty)>:cs seq("*/") -> cs,
+  MultiLineCommentChars = MultiLineNotAsteriskChar (MultiLineCommentChars | empty)
+                       || '*' (PostAsteriskCommentChars | &seq("*/")),
   PostAsteriskCommentChars = MultiLineNotForwardSlashOrAsteriskChar (MultiLineCommentChars | empty)
                           || '*' (PostAsteriskCommentChars | &seq("*/")),
   MultiLineNotAsteriskChar = ~('*') SourceCharacter,
   MultiLineNotForwardSlashOrAsteriskChar = ~('/' || '*') SourceCharacter,
-  SingleLineComment = seq("//") (SingleLineCommentChars | empty -> ""):cs -> (cs),
-  SingleLineCommentChars = SingleLineCommentChar:c (SingleLineCommentChars | empty -> ""):cs -> (c + cs),
-  SingleLineCommentChar = ~LineTerminator SourceCharacter:c -> c,
-    
+  SingleLineComment = seq("//") <(SingleLineCommentChars | empty)>,
+  SingleLineCommentChars = SingleLineCommentChar (SingleLineCommentChars | empty),
+  SingleLineCommentChar = ~LineTerminator SourceCharacter,
+
   // Note: not currently used by the parser
   Token = IdentifierName || Punctuator || NumericLiteral || StringLiteral,
 
   Identifier = IdentifierName:n ~checkReservedWord(n) -> (n),
-  // <...> is OMeta's "consumed-by" operator: the value of the rule is all
-  // the input it consumed
   IdentifierName = <IdentifierName IdentifierPart>
                  | IdentifierStart,
                  
