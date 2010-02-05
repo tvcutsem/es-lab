@@ -128,6 +128,7 @@ function getRule(radio) {
 }
 
 function parse(text, errFun) {
+  ES5Parser.generatePositionInfo = $('positionInfo').checked;
   var rule = getRule($('workspaceForm').rules) || 'Program';
   return JSON.stringify(
     ES5Parser.matchAll(text, rule, [], errFun),
@@ -236,9 +237,16 @@ function parseIt() {
         
       </div>
      
-      <div align="center" style="font-family:verdana;">Parse as:
+      <div align="center" style="font-family:verdana;">
+        <span style="padding: .2em .2em .2em .2em; border: 1px solid lightgrey">
+          Parse as:
         <label for="Program"><input id="Program" type="radio" name="rules" checked="" value="Program"> Program</label>
         <label for="Expression"><input id="Expression" type="radio" name="rules" value="ExpressionOnly"> Expression</label>
+        </span>
+        <span style="padding: .2em .2em .2em .2em"> </span>
+        <span style="padding: .2em .2em .2em .2em; border: 1px solid lightgrey">
+        <label for="Generate position info"><input id="positionInfo" type="checkbox" align="left"> Generate position info</label>
+        </span>
       </div>
       <p></p>
       <div align="center" style="color: darkgrey;font-family:verdana;font-size: 8pt">Copyright &#169; 2009-2010 <a href="http://code.google.com/p/es-lab">es-lab</a>. Created using <a href="http://tinlizzie.org/ometa">OMeta/JS</a>. This page modelled after <a href="http://www.jslint.com">JSLint</a>.</div>

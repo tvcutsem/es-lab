@@ -371,14 +371,14 @@ ometa ES5Parser {
   // A.3 Expressions
 
   // @returns an AST
-  PrimaryExpression = k("this") -> (this.ast("ThisExpr", {}, []))
+  PrimaryExpression = k("this") -> (this.ast(_fromIdx, "ThisExpr", {}, []))
                     || scanIdentifier:id ->
-                      (this.ast("IdExpr",{name:id}, []))
+                      (this.ast(_fromIdx, "IdExpr",{name:id}, []))
                     || scanLiteral:litToken ->
                       ( litToken.type === "regexp"
-                        ? this.ast("RegExpExpr",{body:  litToken.value.body,
+                        ? this.ast(_fromIdx, "RegExpExpr",{body:  litToken.value.body,
                                                  flags: litToken.value.flags}, [])
-                        : this.ast("LiteralExpr",{type:  litToken.type,
+                        : this.ast(_fromIdx, "LiteralExpr",{type:  litToken.type,
                                                   value: litToken.value}, []) )
                     || ArrayLiteral
                     || ObjectLiteral
@@ -386,11 +386,11 @@ ometa ES5Parser {
 
   // @returns an ArrayExpr AST
   ArrayLiteral = "[" ElementList:elts "," (Elision | empty -> []):elis "]" ->
-                     ( this.ast("ArrayExpr",{}, elts.concat(elis)) )
+                     ( this.ast(_fromIdx, "ArrayExpr",{}, elts.concat(elis)) )
                || "[" ElementList:elts "]" ->
-                     ( this.ast("ArrayExpr",{}, elts) )
+                     ( this.ast(_fromIdx, "ArrayExpr",{}, elts) )
                || "[" (Elision | empty -> []):elis "]" ->
-                     ( this.ast("ArrayExpr",{}, elis) ),
+                     ( this.ast(_fromIdx, "ArrayExpr",{}, elis) ),
 
   // @returns an array of ASTs
   ElementList = ElementList:elts "," (Elision | empty -> []):elis AssignmentExpression(true):exp ->
@@ -404,10 +404,10 @@ ometa ES5Parser {
 
   // @returns an ObjectExpr AST
   ObjectLiteral = "{" PropertyNameAndValueList:ps "," "}" ->
-                      ( this.ast("ObjectExpr",{},ps) )
+                      ( this.ast(_fromIdx, "ObjectExpr",{},ps) )
                 || "{" PropertyNameAndValueList:ps "}" ->
-                      ( this.ast("ObjectExpr",{},ps) )
-                || "{" "}" -> ( this.ast("ObjectExpr",{},[]) ),
+                      ( this.ast(_fromIdx, "ObjectExpr",{},ps) )
+                || "{" "}" -> ( this.ast(_fromIdx, "ObjectExpr",{},[]) ),
 
   // @returns an array of ASTs
   PropertyNameAndValueList = PropertyNameAndValueList:ps "," PropertyAssignment:p ->
@@ -417,21 +417,21 @@ ometa ES5Parser {
   // @returns a *Prop AST
   PropertyAssignment = scanIdentifier:id ?(id == "get") PropertyName:n
                        "(" ")" "{" FunctionBody:body "}" ->
-                       ( this.ast("GetterProp",{name:n},
-                                  [ this.ast("FunctionExpr",{},
+                       ( this.ast(_fromIdx, "GetterProp",{name:n},
+                                  [ this.ast(_fromIdx, "FunctionExpr",{},
                                              [this.emptyAst(),
-                                              this.ast("ParamDecl",{},[])].concat(body)) ]) )
+                                              this.ast(_fromIdx, "ParamDecl",{},[])].concat(body)) ]) )
                      || scanIdentifier:id ?(id == "set") PropertyName:n
                        "(" PropertySetParameterList:arg ")" "{" FunctionBody:body "}" ->
-                       ( this.ast("SetterProp",{name:n},
-                                  [ this.ast("FunctionExpr",{},
+                       ( this.ast(_fromIdx, "SetterProp",{name:n},
+                                  [ this.ast(_fromIdx, "FunctionExpr",{},
                                     [ this.emptyAst(),
-                                      this.ast("ParamDecl",{},
-                                        [this.ast("IdPatt",{name:arg},[])]) ].concat(body)
+                                      this.ast(_fromIdx, "ParamDecl",{},
+                                        [this.ast(_fromIdx, "IdPatt",{name:arg},[])]) ].concat(body)
                                     )
                                   ]) )
                      || PropertyName:n ":" AssignmentExpression(true):exp ->
-                       ( this.ast("DataProp",{name:n},[exp]) ),
+                       ( this.ast(_fromIdx, "DataProp",{name:n},[exp]) ),
 
   // @returns a string
   PropertyName = scanIdentifier:id -> (id)
@@ -443,34 +443,34 @@ ometa ES5Parser {
 
   // @returns an AST
   MemberExpression = k("new") MemberExpression:mexp Arguments:args ->
-                     ( this.ast("NewExpr",{},[mexp].concat(args)) )
+                     ( this.ast(_fromIdx, "NewExpr",{},[mexp].concat(args)) )
                    | MemberExpression:mexp "[" Expression(true):iexp "]" ->
-                     ( this.ast("MemberExpr",{},[mexp,iexp]) )
+                     ( this.ast(_fromIdx, "MemberExpr",{},[mexp,iexp]) )
                    | MemberExpression:mexp "." scanIdentifier:id ->
-                     ( this.ast("MemberExpr",{},[mexp,
-                                               this.ast("LiteralExpr",{type:"string",value:id},[])]) )
+                     ( this.ast(_fromIdx, "MemberExpr",{},[mexp,
+                                               this.ast(_fromIdx, "LiteralExpr",{type:"string",value:id},[])]) )
                    | FunctionExpression
                    | PrimaryExpression,
 
   // @returns an AST
   NewExpression = MemberExpression
-                | k("new") NewExpression:exp -> ( this.ast("NewExpr",{},[exp]) ),
+                | k("new") NewExpression:exp -> ( this.ast(_fromIdx, "NewExpr",{},[exp]) ),
 
   // @returns an AST
   CallExpression = CallExpression:cexp "[" Expression(true):iexp "]" ->
-                   ( this.ast("MemberExpr",{},[cexp,iexp]) )
+                   ( this.ast(_fromIdx, "MemberExpr",{},[cexp,iexp]) )
                  | CallExpression:cexp "." scanIdentifier:id ->
-                   ( this.ast("MemberExpr",{},[cexp,
-                              this.ast("Literal",{type:"string",value:id},[])]) )
+                   ( this.ast(_fromIdx, "MemberExpr",{},[cexp,
+                              this.ast(_fromIdx, "Literal",{type:"string",value:id},[])]) )
                  | CallExpression:cexp Arguments:args ->
-                                 ( this.ast("CallExpr",{},[cexp].concat(args)) )
+                                 ( this.ast(_fromIdx, "CallExpr",{},[cexp].concat(args)) )
                  | MemberExpression:mexp Arguments:args ->
                    ( mexp.nodeType() === "MemberExpr"
-                     ? this.ast("InvokeExpr",{},mexp.children().concat(args)) :
+                     ? this.ast(_fromIdx, "InvokeExpr",{},mexp.children().concat(args)) :
                        mexp.nodeType() === "IdExpr" && mexp.attributes().name === "eval"
                        // identify possible 'direct call' to eval, cf. 15.1.2.1.1
-                       ? this.ast("EvalExpr",{},args) :
-                         this.ast("CallExpr",{},[mexp].concat(args)) ),
+                       ? this.ast(_fromIdx, "EvalExpr",{},args) :
+                         this.ast(_fromIdx, "CallExpr",{},[mexp].concat(args)) ),
 
   // @returns an array of ASTs
   Arguments = "(" ")" -> ([])
@@ -485,109 +485,109 @@ ometa ES5Parser {
                          | NewExpression,
 
   PostfixExpression = LeftHandSideExpression:lexp scanPunctNoLineTerminator("++") ->
-                      ( this.ast("CountExpr",{isPrefix:false,op:"++"},[lexp]) )
+                      ( this.ast(_fromIdx, "CountExpr",{isPrefix:false,op:"++"},[lexp]) )
                     | LeftHandSideExpression:lexp scanPunctNoLineTerminator("--") ->
-                      ( this.ast("CountExpr",{isPrefix:false,op:"--"},[lexp]) )
+                      ( this.ast(_fromIdx, "CountExpr",{isPrefix:false,op:"--"},[lexp]) )
                     | LeftHandSideExpression,
 
-  UnaryExpression = k("delete")   UnaryExpression:uexp -> ( this.ast("DeleteExpr",{},[uexp]) )
-                  || k("void")     UnaryExpression:uexp -> ( this.ast("UnaryExpr",{op:"void"},  [uexp]) )
-                  || k("typeof")   UnaryExpression:uexp -> ( this.ast("TypeofExpr",{},[uexp]) )
+  UnaryExpression = k("delete")   UnaryExpression:uexp -> ( this.ast(_fromIdx, "DeleteExpr",{},[uexp]) )
+                  || k("void")     UnaryExpression:uexp -> ( this.ast(_fromIdx, "UnaryExpr",{op:"void"},  [uexp]) )
+                  || k("typeof")   UnaryExpression:uexp -> ( this.ast(_fromIdx, "TypeofExpr",{},[uexp]) )
                   || "++"          UnaryExpression:uexp ->
-                    ( this.ast("CountExpr",{isPrefix:true,op:"++"},[uexp]) )
+                    ( this.ast(_fromIdx, "CountExpr",{isPrefix:true,op:"++"},[uexp]) )
                   || "--"          UnaryExpression:uexp ->
-                    ( this.ast("CountExpr",{isPrefix:true,op:"--"},[uexp]) )
-                  || "+" UnaryExpression:uexp -> ( this.ast("UnaryExpr",{op:"+"},[uexp]) )
-                  || "-" UnaryExpression:uexp -> ( this.ast("UnaryExpr",{op:"-"},[uexp]) )
-                  || "~" UnaryExpression:uexp -> ( this.ast("UnaryExpr",{op:"~"},[uexp]) )
-                  || "!" UnaryExpression:uexp -> ( this.ast("UnaryExpr",{op:"!"},[uexp]) )
+                    ( this.ast(_fromIdx, "CountExpr",{isPrefix:true,op:"--"},[uexp]) )
+                  || "+" UnaryExpression:uexp -> ( this.ast(_fromIdx, "UnaryExpr",{op:"+"},[uexp]) )
+                  || "-" UnaryExpression:uexp -> ( this.ast(_fromIdx, "UnaryExpr",{op:"-"},[uexp]) )
+                  || "~" UnaryExpression:uexp -> ( this.ast(_fromIdx, "UnaryExpr",{op:"~"},[uexp]) )
+                  || "!" UnaryExpression:uexp -> ( this.ast(_fromIdx, "UnaryExpr",{op:"!"},[uexp]) )
                   || PostfixExpression,
 
   MultiplicativeExpression = MultiplicativeExpression:mexp "*" UnaryExpression:uexp ->
-                             ( this.ast("BinaryExpr",{op:"*"},[mexp,uexp]) )
+                             ( this.ast(_fromIdx, "BinaryExpr",{op:"*"},[mexp,uexp]) )
                            | MultiplicativeExpression:mexp "/" UnaryExpression:uexp ->
-                             ( this.ast("BinaryExpr",{op:"/"},[mexp,uexp]) )
+                             ( this.ast(_fromIdx, "BinaryExpr",{op:"/"},[mexp,uexp]) )
                            | MultiplicativeExpression:mexp "%" UnaryExpression:uexp ->
-                             ( this.ast("BinaryExpr",{op:"%"},[mexp,uexp]) )
+                             ( this.ast(_fromIdx, "BinaryExpr",{op:"%"},[mexp,uexp]) )
                            | UnaryExpression,
 
   AdditiveExpression = AdditiveExpression:aexp "+" MultiplicativeExpression:mexp ->
-					             ( this.ast("BinaryExpr",{op:"+"},[aexp,mexp]) )
+					             ( this.ast(_fromIdx, "BinaryExpr",{op:"+"},[aexp,mexp]) )
 				             | AdditiveExpression:aexp "-" MultiplicativeExpression:mexp ->
-					             ( this.ast("BinaryExpr",{op:"-"},[aexp,mexp]) )
+					             ( this.ast(_fromIdx, "BinaryExpr",{op:"-"},[aexp,mexp]) )
 					           | MultiplicativeExpression,
 
   ShiftExpression = ShiftExpression:sexp "<<" AdditiveExpression:aexp ->
-                    ( this.ast("BinaryExpr",{op:"<<"},[sexp,aexp]) )
+                    ( this.ast(_fromIdx, "BinaryExpr",{op:"<<"},[sexp,aexp]) )
                   | ShiftExpression:sexp ">>>" AdditiveExpression:aexp ->
-                    ( this.ast("BinaryExpr",{op:">>>"},[sexp,aexp]) )
+                    ( this.ast(_fromIdx, "BinaryExpr",{op:">>>"},[sexp,aexp]) )
                   | ShiftExpression:sexp ">>" AdditiveExpression:aexp ->
-                    ( this.ast("BinaryExpr",{op:">>"},[sexp,aexp]) )
+                    ( this.ast(_fromIdx, "BinaryExpr",{op:">>"},[sexp,aexp]) )
                   | AdditiveExpression,
 
   // Since this grammar assumes OMeta/JS memoizes left-recursive rules,
   // we parametrize RelationalExpression with a boolean "In" flag that
   // signifies whether or not an expression of the form (e1 in e2) is allowed
   RelationalExpression :In = RelationalExpression(In):rexp "<" ShiftExpression:sexp ->
-				  ( this.ast("BinaryExpr",{op:"<"},[rexp,sexp]) )
+				  ( this.ast(_fromIdx, "BinaryExpr",{op:"<"},[rexp,sexp]) )
 			  | RelationalExpression(In):rexp ">" ShiftExpression:sexp ->
-				  ( this.ast("BinaryExpr",{op:">"},[rexp,sexp]) )
+				  ( this.ast(_fromIdx, "BinaryExpr",{op:">"},[rexp,sexp]) )
 			  | RelationalExpression(In):rexp "<=" ShiftExpression:sexp ->
-				  ( this.ast("BinaryExpr",{op:"<="},[rexp,sexp]) )
+				  ( this.ast(_fromIdx, "BinaryExpr",{op:"<="},[rexp,sexp]) )
 			  | RelationalExpression(In):rexp ">=" ShiftExpression:sexp ->
-				  ( this.ast("BinaryExpr",{op:">="},[rexp,sexp]) )
+				  ( this.ast(_fromIdx, "BinaryExpr",{op:">="},[rexp,sexp]) )
 			  | RelationalExpression(In):rexp k("instanceof") ShiftExpression:sexp ->
-				  ( this.ast("BinaryExpr",{op:"instanceof"},[rexp,sexp]) )
+				  ( this.ast(_fromIdx, "BinaryExpr",{op:"instanceof"},[rexp,sexp]) )
 			  | ?(In) RelationalExpression(true):rexp k("in") ShiftExpression:sexp ->
-				  ( this.ast("BinaryExpr",{op:"in"},[rexp,sexp]) )
+				  ( this.ast(_fromIdx, "BinaryExpr",{op:"in"},[rexp,sexp]) )
 			  | ShiftExpression,
 
   EqualityExpression :In =
         EqualityExpression(In):eexp "==" RelationalExpression(In):rexp ->
-			  ( this.ast("BinaryExpr",{op:"=="},[eexp,rexp]) )
+			  ( this.ast(_fromIdx, "BinaryExpr",{op:"=="},[eexp,rexp]) )
 		  | EqualityExpression(In):eexp "!=" RelationalExpression(In):rexp ->
-			  ( this.ast("BinaryExpr",{op:"!="},[eexp,rexp]) )
+			  ( this.ast(_fromIdx, "BinaryExpr",{op:"!="},[eexp,rexp]) )
 		  | EqualityExpression(In):eexp "===" RelationalExpression(In):rexp ->
-			  ( this.ast("BinaryExpr",{op:"==="},[eexp,rexp]) )
+			  ( this.ast(_fromIdx, "BinaryExpr",{op:"==="},[eexp,rexp]) )
 		  | EqualityExpression(In):eexp "!==" RelationalExpression(In):rexp ->
-			  ( this.ast("BinaryExpr",{op:"!=="},[eexp,rexp]) )
+			  ( this.ast(_fromIdx, "BinaryExpr",{op:"!=="},[eexp,rexp]) )
 		  | RelationalExpression(In),
 
   BitwiseANDExpression :In = BitwiseANDExpression(In):aexp "&" EqualityExpression(In):eexp ->
-						   ( this.ast("BinaryExpr",{op:"&"},[aexp,eexp]) )
+						   ( this.ast(_fromIdx, "BinaryExpr",{op:"&"},[aexp,eexp]) )
 					   | EqualityExpression(In),
 
   BitwiseXORExpression :In = BitwiseXORExpression(In):xexp "^" BitwiseANDExpression(In):aexp ->
-						   ( this.ast("BinaryExpr",{op:"^"},[xexp,aexp]) )
+						   ( this.ast(_fromIdx, "BinaryExpr",{op:"^"},[xexp,aexp]) )
 					   | BitwiseANDExpression(In),
 	
   BitwiseORExpression :In = BitwiseORExpression(In):oexp "|" BitwiseXORExpression(In):xexp ->
-						   ( this.ast("BinaryExpr",{op:"|"},[oexp,xexp]) )
+						   ( this.ast(_fromIdx, "BinaryExpr",{op:"|"},[oexp,xexp]) )
 					   | BitwiseXORExpression(In),
 	
   LogicalANDExpression :In = LogicalANDExpression(In):aexp "&&" BitwiseORExpression(In):oexp ->
-						   ( this.ast("LogicalAndExpr",{},[aexp,oexp]) )
+						   ( this.ast(_fromIdx, "LogicalAndExpr",{},[aexp,oexp]) )
 					   | BitwiseORExpression(In),
 
   LogicalORExpression :In = LogicalORExpression(In):oexp "||" LogicalANDExpression(In):aexp ->
-						   ( this.ast("LogicalOrExpr",{},[oexp,aexp]) )
+						   ( this.ast(_fromIdx, "LogicalOrExpr",{},[oexp,aexp]) )
 					   | LogicalANDExpression(In),
 
   ConditionalExpression :In = LogicalORExpression(In):oexp "?"
                                 AssignmentExpression(In):texp ":" AssignmentExpression(In):fexp ->
-                              ( this.ast("ConditionalExpr",{},[oexp,texp,fexp]) )
+                              ( this.ast(_fromIdx, "ConditionalExpr",{},[oexp,texp,fexp]) )
                             | LogicalORExpression(In),
 
   AssignmentExpression :In = LeftHandSideExpression:lexp
                                AssignmentOperator:op AssignmentExpression(In):aexp ->
-                             ( this.ast("AssignExpr",{op:op},[lexp,aexp]) )
+                             ( this.ast(_fromIdx, "AssignExpr",{op:op},[lexp,aexp]) )
                            | ConditionalExpression(In),
 
   AssignmentOperator = "=" || ">>>=" || "<<=" || ">>="
                      || "*=" || "/=" || "%=" || "+=" || "-=" || "&=" || "^=" || "|=",
 
   Expression :In = Expression(In):exp "," AssignmentExpression(In):aexp ->
-                   ( this.ast("BinaryExpr",{op:","},[exp,aexp]) )
+                   ( this.ast(_fromIdx, "BinaryExpr",{op:","},[exp,aexp]) )
                  | AssignmentExpression(In),
 
   // A.4 Statements
@@ -613,7 +613,7 @@ ometa ES5Parser {
   // this precludes nested function declarations
   // This parser explicitly deviates from the spec to enable nested function declarations
   Block = "{" (SourceElements | empty -> []):stmts "}" ->
-          ( this.ast("BlockStmt",{},stmts) ),
+          ( this.ast(_fromIdx, "BlockStmt",{},stmts) ),
 
   // @returns an array of ASTs
   StatementList = StatementList:stmts Statement:stmt ->
@@ -622,7 +622,7 @@ ometa ES5Parser {
 
   // @returns a Var AST
   VariableStatement = k("var") VariableDeclarationList(true):vars sc ->
-                      ( this.ast("VarDecl",{},vars) ),
+                      ( this.ast(_fromIdx, "VarDecl",{},vars) ),
 
   // @returns an array of ASTs
   VariableDeclarationList :In = VariableDeclarationList(In):vs "," VariableDeclaration(In):v ->
@@ -631,63 +631,63 @@ ometa ES5Parser {
 
   // @returns an AST
   VariableDeclaration :In = scanIdentifier:id Initialiser(In):init ->
-                            ( this.ast("InitPatt",{},
-                                       [this.ast("IdPatt",{name:id},[]),init]) )
-                          | scanIdentifier:id -> (this.ast("IdPatt",{name:id}, [])),
+                            ( this.ast(_fromIdx, "InitPatt",{},
+                                       [this.ast(_fromIdx, "IdPatt",{name:id},[]),init]) )
+                          | scanIdentifier:id -> (this.ast(_fromIdx, "IdPatt",{name:id}, [])),
 
   // @returns an AST
   Initialiser :In = "=" AssignmentExpression(In):exp -> ( exp ),
 
   // @returns an AST
-  EmptyStatement = ";" -> ( this.ast("EmptyStmt",{},[]) ), // note: this semicolon eats newlines
+  EmptyStatement = ";" -> ( this.ast(_fromIdx, "EmptyStmt",{},[]) ), // note: this semicolon eats newlines
 
   // @returns an Expression AST
   ExpressionStatement = ~("{" | k("function")) Expression(true):exp sc -> ( exp ),
 
   // @returns an AST
   IfStatement = k("if") "(" Expression(true):bexp ")" Statement:tstmt k("else") Statement:fstmt ->
-                ( this.ast("IfStmt",{},[bexp,tstmt,fstmt]) )
+                ( this.ast(_fromIdx, "IfStmt",{},[bexp,tstmt,fstmt]) )
               | k("if") "(" Expression(true):bexp ")" Statement:tstmt ->
-                ( this.ast("IfStmt",{},[bexp, tstmt, this.ast("EmptyStmt",{},[])]) ),
+                ( this.ast(_fromIdx, "IfStmt",{},[bexp, tstmt, this.ast(_fromIdx, "EmptyStmt",{},[])]) ),
 
   // @returns an AST
   IterationStatement = k("do") Statement:s k("while") "(" Expression(true):e ")" sc ->
-                       ( this.ast("DoWhileStmt",{},[s,e]) )
+                       ( this.ast(_fromIdx, "DoWhileStmt",{},[s,e]) )
                      || k("while") "(" Expression(true):e ")" Statement:s ->
-                       ( this.ast("WhileStmt",{},[e,s]) )
+                       ( this.ast(_fromIdx, "WhileStmt",{},[e,s]) )
                      || k("for") "(" (Expression(false) | empty -> this.emptyAst()):init ";"
                          (Expression(true) | empty -> this.emptyAst()):cond ";"
                          (Expression(true) | empty -> this.emptyAst()):update ")" Statement:s ->
-                       ( this.ast("ForStmt",{},[init,cond,update,s]) )
+                       ( this.ast(_fromIdx, "ForStmt",{},[init,cond,update,s]) )
                      || k("for") "(" k("var") VariableDeclarationList(false):vars ";"
                          (Expression(true) | empty -> this.emptyAst()):cond ";"
                          (Expression(true) | empty -> this.emptyAst()):update ")" Statement:s ->
-                       ( this.ast("ForStmt",{},[this.ast("VarDecl",{},vars),cond,update,s]) )
+                       ( this.ast(_fromIdx, "ForStmt",{},[this.ast(_fromIdx, "VarDecl",{},vars),cond,update,s]) )
                      || k("for") "(" LeftHandSideExpression:lhs k("in")
                           Expression(true):e ")" Statement:s ->
-                       ( this.ast("ForInStmt",{},[lhs,e,s]) )
+                       ( this.ast(_fromIdx, "ForInStmt",{},[lhs,e,s]) )
                      || k("for") "(" k("var") VariableDeclaration(false):v k("in")
                           Expression(true):e ")" Statement:s ->
-                       ( this.ast("ForInStmt",{},[ this.ast("VarDecl",{},[v]),e,s]) ),
+                       ( this.ast(_fromIdx, "ForInStmt",{},[ this.ast(_fromIdx, "VarDecl",{},[v]),e,s]) ),
 
-  ContinueStatement =  k("continue") sc -> ( this.ast("ContinueStmt",{},[]) )
+  ContinueStatement =  k("continue") sc -> ( this.ast(_fromIdx, "ContinueStmt",{},[]) )
                     || k("continue") scanIdentifierNoLineTerminator:id sc ->
-                      ( this.ast("ContinueStmt",{label:id},[]) ),
+                      ( this.ast(_fromIdx, "ContinueStmt",{label:id},[]) ),
 
-  BreakStatement =  k("break") sc -> ( this.ast("BreakStmt",{},[]) )
+  BreakStatement =  k("break") sc -> ( this.ast(_fromIdx, "BreakStmt",{},[]) )
                  || k("break") scanIdentifierNoLineTerminator:id sc ->
-                      ( this.ast("BreakStmt",{label:id},[]) ),
+                      ( this.ast(_fromIdx, "BreakStmt",{label:id},[]) ),
 
   ReturnStatement = k("return") sc ->
-                      ( this.ast("ReturnStmt",{},[]) )
+                      ( this.ast(_fromIdx, "ReturnStmt",{},[]) )
                   | k("return") skipNoLine Expression(true):exp sc ->
-                      ( this.ast("ReturnStmt",{},[exp]) ),
+                      ( this.ast(_fromIdx, "ReturnStmt",{},[exp]) ),
 
   WithStatement = k("with") "(" Expression(true):e ")" Statement:s ->
-                  ( this.ast("WithStmt",{},[e,s]) ),
+                  ( this.ast(_fromIdx, "WithStmt",{},[e,s]) ),
 
   SwitchStatement = k("switch") "(" Expression(true):e ")" CaseBlock:cases ->
-                    ( this.ast("SwitchStmt",{},[e].concat(cases)) ),
+                    ( this.ast(_fromIdx, "SwitchStmt",{},[e].concat(cases)) ),
 
   // @return an array of ASTs
   CaseBlock = "{" (CaseClauses | empty -> []):precases DefaultClause:dflt
@@ -700,34 +700,34 @@ ometa ES5Parser {
               | CaseClause:clause -> ([ clause ]),
 
   CaseClause = k("case") Expression(true):e ":" (StatementList | empty -> []):stmts ->
-               ( this.ast("Case",{},[e].concat(stmts)) ),
+               ( this.ast(_fromIdx, "Case",{},[e].concat(stmts)) ),
 
   DefaultClause = k("default") ":" (StatementList | empty -> []):stmts ->
-                  ( this.ast("DefaultCase",{}, stmts) ),
+                  ( this.ast(_fromIdx, "DefaultCase",{}, stmts) ),
 
   LabelledStatement = scanIdentifier:id ":" Statement:s ->
-                      ( this.ast("LabelledStmt",{ label: id },[s]) ),
+                      ( this.ast(_fromIdx, "LabelledStmt",{ label: id },[s]) ),
 
   ThrowStatement = k("throw") skipNoLine
                               scanLineTerminator ~empty // fails explicitly
-                 || k("throw") Expression(true):e sc -> ( this.ast("ThrowStmt",{},[e]) ),
+                 || k("throw") Expression(true):e sc -> ( this.ast(_fromIdx, "ThrowStmt",{},[e]) ),
 
   TryStatement = k("try") Block:b Catch:c Finally:f ->
-                 ( this.ast("TryStmt",{},[b,c,f]) )
+                 ( this.ast(_fromIdx, "TryStmt",{},[b,c,f]) )
                | k("try") Block:b Finally:f ->
-                 ( this.ast("TryStmt",{},[b,this.emptyAst(),f]) )
+                 ( this.ast(_fromIdx, "TryStmt",{},[b,this.emptyAst(),f]) )
                | k("try") Block:b Catch:c ->
-                 ( this.ast("TryStmt",{},[b,c]) ),
+                 ( this.ast(_fromIdx, "TryStmt",{},[b,c]) ),
 
   // @returns a CatchClause AST
   Catch = k("catch") "(" scanIdentifier:id ")" Block:b ->
-          ( this.ast("CatchClause", {},
-              [this.ast("IdPatt",{name:id},[]), b]) ),
+          ( this.ast(_fromIdx, "CatchClause", {},
+              [this.ast(_fromIdx, "IdPatt",{name:id},[]), b]) ),
 
   // @returns a Block AST
   Finally = k("finally") Block:b -> ( b ),
 
-  DebuggerStatement = k("debugger") sc -> ( this.ast("DebuggerStmt",{},[]) ),
+  DebuggerStatement = k("debugger") sc -> ( this.ast(_fromIdx, "DebuggerStmt",{},[]) ),
 
 
   // A.5 Functions and Programs
@@ -735,26 +735,26 @@ ometa ES5Parser {
   FunctionDeclaration = k("function") scanIdentifier:id
                         "(" (FormalParameterList | empty -> []):formals ")"
                         "{" FunctionBody:body "}" ->
-                        ( this.ast("FunctionDecl",{},
-                                   [this.ast("IdPatt",{name:id},[]),
-                                    this.ast("ParamDecl",{},formals)].concat(body)) ),
+                        ( this.ast(_fromIdx, "FunctionDecl",{},
+                                   [this.ast(_fromIdx, "IdPatt",{name:id},[]),
+                                    this.ast(_fromIdx, "ParamDecl",{},formals)].concat(body)) ),
 
   FunctionExpression = k("function") scanIdentifier:id
                        "(" (FormalParameterList | empty -> []):formals ")"
                        "{" FunctionBody:body "}" ->
-                       ( this.ast("FunctionExpr",{},
-                                  [this.ast("IdPatt",{name:id},[]),
-                                   this.ast("ParamDecl",{},formals)].concat(body)) )
+                       ( this.ast(_fromIdx, "FunctionExpr",{},
+                                  [this.ast(_fromIdx, "IdPatt",{name:id},[]),
+                                   this.ast(_fromIdx, "ParamDecl",{},formals)].concat(body)) )
                      || k("function") "(" (FormalParameterList | empty -> []):formals ")"
                        "{" FunctionBody:body "}" ->
-                       ( this.ast("FunctionExpr",{},
+                       ( this.ast(_fromIdx, "FunctionExpr",{},
                                   [this.emptyAst(),
-                                   this.ast("ParamDecl",{},formals)].concat(body)) ),
+                                   this.ast(_fromIdx, "ParamDecl",{},formals)].concat(body)) ),
 
   // @returns an array of ASTs
   FormalParameterList = FormalParameterList:formals "," scanIdentifier:id ->
-                        ( formals.concat([ this.ast("IdPatt",{name:id},[]) ]) )
-                      | scanIdentifier:id -> ([ this.ast("IdPatt",{name:id},[]) ]),
+                        ( formals.concat([ this.ast(_fromIdx, "IdPatt",{name:id},[]) ]) )
+                      | scanIdentifier:id -> ([ this.ast(_fromIdx, "IdPatt",{name:id},[]) ]),
 
   // @returns an array of ASTs
   FunctionBody = (DirectivePrologue | empty -> []):prologue
@@ -762,7 +762,7 @@ ometa ES5Parser {
 
   Program = (DirectivePrologue | empty -> []):prologue
               (SourceElements | empty -> []):src skipToEnd ->
-            ( this.ast("Program",{},prologue.concat(src) ) ),
+            ( this.ast(_fromIdx, "Program",{},prologue.concat(src) ) ),
 
   // @returns an array of ASTs
   SourceElements = SourceElements:elts SourceElement:e -> ( elts.concat([e]) )
@@ -774,12 +774,30 @@ ometa ES5Parser {
   DirectivePrologue = DirectivePrologue:p Directive:d -> ( p.concat([d]) )
                     | Directive:d -> ([d]),
   
-  Directive = scanDirective:dir sc -> ( this.ast('PrologueDecl',dir,[]) ),
+  Directive = scanDirective:dir sc -> ( this.ast(_fromIdx, 'PrologueDecl',dir,[]) ),
 
   // === Implementation-level rules (not part of the spec) ===
 
   // useful for parsing only expressions and making sure the parser sees all input
   ExpressionOnly = Expression(true):e skipToEnd -> (e),
+
+  // override apply to collect position information in AST nodes
+  // at the cost of slower parsing...
+  // the rule 'pos' always succeeds and returns the current position in the input stream
+  // Problem: infinite regress...
+  /*_apply :rule = pos:fromIdx ^_apply(rule):ans pos:toIdx
+                { 
+                  (function (){ console.log('in apply'); return true; }) &&
+                  (ans.nodeType && !(ans.attributes().position)) ?
+                    //ans is an AST without position info
+                    (ans.attributes().position = {start:fromIdx,end:toIdx}) : ans } -> ans,
+
+  _applyWithArgs :rule :args = pos:fromIdx ^_applyWithArgs(rule,args):ans pos:toIdx
+                { 
+                  (function (){ console.log('in apply'); return true; }) &&
+                  (ans.nodeType && !(ans.attributes().position)) ?
+                    //ans is an AST without position info
+                    (ans.attributes().position = {start:fromIdx,end:toIdx}) : ans } -> ans,*/
 
   // higher-order rule that parses a rule and ensures there is no lingering input
   complete :rule = apply(rule):res skipToEnd -> (res)
@@ -836,7 +854,11 @@ ES5Parser.initialize = function() {
   this.strictmode = false;
 
   // this function is used to construct ASTs
-  this.ast = function(type, attributes, children) {
+  this.ast = function(startPos, type, attributes, children) {
+    if (this.generatePositionInfo) {
+      attributes['pos-start'] = startPos;
+      attributes['pos-end'] = this._currIdx(); 
+    }
     return mixinASTMethods([ type, attributes ].concat(children));
   };
   this.emptyAst = function() {
@@ -857,6 +879,9 @@ ES5Parser.isFutureReservedWord = function(k) {
             !Object.prototype.hasProperty(k);
   }
 };
+
+// Should the parser attribute AST nodes with position info?
+ES5Parser.generatePositionInfo = false;
 
 // indicate to OMeta to memoize parameterized rules
 // this is crucial for the ES5 Parser, as many of its *Expression
