@@ -31,8 +31,8 @@ function Queue() {
       ends.resolve = next.resolve;
     },
     dequeue: function() {
-      var result = Q.get(ends.promise, 'head');
-      ends.promise = Q.get(ends.promise, 'tail');
+      var result = Q(ends.promise).head;
+      ends.promise = Q(ends.promise).tail;
       return result;
     }
   });
