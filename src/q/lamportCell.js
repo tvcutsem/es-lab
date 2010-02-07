@@ -73,12 +73,12 @@ function LamportCell(value) {
 }
 
 /*
- * L(x).v = 2;
+ * D(x).v = L(2);
  * // Object.defineProperty(x,'v', LamportCell(2));
  * 
- * L(y).v = 5;
+ * D(y).v = L(5);
  * 
- * L(y2).v = L(y).v;
+ * D(y2).v = D(y).v;
  * // Object.defineProperty(y2,'v', Object.getOwnPropertyDescriptor(y,'v');
  * 
  * G(y3).v = G(y).v;
