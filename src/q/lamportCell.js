@@ -41,7 +41,7 @@ function LamportCell(value) {
     if (lastGen < myGen) {
       Q(reactor).reactToUpdate(value, myGen, getter);
     } else {
-      reactors.push(reactor);
+      downReactors.push(reactor);
     }
   };
 
@@ -57,7 +57,7 @@ function LamportCell(value) {
     myGen++;
     if (downReactors.length >= 1) {
       downReactors.forEach(function(reactor) {
-	Q(reactor).reactToUpdate(value, myGen, getter);
+	      Q(reactor).reactToUpdate(value, myGen, getter);
       });
       downReactors = [];
       localInterest();
@@ -90,11 +90,11 @@ function LamportCell(value) {
  * // });
  * 
  * G(z).v = whenever([G(x).v, G(y).v],
- *                   function(){ return x.v + y.v; });
+ *                   function(xv, yv){ return xv + yv; });
  * // Object.defineProperty(z,'v', {
  * //   get: whenever([Object.getOwnPropertyDescriptor(x,'v').get,
  * //                  Object.getOwnPropertyDescriptor(y,'v').get],
- * //                 function(){ return x.v + y.v; }),
+ * //                 function(xv, yv){ return xv + yv; }),
  * //   set: undefined,
  * //   enumerable: true,
  * //   configurable: false
