@@ -353,6 +353,9 @@ ometa ES5Parser {
   scanIdentifier = skip Identifier:id -> (id),
 
   // @returns a string
+  scanIdentifierName = skip IdentifierName:id -> (id),
+
+  // @returns a string
   scanIdentifierNoLineTerminator = skipNoLine Identifier:id -> (id),
 
   // @returns a literal token
@@ -422,31 +425,26 @@ ometa ES5Parser {
                                              [this.emptyAst(),
                                               this.ast(_fromIdx, "ParamDecl",{},[])].concat(body)) ]) )
                      || scanIdentifier:id ?(id == "set") PropertyName:n
-                       "(" PropertySetParameterList:arg ")" "{" FunctionBody:body "}" ->
+                       "(" FormalParameter:formal ")" "{" FunctionBody:body "}" ->
                        ( this.ast(_fromIdx, "SetterProp",{name:n},
                                   [ this.ast(_fromIdx, "FunctionExpr",{},
                                     [ this.emptyAst(),
-                                      this.ast(_fromIdx, "ParamDecl",{},
-                                        [this.ast(_fromIdx, "IdPatt",{name:arg},[])]) ].concat(body)
-                                    )
+                                      this.ast(_fromIdx, "ParamDecl",{}, [formal])].concat(body))
                                   ]) )
                      || PropertyName:n ":" AssignmentExpression(true):exp ->
                        ( this.ast(_fromIdx, "DataProp",{name:n},[exp]) ),
 
   // @returns a string
-  PropertyName = scanIdentifier:id -> (id)
+  PropertyName = scanIdentifierName:id -> (id)
                || scanLiteral:l ?(l.type == "string") -> (l.value)
                || scanLiteral:l ?(l.type == "number") -> ( parseFloat(l.value) ),
-
-  // @returns a string (the identifier name)
-  PropertySetParameterList = scanIdentifier:id -> (id),
 
   // @returns an AST
   MemberExpression = k("new") MemberExpression:mexp Arguments:args ->
                      ( this.ast(_fromIdx, "NewExpr",{},[mexp].concat(args)) )
                    | MemberExpression:mexp "[" Expression(true):iexp "]" ->
                      ( this.ast(_fromIdx, "MemberExpr",{},[mexp,iexp]) )
-                   | MemberExpression:mexp "." scanIdentifier:id ->
+                   | MemberExpression:mexp "." scanIdentifierName:id ->
                      ( this.ast(_fromIdx, "MemberExpr",{},[mexp,
                                                this.ast(_fromIdx, "LiteralExpr",{type:"string",value:id},[])]) )
                    | FunctionExpression
@@ -459,7 +457,7 @@ ometa ES5Parser {
   // @returns an AST
   CallExpression = CallExpression:cexp "[" Expression(true):iexp "]" ->
                    ( this.ast(_fromIdx, "MemberExpr",{},[cexp,iexp]) )
-                 | CallExpression:cexp "." scanIdentifier:id ->
+                 | CallExpression:cexp "." scanIdentifierName:id ->
                    ( this.ast(_fromIdx, "MemberExpr",{},[cexp,
                               this.ast(_fromIdx, "Literal",{type:"string",value:id},[])]) )
                  | CallExpression:cexp Arguments:args ->
@@ -630,10 +628,14 @@ ometa ES5Parser {
                               | VariableDeclaration(In):v -> ( [v] ),
 
   // @returns an AST
-  VariableDeclaration :In = scanIdentifier:id Initialiser(In):init ->
-                            ( this.ast(_fromIdx, "InitPatt",{},
-                                       [this.ast(_fromIdx, "IdPatt",{name:id},[]),init]) )
-                          | scanIdentifier:id -> (this.ast(_fromIdx, "IdPatt",{name:id}, [])),
+  VariableDeclaration :In = InitPattern(In) | IdPattern,
+
+  // @returns an AST
+  InitPattern :In = IdPattern:patt Initialiser(In):init ->
+                    ( this.ast(_fromIdx, "InitPatt",{}, [patt,init]) ),
+
+  // @returns an AST
+  IdPattern = scanIdentifier:id -> ( this.ast(_fromIdx, "IdPatt",{name:id},[]) ),
 
   // @returns an AST
   Initialiser :In = "=" AssignmentExpression(In):exp -> ( exp ),
@@ -720,9 +722,8 @@ ometa ES5Parser {
                  ( this.ast(_fromIdx, "TryStmt",{},[b,c]) ),
 
   // @returns a CatchClause AST
-  Catch = k("catch") "(" scanIdentifier:id ")" Block:b ->
-          ( this.ast(_fromIdx, "CatchClause", {},
-              [this.ast(_fromIdx, "IdPatt",{name:id},[]), b]) ),
+  Catch = k("catch") "(" FormalParameter:formal ")" Block:b ->
+          ( this.ast(_fromIdx, "CatchClause",{}, [formal, b]) ),
 
   // @returns a Block AST
   Finally = k("finally") Block:b -> ( b ),
@@ -732,18 +733,18 @@ ometa ES5Parser {
 
   // A.5 Functions and Programs
 
-  FunctionDeclaration = k("function") scanIdentifier:id
+  FunctionDeclaration = k("function") IdPattern:patt
                         "(" (FormalParameterList | empty -> []):formals ")"
                         "{" FunctionBody:body "}" ->
                         ( this.ast(_fromIdx, "FunctionDecl",{},
-                                   [this.ast(_fromIdx, "IdPatt",{name:id},[]),
+                                   [patt,
                                     this.ast(_fromIdx, "ParamDecl",{},formals)].concat(body)) ),
 
-  FunctionExpression = k("function") scanIdentifier:id
+  FunctionExpression = k("function") IdPattern:patt
                        "(" (FormalParameterList | empty -> []):formals ")"
                        "{" FunctionBody:body "}" ->
                        ( this.ast(_fromIdx, "FunctionExpr",{},
-                                  [this.ast(_fromIdx, "IdPatt",{name:id},[]),
+                                  [patt,
                                    this.ast(_fromIdx, "ParamDecl",{},formals)].concat(body)) )
                      || k("function") "(" (FormalParameterList | empty -> []):formals ")"
                        "{" FunctionBody:body "}" ->
@@ -752,9 +753,12 @@ ometa ES5Parser {
                                    this.ast(_fromIdx, "ParamDecl",{},formals)].concat(body)) ),
 
   // @returns an array of ASTs
-  FormalParameterList = FormalParameterList:formals "," scanIdentifier:id ->
-                        ( formals.concat([ this.ast(_fromIdx, "IdPatt",{name:id},[]) ]) )
-                      | scanIdentifier:id -> ([ this.ast(_fromIdx, "IdPatt",{name:id},[]) ]),
+  FormalParameterList = FormalParameterList:formals "," FormalParameter:formal ->
+                        ( formals.concat([ formal ]) )
+                      | FormalParameter:formal -> [formal],
+
+  // @returns an AST
+  FormalParameter = IdPattern,
 
   // @returns an array of ASTs
   FunctionBody = (DirectivePrologue | empty -> []):prologue
@@ -768,7 +772,10 @@ ometa ES5Parser {
   SourceElements = SourceElements:elts SourceElement:e -> ( elts.concat([e]) )
                  | SourceElement:e -> ([e]),
 
-  SourceElement = FunctionDeclaration || Statement,
+  SourceElement = Declaration || Statement,
+
+  // Broken out so es6 can override to include ConstDecl and LetDecl
+  Declaration = FunctionDeclaration,
 
   // @returns an array of ASTs
   DirectivePrologue = DirectivePrologue:p Directive:d -> ( p.concat([d]) )

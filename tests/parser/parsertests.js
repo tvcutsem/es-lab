@@ -278,6 +278,7 @@ function parserTestSuite() {
 
   // Identifiers
   testExpression("x", [ "IdExpr", { name : "x" } ]);
+  ensureNoMatch("return", "Expression", [true]);
   
   // Literals
   testExpression("10",    [ "LiteralExpr", { type: "number",  value: 10 } ]);
@@ -310,6 +311,9 @@ function parserTestSuite() {
   testExpression("{x:5,}", [ "ObjectExpr", {},
                              ["DataProp", { name: "x" }, Expr("5") ] ]);
   
+  testExpression("{if:5}", [ "ObjectExpr", {},
+                             ["DataProp", { name: "if" }, Expr("5") ] ]);
+  
   testExpression("{ get x() {42;} }", ["ObjectExpr", {},
                    [ "GetterProp", {name:"x"},
                      ["FunctionExpr", {},
@@ -338,6 +342,9 @@ function parserTestSuite() {
                                   [ "MemberExpr", {}, [ "IdExpr", {name:"o"} ],
                                                       [ "LiteralExpr",{type:"string",value: "n"}]],
                                   [ "LiteralExpr",{type:"string", value: "m"} ] ]);	  
+  testExpression("o.if", [ "MemberExpr", {},
+                            [ "IdExpr", {name:"o"} ],
+                            [ "LiteralExpr",{type: "string", value: "if"} ] ]);
 
   // CallExpressions and InvokeExpressions
   testExpression("f()", [ "CallExpr",{},["IdExpr",{name:"f"}] ]);
