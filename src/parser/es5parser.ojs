@@ -72,7 +72,7 @@ ometa ES5Parser {
 
   // input characters are represented as ES3 characters, which can be any unicode character
   SourceCharacter = char,
-
+  
   // 7: Goal production in contexts where a leading '/' or '/=' is permitted
   // Note: not used by the parser
   InputElementDiv = Whitespace || LineTerminator || Comment || Token || DivPunctuator,
@@ -80,6 +80,9 @@ ometa ES5Parser {
   // 7: Goal production in contexts where a leading '/' or '/=' is not permitted
   // Note: not used by the parser
   InputElementRegExp = Whitespace || LineTerminator || Comment || Token || RegularExpressionLiteral,
+
+  // Note: not currently used by the parser
+  Token = IdentifierName || Punctuator || NumericLiteral || StringLiteral,
 
   Whitespace = uc('SP') || uc('TAB') || uc('VT') || uc('FF') || uc('NBSP') || uc('BOM') || uc('Zs'),
   LineTerminator = uc('LF') || uc('CR') || uc('LS') || uc('PS'),
@@ -99,9 +102,6 @@ ometa ES5Parser {
   SingleLineCommentChars = SingleLineCommentChar (SingleLineCommentChars | empty),
   SingleLineCommentChar = ~LineTerminator SourceCharacter,
 
-  // Note: not currently used by the parser
-  Token = IdentifierName || Punctuator || NumericLiteral || StringLiteral,
-
   Identifier = IdentifierName:n ~checkReservedWord(n) -> (n),
   IdentifierName = <IdentifierName IdentifierPart>
                  | IdentifierStart,
@@ -116,7 +116,7 @@ ometa ES5Parser {
   UnicodeConnectorPunctuation = uc('Pc'),
 
   checkReservedWord :id = ?(this.isKeyword(id) || this.isFutureReservedWord(id) ||
-                            id == "null" || id == "true" || id == "false") -> (true),
+                            id == "null" || id == "true" || id == "false") -> true,
 
   // ReservedWord = Keyword | FutureReservedWord(this.strictmode) | NullLiteral | BooleanLiteral,
 
@@ -128,14 +128,15 @@ ometa ES5Parser {
           | ``continue'' | ``for''       | ``switch''     | ``while''
           | ``debugger'' | ``function''  | ``this''       | ``with''
           | ``default''  | ``if''        | ``throw''
-          | ``delete''   | ``in''        | ``try''):kwname ~IdentifierPart -> (kwname),
+          | ``delete''   | ``in''        | ``try''):kwname ~IdentifierPart -> kwname,
 
-  FutureReservedWord false:strict = (``class''| ``enum''  | ``extends''| ``super''
-                                  |  ``const''| ``export''| ``import''):kwname ~IdentifierPart -> (kwname),
+  FutureReservedWord false:strict = (``class''| ``enum''  | ``extends''
+                                  | ``super'' |  ``const''| ``export''
+                                  | ``import''):kwname ~IdentifierPart -> kwname,
   FutureReservedWord true:strict = (FutureReservedWord(false)
                                  |  ``implements''| ``let''    | ``private''  | ``public''
                                  |  ``interface'' | ``package''| ``protected''| ``static''
-                                 |  ``yield''):kwname ~IdentifierPart -> (kwname),
+                                 |  ``yield''):kwname ~IdentifierPart -> kwname,
 
   // Note: beware of the ordering of punctuators with a common prefix!
   // OMeta is a PEG, so '|' denotes prioritized choice.
@@ -152,8 +153,8 @@ ometa ES5Parser {
              | '{'     | '}'     | '('     | ')'    | '['   | ']'
              | '.'     | ';'     | ','     | '<'    | '>'   | '!'
              | '~'     | '='     | '&'     | '|'    | '^'   | '?'
-             | ':'     | '*'     | '%'     | '+'    | '-'):symbol -> (symbol),
-  DivPunctuator = (``/='' | '/'):symbol -> (symbol),
+             | ':'     | '*'     | '%'     | '+'    | '-'),
+  DivPunctuator = (``/='' | '/'),
 
   // Punctuators partitioned according to length (for optimization purposes only)
   // Not used because performance gain was marginal (~3% faster)
@@ -171,15 +172,15 @@ ometa ES5Parser {
 
   Literal = NullLiteral || BooleanLiteral || NumericLiteral
           || StringLiteral || RegularExpressionLiteral, // spec forgot Regexp literals in appendix?
-  NullLiteral = ``null'' -> (literal("null", null)),
-  BooleanLiteral = (``true'' -> true || ``false'' -> false):b -> (literal("boolean",b)),
+  NullLiteral = ``null'' -> literal("null", null),
+  BooleanLiteral = (``true'' -> true || ``false'' -> false):b -> literal("boolean",b),
 
   // For semantics on how decimal literals are constructed, see section 7.8.3
 
   // Note that the ordering of HexIntegerLiteral and DecimalLiteral is reversed w.r.t. the spec
   // This is intentional: the order DecimalLiteral | HexIntegerLiteral will parse
   // '0x...' as a decimal literal '0' followed by 'x...'
-  NumericLiteral = (HexIntegerLiteral | DecimalLiteral):l -> (literal("number",l)),
+  NumericLiteral = (HexIntegerLiteral | DecimalLiteral):l -> literal("number",l),
 
   // DecimalDigits produces objects of the form {val: aNumber, len: aNumber }
   // The 'len' attribute describes the number of characters in the parsed numeral
@@ -209,8 +210,8 @@ ometa ES5Parser {
                 || '-' DecimalDigits:ds -> (-(ds.val)),
 
   HexIntegerLiteral = HexIntegerLiteral:l HexDigit:d -> ( (l * 16) + d )
-                    | ``0x'' HexDigit:d -> (d)
-                    | ``0X'' HexDigit:d -> (d),
+                    | ``0x'' HexDigit:d -> d
+                    | ``0X'' HexDigit:d -> d,
   HexDigit = '0'->0 || '1'->1 || '2'->2 || '3'->3 || '4'->4 || '5'->5 || '6'->6 || '7'->7 || '8'->8 || '9'->9
            || 'a'->10 || 'b'->11 || 'c'->12 || 'd'->13 || 'e'->14 || 'f'->15
            || 'A'->10 || 'B'->11 || 'C'->12 || 'D'->13 || 'E'->14 || 'F'->15,
@@ -235,7 +236,7 @@ ometa ES5Parser {
                  || UnicodeEscapeSequence,
   CharacterEscapeSequence = SingleEscapeCharacter
                           || NonEscapeCharacter,
-  SingleEscapeCharacter = '\'' -> ( String.fromCharCode(0039) ) /*\u0027*/
+  SingleEscapeCharacter = '\''  -> ( String.fromCharCode(0039) ) /*\u0027*/
                         || '"'  -> ( String.fromCharCode(0034) ) /*\u0022*/
                         || '\\' -> ( String.fromCharCode(0092) ) /*\u005C*/
                         || 'b'  -> ( String.fromCharCode(0008) ) /*\u0008*/
@@ -857,20 +858,32 @@ ometa ES5Parser {
   // noEqDbl :t = skip exactly(t) ~'=' ~exactly(t) -> (t),
 
 }
+// Should the parser attribute AST nodes with position info?
+ES5Parser.generatePositionInfo = false;
 ES5Parser.initialize = function() {
   this.strictmode = false;
 
-  // this function is used to construct ASTs
-  this.ast = function(startPos, type, attributes, children) {
-    if (this.generatePositionInfo) {
-      attributes['pos-start'] = startPos;
-      attributes['pos-end'] = this._currIdx(); 
-    }
-    return mixinASTMethods([ type, attributes ].concat(children));
-  };
   this.emptyAst = function() {
     return mixinASTMethods([ "Empty" ]);
   };
+  
+  if (this.generatePositionInfo) {
+    var idxToPosition = LineScanner.delegated({input:this.input})._apply('initialize');
+    this.ast = function(startPos, type, attributes, children) {
+      // idxToPosition(idx) -> [line, column]
+      var startPos = idxToPosition(startPos);
+      var endPos = idxToPosition(this._currIdx() - 1);
+      attributes.startLine   = startPos[0];
+      attributes.startColumn = startPos[1];
+      attributes.endLine     = endPos[0];
+      attributes.endColumn   = endPos[1];
+      return mixinASTMethods([ type, attributes ].concat(children));
+    }
+  } else {
+    this.ast = function(startPos, type, attributes, children) {
+      return mixinASTMethods([ type, attributes ].concat(children));
+    }; 
+  }
 };
 
 ES5Parser.isKeyword = function(k) {
@@ -887,8 +900,26 @@ ES5Parser.isFutureReservedWord = function(k) {
   }
 };
 
-// Should the parser attribute AST nodes with position info?
-ES5Parser.generatePositionInfo = false;
+// a LineScanner grammar that simply scans the entire input for LineTerminators,
+// and builds up an array of the indices of line terminators
+// parser can then convert from indices to line and column info by invoking:
+// var lineindex = LineScanner.matchAll(input, 'initialize', []);
+// lineindex.toLineAndColumn(idx) -> [line, column]
+ometa LineScanner {
+  // copied from ES5Parser:
+  LineTerminator = uc('LF') | uc('CR') | uc('LS') | uc('PS'),
+  uc :id = char:x ?(UnicodeCategories[id].test(x)) -> (x),
+  
+  initialize = (&findLineStarts):lineStarts ->
+    ( function(idx) {
+        var line = 0;
+        while (idx >= lineStarts[line]) {
+          line++;
+        }
+        return [line, idx - lineStarts[line - 1] + 1];
+      } ),
+  findLineStarts = {[0]}:ls (LineTerminator {ls.push(this._currIdx())} | char)* -> ls
+}
 
 // indicate to OMeta to memoize parameterized rules
 // this is crucial for the ES5 Parser, as many of its *Expression
