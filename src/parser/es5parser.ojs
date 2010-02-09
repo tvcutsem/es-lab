@@ -868,7 +868,7 @@ ES5Parser.initialize = function() {
   };
   
   if (this.generatePositionInfo) {
-    var idxToPosition = LineScanner.delegated({input:this.input})._apply('initialize');
+    var idxToPosition = LineScanner._genericMatch(this.input, 'scan');
     this.ast = function(startPos, type, attributes, children) {
       // idxToPosition(idx) -> [line, column]
       var startPos = idxToPosition(startPos);
@@ -900,17 +900,23 @@ ES5Parser.isFutureReservedWord = function(k) {
   }
 };
 
-// a LineScanner grammar that simply scans the entire input for LineTerminators,
-// and builds up an array of the indices of line terminators
-// parser can then convert from indices to line and column info by invoking:
-// var lineindex = LineScanner.matchAll(input, 'initialize', []);
-// lineindex.toLineAndColumn(idx) -> [line, column]
+// The LineScanner grammar is used for generating accurate (line, column) position
+// information for AST nodes. It simply scans the entire input for LineTerminators,
+// and builds up an array of the indices of line terminators.
+// The parser can then convert from indices into the input stream to line and column
+// numbers by invoking:
+// var converter = LineScanner.matchAll(input, 'scan');
+// converter(idx) -> [line, column]
+// Note: LineScanner does not actually 'consume' its input, it simply performs
+// a look-ahead across the entire input.
+//
+// Thanks to Alessandro Warth for suggesting this idea.
 ometa LineScanner {
   // copied from ES5Parser:
   LineTerminator = uc('LF') | uc('CR') | uc('LS') | uc('PS'),
   uc :id = char:x ?(UnicodeCategories[id].test(x)) -> (x),
   
-  initialize = (&findLineStarts):lineStarts ->
+  scan = (&findLineStarts):lineStarts ->
     ( function(idx) {
         var line = 0;
         while (idx >= lineStarts[line]) {
