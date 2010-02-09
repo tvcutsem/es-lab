@@ -12,21 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// A collection of useful traits
+// Example using the traits.js library.
+// This file defines three abstractions:
+//  - an 'enumerable' trait that captures the commonalities of enumerable data types
+//  - a 'comparable' trait that captures the commonalities of comparable data types
+//  - an 'interval' data type that makes use of these traits
 
 load('traits.js'); // provides Trait
 
-// makeSeq is a function() -> Sequence
-// where Sequence is an object c that understands c.push(elem)
-// in order to append an element to the sequence
+/**
+ * makeEnumerableTrait(makeSeq) -> <anEnumerableTrait>
+ *
+ * @param makeSeq a function() -> Sequence
+ *        where Sequence is an object c that understands c.push(elem)
+ *        in order to append an element to the sequence
+ * @return an enumerable trait that can be composed with other traits
+ *
+ * This trait is 'incomplete'. It requires the composer to provide
+ * methods named 'forEach' and 'reverseEach':
+ *   - forEach: function(fun) -> apply fun to each element and index of an enumeration
+ *   - reverseEach: function(fun) -> like forEach, but enumerate in reverse
+ */
 function makeEnumerableTrait(makeSeq) {
   return Trait({
-    // this.forEach(fun) passes each element and index to fun
-    forEach: Trait.required,
-    // this.reverseEach(f) -> pass elements to f in reverse order
-    // needed for reduceRight only
-    reverseEach: Trait.required,
+    // state required properties (optional, but informative)
+    forEach: Trait.required,    
+    reverseEach: Trait.required, // needed for reduceRight only
  
+    // the trait provides these properties:
     map: function(fun) {
       var seq = makeSeq();
       this.forEach(function(e,i) {
@@ -91,12 +104,19 @@ function makeEnumerableTrait(makeSeq) {
   })
 }
 
-// an enumerable trait that returns all sequences as arrays
+// TEnumerable is an enumerable trait that implements all sequences
+// returned by the higher-order functions as arrays
 var TEnumerable = makeEnumerableTrait(function() { return []; });
 
-// a comparable trait that works on partially ordered data
-// note: if two elements are incomparable, the relational operators
-// will answer 'false' and the min and max operators will answer 'undefined'
+/**
+ * TComparable provides common relational operators associated with
+ * comparable data types, given a definition for '<' and '=='.
+ *
+ * TComparable can be used for partially ordered data types. In this case,
+ * two elements a and b are incomparable if !(a < b) && !(b < a). For
+ * incomparable elements, the relational operators return 'false' and the
+ * min and max operators return 'undefined'.
+ */
 var TComparable = Trait({
   '<': Trait.required, // this['<'](other) -> boolean
  '==': Trait.required, // this['=='](other) -> boolean
@@ -136,7 +156,22 @@ var TComparable = Trait({
   }
 });
 
-// represents an open interval [min, max[
+/**
+ * makeInterval(min, max) -> <an interval [min,max[ >
+ *
+ * A constructor for an open interval data type.
+ * Open intervals are enumerable as arrays [min,min+1,...,max-1].
+ * Open intervals are partially ordered. 'less than' is defined as follows:
+ *  [min1, max1[ < [min2, max2[ <=> max1 <= min2
+ *
+ * Note: the interval trait defines the required 'forEach' and 'reverseEach'
+ * methods for TEnumerable and the required '<' and '==' methods for TComparable.
+ * In return, it "inherits" all the higher-order methods of TEnumerable and
+ * all the derived relational operators of TComparable.
+ *
+ * In this particular example, the composed traits don't define properties
+ * with a common name, so there is no need for conflict resolution.
+ */
 function makeInterval(min, max) {  
   return Trait.create(Object.prototype,
     Trait.compose(
@@ -162,6 +197,8 @@ function makeInterval(min, max) {
         }
       })));
 }
+
+// === unit tests ===
 
 function testTraits() {
   load('../../tests/unit.js');
