@@ -1,16 +1,22 @@
 Traits: TODO
-- define a collections lib with these operators
-TIndexable? (search other languages for more examples)
-Collections:
-Sequence
-  Array [ Indexable sequence? ]
-Map
-  Hash & TreeMap?
+- define a collections lib with these operators:
+TIndexable, TSequenceable, TEnumerable,
+Collections: Array, LinkedList, OrderedCollection (resizable array, vector), Interval, Set, Dictionary (Map)
 
-- Trait.new({...}) on ES5 is potentially confusing: does this create a trait or an instance of the trait?
-Better: use Trait as a constructor: Trait({...}) generates a new trait, Trait.create generates a new instance of a trait. So Trait({...}) is equivalent to the old 'Trait.trait({...})'.
+
+
+== Design rationale not pursued ==
+
+- rename 'open' option to 'final'?
+final has the advantage that:
+- it's already known as a keyword enforcing similar semantics
+- it explicitly tells the programmer that this object will not play nice with objects that delegate to it
+the downside: if 'final:true' is the default, then usually 'final' will show up in the source when one means to write: 'final:false', and cognitively it's bad to introduce 'final' only when you create non-final objects...
+so: final:false as default could work, but then the 'unsafe' alternative is the default...
+
 
 - Trait.object({...}) -> would make more sense for users just to write object({...}). Bring 'object' into importer's scope by default? Maybe not... keep it clean... importer can always write var object = Trait.object;
+
 
 - alternative API: represent traits as function objects instead of as property maps (currently not pursued, disadvantages outweigh advantages)
 if we would represent traits as functions, we could use the new operator or function calls to instantiate traits.
