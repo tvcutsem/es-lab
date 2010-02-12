@@ -284,17 +284,21 @@
             Trait({ a: 1, b: Trait.required, c: testMethod })),
           { A: dataP(1),
             b: requiredP(),
-            C: methodP(testMethod) },
+            C: methodP(testMethod),
+            a: requiredP(),
+            c: requiredP() },
           "resolve: renaming");
 
   testEqv(Trait.resolve({ a: 'b' },
             Trait({ a: 1, b: 2 })),
-          { b: conflictP('b') },
+          { b: conflictP('b'),
+            a: requiredP() },
           "resolve: renaming to conflicting name causes conflict, ordering 1");
   
   testEqv(Trait.resolve({ a: 'b' },
             Trait({ b: 2, a: 1 })),
-          { b: conflictP('b') },
+          { b: conflictP('b'),
+            a: requiredP() },
           "resolve: renaming to conflicting name causes conflict, ordering 2");
   
   testEqv(Trait.resolve({ a: undefined },
@@ -309,23 +313,28 @@
 
   testEqv(Trait.resolve({ a: undefined, b: 'c' },
             Trait({ a: 1, b: 2 })),
-          { c: dataP(2) },
+          { c: dataP(2),
+            b: requiredP() },
           "resolve: exclusion and renaming of disjoint props");
 
   testEqv(Trait.resolve({ a: undefined, b: 'a' },
             Trait({ a: 1, b: 2 })),
-          { a: dataP(2) },
+          { a: dataP(2),
+            b: requiredP() },
           "resolve: exclusion and renaming of overlapping props");
 
   testEqv(Trait.resolve({ a: 'c', b: 'c' },
             Trait({ a: 1, b: 2 })),
-          { c: conflictP('c') },
+          { c: conflictP('c'),
+            a: requiredP(),
+            b: requiredP() },
           "resolve: renaming to a common alias causes conflict");
 
   testEqv(Trait.resolve({ a: 'c', d: 'c' },
             Trait({ a: 1, b: 2 })),
           { c: dataP(1),
-            b: dataP(2) },
+            b: dataP(2),
+            a: requiredP() },
           "resolve: renaming of non-existent props has no effect");
 
   testEqv(Trait.resolve({ b: undefined },
@@ -340,6 +349,30 @@
             c: dataP('foo'),
             d: dataP(1) },
           "resolve is neutral w.r.t. required properties");
+  
+  testEqv(Trait.resolve({a: 'b', b: 'a'},
+            Trait({ a: 1, b: 2 })),
+          { a: dataP(2),
+            b: dataP(1) },
+          "resolve supports swapping of property names, ordering 1");
+  
+  testEqv(Trait.resolve({b: 'a', a: 'b'},
+            Trait({ a: 1, b: 2 })),
+          { a: dataP(2),
+            b: dataP(1) },
+          "resolve supports swapping of property names, ordering 2");
+  
+  testEqv(Trait.resolve({b: 'a', a: 'b'},
+            Trait({ b: 2, a: 1 })),
+          { a: dataP(2),
+            b: dataP(1) },
+          "resolve supports swapping of property names, ordering 3");
+
+  testEqv(Trait.resolve({a: 'b', b: 'a'},
+            Trait({ b: 2, a: 1 })),
+          { a: dataP(2),
+            b: dataP(1) },
+          "resolve supports swapping of property names, ordering 4");
   
   testEqv(Trait.override(
             Trait({a: 1, b: 2 }),
@@ -503,6 +536,22 @@
     if (Function.prototype.bind) {
       var fakethis = {};
       unit.compare(fakethis, o6.m.call(fakethis), 'this not bound to composite object');
+    }
+  })();
+    
+  // test diamond with conflicts
+  (function() {
+    function makeT1(x) {
+      return Trait({ m: function() { return x; } });
+    }
+    function makeT2(x) { return Trait.compose(Trait({t2:'foo'}), makeT1(x)); }
+    function makeT3(x) { return Trait.compose(Trait({t3:'bar'}), makeT1(x)); }
+    var T4 = Trait.compose(makeT2(5), makeT3(5));
+    try {
+      var o = Trait.create(Object.prototype, T4);
+      unit.ok(false, 'expected diamond prop to cause exception');
+    } catch(e) {
+      unit.compare('Error: Remaining conflicting property: m', e.toString(), 'diamond prop conflict');
     }
   })();
     

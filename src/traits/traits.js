@@ -367,43 +367,53 @@ var Trait = (function(){
    * @param map an object whose own properties serve as a mapping from
             old names to new names.
    * @param trait a trait object
-   * @returns a new trait with the same own properties as the original trait,
-   *          except that all own properties whose name is an own property
-   *          of map will be renamed to map[name]
+   * @returns a new trait with the same properties as the original trait,
+   *          except that all properties whose name is an own property
+   *          of map will be renamed to map[name], and a 'required' property
+   *          for name will be added instead.
    *
    * rename({a: 'b'}, t) eqv compose(exclude(['a'],t),
-                                     { b: t[a] })
+   *                                 { a: { required: true },
+   *                                   b: t[a] })
+   *
+   * For each renamed property, a required property is generated.
+   * If the map renames two properties to the same name, a conflict is generated.
+   * If the map renames a property to an existing unrenamed property, a conflict is generated.
    *
    * Note: rename(A, rename(B, t)) is equivalent to rename(\n -> A(B(n)), t)
-   * Note: rename is not associative with exclude
-   *
-   * If one of the new names is already defined in 'trait', the renamed
-   * property will generate a conflict.
+   * Note: rename({...},exclude([...], t)) is not eqv to exclude([...],rename({...}, t))
    */
   function rename(map, trait) {
     var renamedTrait = {};
-    var keys = getOwnPropertyNames(map);
-    forEach(keys, function (name) {
-      if (hasOwnProperty(trait, name) && !trait[name].required) {
-        var alias = map[name];
-        if (hasOwnProperty(renamedTrait, alias)) {
+    forEach(getOwnPropertyNames(trait), function (name) {
+      // required props are never renamed
+      if (hasOwnProperty(map, name) && !trait[name].required) {
+        var alias = map[name]; // alias defined in map
+        if (hasOwnProperty(renamedTrait, alias) && !renamedTrait[alias].required) {
           // could happen if 2 props are mapped to the same alias
           renamedTrait[alias] = makeConflictingPropDesc(alias);
         } else {
-          renamedTrait[alias] = trait[name];          
+          // add the property under an alias
+          renamedTrait[alias] = trait[name];
+        }
+        // add a required property under the original name
+        // but only if a property under the original name does not exist
+        // such a prop could exist if an earlier prop in the trait was previously
+        // aliased to this name
+        if (!hasOwnProperty(renamedTrait, name)) {
+          renamedTrait[name] = makeRequiredPropDesc(name);     
+        }
+      } else { // no alias defined
+        if (hasOwnProperty(renamedTrait, name)) {
+          // could happen if another prop was previously aliased to name
+          renamedTrait[name] = makeConflictingPropDesc(name);
+        } else {
+          renamedTrait[name] = trait[name]; 
         }
       }
     });
-    // renamedTrait now contains all valid renamed properies
-    // now compose these new properties with the existing trait
-    // if any of the aliases conflict with existing trait names,
-    // the renamed properties will be marked as conflicts
     
-    // Also, exclude all renamed property names from the original trait
-    // (without this step, our 'rename' operator would coincide with the 'alias'
-    // operator in the original traits model)
-    return freeze(compose(exclude(keys, trait),
-                          renamedTrait));
+    return freeze(renamedTrait);
   }
   
   /**
