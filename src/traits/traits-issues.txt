@@ -1,19 +1,5 @@
 Traits: issues, comments, todo's...
 
-- Trait.resolve({a:'b'}, t) should result in a renamed trait that contains 'a' as a required property! ('a' could contain a call self.a, so 'a' should now be provided by a composer)
-
-- Trait.create(proto, trait, {open:true}) is almost exactly the same as
-Object.create(proto, trait)!!
-only difference: Trait.create filters the required properties. But I see no harm in leaving them in the object (since conflicts are left in there anyway) + they are bound to undefined and are non-enumerable.
-Proposal: get rid of the open flag!
-Either you can instantiate the object using Object.create without any special interventions (traits are just property maps)
-Or, you instantiate using Trait.create, giving you a closed object, with checks.
-We could still support a third options arg to Trait.create to enable suppression of the exceptions and still end up with a closed object.
-
-- If we're really going to marry the trait representation to property maps, we should consider allowing the trait constructor to take an arbitrary object as input, not just a 'record'. All of the object's properties (not just own props) will end up in the trait.
-That leaves the issue of freezing the prototype property of "methods". Perhaps we can make this configurable?
-Trait(obj, options) where default options = { own: false, open: false }
-
 If we are completely transparent about the representation of traits as property maps, then traits.js truly becomes _both_ a general-purpose property map combinator library _and_ a principled approach to trait-based object composition.
 
 - Trait.create could be enhanced to enable sharing of structure between instances.

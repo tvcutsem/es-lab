@@ -458,12 +458,12 @@
     }
   })();
   
-  // - create open:false -
+  // - Trait.create -
   
   // exception for incomplete required properties
   try {
     Trait.create(Object.prototype,
-                 Trait({ foo: Trait.required }), {open:false})
+                 Trait({ foo: Trait.required }));
     unit.ok(false, 'expected create to complain about missing required props');
   } catch(e) {
     unit.compare('Error: Missing required property: foo', e.toString(), 'required prop error');
@@ -472,14 +472,14 @@
   // exception for unresolved conflicts
   try {
     Trait.create(Object.prototype,
-                 Trait.compose(Trait({ a: 0 }), Trait({ a: 1 })), {open:false})
+                 Trait.compose(Trait({ a: 0 }), Trait({ a: 1 })));
     unit.ok(false, 'expected create to complain about unresolved conflicts');
   } catch(e) {
     unit.compare('Error: Remaining conflicting property: a', e.toString(), 'conflicting prop error');
   }
   
   (function(){
-    var o3 = Trait.create(Object.prototype, Trait({ m: function() { return this; } }), {open:false});
+    var o3 = Trait.create(Object.prototype, Trait({ m: function() { return this; } }));
     // verify object and methods frozen in ES5
     if (Object.freeze) {
       unit.ok(Object.isFrozen(o3), 'closed create freezes object');
@@ -494,14 +494,15 @@
     }
   })();
   
-  // - create open:true -
+  // - Object.create -
   
-  // verify that required properties are dropped
+  // verify that required properties are present but undefined
   (function(){
     try {
-      var o4 = Trait.create(Object.prototype,
-                   Trait({ foo: Trait.required }), {open:true});
-      unit.ok(!('foo' in o4), 'required property dropped');
+      var o4 = Object.create(Object.prototype,
+                   Trait({ foo: Trait.required }));
+      unit.ok(('foo' in o4), 'required property present');
+      unit.ok(!(o4.foo), 'required property undefined');
     } catch(e) {
       unit.ok(false, 'did not expect create to complain about required props');
     }
@@ -510,8 +511,8 @@
   // verify that conflicting properties are present
   (function(){
     try {
-      var o5 = Trait.create(Object.prototype,
-                   Trait.compose(Trait({ a: 0 }), Trait({ a: 1 })), {open:true});
+      var o5 = Object.create(Object.prototype,
+                   Trait.compose(Trait({ a: 0 }), Trait({ a: 1 })));
       unit.ok('a' in o5, 'conflicting property present');
       try {
         (o5.a, o5.a()); // accessor or data prop
@@ -525,7 +526,7 @@
   })();
   
   (function(){
-    var o6 = Trait.create(Object.prototype, Trait({ m: function() { return this; } }), {open:true});
+    var o6 = Object.create(Object.prototype, Trait({ m: function() { return this; } }));
     // verify that object and methods are not frozen in ES5
     if (Object.freeze) {
       unit.ok(!(Object.isFrozen(o6)), 'open create does not freeze object');

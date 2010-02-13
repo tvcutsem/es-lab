@@ -76,7 +76,7 @@ var Trait = (function(){
           }
         }
       };
-  var Object_create = Object.create || 
+  var Object_create = Object.create ||
       function(proto, propMap) {
         var self;
         function dummy() {};
@@ -86,6 +86,14 @@ var Trait = (function(){
           defineProperties(self, propMap);          
         }
         return self;
+      };
+  var getOwnProperties = Object.getOwnProperties ||
+      function(obj) {
+        var map = {};
+        forEach(getOwnPropertyNames(obj), function (name) {
+          map[name] = getOwnPropertyDescriptor(obj, name);
+        });
+        return map;
       };
   
   // end of ES3 - ES5 compatibility functions
@@ -180,7 +188,7 @@ var Trait = (function(){
 
   // == singleton object to be used as the placeholder for a required property ==
   
-  var required = freeze({ comment: 'required trait property' });
+  var required = freeze({ toString: function() { return '<Trait.required>'; } });
 
   // == The public API methods ==
 
@@ -189,13 +197,11 @@ var Trait = (function(){
    *
    * @param object an object record (in principle an object literal)
    * @returns a new trait describing all of the own properties of the object
-   *   (both enumerable and non-enumerable)
-   * @throws an exception if the object passed to 'trait' has a prototype
-   *         other than Object.prototype
+   *          (both enumerable and non-enumerable)
    *
-   * As a general rule, 'trait' should always be invoked with an
-   * object *literal*, since the object merely serves as a record
-   * descriptor. Both its identity and its prototype chain are completely ignored.
+   * As a general rule, 'trait' should be invoked with an
+   * object literal, since the object merely serves as a record
+   * descriptor. Both its identity and its prototype chain are irrelevant.
    * 
    * Data properties bound to function objects in the argument will be flagged
    * as 'method' properties. The prototype of these function objects is frozen.
@@ -209,10 +215,6 @@ var Trait = (function(){
    * in-place anonymous functions, this should normally be the case.
    */
   function trait(obj) {
-    if (getPrototypeOf(obj) !== Object.prototype) {
-      throw new Error("trait expects only object records");
-    }
-    
     var map = {};
     forEach(getOwnPropertyNames(obj), function (name) {
       var pd = getOwnPropertyDescriptor(obj, name);
@@ -457,95 +459,71 @@ var Trait = (function(){
   }
 
   /**
-   * var obj = create(proto, trait, options)
+   * var obj = create(proto, trait)
    *
    * @param proto denotes the prototype of the completed object
    * @param trait a trait object to be turned into a complete object
-   * @param options an optional object where:
-   *
-   *    options.open: is a boolean indicating whether this object
-   *      should be considered 'open' or 'closed' (default: false)
-   *
-   *     'open: false' (default) is for high-integrity or final objects
-   *       - an exception is thrown if 'trait' still contains required properties
-   *       - an exception is thrown if 'trait' still contains conflicting properties
-   *       - the object is and all of its accessor and method properties are frozen
-   *       - the 'this' pseudovariable in all accessors and methods of the object is
-   *         bound to the composed object.
-   *
-   *     'open: true' is for abstract or malleable objects and implies
-   *       - no exception is thrown if 'trait' still contains required properties
-   *         (the properties are simply dropped from the composite object)
-   *       - no exception is thrown if 'trait' still contains conflicting properties
-   *         (these properties remain as conflicting properties in the composite object)
-   *       - neither the object nor its accessor and method properties are frozen
-   *       - the 'this' pseudovariable in all accessors and methods of the object is
-   *         left unbound.
-   *
-   *
    * @returns an object with all of the properties described by the trait.
+   * @throws 'Missing required property' the trait still contains a required property.
+   * @throws 'Remaining conflicting property' if the trait still contains a conflicting property.
    *
-   * @throws 'Missing required property' if {open:false} and
-   *         the trait still contains a required property.
-   * @throws 'Remaining conflicting property' if {open:false} and
-   *         the trait still contains a conflicting property.
+   * Trait.create is like Object.create, except that it generates
+   * high-integrity or final objects. In addition to creating a new object
+   * from a trait, it also ensures that:
+   *    - an exception is thrown if 'trait' still contains required properties
+   *    - an exception is thrown if 'trait' still contains conflicting properties
+   *    - the object is and all of its accessor and method properties are frozen
+   *    - the 'this' pseudovariable in all accessors and methods of the object is
+   *      bound to the composed object.
+   *
+   *  Use Object.create instead of Trait.create if you want to create
+   *  abstract or malleable objects. Keep in mind that for such objects:
+   *    - no exception is thrown if 'trait' still contains required properties
+   *      (the properties are simply dropped from the composite object)
+   *    - no exception is thrown if 'trait' still contains conflicting properties
+   *      (these properties remain as conflicting properties in the composite object)
+   *    - neither the object nor its accessor and method properties are frozen
+   *    - the 'this' pseudovariable in all accessors and methods of the object is
+   *      left unbound.
    */
-  function create(proto, trait, optOptions) {
-    var options = optOptions || {};
-    var isClosed = !(options.open);
+  function create(proto, trait) {
     var self = Object_create(proto);
     var properties = {};
   
-    if (isClosed) {
-      // closed objects
-      forEach(getOwnPropertyNames(trait), function (name) {
-        var pd = trait[name];
-        // check for remaining 'required' properties
-        // Note: it's OK for the prototype to provide the properties
-        if (pd.required && !(name in proto)) {
-          throw new Error('Missing required property: '+name);
-        } else if (pd.conflict) { // check for remaining conflicting properties
-          throw new Error('Remaining conflicting property: '+name);
-        } else if ('value' in pd) { // data property
-          // freeze all function properties and their prototype
-          if (pd.method) { // the property is meant to be used as a method
-            // bind 'this' in trait method to the composite object
-            properties[name] = {
-              value: freezeAndBind(pd.value, self),
-              enumerable: pd.enumerable,
-              configurable: pd.configurable,
-              writable: pd.writable
-            };
-          } else {
-            properties[name] = pd;
-          }
-        } else { // accessor property
+    forEach(getOwnPropertyNames(trait), function (name) {
+      var pd = trait[name];
+      // check for remaining 'required' properties
+      // Note: it's OK for the prototype to provide the properties
+      if (pd.required && !(name in proto)) {
+        throw new Error('Missing required property: '+name);
+      } else if (pd.conflict) { // check for remaining conflicting properties
+        throw new Error('Remaining conflicting property: '+name);
+      } else if ('value' in pd) { // data property
+        // freeze all function properties and their prototype
+        if (pd.method) { // the property is meant to be used as a method
+          // bind 'this' in trait method to the composite object
           properties[name] = {
-            get: pd.get ? freezeAndBind(pd.get, self) : undefined,
-            set: pd.set ? freezeAndBind(pd.set, self) : undefined,
+            value: freezeAndBind(pd.value, self),
             enumerable: pd.enumerable,
             configurable: pd.configurable,
-            writable: pd.writable            
+            writable: pd.writable
           };
+        } else {
+          properties[name] = pd;
         }
-      });
+      } else { // accessor property
+        properties[name] = {
+          get: pd.get ? freezeAndBind(pd.get, self) : undefined,
+          set: pd.set ? freezeAndBind(pd.set, self) : undefined,
+          enumerable: pd.enumerable,
+          configurable: pd.configurable,
+          writable: pd.writable            
+        };
+      }
+    });
 
-      defineProperties(self, properties);
-      return freeze(self); 
-    } else {
-      // open objects
-      forEach(getOwnPropertyNames(trait), function (name) {
-        var pd = trait[name];
-        if (pd.required) {
-          return; // drop missing required property
-        }
-        // if (pd.conflict) {} // leave conflicting properties in the composite
-        properties[name] = pd;
-      });
-
-      defineProperties(self, properties);
-      return self;
-    }
+    defineProperties(self, properties);
+    return freeze(self);
   }
 
   /** A shorthand for create(Object.prototype, trait({...}), options) */
@@ -575,6 +553,17 @@ var Trait = (function(){
       }
     }
     return true;
+  }
+  
+  // if this code is ran in ES3 without an Object.create function, this
+  // library will define it on Object:
+  if (!Object.create) {
+    Object.create = Object_create;
+  }
+  // ES5 does not by default provide Object.getOwnProperties
+  // if it's not defined, the Traits library defines this utility function on Object
+  if(!Object.getOwnProperties) {
+    Object.getOwnProperties = getOwnProperties;
   }
   
   // expose the public API of this module
