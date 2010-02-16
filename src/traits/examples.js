@@ -157,7 +157,7 @@ var TComparable = Trait({
 });
 
 /**
- * makeInterval(min, max) -> an interval min..!max >
+ * makeInterval(min, max) -> an interval min..!max
  *
  * A constructor for an open interval data type.
  * Open intervals are enumerable as arrays [min,min+1,...,max-1].
@@ -181,7 +181,7 @@ function makeInterval(min, max) {
         start: min,
         end: max,
         size: max - min - 1,
-        toString: function() { return '['+min+','+max+'['; },
+        toString: function() { return ''+min+'..!'+max; },
         '<': function(ival) { return max <= ival.start; },
         '==': function(ival) { return min === ival.start && max === ival.end; },
         contains: function(e) { return (min <= e) && (e < max); },
@@ -243,16 +243,16 @@ function testTraits() {
   
   unit.compare(true, i1.between(i1,i1), 'i1 between i1 and i1');
   unit.compare(true, i1.between(i1,i2), 'i1 between i1 and i2');
-  unit.compare(false, makeInterval(2,4).between(i1,i2), '[2,4[ between i1 and i2');
-  unit.compare(true, makeInterval(6,7).between(i1,i2), '[6,7[ between i1 and i2');
+  unit.compare(false, makeInterval(2,4).between(i1,i2), '2..!4 between i1 and i2');
+  unit.compare(true, makeInterval(6,7).between(i1,i2), '6..!7 between i1 and i2');
 
   unit.compare(i1, i1.min(i2), "i1 min i2");
   unit.compare(i1, i2.min(i1), "i2 min i1");
   unit.compare(i2, i1.max(i2), "i1 max i2");
   unit.compare(i2, i2.max(i1), "i2 max i1");
-  unit.compare(undefined, i1.min(makeInterval(3,7)), "i1 min [3,7[");
+  unit.compare(undefined, i1.min(makeInterval(3,7)), "i1 min 3..!7");
 
-  unit.compare('[0,6[',''+i1, "i1 toString");
+  unit.compare('0..!6',''+i1, "i1 toString");
 
   testSameArray([0,1,2,3,4,5], i1.asSequence(), 'i1.asSequence');
 
@@ -273,7 +273,7 @@ function testTraits() {
   unit.compare(3, i2.reduce(function(sum, e, i) { return sum+i; }, 0), 'i2.reduce sum idx');
   unit.compare('foo',
     makeInterval(0,0).reduce(function(tot,nxt) { return 'bar'; },'foo'),
-    '[0,0].reduce');
+    '0..!0.reduce');
   unit.compare(15,
     i1.reduceRight(function(sum, e) { return sum+e; }, 0),
     'i1.reduceRight sum');
