@@ -113,7 +113,7 @@ var TEnumerable = makeEnumerableTrait(function() { return []; });
  * comparable data types, given a definition for '<' and '=='.
  *
  * TComparable can be used for partially ordered data types. In this case,
- * two elements a and b are incomparable if !(a < b) && !(b < a). For
+ * two elements a and b are incomparable if !(a <= b) && !(b <= a). For
  * incomparable elements, the relational operators return 'false' and the
  * min and max operators return 'undefined'.
  */
@@ -157,12 +157,12 @@ var TComparable = Trait({
 });
 
 /**
- * makeInterval(min, max) -> <an interval [min,max[ >
+ * makeInterval(min, max) -> an interval min..!max >
  *
  * A constructor for an open interval data type.
  * Open intervals are enumerable as arrays [min,min+1,...,max-1].
  * Open intervals are partially ordered. 'less than' is defined as follows:
- *  [min1, max1[ < [min2, max2[ <=> max1 <= min2
+ *  min1..!max1 < min2..!max2 <=> max1 <= min2
  *
  * Note: the interval trait defines the required 'forEach' and 'reverseEach'
  * methods for TEnumerable and the required '<' and '==' methods for TComparable.
