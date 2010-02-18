@@ -225,6 +225,9 @@ var Trait = (function(){
         if ('prototype' in pd.value) {
           freeze(pd.value.prototype);
         }
+      } else {
+        if (pd.get && pd.get.prototype) { freeze(pd.get.prototype); }
+        if (pd.set && pd.set.prototype) { freeze(pd.set.prototype); }
       }
       map[name] = pd;
     });
