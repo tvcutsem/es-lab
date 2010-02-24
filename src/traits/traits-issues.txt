@@ -14,6 +14,42 @@ two problems:
 - the 'this' variable in the common object cannot be bound. Must be left unbound such that 'this' can refer to the per-instance sub-object. Problem: this object is accessible from the trait instance via Object.getPrototypeOf
 this would not be a problem for open:true objects.
 
+== Extensible Annotations ==
+
+Trait.transform = function(pdm, transformations) {
+  var props = {};
+  for (var prop in pdm) {// only own props
+    var pd = pdm[name];
+    for (var attr in pd) { // only own props
+      // filter out ES5 attributes?
+      if (attr in transformations) {
+        props[name] = transformations[attr](name,pd); // each transform is a fn(pd) -> pd
+      }
+    }
+  }
+  return props;
+};
+
+var traitRules = Object.getOwnProperties({
+  required: function(name,pd) { if (!name in proto) { throw new Error('required: '+name); } },
+  conflict: function(name,pd) { throw new Error('conflict: '+name); },
+  method: function(name, pd) {
+    // ugly imperative, should probably construct a new prop descriptor
+    if (pd.value) { pd.value = freezeAndBind(pd.value); }
+    if (pd.get) { pd.get = freezeAndBind(pd.get, self); } // TODO: how to get self???
+    if (pd.set) { pd.set = freezeAndBind(pd.set, self); } // TODO: how to get self???
+    return pd;
+  }
+});
+
+Trait.create = function(proto, pdm, additionalRules) {
+  additionalRules = additionalRules || {};
+  return Object.freeze(
+           Object.create(proto,
+             Trait.transform(pdm,
+               Object.create(additionalRules, traitRules))));
+};
+
 == Design rationale not pursued ==
 
 - rename 'open' option to 'final'?
