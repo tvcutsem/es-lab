@@ -4,19 +4,16 @@
 %  Created by Tom Van Cutsem on 2010-01-18.
 %  Copyright (c) 2010 Google. All rights reserved.
 %
-\documentclass[10pt,legalpaper]{article}
+\documentclass{acm_proc_article-sp}
 
 % Use utf-8 encoding for foreign characters
-\usepackage[utf8]{inputenc}
+%\usepackage[utf8]{inputenc}
 
 % Setup for fullpage use
-\usepackage{fullpage}
+%\usepackage{fullpage}
 
 % Multipart figures
 %\usepackage{subfigure}
-
-% Surround parts of graphics with box
-\usepackage{boxedminipage}
 
 % Package for including code in the document
 \usepackage{listings}
@@ -75,8 +72,27 @@
 \else
 \usepackage{graphicx}
 \fi
-\title{Javascript Proxies}
-\author{Tom Van Cutsem \and Mark Miller}
+
+\title{Robust Intercession in Javascript using Proxies}
+% \subtitle[Extended Abstract]
+% \titlenote{}
+
+\numberofauthors{2}
+\author{
+\alignauthor
+Tom Van Cutsem\titlenote{Tom Van Cutsem is a Postdoctoral Fellow of the Research Foundation, Flanders (FWO). This work was carried out as Visiting Faculty at Google, sponsored by Google and the FWO.}\\
+       \affaddr{Vrije Universiteit Brussel}\\
+       \affaddr{Pleinlaan 2}\\
+       \affaddr{1050 Brussels}\\
+       \email{tvcutsem@vub.ac.be}
+% 2nd. author
+\alignauthor
+Mark S. Miller%\titlenote{}\\
+       \affaddr{Google}\\
+       \affaddr{1600 Amphitheatre Parkway}\\
+       \affaddr{Mountain View, CA, USA}\\
+       \email{erights@google.com}
+}
 
 \date{}
 
@@ -92,6 +108,10 @@
 
 \begin{abstract}
 \end{abstract}
+
+%\category{H.4}{Information Systems Applications}{Miscellaneous}
+%\terms{Theory}
+%\keywords{}
 
 \section{Introduction}
 
@@ -381,6 +401,6 @@ In Java, proxies are supported without the need to introduce a new type of objec
 
 \section{Conclusion}
 
-\bibliographystyle{plain}
+\bibliographystyle{abbrv}
 \bibliography{}
 \end{document}
