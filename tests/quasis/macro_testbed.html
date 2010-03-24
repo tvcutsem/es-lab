@@ -50,7 +50,7 @@ function doExpand(handler, code, production, output) {
       code = code.substring(m[0].length);
       continue;
     }
-    chunks.push('"##' + ++t + '"');
+    chunks.push('("##' + ++t + '")');
     var prefix = code.match(/^(\w*)`/);
     var name = prefix[1] || 'defaultQuasi';
     var quasi = extracted[t] = ['QuasiExpr', { name: name }];
@@ -111,7 +111,7 @@ function doExpand(handler, code, production, output) {
         var quasi = extracted[m[1]];
         var parts = [[], []];
         for (var i = 2, n = quasi.length; i < n; ++i) {
-          if (i & 1 && quasi[i][1].value.indexOf('`') >= 0) {
+          if ((i & 1) && quasi[i][1].value.indexOf('`') >= 0) {
             // Recurse to substitutions
             doExpand(handler, quasi[i][1].value, 'Expression', quasi[i][1]);
             quasi[i][1].value = '(' + quasi[i][1].value + ')';
@@ -142,7 +142,7 @@ function doExpand(handler, code, production, output) {
 <button type=sumit>Expand</button>
 <table><tr valign=top><td>
 <h2>Handler</h2>
-<textarea cols=80 rows=15 name=handler>function defaultQuasi(literals, readSubsts) {
+<textarea cols=80 rows=15 name=handler>function foo(literals, readSubsts) {
   function str(s) { return ['LiteralExpr', {type: 'string', value: s}]; }
   var ctor = ['NewExpr', {},
                ['MemberExpr', {}, readSubsts[0], str('Interpolation')],
@@ -154,7 +154,7 @@ function doExpand(handler, code, production, output) {
 }</textarea>
 
 <h2>Source</h2>
-<textarea cols=80 rows=10 name=source>foo(`<foo>${bar}baz`)</textarea>
+<textarea cols=80 rows=10 name=source>myNode.innerHTML = foo`<foo>${bar}baz`</textarea>
 <td>
 <h2>Result</h2>
 <textarea cols=80 rows=10 name=output disabled
@@ -176,5 +176,5 @@ function doExpand(handler, code, production, output) {
 
 <hr>
 <address></address>
-<!-- hhmts start --> Last modified: Fri Jan 15 13:12:53 PST 2010 <!-- hhmts end -->
+<!-- hhmts start --> Last modified: Tue Mar 23 19:25:50 PDT 2010 <!-- hhmts end -->
 </body> </html>

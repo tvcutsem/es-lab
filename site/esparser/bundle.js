@@ -37,12 +37,16 @@ this.nextPutAll(arguments[idx])}
 StringBuffer.prototype.nextPutAll=function(s){this.strings.push(s)}
 StringBuffer.prototype.contents=function(){return this.strings.join("")}
 String.prototype.writeStream=function(){return new StringBuffer(this)}
+printOn=function(x,ws){if(x===undefined||x===null)
+ws.nextPutAll(""+x)
+else
+x.printOn(ws)}
 Object.prototype.printOn=function(ws){ws.nextPutAll(this.toString())}
 Array.prototype.toString=function(){var ws="".writeStream();this.printOn(ws);return ws.contents()}
 Array.prototype.printOn=function(ws){ws.nextPutAll("[")
 for(var idx=0;idx<this.length;idx++){if(idx>0)
 ws.nextPutAll(", ")
-this[idx].printOn(ws)}
+printOn(this[idx],ws)}
 ws.nextPutAll("]")}
 Object.prototype.delegated=function(props){var f=function(){}
 f.prototype=this
@@ -220,7 +224,12 @@ for(var idx=1;idx<arguments.length;idx++)
 try{this.input=origInput;return arguments[idx].call(this)}
 catch(f){if(f!=fail)
 throw f}
-throw fail}},_many:function(x){var ans=arguments[1]!=undefined?[arguments[1]]:[]
+throw fail}},_opt:function(x){var origInput=this.input,ans
+try{ans=x.call(this)}
+catch(f){if(f!=fail)
+throw f
+this.input=origInput}
+return ans},_many:function(x){var ans=arguments[1]!=undefined?[arguments[1]]:[]
 while(true){var origInput=this.input
 try{ans.push(x.call(this))}
 catch(f){if(f!=fail)
@@ -240,18 +249,21 @@ x.call(this)
 return origInput.upTo(this.input)},_idxConsumedBy:function(x){var origInput=this.input
 x.call(this)
 return{fromIdx:origInput.idx,toIdx:this.input.idx}},_interleave:function(mode1,part1,mode2,part2){var currInput=this.input,ans=[]
+for(var idx=0;idx<arguments.length;idx+=2)
+ans[idx/2]=(arguments[idx]=="*"||arguments[idx]=="+")?[]:undefined
 while(true){var idx=0,allDone=true
 while(idx<arguments.length){if(arguments[idx]!="0")
 try{this.input=currInput
-switch(arguments[idx]){case"*":(ans[idx/2]=ans[idx/2]||[]).push(arguments[idx+1].call(this));break
-case"+":(ans[idx/2]=ans[idx/2]||[]).push(arguments[idx+1].call(this));arguments[idx]="*";break
+switch(arguments[idx]){case"*":ans[idx/2].push(arguments[idx+1].call(this));break
+case"+":ans[idx/2].push(arguments[idx+1].call(this));arguments[idx]="*";break
+case"?":ans[idx/2]=arguments[idx+1].call(this);arguments[idx]="0";break
 case"1":ans[idx/2]=arguments[idx+1].call(this);arguments[idx]="0";break
 default:throw"invalid mode '"+arguments[idx]+"' in OMeta._interleave"}
 currInput=this.input
 break}
 catch(f){if(f!=fail)
 throw f
-allDone=allDone&&arguments[idx]=="*"}
+allDone=allDone&&(arguments[idx]=="*"||arguments[idx]=="?")}
 idx+=2}
 if(idx==arguments.length){if(allDone)
 return ans
