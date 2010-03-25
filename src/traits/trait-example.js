@@ -45,7 +45,10 @@ function makeAnimationTrait(refreshRate) {
 function makeParticleTrait(radius, moveRate, dx, dy) {
    return Trait.compose(
      Trait({ animate: function() { return this.move(dx, dy); },
-               start: function() { return this.startMoving(); } }),
+             // because 'start' is renamed and 'stop' is excluded from animationTrait
+             // this trait has to provide alternative implementations
+               start: function() { return this.startMoving(); },
+                stop: function() { return 'alternative stop'; } }),
      Trait.resolve({ start: 'startMoving',
                       stop: undefined },
                    makeAnimationTrait(moveRate)));
@@ -69,6 +72,7 @@ var unit = makeUnitTest('Traits', true);
 var m = makeParticleMorph(2.0, 1.0, 1, 1);
 unit.compare('moved 1,1', m.startMoving(), 'startMoving returns moved');
 unit.ok(('start' in m), 'start present in m');
-unit.ok(!('stop' in m), 'stop not present in m');
+unit.ok(('stop' in m), 'stop present in m');
+unit.compare('alternative stop', m.stop(), 'stop refers to new implementation');
 unit.compare('moved 2,3', m.move(2,3));
 unit.testDone();

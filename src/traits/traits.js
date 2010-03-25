@@ -287,18 +287,22 @@ var Trait = (function(){
    * @param names a list of strings denoting property names.
    * @param trait a trait some properties of which should be excluded.
    * @returns a new trait with the same own properties as the original trait,
-   *          except those properties whose name appears in names
-   
+   *          except that all property names appearing in the first argument
+   *          are replaced by required property descriptors.
+   *
    * Note: exclude(A, exclude(B,t)) is equivalent to exclude(A U B, t)
    */
   function exclude(names, trait) {
     var exclusions = makeSet(names);
     var newTrait = {};
     
-    // required properties are not excluded but ignored
     forEach(getOwnPropertyNames(trait), function (name) {
+      // required properties are not excluded but ignored
       if (!hasOwnProperty(exclusions, name) || trait[name].required) {
         newTrait[name] = trait[name];
+      } else {
+        // excluded properties are replaced by required properties
+        newTrait[name] = makeRequiredPropDesc(name);
       }
     });
     
@@ -411,9 +415,13 @@ var Trait = (function(){
       } else { // no alias defined
         if (hasOwnProperty(renamedTrait, name)) {
           // could happen if another prop was previously aliased to name
-          renamedTrait[name] = makeConflictingPropDesc(name);
+          if (!trait[name].required) {
+            renamedTrait[name] = makeConflictingPropDesc(name);            
+          }
+          // else required property overridden by a previously aliased property
+          // and otherwise ignored
         } else {
-          renamedTrait[name] = trait[name]; 
+          renamedTrait[name] = trait[name];
         }
       }
     });
@@ -432,15 +440,17 @@ var Trait = (function(){
    * @param resolutions an object whose own properties serve as a mapping from
             old names to new names, or to undefined if the property should be excluded
    * @param trait a trait object
-   * @returns a new trait with the same own properties as the original trait,
-   *          except that all own properties whose name is an own property
-   *          of resolutions will be renamed to resolutions[name], or will be
-   *          excluded from newTrait if resolutions[name] is falsy.
+   * @returns a resolved trait with the same own properties as the original trait.
+   *
+   * In a resolved trait, all own properties whose name is an own property
+   * of resolutions will be renamed to resolutions[name] if it is truthy,
+   * or their value is changed into a required property descriptor if
+   * resolutions[name] is falsy.
    *
    * Note, it's important to _first_ exclude, _then_ rename, since exclude
    * and rename are not associative, for example:
    * rename({a: 'b'}, exclude(['b'], trait({ a:1,b:2 }))) eqv trait({b:1})
-   * exclude(['b'], rename({a: 'b'}, trait({ a:1,b:2 }))) eqv trait({})
+   * exclude(['b'], rename({a: 'b'}, trait({ a:1,b:2 }))) eqv trait({b:Trait.required})
    *
    * writing resolve({a:'b', b: undefined},trait({a:1,b:2})) makes it clear that
    * what is meant is to simply drop the old 'b' and rename 'a' to 'b'
