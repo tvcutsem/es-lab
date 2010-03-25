@@ -303,17 +303,20 @@
   
   testEqv(Trait.resolve({ a: undefined },
             Trait({ a: 1, b: 2 })),
-          { b: dataP(2) },
+          { a: requiredP(),
+            b: dataP(2) },
           "resolve: simple exclusion");
   
   testEqv(Trait.resolve({ a: undefined, b: undefined },
             Trait({ a: 1, b: 2 })),
-          { },
-          "resolve: exclusion to empty trait");
+          { a: requiredP(),
+            b: requiredP() },
+          "resolve: exclusion to 'empty' trait");
 
   testEqv(Trait.resolve({ a: undefined, b: 'c' },
             Trait({ a: 1, b: 2 })),
-          { c: dataP(2),
+          { a: requiredP(),
+            c: dataP(2),
             b: requiredP() },
           "resolve: exclusion and renaming of disjoint props");
 
@@ -329,6 +332,18 @@
             a: requiredP(),
             b: requiredP() },
           "resolve: renaming to a common alias causes conflict");
+
+  testEqv(Trait.resolve({ b: 'a' },
+            Trait({ a: Trait.required, b: 2 })),
+          { a: dataP(2),
+            b: requiredP() },
+          "resolve: renaming overrides required target");
+
+  testEqv(Trait.resolve({ b: 'a' },
+            Trait({ a: 2, b: Trait.required })),
+          { a: dataP(2),
+            b: requiredP() },
+          "resolve: renaming required properties has no effect");
 
   testEqv(Trait.resolve({ a: 'c', d: 'c' },
             Trait({ a: 1, b: 2 })),
