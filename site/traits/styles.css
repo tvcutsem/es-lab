@@ -1,3 +1,40 @@
+.api {
+  text-align: justify;
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-bottom-color: gray;
+  margin-top: 12px;
+}
+
+.api .api-signature {
+  font-size: 1.5em;
+  color: #006600;
+}
+
+.api-index {
+  list-style-type: none;
+}
+
+.api .api-example {
+  color: gray;
+  display: none;
+}
+
+.conflict {
+  color: red;
+}
+
+.required {
+  color: blue;
+}
+
+.example-button {
+  color: #ff6600;
+  font-size: 90%;
+  background: transparent;
+  border-style: hidden;
+}
+
 /* @group General Styles */
 
 body {
@@ -45,7 +82,10 @@ img {
 
 /* @group Layout */
 
-#container { 	width: 600px;	margin: 0px auto;	text-align: justify;
+#container { 
+	width: 800px;
+	margin: 0px auto;
+	text-align: justify;
 	background: #fff;
 }
 
@@ -55,7 +95,7 @@ img {
 
 #pageHeader {
 	text-align: left;
-	width: 600px;
+	width: 800px;
 	margin: 0 auto;
 	height: 93px;
 	background: url(images/header_bg.png) no-repeat;
@@ -88,14 +128,14 @@ img {
 }
 
 #contentTop {
-	width: 600px;
+	width: 800px;
 	height: 14px;
 	background: no-repeat url(images/content_top.png);
 }
 
 #contentBottom {
 	margin: 0 auto;
-	width: 600px;
+	width: 800px;
 	height: 14px;
 	background: url(images/content_bottom.png) no-repeat;
 }
@@ -450,21 +490,26 @@ ul.blog-tag-cloud li {
 .blog-entry-summary {
 	margin-bottom: 10px;
 }
-.blog-archive-headings-wrapper {
+
+.blog-archive-headings-wrapper {
 }
 
 .blog-archive-entries-wrapper {
 }
 
 .blog-archive-entries-wrapper .blog-entry {
-}.blog-archive-month {
+}
+
+.blog-archive-month {
 	font-size: 2.2em; 
 }
 
 .blog-archive-link { 
 	font-size: 1.2em; 
 	margin-bottom: 15px;
-}.blog-archive-link a:link, .blog-archive-link a:visited {
+}
+
+.blog-archive-link a:link, .blog-archive-link a:visited {
 }
 	
 /* @end */
@@ -648,7 +693,8 @@ ul.blog-tag-cloud li {
 	padding-top: 3px;
 	padding-left: 20px;
 	padding-right: 20px;
-	margin: 0px auto 30px; /* Right And Left Margin Widths To Auto */	text-align: justify; /* Hack To Keep IE5 Windows Happy */
+	margin: 0px auto 30px; /* Right And Left Margin Widths To Auto */
+	text-align: justify; /* Hack To Keep IE5 Windows Happy */
 }
 
 .photo-links {
@@ -886,11 +932,15 @@ p.exif-user-comment {
 .movie-page-title {
 	color: #0065d1; 
 	font-size: 2.2em;
-}.movie-page-description {
+}
+
+.movie-page-description {
 	font-size: 0.95em;
 	color: #b3b3b3;
 	margin-bottom: 10px;
-}.movie-thumbnail-frame {
+}
+
+.movie-thumbnail-frame {
 	width: 132px;
 	height: 132px;
 	float: left;
