@@ -1,3 +1,7 @@
+tt {
+  font-size: 130%;
+}
+
 .api {
   text-align: justify;
   border-bottom-width: 1px;
@@ -9,6 +13,7 @@
 .api .api-signature {
   font-size: 1.5em;
   color: #006600;
+  text-align: left;
 }
 
 .api-index {
@@ -21,11 +26,11 @@
 }
 
 .conflict {
-  color: red;
+  color: #990000;
 }
 
 .required {
-  color: blue;
+  color: #0099ff;
 }
 
 .example-button {
@@ -600,6 +605,7 @@ ul.blog-tag-cloud li {
 }
 
 .filesharing-item {
+  font-size: 150%;
 }
 
 .filesharing-item-title a:link {
