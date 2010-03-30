@@ -33,6 +33,13 @@ tt {
   color: #0099ff;
 }
 
+.download {
+  text-align: center;
+}
+.download a {
+  font-size: 150%;
+}
+
 .example-button {
   color: #ff6600;
   font-size: 90%;
