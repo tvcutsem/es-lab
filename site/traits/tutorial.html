@@ -82,20 +82,16 @@
       <div id="content">
         <!-- Start content -->
         <h1>Tutorial</h1>
-        <p>This tutorial explains how to use the traits.js library
-          by means of a couple of concrete examples.
+        <p>This tutorial explains how to use the <em>traits.js</em> library
+          by means of some concrete examples.
         This tutorial assumes a basic understanding of Javascript
         and of object-oriented programming in general.
+        It does not assume detailed knowledge of traits in other languages,
+        although this tutorial won't discuss their background, which is
+        <a href="http://code.google.com/p/es-lab/wiki/Traits#Background:_Traits">explained elsewhere</a>.
         
-        <p>If you're looking for background information on the library's
-          design or on traits in particular, <a href="http://code.google.com/p/es-lab/wiki/Traits">this page</a>
-        may be of help.
+        <h3>Part 1: An Enumerable Trait</h3>
         
-        <p>A complete version of the source code used in this tutorial can be downloaded <a href="http://code.google.com/p/es-lab/source/browse/trunk/src/traits/examples.js">here</a>.</p>
-        
-        <h3>Part 1: an Enumerable trait</h3>
-        
- 
         <p>Say we want to define a reusable piece of code for <em>enumerating</em> an
            abstract sequence of elements. Sure, the latest version of Javascript defines
            a number of useful higher-order operations on <tt>Array.prototype</tt>, such as
@@ -116,7 +112,7 @@
            elements of a sequence:
         
 <pre class="prettyprint lang-js">
-var EnumerableTrait = Trait({
+var EnumerableTrait = <strong>Trait</strong>({
   // the trait requires these properties
   forEach: Trait.required,
 
@@ -152,16 +148,19 @@ a distinguished <a href="api.html#required">Trait.required</a> value.
 
 <p>Note that the implementation of map, filter and reduce invokes the required forEach method by means of a message sent to <tt>this</tt>. In the context of a trait, <tt>this</tt> refers to an instance object that will be composed from one or more traits. It is expected that <tt>this</tt> eventually defines all required methods. In part 2, we'll see how this is ensured.
   
-<p>Attentive readers may have noticed that map and filter both return arrays. They don't return a mapped or filtered version of the original datatype. This can be fixed by parameterizing the trait explicitly with a constructor for the kind of sequence to which the trait is applied. Have a look at the completed <a href="http://code.google.com/p/es-lab/source/browse/trunk/src/traits/examples.js">example code</a> to see how such a parameterized trait could be constructed.
+<p>You may have noticed that map and filter both return arrays, regardless of the type of
+abstract sequence to which they are applied. They don't return a mapped or filtered version of the original datatype. This can be fixed by parameterizing the trait explicitly with a constructor for the kind of sequence to which the trait is applied. Have a look at the completed <a href="http://code.google.com/p/es-lab/source/browse/trunk/src/traits/examples.js">example code</a> to see how such a parameterized trait could be constructed.
 
-        <h3>Part 2: an Enumerable Interval</h3>
+        <h3>Part 2: An Enumerable Interval</h3>
+
+<p>Now that we have defined a reusable <tt>EnumerableTrait</tt> abstraction, let's define a concrete sequence datatype that makes use of it. Consider an integer interval bounded by a lower bound <tt>min</tt> (inclusive) and an upper bound <tt>max</tt> (exclusive). We will use the notation <tt>min..!max</tt> to denote such an interval. An interval is enumerable as a sequence of integers from <tt>min</tt> up to and including <tt>max - 1</tt>. Let's define a function <tt>makeInterval(min, max)</tt> that produces instances of such a data type:
 
 <pre class="prettyprint lang-js">
 function makeInterval(min, max) {  
-  return Trait.create(Object.prototype,
-    Trait.compose(
-      TEnumerable,
-      Trait({
+  return <strong>Trait.create</strong>(Object.prototype,
+    <strong>Trait.compose</strong>(
+      EnumerableTrait,
+      <strong>Trait</strong>({
         start: min,
         end: max,
         size: max - min - 1,
@@ -176,10 +175,25 @@ function makeInterval(min, max) {
 }
 </pre>
 
-        <h3>Part 3: a Comparable trait</h3>
-     
+<p>An interval object is defined as an instance of a trait (since it is created by calling <a href="api.html#create">Trait.create</a>). But an instance of what trait, exactly? It is an instance of a <em>composite</em> trait: a combination of the <tt>EnumerableTrait</tt> defined in part 1, and an anonymous trait describing the properties specific to an interval data type. The anonymous trait is created by calling the <a href="api.html#Trait">Trait constructor</a>. The two traits are combined into a composite trait by means of <a href="api.html#compose">Trait.compose</a>.
+  
+<p>Recall from part 1 that <tt>EnumerableTrait</tt> provides map, reduce and filter but requires the composer to provide it with a <tt>forEach</tt> method to enumerate the sequence's elements. The interval data type adheres to this contract. For this concrete interval sequence, <tt>forEach</tt> just yields the consecutive integers in the range <tt>min..!max</tt>. The interval data type benefits from this contract: by providing this one <tt>forEach</tt> method, it gets map, reduce and filter for free:
+
 <pre class="prettyprint lang-js">
-var TComparable = Trait({
+var i = makeInterval(0,5);
+i.start // 0
+i.end // 5
+i.reduce(0, function(a,b) { return a+b; }) // 0+1+2+3+4 = 10
+</pre>
+
+<p>The prototype of the interval object is set to <tt>Object.prototype</tt>. If the interval object is supposed to be part of some collection hierarchy, we could have also made it inherit from <tt>Collection.prototype</tt>. What's important here is that the prototype delegation hierarchy of the instance is completely separate from the trait composition. Both are independent of one another.
+
+        <h3>Part 3: A Comparable Trait</h3>
+
+<p>Let's define a second reusable trait. A <em>comparable</em> data type is a data type that can be compared with instances of itself using various boolean equality and inequality operators. Since most of these boolean operators can be defined in terms of others, it makes sense to factor out the common behavior in a trait:
+   
+<pre class="prettyprint lang-js">
+var ComparableTrait = <strong>Trait</strong>({
   '<': Trait.required, // this['<'](other) -> boolean
  '==': Trait.required, // this['=='](other) -> boolean
 
@@ -197,22 +211,28 @@ var TComparable = Trait({
   }
 });
 </pre>
-   
-        <h3>Part 4: an Enumerable Comparable Interval</h3>
+  
+<p>This trait provides four relational operators whose implementation depends on two required relational operators. By providing an implementation of these two operators, a concrete comparable data type "inherits" the implementation of the other four operators for free.
+ 
+        <h3>Part 4: An Enumerable Comparable Interval</h3>
+
+<p>Recall our bounded integer interval data type from part 2. We can define what it means for two intervals to be comparable. An interval <tt>a..!b == c..!d</tt> if and only if <tt>a == c &amp;&amp; b == d</tt>. One possible way to define less-than for intervals is that <tt>a..!b &lt; c..!d</tt> if and only if <tt>b &lt;= c</tt>, i.e. if the upper bound of the first interval does not exceed the lower bound of the second interval. For the mathematically inclined: this definition only induces a partial order on intervals (i.e. there exist overlapping intervals <tt>i1</tt> and <tt>i2</tt> such that neither <tt>i1 &lt; i2</tt> nor <tt>i2 &lt; i1</tt>) but that's OK.
+  
+<p>Having defined what it means for intervals to be comparable, we can go ahead and reuse the <tt>ComparableTrait</tt> defined in part 3:
 
 <pre class="prettyprint lang-js">
 function makeInterval(min, max) {  
-  return Trait.create(Object.prototype,
-    Trait.compose(
-      TEnumerable,
-      TComparable,
-      Trait({
+  return <strong>Trait.create</strong>(Object.prototype,
+    <strong>Trait.compose</strong>(
+      EnumerableTrait,
+      ComparableTrait,
+      <strong>Trait</strong>({
         start: min,
         end: max,
         size: max - min - 1,
         toString: function() { return ''+min+'..!'+max; },
         '<': function(ival) { return max <= ival.start; },
-        '==': function(ival) { return min === ival.start && max === ival.end; },
+        '==': function(ival) { return min == ival.start && max == ival.end; },
         contains: function(e) { return (min <= e) && (e < max); },
         forEach: function(consumer) {
           for (var i = min; i < max; i++) {
@@ -223,8 +243,110 @@ function makeInterval(min, max) {
 }
 </pre>
 
-  <h3>Part 5: dealing with conflicts</h3>
-     
+<p><a href="api.html#compose">Trait.compose</a> can combine any number of traits. The resulting interval abstraction now reuses two traits, and is therefore both enumerable and comparable. Again, in order to adhere to <tt>EnumerableTrait</tt>'s contract, the interval trait must provide implementations for <tt>&lt;</tt> and <tt>==</tt>. If any of these implementations were missing, <a href="api.html#create">Trait.create</a> would throw an exception. Now we can happily compare intervals as well:
+
+<pre class="prettyprint lang-js">
+var i1 = makeInterval(0,5);
+var i2 = makeInterval(7,12);
+i1['=='](i2) // false
+i1['<'](i2) // true
+</pre>
+
+  <h3>Part 5: Dealing With Conflicts</h3>
+  
+<p>Thus far, we have not yet encountered a situation where the composition of two or more traits leads to a name clash. Our <tt>EnumerableTrait</tt>, <tt>ComparableTrait</tt> and interval trait all define disjoint properties, so their composition is orthogonal. But now consider what happens if the author of the <tt>EnumerableTrait</tt> adds a method named <tt>contains</tt> that, given an element, returns whether or not the element is part of the sequence. It has a very naive implementation (we could speed it up, but it wouldn't add anything new to the discussion):
+
+<pre class="prettyprint lang-js">
+var EnumerableTrait = Trait({
+  forEach: Trait.required,
+  // map, filter, reduce defined as above
+  contains: function(e) {
+    var result = this.filter(function (elt) { elt === e });
+    return result.length > 0;
+  }
+});
+</pre>
+
+<p>If we were to run our code again after this change, the code would break. Why? When <tt>EnumerableTrait</tt> and the anonymous interval trait are combined using <a href="api.html#compose">Trait.compose</a>, this function will notice that both traits define a method named <tt>contains</tt>. It would record this fact in its resulting composite trait by binding <tt>contains</tt> to a <em>conflicting property</em>. Later, when <a href="api.html#create">Trait.create</a> instantiates this composite trait, it notices the unresolved conflict, and will throw an exception.
+
+<p>This behavior is perhaps the biggest advantage of traits over mixins or traditional multiple inheritance strategies: the fact that name clashes are not sorted out implicitly, but are rather recorded as conflicts that must be explicitly resolved by the trait composer. Note that the occurrence of the conflict is independent of the <em>order</em> in which the traits are composed.
+Any other ordering of the arguments to <a href="api.html#compose">Trait.compose</a> would have resulted in the same conflict, which is a Good Thing.
+
+<p>So how do we resolve this conflict? In this particular case, the designer of the interval data type will prefer his own, substantially faster, implementation of <tt>contains</tt> rather than inheriting a generic version from <tt>EnumerableTrait</tt>. The conflict can be resolved by the trait composer by explicitly <em>excluding</em> the <tt>contains</tt> property from <tt>EnumerableTrait</tt> before composing it. The tool for resolving conflicts in <em>traits.js</em> is named <a href="api.html#resolve">Trait.resolve</a>:
+
+<pre class="prettyprint lang-js">
+function makeInterval(min, max) {  
+  return Trait.create(Object.prototype,
+    Trait.compose(
+      <strong>Trait.resolve</strong>({ contains: undefined }, EnumerableTrait),
+      ComparableTrait,
+      Trait({
+        // interval implementation, as in part 4
+      })));
+}
+</pre>
+
+<p>Rather than directly reusing <tt>EnumerableTrait</tt>, the interval implementor
+   reuses a resolved trait that is in every way identical to <tt>EnumerableTrait</tt>,
+   except that <tt>contains</tt> is "undefined". What this means is that, in the
+   resolved trait, the property <tt>contains</tt> is marked as a <em>required</em>
+   property, rather than as a provided property. When
+   <a href="api.html#compose">Trait.compose</a> subsequently composes this trait
+   with the interval trait, it will replace this required property with the implementation
+   provided by the interval trait.
+   
+<p>Why does <a href="api.html#resolve">Trait.resolve</a> turn <tt>contains</tt> into
+   a required property rather than just removing it entirely from the trait? It's always
+   possible (although <em>traits.js</em> makes no attempt to verify this) that other methods
+   defined by <tt>EnumerableTrait</tt> depend on the implementation of the excluded property.
+   In order to maintain the integrity of the trait, we have to express the fact the composer
+   should provide <tt>EnumerableTrait</tt> with another implementation of the excluded property.
+   This is done by turning the excluded property into a required property of the trait.
+   
+<p>Sometimes a composer only wants to <em>augment</em> the definition of a method inherited
+   from a trait. That is, the composer wants to perform some behavior specific to the data
+   type, then perform the generic behavior inherited from the trait. The composer must somehow
+   be able to refer to the generic version of the method. Simply excluding the method from
+   the trait disables this. To this end, <a href="api.html#resolve">Trait.resolve</a> also
+   allows one to <em>rename</em> properties:
+
+<pre class="prettyprint lang-js">
+var t2 = Trait.resolve({ oldName: 'newName' }, t1);
+</pre>
+
+<p>In this case, <tt>t2.newName</tt> will refer to whatever <tt>t1.oldName</tt> refers.
+   However, just as in the case of excluded properties, <tt>t2</tt> will record the fact
+   that one of its properties was renamed by defining <tt>oldName</tt> as a required
+   property: since other methods of <tt>t1</tt> may have depended upon <tt>oldName</tt>,
+   a composer of <tt>t2</tt> must provide an implementation of <tt>oldName</tt>. However,
+   when the composer now defines his own version of <tt>oldName</tt>, he or she can refer
+   to the original (generic) implementation inherited from the trait by means of the name
+   <tt>newName</tt>.
+   
+   <h3>Conclusion</h3>
+   
+   <p>Now that you know how to deal with conflicts, you're all set to start using
+      <em>traits.js</em>. There really isn't that much more to it than this.
+      There are a couple of functions provided by the library that were not covered
+      in this tutorial, most notably <a href="api.html#override">Trait.override</a>
+      and <a href="api.html#object">Trait.object</a> which are mainly convenience
+      functions and <a href="api.html#eqv">Trait.eqv</a> which can be regarded as
+      an equality operator for traits.
+ 
+   <p>A complete version of the source code examples discussed in this tutorial can
+      be downloaded <a href="http://code.google.com/p/es-lab/source/browse/trunk/src/traits/examples.js">here</a>.
+  
+   <p>If you're interested in the data format used by <em>traits.js</em> to
+      represent traits, it is explained
+      <a href="http://code.google.com/p/es-lab/wiki/Traits#Traits_as_Property_Maps">
+      in some detail elsewhere</a>.
+      Briefly, traits are represented not as opaque values, but as plain
+      <em>property descriptor maps</em>. This is the same format as accepted by the
+      Ecmascript 5 built-in function <tt>Object.create</tt>. For this reason,
+      property descriptor maps and traits are completely interchangeable.
+      If anything, it means you can use <em>traits.js</em> as a simple library for
+      manipulating arbitrary property maps.
+        
       </div><!-- End content -->
     </div><!-- End main content wrapper -->
 

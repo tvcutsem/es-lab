@@ -21,7 +21,8 @@ tt {
 }
 
 .api .api-example {
-  color: gray;
+  color: #333333;
+  font-size: 1.3em;
   display: none;
 }
 
