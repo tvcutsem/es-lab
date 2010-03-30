@@ -79,20 +79,38 @@
       <div id="content">
         <!-- Start content -->
 
-        <p align="justify"><em>traits.js</em> is a minimal, standards-compliant trait
-        composition library for Javascript.
-
-        <div class="download"><a href="files/traits.js">Download v0.1</a></div>
-
-        <p>The latest development version can be found <a href=
+        <div class="intro"><em>traits.js</em> is a minimal, standards-compliant trait
+        composition library for Javascript.</div>
+        <div class="download">
+          <a href="files/traits.js">
+            <img style="float: left; border: none;"
+                 src="images/download.png" height="80px" caption="download"></img>
+            <table class="downloadtitle">
+              <tr><td><strong>Download</strong></td></tr>
+              <tr><td class="version">v0.1</td></tr>
+            </table>
+          </a>
+        </div>
+        
+        <p style="clear:both; padding-top: 20px">The latest development version can be found <a href=
         "http://code.google.com/p/es-lab/source/browse/#svn/trunk/src/traits">
         here</a>.
               
         <h4>Why traits?</h4>
-        <a href="http://en.wikipedia.org/wiki/Trait_(computer_science)">Traits</a> are a more
-        robust alternative to multiple inheritance and mixins.
+        
+        <p><a href="http://en.wikipedia.org/wiki/Trait_(computer_science)">Traits</a> are
+        a flexible mechanism to factor out and recombine reusable pieces of code.
+        They a more robust alternative to multiple inheritance and mixins.
+        They are more robust because name clashes must be resolved explicitly by composers,
+        and because trait composition is order-independent (i.e. more declarative).
       
         <h4>Why traits.js?</h4>
+        
+        <p>Because it's minimal, easy to understand and because it plays nicely
+           with the new
+           <a href="http://ejohn.org/blog/ecmascript-5-objects-and-properties/">object-manipulation API</a>
+          defined on <tt>Object</tt> in <a href="http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-262.pdf">Ecmascript 5th edition</a>.
+        
         <p><em>traits.js</em> is compliant with any
          Javascript engine supporting Ecmascript 262 Edition 3 and
          Edition 5. This includes the engines of all major

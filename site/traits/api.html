@@ -20,10 +20,10 @@
     var elt = document.getElementById(id);
     if (elt.style.display === 'none' || elt.style.display === '') {
       elt.style.display = 'inline';
-      document.getElementById(id+'-btn').innerText = 'Hide example';
+      document.getElementById(id+'-btn').innerHTML = 'Hide example';
     } else {
       elt.style.display = 'none';
-      document.getElementById(id+'-btn').innerText = 'Show example';
+      document.getElementById(id+'-btn').innerHTML = 'Show example';
     }
   }
   </script>

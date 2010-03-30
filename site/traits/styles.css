@@ -34,11 +34,29 @@ tt {
   color: #0099ff;
 }
 
-.download {
-  text-align: center;
+.intro {
+  font-size: 120%;
+  float: left;
+  width: 60%;
+  margin-top: 20px;
+  text-align: left;
 }
-.download a {
+
+.download {
   font-size: 150%;
+  float: right;
+  width: auto;
+  margin-top: 10px;
+}
+
+.downloadtitle {
+  float: left;
+  margin-top: 20px
+}
+
+.version {
+  font-size: 60%;
+  color: gray;
 }
 
 .example-button {
@@ -53,7 +71,7 @@ tt {
 body {
 	text-align: center;
 	font: 0.85em "Lucida Grande", Arial, Helvetica, Swiss, SunSans-Regular;
-	background: url(images/body_bg.png) repeat;
+	background: #2b2b2b;
 	margin: 20px;
 	color: #2b2b2b;
 	padding: 0;
