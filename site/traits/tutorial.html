@@ -16,13 +16,16 @@
         media="screen"
         href="sidebar.css" />
 
+  <link href="prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="prettify.js"></script>
+
 </head>
 
-<body>
+<body onload="prettyPrint()">
   <div id="pageHeader">
     <!-- Start page header -->
 
-    <h1>traits.js</h1>
+    <h1>traits<span style="color: orange">.js</span></h1>
 
     <h2>Traits for Javascript</h2>
 
@@ -79,8 +82,149 @@
       <div id="content">
         <!-- Start content -->
         <h1>Tutorial</h1>
+        <p>This tutorial explains how to use the traits.js library
+          by means of a couple of concrete examples.
+        This tutorial assumes a basic understanding of Javascript
+        and of object-oriented programming in general.
         
+        <p>If you're looking for background information on the library's
+          design or on traits in particular, <a href="http://code.google.com/p/es-lab/wiki/Traits">this page</a>
+        may be of help.
         
+        <p>A complete version of the source code used in this tutorial can be downloaded <a href="http://code.google.com/p/es-lab/source/browse/trunk/src/traits/examples.js">here</a>.</p>
+        
+        <h3>Part 1: an Enumerable trait</h3>
+        
+ 
+        <p>Say we want to define a reusable piece of code for <em>enumerating</em> an
+           abstract sequence of elements. Sure, the latest version of Javascript defines
+           a number of useful higher-order operations on <tt>Array.prototype</tt>, such as
+           <tt>map</tt>, <tt>filter</tt> and <tt>reduce</tt> operations. But these are defined
+           only on arrays. If we define our own datatype, we'll have to redefine all of these
+           operations from scratch.
+           
+        <p>Traits are reusable building blocks. Their goal is to factor out
+           a common piece of functionality that can be reused by multiple abstractions,
+           regardless of those abstractions' inheritance chain (in Javascript: prototype chain).
+           In traits.js, a trait is simply a collection of <em>required</em> and
+           <em>provided</em> properties. Required properties are like abstract methods in
+           a traditional class hierarchy: they must be implemented by the trait composer.
+           The trait's provided methods may rely on these required methods.
+           
+        <p>Consider a simple <tt>EnumerableTrait</tt> that provides the higher-order methods
+           map, filter and reduce given a forEach method that can provide it with successive
+           elements of a sequence:
+        
+<pre class="prettyprint lang-js">
+var EnumerableTrait = Trait({
+  // the trait requires these properties
+  forEach: Trait.required,
+
+  // the trait provides these properties:
+  map: function(fun) {
+    var seq = [];
+    this.forEach(function(e,i) {
+      seq.push(fun(e,i));
+    });
+    return seq;
+  },
+  filter: function(pred) {
+    var seq = [];
+    this.forEach(function(e,i) {
+      if (pred(e,i)) {
+        seq.push(e);          
+      }
+    });
+    return seq;
+  },
+  reduce: function(fun, optInit) {
+    var result = optInit;
+    this.forEach(function(e,i) {
+      result = fun(result, e, i);
+    });
+    return result;
+  }
+});
+</pre>
+
+<p>A trait is defined by invoking the <a href="api.html#Trait">Trait constructor</a>. This constructor takes as its argument a simple Javascript object literal that describes the properties of the trait. Required properties are defined by assigning a property name to
+a distinguished <a href="api.html#required">Trait.required</a> value.
+
+<p>Note that the implementation of map, filter and reduce invokes the required forEach method by means of a message sent to <tt>this</tt>. In the context of a trait, <tt>this</tt> refers to an instance object that will be composed from one or more traits. It is expected that <tt>this</tt> eventually defines all required methods. In part 2, we'll see how this is ensured.
+  
+<p>Attentive readers may have noticed that map and filter both return arrays. They don't return a mapped or filtered version of the original datatype. This can be fixed by parameterizing the trait explicitly with a constructor for the kind of sequence to which the trait is applied. Have a look at the completed <a href="http://code.google.com/p/es-lab/source/browse/trunk/src/traits/examples.js">example code</a> to see how such a parameterized trait could be constructed.
+
+        <h3>Part 2: an Enumerable Interval</h3>
+
+<pre class="prettyprint lang-js">
+function makeInterval(min, max) {  
+  return Trait.create(Object.prototype,
+    Trait.compose(
+      TEnumerable,
+      Trait({
+        start: min,
+        end: max,
+        size: max - min - 1,
+        toString: function() { return ''+min+'..!'+max; },
+        contains: function(e) { return (min <= e) && (e < max); },
+        forEach: function(consumer) {
+          for (var i = min; i < max; i++) {
+            consumer(i,i-min);
+          }
+        }
+      })));
+}
+</pre>
+
+        <h3>Part 3: a Comparable trait</h3>
+     
+<pre class="prettyprint lang-js">
+var TComparable = Trait({
+  '<': Trait.required, // this['<'](other) -> boolean
+ '==': Trait.required, // this['=='](other) -> boolean
+
+ '<=': function(other) {
+    return this['<'](other) || this['=='](other);
+  },
+  '>': function(other) {
+    return other['<'](this);
+  },
+ '>=': function(other) {
+    return other['<'](this) || this['=='](other);
+  },
+ '!=': function(other) {
+    return !(this['=='](other));  
+  }
+});
+</pre>
+   
+        <h3>Part 4: an Enumerable Comparable Interval</h3>
+
+<pre class="prettyprint lang-js">
+function makeInterval(min, max) {  
+  return Trait.create(Object.prototype,
+    Trait.compose(
+      TEnumerable,
+      TComparable,
+      Trait({
+        start: min,
+        end: max,
+        size: max - min - 1,
+        toString: function() { return ''+min+'..!'+max; },
+        '<': function(ival) { return max <= ival.start; },
+        '==': function(ival) { return min === ival.start && max === ival.end; },
+        contains: function(e) { return (min <= e) && (e < max); },
+        forEach: function(consumer) {
+          for (var i = min; i < max; i++) {
+            consumer(i,i-min);
+          }
+        }
+      })));
+}
+</pre>
+
+  <h3>Part 5: dealing with conflicts</h3>
+     
       </div><!-- End content -->
     </div><!-- End main content wrapper -->
 
