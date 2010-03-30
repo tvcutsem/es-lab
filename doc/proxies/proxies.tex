@@ -309,6 +309,7 @@ Upon fixing an object proxy, the prototype of the generated object is the \textt
 %\texttt{Object.isExtensible(proxy)} always returns \texttt{true} if a proxy is trapping and \texttt{false} when it is fixed.
 
 %TODO: drop Proxy.isTrapping?
+%TODO: could be another important design principle: whether or not to fully virtualize an API
 A method is defined on \texttt{Proxy} to distinguish trapping proxies from regular objects or fixed proxies:
 \texttt{Proxy.isTrapping(anObject)} returns \texttt{true} if and only if \texttt{anObject} is a proxy and is in trapping mode. This is the single, reliable way of testing whether an object is a trapping proxy or not. Note that a proxy cannot influence the outcome of this method. Once a proxy is fixed, it is in all ways simply a normal object, with no built-in way to detect that it had ever been a trapping proxy.
 
