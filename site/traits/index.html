@@ -111,10 +111,20 @@
            <a href="http://ejohn.org/blog/ecmascript-5-objects-and-properties/">object-manipulation API</a>
           defined on <tt>Object</tt> in <a href="http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-262.pdf">Ecmascript 5th edition</a>.
         
+        <p>Another distinguishing feature of <em>traits.js</em> is that it introduces
+           traits without also introducing classes in Javascript. In this library, traits
+           are like lambdas: first-class citizens, freely lexically nestable,
+           anonymous and not linked to an implicit namespace.
+           
+        <p>What about the roles supported by classes but not supported by traits, such as
+           per-instance private state and constructors to initialize that state?
+           If you want per-instance private state, wrap your trait in a closure capturing that state.
+           That closure will additionally act as the "constructor". That's all the mechanism you need.
+           
         <p><em>traits.js</em> is compliant with any
          Javascript engine supporting Ecmascript 262 Edition 3 and
          Edition 5. This includes the engines of all major
-         browsers. It does not depend on browser-specific additions.
+         browsers. It does not depend on browser-specific features.
           
       </div><!-- End content -->
     </div><!-- End main content wrapper -->
