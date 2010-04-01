@@ -115,7 +115,7 @@ Mark S. Miller\\%\titlenote{}\\
 
 \section{Introduction}
 
-We describe the design of a new metalevel API for Javascript that enables the creation of generic proxies around objects. Such proxies are useful for creating generic interposing abstractions between objects, which are in turn useful for enforcing access control (sandboxing), for implementing adaptors around older libraries to enable change in the face of legacy compatibility constraints, etc. Proxies can also be used to create ``virtualized'' objects: persistent objects, remote objects, lazy creation of objects, \ldots
+We describe the design of a new metalevel API for Javascript that enables the creation of generic proxies for objects. Such proxies are useful for creating generic interposing abstractions between objects, which are in turn useful for enforcing access control (sandboxing), for implementing adaptors around older libraries to enable change in the face of legacy compatibility constraints, etc. Proxies can also be used to create ``virtualized'' objects: persistent objects, remote objects, lazy creation of objects, \ldots
 
 %General context/motivation
 %need for proxy metalevel APIs to enable objects (and by extension entire APIs) to be fully virtualized.
@@ -126,10 +126,13 @@ We describe the design of a new metalevel API for Javascript that enables the cr
 %- adaptors for interfacing with another system (e.g. Javascript/Caja, AmbientTalk/Java or more generally: <your favourite scripting language>/JVM)
 %- tracing/logging/profiling
 
+We will use the term \emph{intercession API} to refer to any API, framework or language feature that enables the creation of new base-level objects with custom meta-level behavior.
+% do our claims also hold true for non OO APIs?
+
 The goals of this paper are:
 \begin{itemize}
-  \item To introduce in detail a robust intercession API for Javascript
-  \item To share some design principles specific to intercessive APIs which we think should hold true in general
+  \item To introduce in detail a robust proxy-based intercession API for Javascript.
+  \item To share some design principles that we have applied successfully to our API, but which we think should be applicable to similar such APIs for other languages or systems.
 \end{itemize}
 
 \section{A Brief History of Javascript}
@@ -137,51 +140,81 @@ The goals of this paper are:
 % Javascript vs ECMAScript
 % ECMAScript 3, ECMAScript 5, es5-strict, ECMAScript Harmony
 %  we should definitely introduce es5 seal,freeze,preventExtensions and property attributes
-The official, standardized version of the Javascript language is named ECMAScript and is standardized by the ECMA TC39 committee. The latest edition of the ECMAScript standard, ECMA-262, 5th edition~\cite{ecma262} was published in December 2009. The latest version of ECMAScript adds to the language support for defensively consistent objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). ECMAScript 5 also defines a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived ``language warts'', edge cases and inconsistencies.
+The official, standardized version of the Javascript language is named ECMAScript. The latest edition of ECMAScript, ECMA-262, 5th edition~\cite{ecma262}, adds to the language support for defensively consistent objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). ECMAScript 5 also defines a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived ``language warts'', edge cases and inconsistencies.
 
 % Execution environment: the browser (DOM API for interacting with webpage, XHR object)
-Javascript is conceived of as a scripting language. In practice, this implies that the language runtime is often embedded within a larger execution environment. By far the most common execution environment is the web browser. In this environment, the global object is named \texttt{window} and gives Javascript objects access to the content and structure of web pages via the ``Document Object Model'' (DOM) API. Other important objects include the \texttt{XmlHttpRequest} (XHR) object that allows Javascript code to asynchronously communicate with its originating server.
+Javascript is conceived as a scripting language which implies that the language runtime is often embedded within a larger execution environment. By far the most common execution environment for Javascript is the web browser. In this environment, the global object is named \texttt{window} and gives Javascript objects access to the content and structure of web pages via the ``Document Object Model'' (DOM) API. Other important objects include the \texttt{XmlHttpRequest} (XHR) object that allows Javascript code to asynchronously communicate with its originating server.
 
 % The 'good parts': objects, arrays, functions
-At its core, and despite its C-like surface syntax, Javascript is a simple dynamic language that inherits first-class lexically scoped functions from Scheme~\cite{scheme} and prototype-based objects from Self~\cite{self}. Javascript has a surprisingly elegant object literal notation that enables the lightweight creation of one-off objects.
+At its core, Javascript is a simple dynamic language that inherits first-class lexically scoped functions from Scheme~\cite{scheme} and prototype-based objects from Self~\cite{self}. Javascript has a surprisingly expressive object literal notation that enables the lightweight creation of one-off, anonymous, objects.
 
 \section{Reflection in Javascript}
 
+Before we discuss Javascript's support (and lack of support) for reflection, we introduce some terminology from the field of computational reflection~\cite{maes-oopsla87} and metaprogramming~\cite{kiczales-artofthemop}.
+
 \subsection{Metaobject Protocols}
-In this section, we discuss Javascript's support (and lack of support) for reflection. First, we introduce some terminology from the field of computational reflection~\cite{maes-oopsla87} and metaprogramming~\cite{kiczales-artofthemop}. A metaobject protocol supports \emph{introspection} if it enables reflective access to the structure and values of an object's properties. It further supports \emph{invocation} if methods and constructors can be invoked reflectively, and \emph{self-modification} if its properties' values can be changed reflectively. Finally, it supports \emph{intercession} if the metalevel operations defined on objects can be \emph{replaced} with custom operations.
 
-The first three operations are typically well-supported by most metaobject protocols. Java's \texttt{java.lang.reflect} package, for example, supports introspection, invocation and self-modification. However, metaobject protocols that additionally support intercession are rare. The CLOS metaobject protocol is the most well-known example of a metaobject protocol supporting intercession~\cite{clos}.
+A metaobject protocol is basically an object-oriented framework that describes the behavior of an object-oriented language.
 
-In an object-oriented language, computation is comprised mostly of method calls. Historically, many programming languages have provided ``ad hoc'' intercession support for method calls. The classic example is Smalltalk's \texttt{doesNotUnderstand:} method, inherited by all objects from the \texttt{Object} class. When the Smalltalk VM cannot find a method selector in an object's class or superclasses, it invokes the object's \texttt{doesNotUnderstand:} method instead, passing along the reified selector and arguments array. Objects are free to treat the invocation however they please, but the default is to simply raise an exception stating that the message was not understood. While this approach is simple and well-understood, we will describe a number of significant downsides of this approach in section~\ref{sub:intercession_in_javascript}.
+A metaobject protocol supports \emph{introspection} if it enables reflective access to the structure of an object, and the values contained in this structure. It supports \emph{self-modification} if it is possible to modify this structure (e.g. add a new method, assign a field). It further supports \emph{invocation} if it enables the reflective invocation of an object's behavior. Finally, it supports \emph{intercession} if it enables the creation of meta-objects with custom structure and behavior.
 
-Another ad hoc approach to support intercession of method calls is Java's \texttt{java.lang.reflect.Proxy} abstraction. A proxy is created with an \texttt{InvocationHandler} instance and a list of interface types. The Java VM ensures that the returned proxy is an instance of the provided interfaces. Furthermore, all invocations on the proxy are reified as calls to the proxy's associated invocation handler's \texttt{invoke} method. The distinction between proxies and invocation handlers avoids the pitfalls of the \texttt{doesNotUnderstand:} approach, and our approach for adding intercession to Javascript is based on Java's proxy mechanism (cf. Section~\ref{sec:proxies_for_javascript}).
+The first three operations are typically well-supported by most metaobject protocols. Java's \texttt{java.lang.reflect} package, for example, supports introspection, invocation and limited self-modification. However, metaobject protocols that additionally support intercession are rare. The CLOS metaobject protocol is the foremost example of a metaobject protocol supporting intercession~\cite{clos}.
+
+It is customary for a metaobject protocol to represent language operations defined on objects as methods of their meta-objects. Throughout the rest of this paper, we use the term ``operation'' to characterize operations such as message sending, property access, assignment, method definition, performing an \texttt{instanceof} operation, and so on.
+
+In a proper object-oriented language, the dominant operation applied to objects is the message send (or method invocation). It is therefore unsurprising to observe that, historically, many programming languages have provided ``ad hoc'' intercession of method invocations. For example, in Smalltalk, the class \texttt{Object} defines a method named \texttt{doesNotUnderstand:}. When the Smalltalk VM cannot find a method selector in an object's class or superclasses, it invokes the object's \texttt{doesNotUnderstand:} method instead, passing along the selector and the arguments, reified as an array. Objects are free to treat the invocation however they please. The default response is to raise an exception stating that the message was not understood. While this approach is simple and flexible, we describe the drawbacks of this approach in section~\ref{sub:intercession_in_javascript}.
+
+Another well-known example of an ad-hoc intercession API is Java's \texttt{java.lang.reflect.Proxy} abstraction. Proxies are instances of classes that implement one or more interfaces. A proxy instance is created with a reference to an \texttt{InvocationHandler} instance and a list of interface types. The Java VM synthesizes a new class that implements these interfaces. All invocations on the proxy are reified as calls to the proxy's associated invocation handler's \texttt{invoke} method. The distinction between proxies and invocation handlers avoids the pitfalls of the \texttt{doesNotUnderstand:} approach, and our intercession API for Javascript is based on Java's proxy mechanism (cf. Section~\ref{sec:proxies_for_javascript}).
 
 \subsection{Introspection and Invocation in Javascript}
+\label{sub:introspection_in_js}
 
-Javascript has excellent support for introspection, invocation and self-modification, so much so that these properties are regarded as an essential part of the language, rather than being made available via a separate ``metaobject protocol''. This is largely due to the language's representation of objects as records mapping arbitrary strings to values. In Javascript, a property name is just a string. Property names can be computed at runtime and their value can be retrieved using array indexing notation. The following code snippet demonstrates introspection, invocation and self-modification in Javascript:
+Javascript has built-in support for introspection, invocation and self-modification. In fact, these properties are provided as part of the language, rather than through a distinct metaobject protocol. This is largely because Javascript objects are represented as flexible records mapping arbitrary strings to values. In Javascript, a property name is just a string. Property names can be computed at runtime and their value can be retrieved using array indexing notation. The following code snippet demonstrates introspection, invocation and self-modification in Javascript:
 
-\begin{lstlisting}
-var o = { x: 5, m: function(y) { return this.x + y; } }
-o["x"] // returns 5 (introspection)
-o["m"].apply(o,[2]) // returns 7 (invocation)
-"y" in o // returns false (introspection)
-o["x"] = 6 // sets x to 6 (self-modification)
-var props = [];
-// iterate over o's properties (introspection)
-for (var p in o) {
-  if (o.hasOwnProperty(p)) { props.push(p); }
-}
-// props is now an array of o's non-inherited properties
+\begin{lstlisting}[language=javascript]
+var o = {
+  x: 5,
+  m: function(y) { return this.x + y; }
+};
+// introspection:
+o["x"] // property access
+"y" in o // property lookup
+Object.keys(o) // array of own property names
+// invocation:
+o["m"].call(o,2) // method call
+// self-modification:
+o["x"] = 6 // property assignment
+o.z = 7 // add a property
+delete o.z // remove a property
 \end{lstlisting}
+
+One of the major changes of the latest standard, ECMAScript 5, is the addition of a new object-manipulation API that provides programmers with more fine-grained control over the nature of properties~\cite{ecma262}. Ecmascript 5 associates with each property in an object a set of attributes, describing whether the property is writable (i.e.~can be set), enumerable (~i.e. appears in \texttt{for-in} loops) or configurable (~i.e. whether these attributes themselves are mutable). The following code snippet shows how these attributes can be inspected and defined.
+
+\begin{lstlisting}[language=javascript]
+var pd = Object.getOwnPropertyDescriptor(o, 'x');
+x.value // 5
+x.writable // true
+
+Object.defineProperty(o, 'z', {
+  value: 7,
+  writable: false,
+  enumerable: false,
+  configurable: true
+});
+\end{lstlisting}
+
+The \texttt{pd} object and the third argument to \texttt{defineProperty} are called \emph{property descriptors}. They are objects that describe properties of objects.
+
+For the first time in the history of Javascript, the availability of these new attributes enables the creation of objects that can prevent their clients from tampering with their properties. Ecmascript 5 introduces the notion of non-extensible, sealed and frozen objects. Non-extensible objects cannot be extended with new properties. Sealed objects are non-extensible and all of their properties are non-configurable. Frozen objects are sealed and all of their properties are non-writable. To freeze an object \texttt{obj}, one invokes \texttt{Object.freeze(obj)}. We describe in Section~\ref{} how the addition of these kinds of objects has influenced the design of our intercession API.
 
 \subsection{Intercession in Javascript}
 \label{sub:intercession_in_javascript}
 
-Javascript lacks any form of intercession for objects. It is not possible to redefine the semantics of the dot-operator, or array indexing on objects. Neither is it possible affect the outcome of the binary \texttt{in} operator or the \texttt{for-in} statement.
+Javascript has no built-in support for intercession. It is not possible to redefine the application of the dot-operator, array indexing, the \texttt{in}-operator and so on.
 
-Spidermonkey, Mozilla's implementation of Javascript as used in Firefox, has long included a non-standard way of interceding method calls based on Smalltalk's \texttt{doesNotUnderstand:} method. In Spidermonkey, this ``trap method'' is named \lstinline{__noSuchMethod__} and can be used as follows:
+Spidermonkey, Mozilla's implementation of Javascript, has long included a non-standard way of interceding method calls based on Smalltalk's \texttt{doesNotUnderstand:} method. In Spidermonkey, this method is named \lstinline{__noSuchMethod__}. For example, a proxy that can generically forward all received messages to a target object \texttt{o} is created as follows:
 
-\begin{lstlisting}
+\begin{lstlisting}[language=javascript]
 function makeProxy(o) {
   return {
     __noSuchMethod__: function(prop, args) {
@@ -191,96 +224,108 @@ function makeProxy(o) {
 }
 \end{lstlisting}
 
-The return value of \texttt{makeProxy} is an object that forwards any messages it does not understand to \texttt{o}.
-
 % discuss the problems of __noSuchMethod__ (extension of Firefox to enable the creation of proxies in the tradition of Smalltalk-like 'doesNotUnderstand:' hooks)
-While the \lstinline{__noSuchMethod__} trap method is straightforward, it has a number of important drawbacks.
+In what follows, we will refer to methods such as \texttt{__noSuchMethod__} and \texttt{doesNotUnderstand:} as \emph{traps}. The advantage of such traps is their perceived simplicity. The drawback is that the traps are not \emph{stratified}.
 
-Intercession is not stratified:
+The only way in which a trap is distinguished from a regular method is by their name. Programmers that are unaware of the naming convention could accidentally define a method with the same name, leading to unexpected interactions. A violation of stratification can lead to two subtly different kinds of confusion:
+
 \begin{itemize}
-  \item Programmers not aware of the ``special status'' of the trap could accidentally define a method with the same name, leading to unexpected interactions. While this may seem unlikely at first, attributing certain method names with special semantics is most definitely not a scalable solution. What if we were to introduce additional such traps to intercess not only method invocation, but also property access, assignment, enumeration, etc.? The number of ``reserved method names'' would quickly grow out of hand.
-  
-  \item The trap method may conflict with other base-level code. For example, it could show up unexpectedly in a \texttt{for-in} loop. Ecmascript 5 does provide support to filter out such properties automatically by explicitly defining them as non-enumerable.
-  
-  \item Because the trap method is part of the proxy, it fails to relay messages named \lstinline{__noSuchMethod__} to \texttt{o}. That is, invoking \lstinline{aProxy.__noSuchMethod__('foo',[1])} will lead to the invocation of \lstinline{o.foo(1)} rather than the invocation \lstinline{o.__noSuchMethod__('foo',[1])}, leaking the proxy abstraction.
-  
-  %\item Objects cannot distinguish a missing method invocation from a direct invocation of \lstinline{__noSuchMethod__}. %TODO: can this create a security hazard? If so, explain
+  \item Say an object \texttt{o} purposely overrides the trap. Clients of an object can accidentally invoke the trap method as if it were an application-level method. Since traps are plain methods, nothing prevents these traps from being invoked as if they were plain methods. This confuses meta-level code, since the call ``originated'' from the base-level.
+  \item Say an object \texttt{o} accidentally overrides the trap, treating that method name as part of the application. The VM may then incidentally invoke the application method as if it were a trap. This confuses the base-level code, since the call ``originated'' from the meta-level.
 \end{itemize}
+
+Granted, for a method named \texttt{__noSuchMethod__} this hypothetical confusion may seem far-fetched, although in Smalltalk \texttt{doesNotUnderstand:} is a pretty reasonable name for an application to use. But this critique misses the essential point, which is that the intercession API is polluting the name space of the application. This is not a scalable approach. What if we were to introduce additional such traps to intercept not only method invocation, but also property access, assignment, lookup, enumeration, etc.? The number of ``reserved method names'' would quickly grow out of hand. The reason that the lack of stratification has not really posed a significant problem \emph{in practice} is that Spidermonkey and Smalltalk define only one such special method.
+
+So far in our discussion, we have limited the confusion caused by the lack of stratification to the fact that a trap is invoked by the wrong code. However, there are many other ways in which the trap method may conflict with other base-level code. For example, in Javascript a common idiom is to enumerate all properties of an object. Say we want to populate the content of a drop-down list in an HTML form with id \texttt{id} with all of the properties of an object \texttt{obj}:
+
+\begin{lstlisting}[language=javascript]
+function populate(id, obj) {
+  var select = document.getElementById(id);
+  for (var name in obj) {
+    var opt = document.createElement('option');
+    opt.text = name;
+    select.add(opt, null); // append opt
+  }
+}
+\end{lstlisting}
+
+If \texttt{obj} defines \texttt{__noSuchMethod__} for the sake of intercepting method invocations, this method will show up in the enumeration of \texttt{obj}'s properties, probably leading to unexpected results.
+
+Another drawback of defining the trap as part of the proxy is that it becomes impossible to recursively trap invocations of the trap \emph{itself}. Say \texttt{p} is a proxy. The invocation \lstinline{p.__noSuchMethod__('foo',[1])} itself cannot be intercepted. It is not transparently insert another proxy \texttt{p2} in between the caller and \texttt{p} such that \texttt{p2}'s \texttt{__noSuchMethod__} trap is invoked as \lstinline{p2.__noSuchMethod__('__noSuchMethod__',['foo',[1]])}. We will show in Section~\ref{sub:doublelifting} that this recursive pattern of proxying proxies themselves has benefits when proxies can trap more than a single operation.
 
 \section{Proxies for Javascript}
 \label{sec:proxies_for_javascript}
 
-In our proposed proxy extension to Javascript, intercession is only supported for distinct proxy objects, controlled by a handler object.
+Our intercession API for Javascript supports intercession only for distinct proxy objects, controlled by a handler object. The methods of the handler object describe the behavior of the language operations when applied to the proxy object. We will call these methods \emph{traps}.
 
-The distinction between proxy and handler object enforces stratification of the traps. Also, the distinction between special ``proxy objects'' and regular objects ensures that the vast majority of objects does not pay the overhead of intercession. We will support this claim with empirical data in section~\ref{benchmarks}.
+The distinction between a proxy and its handler object enforces stratification of the traps. Traps are no longer methods defined as part of the intercepted object, but are defined on handlers. Handlers can be treated as ``meta-objects'' that hook into the ``metaobject protocol''.
 
-%In keeping with the current distinction in the spec between objects and functions, we found that the cleanest approach to catch-alls was to introduce two kinds of proxies: object proxies and function proxies.
-% Tom: I propose to leave function proxies out of the paper for now, in the interest of simplicity
-%var proxy = Proxy.createFunction(handler, callTrap, constructTrap);
+Also, the distinction between proxy objects and regular objects ensures that non-proxy objects (which we expect makes up the vast majority of objects in a system) do not pay the overhead associated with intercession. We support this claim with empirical data in section~\ref{benchmarks}.
 
 A proxy for an object is created as follows:
 
-\begin{lstlisting}
+\begin{lstlisting}[language=javascript]
 var proxy = Proxy.create(handler, proto);
 \end{lstlisting}
 
 Here, \texttt{handler} is an object that is supposed to implement a particular meta-level API and \texttt{proto} is an optional argument object representing the proxy's prototype.
 
-The proxy's prototype is only used for the purposes of \texttt{instanceof} tests. % TODO: explain further
-
 % TODO: we should introduce the API piecemeal. All at once may be too overwhelming.
 % perhaps we should even just consider the Object.* traps outside the scope of this paper
-\begin{lstlisting}
+\begin{lstlisting}[language=javascript]
 {
   has:       function(name) -> boolean                 // name in proxy
   get:       function(receiver, name) -> any           // receiver.name
   set:       function(receiver, name, val) -> boolean  // receiver.name = val
-  invoke:    function(receiver, name, args) -> any     // receiver.name(...args)
   delete:    function(name) -> boolean                 // delete proxy.name
   enumerate: function() -> [string]                    // for (name in proxy)
-                                // (return array of own and inherited properties)
+  keys:      function() -> [string]                    // Object.keys(proxy)
+  defineProperty: function(name, pd) -> null           // Object.defineProperty(proxy,name,pd)
+  ...
 }
 \end{lstlisting}
 
-As an example, consider the following generic proxy abstraction that simply forwards all operations invoked on it to another object \texttt{obj}. Most use cases of proxies will start from this general pattern but will add additional semantics around the forwarding operations.
+As an example, consider the following generic forwarding proxy abstraction. Each trap simply applies the operation to a target object \texttt{obj}. Most use cases of proxies will be variations on this simple forwarding semantics, usually just augmenting some operations.
 
 \begin{lstlisting}[language=javascript]
-function handlerMaker(obj) {
+function makeForwaringHandler(obj) {
   return {
    delete:     function(name) { return delete obj[name]; },    
    has:        function(name) { return name in obj; },
    get:        function(receiver, name) { return obj[name]; },
    set:        function(receiver, name, val) { obj[name] = val; return true; },
-   invoke:     function(receiver, name, args) { return obj[name].apply(obj,args); },
    enumerate:  function() {
      var result = [];
      for (name in obj) { result.push(name); };
      return result;
-   }, 
+   },
+   ...
   };
 };
-var proxy = Proxy.create(handlerMaker(obj));
+var proxy = Proxy.create(makeForwaringHandler(obj),
+                         Object.getPrototypeOf(obj));
 \end{lstlisting}
 
 \subsection{Stratification}
 
-The handler is a regular object. It may delegate to other objects and its delegation chain and is completely independent from that of the proxy it handles. A single handler may handle multiple proxies. The handler can be a proxy itself.
+The handler is a regular object. It may delegate to other objects and its delegation chain and is completely independent from that of the proxy it handles. A single handler may handle multiple proxies. The handler can be a proxy itself (we will illustrate a use case of this in Section~\ref{sub:doublelifting}).
 
-Calling \lstinline{aProxy.get} , \lstinline{aProxy.fix} explicitly on a proxy will not trigger the proxy’s corresponding traps. Instead, the call will be reified like any other. That is, \lstinline{aProxy.fix([])} invokes the handler’s \lstinline{invoke(aProxy,'fix',[])} trap. Traps can only be invoked explicitly on a proxy’s handler, not on the proxy itself. This enforces stratification (the meta-level traps should not interfere with base-level method names). Thus, proxies continue to work correctly if an application (by accident or by design) uses the names \texttt{get}, \texttt{set}, \texttt{has}, etc.
+Calling \lstinline{aProxy.get}, \lstinline{aProxy.fix} explicitly on a proxy will not trigger the proxy’s corresponding traps. Instead, the call will be reified like any other. That is, \lstinline{aProxy.fix([])} invokes the handler’s \lstinline{invoke(aProxy,'fix',[])} trap. Traps can only be invoked explicitly on a proxy’s handler, not on the proxy itself. This enforces stratification (the meta-level traps should not interfere with base-level method names). Thus, proxies continue to work correctly if an application (by accident or by design) uses the names \texttt{get}, \texttt{set}, \texttt{has}, etc.
 
-% Design Principle: define traps on a handler object that is separate from the object being intercessed to achieve stratification.
+This brings us to our first design principle:
+
+\textbf{Stratification:} traps can be stratified by defining them on an object that is distinct from the proxy being intercepted.
 
 \subsection{Dealing with immutability}
+\label{sub:immutability}
 
-Ecmascript 5 associates with each property in an object record a set of attributes, describing whether the property is writable (i.e.~can be set), enumerable (~i.e. appears in \texttt{for-in} loops) or configurable (~i.e. whether these attributes themselves are mutable). Additionally, the latest standard introduces the notion of non-extensible, sealed and frozen objects~\cite{ecma262}. Non-extensible objects cannot be extended with new properties. Sealed objects are non-extensible and all of their properties are non-configurable. Frozen objects are sealed and all of their properties are non-writable.
-
-Non-extensible, sealed and frozen objects provide useful guarantees that programmers can rely upon. When designing a proxy mechanism, great care must be taken that proxies cannot break these guarantees. For example, if \texttt{o} is an object, then \texttt{Object.freeze(o)} freezes that object. If the programmer knows \texttt{o} is frozen, he knows that \texttt{o.foo} will consistently return the same value. If \texttt{o} is a proxy, we do not want a proxy to violate this guarantee.
+Recall from section~\cite{sub:introspection_in_js} that Ecmascript 5 introduces the notion of non-extensible, sealed and frozen objects. These objects provide useful guarantees that programmers can rely upon. When designing a proxy mechanism, care should be taken that proxies cannot break these guarantees. For example, if \texttt{o} is an object, then \texttt{Object.freeze(o)} freezes that object. If the programmer knows \texttt{o} is frozen, he can rely on the fact that \texttt{o.foo} will consistently return the same value. If \texttt{o} is a proxy, we do not want a proxy to violate this assumption.
 
 To reconcile non-extensible, sealed and frozen objects with proxies, we introduce an additional trap named \texttt{fix}.
 
 % Introduce the distinction between trapping and fixed proxies
 
-\begin{lstlisting}
+\begin{lstlisting}[language=javascript]
 return {
   ...,
   fix: function() {
@@ -294,7 +339,7 @@ return {
 }
 \end{lstlisting}
 
-The \texttt{fix} trap is introduced to enable a proxy to interact with ECMAScript 5's new \texttt{Object.preventExtensions}, \texttt{Object.seal} and \texttt{Object.freeze} primitives. A non-extensible, sealed or frozen object should somehow restrict the handler’s freedom in terms of what it can return from subsequent calls to \texttt{set}, \texttt{get}, etc. For example, if previous invocations of \texttt{handler.get(p, ``foo'')} returned a non-undefined value (for some \texttt{handler} of a proxy \texttt{p}), then future invocations of \texttt{handler.get(p, ``foo'')} should return the same value when \texttt{p} is frozen.
+The \texttt{fix} trap is introduced to enable a proxy to interact with the \texttt{Object.preventExtensions}, \texttt{Object.seal} and \texttt{Object.freeze} primitives available in ECMAScript 5. A non-extensible, sealed or frozen object should somehow restrict the handler’s freedom in terms of what it can return from subsequent calls to \texttt{set}, \texttt{get}, etc. For example, if previous invocations of \texttt{handler.get(p, ``foo'')} returned a non-undefined value (for some \texttt{handler} of a proxy \texttt{p}), then future invocations of \texttt{handler.get(p, ``foo'')} should return the same value when \texttt{p} is frozen.
 
 Proxies enforce these restrictions as follows: every time an external object tries to freeze, seal or make a proxy non-extensible, the \texttt{fix} trap is invoked on the proxy’s handler. At that point, the handler has two options:
 \begin{enumerate}
@@ -330,11 +375,9 @@ A method is defined on \texttt{Proxy} to distinguish trapping proxies from regul
 %
 %The advantage is that the metaprogrammer need only implement the lower-level traps. The higher-level traps will automatically
 %work as expected, working in terms of the lower-level traps.
-%
-%Interesting constraint that seems to recur across languages:
-%when overriding the high-level trap, the low-level trap must also be overridden, in order to maintain a consistent semantics between the traps.
 
 \subsection{Double Lifting}
+\label{sub:doublelifting}
 % explain double lifting trick
 % handler as a proxy, include figure
 % discipline that a proxy only interacts with its handler through method invocation
@@ -343,25 +386,38 @@ A method is defined on \texttt{Proxy} to distinguish trapping proxies from regul
 % hides the complexity of the meta-level API
 % apply this to membranes
 
+% Design Principle: handlers can be proxies themselves
+
 % Design Principle: express all meta-level computation (interaction with the handler)
 % using a single primitive such that shifting two levels requires intercession of only one operation
 
-\subsection{What to intercess}
+\subsection{Selective Interception}
 % tradeoff between what to intercess and what to fix upfront
-% rationale for e.g. 
-% providing the prototype and [[Class]] upfront in Proxy.create
-% distinction between Proxy.create and Proxy.createFunction (committing to typeof upfront)
+
+A proxy-based intercession API introduces a tradeoff between what operations can be intercepted by proxy handlers on the one hand, versus what operations have a reliable outcome from the language runtime and the programmer's point of view. We already briefly touched upon this issue in Section~\ref{sub:immutability} when discussing how proxies interact with operations that make non-extensible, sealed or frozen. As we have discussed, the \texttt{fix} trap enables a proxy handler to dynamically decide whether or not to commit to a fixed representation.
+
 % commit to identity upfront (possible because we don't intercess equality)
+Some operations may be so critical that we don't want proxies to influence their outcome. One such operation is testing for equality. In Javascript, the expression \texttt{a === b} determines whether \texttt{a} and \texttt{b} refer to identical objects. The \texttt{===} operator comes with an entire list of guarantees that are implicitly taken for granted by programmers. For example, \texttt{===} is commutative, transitive, reflexive and deterministic (it always reports the same answer given the same arguments). Furthermore, testing \texttt{a} and \texttt{b} for equality should not grant \texttt{a} access to \texttt{b} or vice versa. For all these reasons, we decided not to enable proxy handlers to trap \texttt{===}. Proxies cannot influence the outcome of this operation.
 
-% discuss: when can user-code run?
-% introducing new interleaving points
-%  a === b
-%  typeof
-% 'a' in b -> violation
-%  for-in loops and enumerate()
+As in the case of \texttt{===}, the fact that an operation should be deterministic is a requirement for many operations. To uphold determinism, the operation should not be delegated to a proxy handler. However, just because an operation should have a deterministic result does not mean that it cannot be reliably intercepted. When an operation requires a deterministic, stable result, this result can be provided once to the proxy when it is created. There are two concrete examples of this in our intercession API.
 
-% Design Principle: distinguish aspects of objects that you wish to commit to upfront
-% Factor these aspects out of the handler API, and make them configurable via the proxy constructor instead
+The first example is that proxies must commit to their prototype upfront. Recall from section~\ref{sec:proxies_for_javascript} that the second argument to \texttt{Proxy.create} denotes the proxy's prototype. This has two important effects: the first is that Ecmascript's built-in operation \texttt{Object.getPrototypeOf} remains deterministic, even when applied to a proxy. The second is that proxies cannot influence \texttt{instanceof} when they are used as the left-hand operand: to determine whether \texttt{proxy instanceof Foo} is true, the implementation need only look at the prototype of \texttt{proxy}, which using our API it can do without consulting the proxy.
+
+The second example is that proxies have to decide upfront whether or not they will represent a function. In Javascript, functions are almost plain objects, but they differ in some important aspects. The details are beyond the scope of this paper, but for example the expression \texttt{typeof o} evaluates to \texttt{"object"} if \texttt{o} is ``just'' an object and to \texttt{"function"} if \texttt{o} is a function. Creating a function proxy is quite distinct from creating an object proxy:
+
+\begin{lstlisting}[language=javascript]
+var f = Proxy.createFunction(handler, callTrap, constructTrap);
+f(); // calls callTrap
+new f(); // calls constructTrap
+\end{lstlisting}
+
+The first argument to \texttt{Proxy.createFunction} is exactly the same kind of handler object used to define object proxies. The additional arguments \texttt{callTrap} and \texttt{constructTrap} are functions that respectively reify Javascript's function call and \texttt{new} operator. By requiring proxies to determine at creation time whether or not they will proxy for an object or a function, the language runtime is able to uphold important invariants that it would have to forfeit if it would have to consult the \texttt{handler}. For example, unlike \texttt{create}, \texttt{createFunction} does not accept a prototype argument. Functions always inherit from \texttt{Function.prototype}, and this API enforces that invariant.
+
+Another aspect to take into account when deciding whether or not a certain operation can be intercepted by a proxy is the fact that it may lead to arbitrary code being run in places where the language runtime or the programmer did not expect this to. For example, without our intercession API, the expression \texttt{name in obj} does not trigger Javascript code. Since \texttt{in} is a primitive operation, the evaluation of this expression occurs entirely within the language runtime, without it ever having to run non-native code. Proxies may change these assumptions.
+
+In our particular case, proxies enable non-native code to run while evaluating the \texttt{in} operator, the \texttt{delete} operator and \texttt{for-in} loops, yet they preserve the integrity of \texttt{===} and \texttt{typeof}. It's hard to make general claims about what operations should generally be interceptable and which should not. It is a design decision that depends on the particulars of the system at hand. The point that we want to make is that it's important to recognize that such a tradeoff exists. This brings us to the following design principle:
+
+\textbf{Selective interception:} determine what properties of an object should be to committed to upfront. If these properties are required to be stable but may be configurable, turn them into parameters of the proxy constructor rather than retrieving them via a handler trap.
 
 \subsection{Fundamental versus derived traps}
 
@@ -370,6 +426,16 @@ Some traps may be subsumed by other, more general traps. Nevertheless, sometimes
 Show example, e.g. getOwnProperty returns undefined vs pd can be translated into has returning a boolean.
 
 % Design Principle: tradeoff between a minimal API versus a number of ad hoc traps for efficiency
+
+\subsection{Trapping method invocations}
+% Get+Call versus Invoke
+% var f = o.m; f.apply(o, [1, 2, 3]);
+% o.m(1,2,3)
+
+%Interesting constraint that seems to recur across languages:
+%when overriding the high-level trap, the low-level trap must also be overridden, in order to maintain a consistent semantics between the traps.
+
+% Design principle: tradeoff between distinction of semantically equivalent code, but precisely because we reveal the distinction to proxies, we allow them to break the invariant
 
 \section{Case: Membranes and Script Compartments}
 % es-lab's compartments building on membranes
@@ -425,10 +491,6 @@ Application of the membrane abstraction to the isolation of mutually distrustful
 
 A membrane around an SES \texttt{eval}\footnote{Ref to \texttt{es-lab} project for SES and Securable ES5.} creates a compartment in which one can run potentially malicious code, confident that the resulting potentially malicious objects can interact with the world outside this compartment only as permitted by the objects you provide them. Once the compartment is revoked, not only is all their connectivity severed, it is severed in ways the garbage collector can recognize. Given a good enough collector, these hostile objects cannot even continue to occupy your memory.
 
-\section{Open Issues}
-% argument evaluation order?
-% get+call versus invoke
-
 \section{Implementation}
 Briefly discuss Andreas Gal's Tracemonkey implementation.
 
@@ -444,7 +506,7 @@ We categorize related work into three classes, based on whether the work support
   \item intercession of missing method invocations only
 \end{itemize}
 
-% TODO: we should probably see which of our design principles holds true for these systems
+% TODO: we should check which of our design principles holds true for these systems
 
 \paragraph{Intercession of multiple meta-level operations}
 
@@ -489,7 +551,7 @@ The main difference between Java proxies and Javascript proxies is that Java pro
 Recapitulate our ``design principles''. Should be generally applicable (apart from Javascript).
 \begin{itemize}
   \item Stratification of proxy and handler.
-  \item What to intercess: committing to values upfront.
+  \item What operations to intercept: committing to values upfront.
   \item Fundamental versus derived traps: allocation.
   \item Double lifting.
   \item Fixing: dealing with immutability.
