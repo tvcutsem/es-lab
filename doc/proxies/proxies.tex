@@ -274,13 +274,14 @@ Here, \texttt{handler} is an object that is supposed to implement a particular m
 % perhaps we should even just consider the Object.* traps outside the scope of this paper
 \begin{lstlisting}[language=javascript]
 {
-  has:       function(name) -> boolean                 // name in proxy
-  get:       function(receiver, name) -> any           // receiver.name
-  set:       function(receiver, name, val) -> boolean  // receiver.name = val
-  delete:    function(name) -> boolean                 // delete proxy.name
-  enumerate: function() -> [string]                    // for (name in proxy)
-  keys:      function() -> [string]                    // Object.keys(proxy)
-  defineProperty: function(name, pd) -> null           // Object.defineProperty(proxy,name,pd)
+  has:       function(name) -> boolean                // name in proxy
+  get:       function(receiver, name) -> any          // receiver.name
+  set:       function(receiver, name, val) -> boolean // receiver.name = val
+  delete:    function(name) -> boolean                // delete proxy.name
+  enumerate: function() -> [string]                   // for (name in proxy)
+  keys:      function() -> [string]                   // Object.keys(proxy)
+  defineProperty: function(name, pd) -> null          // Object.defineProperty(proxy,name,pd)
+  getOwnPropertyDescriptor: function(name) -> pd      // Object.getOwnPropertyDescriptor(name)
   ...
 }
 \end{lstlisting}
@@ -290,15 +291,11 @@ As an example, consider the following generic forwarding proxy abstraction. Each
 \begin{lstlisting}[language=javascript]
 function makeForwaringHandler(obj) {
   return {
-   delete:     function(name) { return delete obj[name]; },    
    has:        function(name) { return name in obj; },
    get:        function(receiver, name) { return obj[name]; },
    set:        function(receiver, name, val) { obj[name] = val; return true; },
-   enumerate:  function() {
-     var result = [];
-     for (name in obj) { result.push(name); };
-     return result;
-   },
+   delete:     function(name) { return delete obj[name]; },
+   keys:       function() { return Object.keys(obj) },
    ...
   };
 };
@@ -421,21 +418,70 @@ In our particular case, proxies enable non-native code to run while evaluating t
 
 \subsection{Fundamental versus derived traps}
 
-Some traps may be subsumed by other, more general traps. Nevertheless, sometimes it may be useful to provide more specific traps for efficiency. Our rule of thumb: less allocations.
+The handler protocol of our intercession API provides 12 traps in total, each intercepting a different Javascript operation applied to a proxy. The exact nature of the handler protocol will of course vary greatly from language to language. However, there is one interesting observation about our protocol that we think may apply to other languages as well: some traps can be expressed in terms of the semantics of other traps (i.e. the semantics of the operation which they intercept is subsumed by the semantics of some other operation). We will refer to such traps as \emph{derived} traps, since their implementation may in fact be derived from other, more \emph{fundamental} traps.
 
-Show example, e.g. getOwnProperty returns undefined vs pd can be translated into has returning a boolean.
+\subsubsection{Efficiency: the case for derived traps}
 
-% Design Principle: tradeoff between a minimal API versus a number of ad hoc traps for efficiency
+It turns out that our intercession API is comprised of 7 fundamental traps and 5 derived traps. If we can get away with 7 traps, why define 12 of them? The reason is efficiency: implementing a derived trap directly may be more efficient than using its default implementation based on the corresponding fundamental trap. In our particular design, as a rule of thumb, we introduced derived traps only if their implementation could intercept the operation with less allocations than the corresponding implementation based on the fundamental trap.
 
-\subsection{Trapping method invocations}
-% Get+Call versus Invoke
-% var f = o.m; f.apply(o, [1, 2, 3]);
-% o.m(1,2,3)
+As a concrete example, consider the expression \texttt{name in obj}. The \texttt{in} operator returns a boolean indicating whether \texttt{obj} defines or inherits a property named \texttt{name}. If \texttt{obj} is a proxy, this operation will trigger the handler's \texttt{has(name)} trap, which should return a boolean. \texttt{has} is a derived trap: its semantics can be directly derived from the fundamental trap \texttt{getPropertyDescriptor} which, given a property name, returns either a property descriptor for a property corresponding to that name if it exists, or returns \texttt{undefined} otherwise. Clearly, \texttt{has} could have just been defined as:
 
-%Interesting constraint that seems to recur across languages:
-%when overriding the high-level trap, the low-level trap must also be overridden, in order to maintain a consistent semantics between the traps.
+\begin{lstlisting}[language=javascript]
+has: function(name) {
+  return this.getPropertyDescriptor(name) !== undefined;
+}
+\end{lstlisting}
 
-% Design principle: tradeoff between distinction of semantically equivalent code, but precisely because we reveal the distinction to proxies, we allow them to break the invariant
+While this is a correct implementation of \texttt{has}, the downside is that \texttt{getPropertyDescriptor} needlessly allocates a property descriptor in the case that the named property exists. A custom implementation of \texttt{has} can often avoid this allocation.
+
+While defining the intercession API, we found that there is another force at play that can prevent designers from introducing a derived trap, even if it were more efficient.
+
+\subsubsection{Consistency: the case against derived traps}
+
+One reason \emph{not} to introduce a derived trap, even in the face of improved efficiency, is that introducing the distinction may break language invariants that may surprise the language runtime and programmers.
+
+Once the API provides a proxy handler with both a fundamental and a derived trap, there is no guarantee that a proxy handler will effectively make sure that the derived trap is indeed semantically equivalent to the canonical derived implementation. For example, if a proxy handler is given the option to override both the \texttt{has} and the \texttt{getPropertyDescriptor} traps, it is not enforced that these traps return mutually consistent results. That is, without proxies, the programmer can count on the following invariant:
+
+\begin{lstlisting}[language=javascript]
+(name in obj) === (Object.getPropertyDescriptor(name) !== undefined)
+\end{lstlisting}
+
+If \texttt{obj} is a proxy, this invariant is no longer guaranteed! \texttt{has} could return true and \texttt{getPropertyDescriptor} could return false. We may characterize a proxy handler with such a behavior as ``ill-defined'' or ``buggy'', but the fact of the matter is that both the language runtime and programmers can no longer count on the invariant being upheld.
+
+The requirement of mutual consistency between operations is an opposing force in the decision of whether or not to introduce a derived trap for a certain operation. Whether the benefits of efficiency outweigh the mutual consistency of operations is, again, based on the particulars of the system and there is no general answer.
+
+One interesting case where mutual consistency outweighed efficiency gain was the decision not to introduce a derived trap to intercept method invocations. In Javascript, a method call expression \texttt{obj.m(1,2,3)} is evaluated by looking up the property \texttt{m} in \texttt{obj}, and then applying the resulting value as a function to the arguments. This semantics can even be expressed approximately in Javascript itself as \texttt{var f = obj.m; f.apply(obj, [1,2,3])}.
+
+In a first design iteration, we defined a separate trap for method invocations: the expression \texttt{proxy.m(1,2,3)} calls \texttt{handler.invoke(obj,'m',[1,2,3])} where \texttt{handler} is \texttt{proxy}'s handler. The expression \texttt{proxy.m} calls \texttt{handler.get(proxy, 'm')}. Clearly, given the invariant sketched in the previous paragraph, \texttt{invoke} is a derived trap corresponding to the more fundamental \texttt{get} trap. Its canonical derived implementation would be:
+
+\begin{lstlisting}[language=javascript]
+invoke: function(rcvr, name, args) {
+  return this.get(rcvr, name).apply(rcvr, args);
+}
+\end{lstlisting}
+
+\texttt{invoke} is a useful derived trap because in some cases it can avoid the allocation of a function. Say a proxy wants to virtualize some non-object resource as an object. Say this resource has a property \texttt{foo} that should behave like a method. Part of the proxy handler's traps could be implemented as follows:
+
+\begin{lstlisting}[language=javascript]
+get: function(rcvr, name) {
+  if (name === 'foo') {
+    return function(a,b) {
+      // handle proxy.foo(a,b)
+    } 
+  } else ...
+}
+invoke: function(rcvr, name, args) {
+  if (name === 'foo') {
+    // handle proxy.foo(args)
+  } else ...
+}
+\end{lstlisting}
+
+Here, the \texttt{invoke} trap saves the allocation of a function that \texttt{get} has to perform to curry over the arguments of the invocation. Eventually, we dropped the \texttt{invoke} trap because the invariant that it can break is so deeply rooted in the understanding of Javascript's method invocation semantics.
+
+Note that, even if the programmer of a proxy handler has the best intentions to uphold the consistency between fundamental and derived traps (as in the example code above), upholding the consistency introduces a maintenance cost: if either of the two traps is later changed, or any of them gets overridden in a delegating object, the other trap should likewise be changed or overridden.
+
+\textbf{Fundamental versus Derived Traps:} an intercession API faces a tradeoff between defining a minimal API consisting only of fundamental traps versus defining a more complex API that introduces derived traps. Derived traps may be more efficient, but may break invariants that hold between the operations corresponding to the fundamental and the derived trap.
 
 \section{Case: Membranes and Script Compartments}
 % es-lab's compartments building on membranes
