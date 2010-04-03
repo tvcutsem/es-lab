@@ -383,9 +383,9 @@ A method is defined on \texttt{Proxy} to distinguish trapping proxies from regul
 % hides the complexity of the meta-level API
 % apply this to membranes
 
-Our intercession API requires proxy handlers to implement 12 traps. A common use case for proxy handlers is to, for example, perform an access control check before performing the operation on some wrapped object. Only if the check succeeds is the operation is forwarded. A straightforward implementation would duplicate the pattern of access checking and forwarding in each trap. Ideally, if all operations would be funneled through a single trap, the handler would only have to perform the access check once, in the single trap.
+A common use case for proxy handlers is, for example, to perform an access control check before performing the operation on some wrapped object. Only if the check succeeds is the operation forwarded. Since there are 12 different operations that proxy handlers can intercept, a straightforward implementation would have to duplicate the pattern of access checking and forwarding the operation in each trap. It's difficult to abstract this pattern, because each operation has to be ``forwarded'' in a different way, as exemplified by the forwarding handler in Section~\ref{sec:proxies_for_javascript}. Ideally, if all operations could be uniformly funneled through a single trap, the handler would only have to perform the access check once, in the single trap.
 
-We can achieve such funneling of all operations through a single trap by treating a proxy handler \emph{itself} as a proxy. In meta-programming terms, this corresponds to shifting meta-levels twice: the handler for a proxy that represents a handler effectively resides at the meta-meta-level. To avoid the confusion that invariably follows from this type of level-shifting, let us introduce some terminology. The \emph{base-level proxy} is the proxy object that with which other regular application objects will interact. That proxy's handler is the \emph{base-level handler}. If the base-level handler is itself a proxy, it is \emph{also} a \emph{meta-level proxy}. The handler of a meta-level proxy is a \emph{meta-level handler}.
+We can achieve such funneling of all operations through a single trap by treating a proxy handler \emph{itself} as a proxy. In meta-programming terms, this corresponds to shifting to the meta-meta-level. To avoid the confusion that invariably follows from such shifting between meta-levels, let us introduce some terminology. The \emph{base-level proxy} is the proxy object that with which other regular application objects will interact. That proxy's handler is the \emph{base-level handler}. If the base-level handler is itself a proxy, it is \emph{also} a \emph{meta-level proxy}. The handler of a meta-level proxy is a \emph{meta-level handler}.
 
 We carefully designed the intercession API such that proxies only interact with their associated handler by invoking their traps. Proxies never assign, enumerate or test for the presence of traps on their handler. Because of this invariant, if the base-level handler is \emph{only} used in its role as the handler for a base-level proxy, the meta-level handler only needs to implement the \texttt{get} trap. Because method invocation is the only operation performed on meta-level proxies, only this single trap is triggered on meta-level handlers.
 
@@ -397,14 +397,15 @@ We carefully designed the intercession API such that proxies only interact with 
 % p.x                blh.get(p,'x')          mlh.get(blh,'get').apply(blh,[p,'x'])
 %                                                                    fh.get(p,'x')      target['x']
 
-Another way of looking at it is as follows. At the base-level, Javascript computation is reified in the form of 12 distinct kinds of operations that are being applied to objects as computation progresses. At the meta-level, all of these operations are reified as messages sent to handlers. Therefore, at the meta-meta-level, handlers need to reify only a single operation (property access), since all other operations have been recast in terms of property access.
+Another way to explain why this funneling works is as follows. At the base-level, there is an assortment of operations that are performed on Javascript objects as computation progresses (e.g. property lookup, access, assignment, enumeration, \ldots). At the meta-level (that is: in the intercession API), all of these operations are reified uniformly as method invocations on handlers. Therefore, at the meta-level, the only operation performed on meta-level objects (base-level handlers) is property access, and meta-meta-level objects (meta-level handlers) only need to handle this single operation in their protocol.
 
-Naturally, one can apply this trick of shifting meta-levels at the meta-meta-level itself. In fact, the API does not prevent one from shifting an arbitrary number of meta-levels. This legitimately brings up the question of infinite meta-regress. Such an infinite regress is avoided as long as a proxy handler is eventually implemented as a concrete Javascript object, rather than as yet another proxy.
+We will show an example of this technique of funneling all methods in Section~\ref{sec:membranes}.
+
+Naturally, one can apply this trick of shifting meta-levels at the meta-meta-level recursively. The API allows an arbitrary number of such meta-level shifts. This brings up the question of infinite meta-regress. Such an infinite regress is avoided as long as a proxy handler is eventually implemented as a concrete Javascript object, rather than as yet another proxy.
 
 % Design Principle: handlers can be proxies themselves
 % Design Principle: express all meta-level computation (interaction with the handler)
 % using a single primitive such that shifting two levels requires intercession of only one operation
-
 To summarize, this section reveals two important design principles of proxy-based intercession APIs:
 
 \textbf{Meta-level shifting:} a proxy-based intercession API supports shifting to a new meta-level by implementing a handler as a proxy.
@@ -507,6 +508,7 @@ Note that, even if the programmer of a proxy handler has the best intentions to 
 \textbf{Fundamental versus Derived Traps:} an intercession API faces a tradeoff between defining a minimal API consisting only of fundamental traps versus defining a more complex API that introduces derived traps. Derived traps may be more efficient, but may break invariants that hold between the operations corresponding to the fundamental and the derived trap.
 
 \section{Case: Membranes and Script Compartments}
+\label{sec:membranes}
 % es-lab's compartments building on membranes
 
 As with the simple membrane of figure 9.3, p 71 of Robust Composition, the following is the simplest expository membrane that satisfies the formal property of unavoidable transitive interposition.
