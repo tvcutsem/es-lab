@@ -15,10 +15,11 @@
         type="text/css"
         media="screen"
         href="sidebar.css" />
-        
+  <link href="prettify.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="prettify.js"></script>      
 </head>
 
-<body>
+<body onload="prettyPrint()">
   <div id="pageHeader">
     <!-- Start page header -->
 
@@ -35,8 +36,7 @@
            id="current"
            name="current">Home</a></li>
 
-        <li><a href="http://code.google.com/p/es-lab/downloads/list?can=2&amp;q=label:traits&amp;colspec=Filename+Summary+Uploaded+Size+DownloadCount"
-           rel="self">Download</a></li>
+        <li><a href="http://code.google.com/p/es-lab/downloads/list?can=2&amp;q=label:traits&amp;colspec=Filename+Summary+Uploaded+Size+DownloadCount" target="_top">Download</a></li>
 
         <li><a href="api.html"
            rel="self">API</a></li>
@@ -45,11 +45,9 @@
            rel="self">Tutorial</a></li>
 
         <li><a href=
-        "http://code.google.com/p/es-lab/issues/list?q=label%3Atraits"
-           rel="self">Bug Tracker</a></li>
+        "http://code.google.com/p/es-lab/issues/list?q=label%3Atraits" target="_top">Bug Tracker</a></li>
 
-        <li><a href="http://groups.google.com/group/traits-js"
-           rel="self">Discuss</a></li>
+        <li><a href="http://groups.google.com/group/traits-js?hl=en" target="_top">Discuss</a></li>
       </ul>
     </div><!-- End navigation -->
   </div><!-- End page header -->
@@ -99,11 +97,13 @@
         <h4>Why traits?</h4>
         
         <p><a href="http://en.wikipedia.org/wiki/Trait_(computer_science)">Traits</a> are
-        a flexible mechanism to factor out and recombine reusable pieces of code.
-        They a more robust alternative to multiple inheritance and mixins.
+        a flexible language feature to factor out and recombine reusable pieces of code.
+        They are a more robust alternative to multiple inheritance or mixins.
         They are more robust because name clashes must be resolved explicitly by composers,
-        and because trait composition is order-independent (i.e. more declarative).
-      
+        and because trait composition is order-independent (hence more declarative).
+        To put it simply: if you combine two traits that define a method with the same name,
+        your program will fail. Traits won't automatically give precedence to either one.      
+                
         <h4>Why traits.js?</h4>
         
         <p>Because it's minimal, easy to understand and because it plays nicely
@@ -111,20 +111,41 @@
            <a href="http://ejohn.org/blog/ecmascript-5-objects-and-properties/">object-manipulation API</a>
           defined on <tt>Object</tt> in <a href="http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-262.pdf">Ecmascript 5th edition</a>.
         
-        <p>Another distinguishing feature of <em>traits.js</em> is that it introduces
-           traits without also introducing classes in Javascript. In this library, traits
-           are like lambdas: first-class citizens, freely lexically nestable,
-           anonymous and not linked to an implicit namespace.
+        <p><em>traits.js</em> introduces traits without also introducing classes.
+           In this library, traits are like Javascript's functions:
+           anonymous, first-class and freely lexically nestable.
            
-        <p>What about the roles supported by classes but not supported by traits, such as
-           per-instance private state and constructors to initialize that state?
-           If you want per-instance private state, wrap your trait in a closure capturing that state.
-           That closure will additionally act as the "constructor". That's all the mechanism you need.
+        <p>What about the roles of classes not normally supported by traits, such as
+           instance-private state and constructors to initialize that state?
+           These roles are already supported by Javascript's functions: you can nest
+           traits inside functions that close over the required state, and you can use
+           the function body as the "constructor".
+           Here's an obligatory 'point-and-color' example:
+<pre class="prettyprint lang-js noborder">
+function makeColorTrait(col) {
+  return Trait({
+    color: function() { return col; }
+  });
+}
+function makePoint(x, y) {
+  return Trait.create(      // create an instance of a trait
+   Object.prototype,        // that inherits from Object.prototype
+   Trait.compose(           // and is the composition of
+     makeColorTrait('red'), // a color trait
+     Trait({                // and an anonymous point trait
+       getX: function() { return x; },
+       getY: function() { return y; },
+       toString: function() { return ''+x+'@'+y; }               
+     })));
+}
+var p = makePoint(0,2);
+p.color() // 'red'
+</pre>
            
-        <p><em>traits.js</em> is compliant with any
-         Javascript engine supporting Ecmascript 262 Edition 3 and
-         Edition 5. This includes the engines of all major
-         browsers. It does not depend on browser-specific features.
+        <p><em>traits.js</em> is designed to work with the new object manipulation API
+         defined in Ecmascript-262, Edition 5. However, the library is backwards-
+         compatible with Edition 3 (most browsers do not support Ecmascript 5, yet).
+         The library does not depend on any browser-specific features.
           
       </div><!-- End content -->
     </div><!-- End main content wrapper -->
@@ -148,5 +169,18 @@
       <!-- Start the breadcrumb wrapper -->
     </div><!-- End breadcrumb -->
   </div><!-- End Footer -->
+  <script type="text/javascript">
+
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-7331943-5']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+
+  </script>
 </body>
 </html>
