@@ -249,7 +249,7 @@ var t = Trait.<strong>override</strong>(t1, t2);
           <p><strong>required</strong> is a singleton object that serves as a placeholder
             for a trait's required properties.
           <p>In principle, <strong>required</strong> should only be used inside
-            the record definition passed to the <tt>Trait</tt> constructor.
+            the record definition passed to the <a href="#Trait">Trait constructor</a>.
           </div>
           <a id="required-example-btn"
              onclick="toggleExample('required-example')"
@@ -281,7 +281,7 @@ var t = Trait({
             <tt>Object.create</tt> except that it generates high-integrity, "final" objects.
             In addition to creating a new object from a trait, it also ensures that:
             <ul>
-              <li>the object is and all of its accessor and method properties are frozen.
+              <li>the object and all of its accessor and method properties are frozen.
               <li>the <tt>this</tt> pseudovariable in all accessors and methods of the object is
                   bound to the instantiated object. Hence, even if methods of the trait instance
                   are extracted and used as funargs, <tt>this</tt> will retain its correct binding.
@@ -291,7 +291,7 @@ var t = Trait({
              should not be used as the prototype of other objects (because <tt>this</tt> would
              not refer to the delegating child object). That is why these instances are called
              "final" objects.
-          <p>Use <a href="#Object_create">Object.create</a> instead of <strong>Trait.create</strong> if you want your trait instances to remain malleable or to act
+          <p>Use <a href="#Object_create">Object.create</a> instead of <strong>Trait.create</strong> if you want your trait instances to remain malleable or if you want them to act
             as prototypes of other objects.
           </div>
           <a id="create-example-btn"
@@ -318,7 +318,7 @@ var o = <strong>Trait.create</strong>(
              of property names and for all property names n, the property descriptor t1[n]
              is equivalent to the property descriptor t2[n]. Two property descriptors are
              equivalent if they have the same value, accessors and attributes.
-          <p>The value of a property descriptor is compared using <tt>===</tt>.
+          <p>The value of two property descriptors is compared using <tt>===</tt>.
           </div>
           <a id="eqv-example-btn"
              onclick="toggleExample('eqv-example')"
@@ -337,7 +337,7 @@ var o = <strong>Trait.create</strong>(
         <div id="object" class="api">
           <span class="api-signature">Trait.<strong>object</strong>(record: <em>Object</em>) : <em>Object</em></span>
           <div class="api-text">
-          <p><strong>object</strong> takes a record describing a trait as an argument
+          <p><strong>object</strong> takes as its sole argument a record describing a trait
             and returns an instance of that trait whose prototype is <tt>Object.prototype</tt>.
           <p><tt>Trait.object({...})</tt> is a shorthand notation for:<br>
              <tt>Trait.create(Object.prototype, Trait({...}))</tt>.

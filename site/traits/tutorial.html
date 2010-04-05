@@ -251,23 +251,23 @@ i1['<'](i2) // true
 
   <h3>Part 5: Dealing With Conflicts</h3>
   
-<p>Thus far, we have not yet encountered a situation where the composition of two or more traits leads to a name clash. Our <tt>EnumerableTrait</tt>, <tt>ComparableTrait</tt> and interval trait all define disjoint properties, so their composition is orthogonal. But now consider what happens if the author of the <tt>EnumerableTrait</tt> adds a method named <tt>contains</tt> that, given an element, returns whether or not the element is part of the sequence. It has a very naive implementation (we could speed it up, but it wouldn't add anything new to the discussion):
+<p>Thus far, we have not yet encountered a situation where the composition of two or more traits leads to a name clash. The <tt>EnumerableTrait</tt>, <tt>ComparableTrait</tt> and interval trait all define disjoint properties, so their composition does not produce conflicts. Now consider what happens if the author of the <tt>EnumerableTrait</tt> adds a method named <tt>contains</tt> that, given an element, returns whether or not the element is part of the sequence. It has a very naive implementation (we could speed it up, but it wouldn't add anything new to the discussion):
 
 <pre class="prettyprint lang-js">
 var EnumerableTrait = Trait({
   forEach: Trait.required,
   // map, filter, reduce defined as above
   contains: function(e) {
-    var result = this.filter(function (elt) { elt === e });
+    var result = this.filter(function (elt) { return elt === e; });
     return result.length > 0;
   }
 });
 </pre>
 
-<p>If we were to run our code again after this change, the code would break. Why? When <tt>EnumerableTrait</tt> and the anonymous interval trait are combined using <a href="api.html#compose">Trait.compose</a>, this function will notice that both traits define a method named <tt>contains</tt>. It would record this fact in its resulting composite trait by binding <tt>contains</tt> to a <em>conflicting property</em>. Later, when <a href="api.html#create">Trait.create</a> instantiates this composite trait, it notices the unresolved conflict, and will throw an exception.
+<p>If we were to run our code again after this change, the code would break. Why? When <tt>EnumerableTrait</tt> and the anonymous interval trait are combined using <a href="api.html#compose">Trait.compose</a>, this function will notice that both traits define a method named <tt>contains</tt>. It records this fact in its resulting composite trait by binding <tt>contains</tt> to a <em>conflicting property</em>. Later, when <a href="api.html#create">Trait.create</a> instantiates this composite trait, it notices the unresolved conflict, and throws an exception.
 
-<p>This behavior is perhaps the biggest advantage of traits over mixins or traditional multiple inheritance strategies: the fact that name clashes are not sorted out implicitly, but are rather recorded as conflicts that must be explicitly resolved by the trait composer. Note that the occurrence of the conflict is independent of the <em>order</em> in which the traits are composed.
-Any other ordering of the arguments to <a href="api.html#compose">Trait.compose</a> would have resulted in the same conflict, which is a Good Thing.
+<p>This behavior is perhaps the biggest advantage of traits over mixins or traditional multiple inheritance strategies: the fact that name clashes are not resolved implicitly, but are rather recorded as conflicts that must be explicitly resolved by the trait composer. Note that the occurrence of the conflict is independent of the <em>order</em> in which the traits are composed.
+Any other ordering of the arguments to <a href="api.html#compose">Trait.compose</a> would have resulted in the same conflict. This is a Good Thing.
 
 <p>So how do we resolve this conflict? In this particular case, the designer of the interval data type will prefer his own, substantially faster, implementation of <tt>contains</tt> rather than inheriting a generic version from <tt>EnumerableTrait</tt>. The conflict can be resolved by the trait composer by explicitly <em>excluding</em> the <tt>contains</tt> property from <tt>EnumerableTrait</tt> before composing it. The tool for resolving conflicts in <em>traits.js</em> is named <a href="api.html#resolve">Trait.resolve</a>:
 
@@ -312,13 +312,19 @@ var t2 = Trait.resolve({ oldName: 'newName' }, t1);
 </pre>
 
 <p>In this case, <tt>t2.newName</tt> will refer to whatever <tt>t1.oldName</tt> refers.
-   However, just as in the case of excluded properties, <tt>t2</tt> will record the fact
-   that one of its properties was renamed by defining <tt>oldName</tt> as a required
-   property: since other methods of <tt>t1</tt> may have depended upon <tt>oldName</tt>,
-   a composer of <tt>t2</tt> must provide an implementation of <tt>oldName</tt>. However,
+   However, all references to <tt>oldName</tt> in the trait's methods are <em>unaffected</em>:
+   they are not renamed to <tt>newName</tt>. Just as in the case of excluded properties,
+   <tt>t2</tt> will record the fact that one of its properties was renamed by defining
+   <tt>oldName</tt> as a required property: since other methods of <tt>t1</tt> may continue
+   to depend upon the existence of <tt>oldName</tt>, a composer of <tt>t2</tt> must provide
+   an implementation of <tt>oldName</tt>. However,
    when the composer now defines his own version of <tt>oldName</tt>, he or she can refer
    to the original (generic) implementation inherited from the trait by means of the name
    <tt>newName</tt>.
+   
+   <p>Resolving conflicts through renaming is analogous to method overriding
+      in classical single-inheritance. Think of overriding a method <tt>m</tt> in
+      a subclass as 'renaming' the superclass method to <tt>super.m</tt>.
    
    <h3>Conclusion</h3>
    
@@ -342,7 +348,7 @@ var t2 = Trait.resolve({ oldName: 'newName' }, t1);
       Ecmascript 5 built-in function <tt>Object.create</tt>. For this reason,
       property descriptor maps and traits are completely interchangeable.
       If anything, it means you can use <em>traits.js</em> as a simple library for
-      manipulating arbitrary property maps.
+      manipulating arbitrary property descriptor maps.
         
       </div><!-- End content -->
     </div><!-- End main content wrapper -->
