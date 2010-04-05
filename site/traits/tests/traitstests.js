@@ -168,12 +168,14 @@ this.runTraitsTests = function() {
   
   (function() {
     // note: only works for ES5 or ES3 implementations that support accessor syntax
-    var record = {get a() {}, set a(v) {} };
-    var get = Object.getOwnPropertyDescriptor(record,'a').get;
-    var set = Object.getOwnPropertyDescriptor(record,'a').set;
-    testEqv(Trait(record),
-            { a: accessorP(get,set) },
-            "trait with accessor property");
+    if (Object.getOwnPropertyDescriptor) {
+      var record = {get a() {}, set a(v) {} };
+      var get = Object.getOwnPropertyDescriptor(record,'a').get;
+      var set = Object.getOwnPropertyDescriptor(record,'a').set;
+      testEqv(Trait(record),
+              { a: accessorP(get,set) },
+              "trait with accessor property"); 
+    }
   })();
   
   testEqv(Trait.compose(
