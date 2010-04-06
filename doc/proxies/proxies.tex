@@ -15,9 +15,10 @@
 % Multipart figures
 %\usepackage{subfigure}
 
+\usepackage{multirow}
+
 % Package for including code in the document
 \usepackage{listings}
-
 \lstdefinelanguage{javascript}{
    morekeywords={break,do,instanceof,typeof,case,else,new,var,catch,finally,return, void, continue, for, switch, while, debugger, function, this, with, default, if, throw, delete, in, try, class, enum, extends, super, const, export, import, implements, let, private, public, interface, package,protected, static, yield},
    keywordstyle=\bfseries,
@@ -258,7 +259,7 @@ Another drawback of defining the trap as part of the proxy is that it becomes im
 
 Our intercession API for Javascript supports intercession only for distinct proxy objects, controlled by a handler object. The methods of the handler object describe the behavior of the language operations when applied to the proxy object. We will call these methods \emph{traps}.
 
-The distinction between a proxy and its handler object enforces stratification of the traps. Traps are no longer methods defined as part of the intercepted object, but are defined on handlers. Handlers can be treated as ``meta-objects'' that hook into the ``metaobject protocol''.
+The distinction between a proxy and its handler object enforces stratification of the traps. Traps are no longer methods defined as part of the intercepted object, but are defined on handlers. Handlers can be treated as ``meta-objects'' and their API is effectively the ``metaobject protocol''.
 
 Also, the distinction between proxy objects and regular objects ensures that non-proxy objects (which we expect makes up the vast majority of objects in a system) do not pay the overhead associated with intercession. We support this claim with empirical data in section~\ref{benchmarks}.
 
@@ -270,23 +271,47 @@ var proxy = Proxy.create(handler, proto);
 
 Here, \texttt{handler} is an object that is supposed to implement a particular meta-level API and \texttt{proto} is an optional argument object representing the proxy's prototype.
 
-% TODO: we should introduce the API piecemeal. All at once may be too overwhelming.
-% perhaps we should even just consider the Object.* traps outside the scope of this paper
-\begin{lstlisting}[language=javascript]
-{
-  has:       function(name) -> boolean                // name in proxy
-  get:       function(receiver, name) -> any          // receiver.name
-  set:       function(receiver, name, val) -> boolean // receiver.name = val
-  delete:    function(name) -> boolean                // delete proxy.name
-  enumerate: function() -> [string]                   // for (name in proxy)
-  keys:      function() -> [string]                   // Object.keys(proxy)
-  defineProperty: function(name, pd) -> null          // Object.defineProperty(proxy,name,pd)
-  getOwnPropertyDescriptor: function(name) -> pd      // Object.getOwnPropertyDescriptor(name)
-  ...
-}
-\end{lstlisting}
+\begin{table*}[t]
+  \begin{center}
+    \begin{tabular}{|l|l|l|}
+    \hline
+    \textbf{Operation} & \textbf{Triggered by} & \textbf{Reified as}\\
+    \hline
+    \multicolumn{3}{|l|}{Fundamental traps}\\
+    \hline
+    Descriptor access & Object.getOwnPropertyDescriptor(proxy,name) & handler.getOwnPropertyDescriptor(name)\\
+    \hline
+    Descriptor definition & Object.defineProperty(proxy,name,pd) & handler.defineProperty(name,pd)\\
+    \hline
+    Own key listing & Object.getOwnPropertyNames(proxy) & handler.getOwnPropertyNames()\\
+    \hline
+    Property deletion & delete proxy.name & handler.delete(name)\\
+    \hline
+    Key enumeration & for (name in proxy) {...} & handler.enumerate().forEach(function(name) { ... })\\
+    \hline
+    Object fixing & Object.\{freeze,seal,preventExtensions\}(proxy) & Object.\{freeze,seal,preventExtensions\}(Object.create(proto, handler.fix()))\\
+    \hline
+    \multicolumn{3}{|l|}{Derived traps}\\
+    \hline
+    Property lookup & name in proxy & handler.has(name)\\
+    \hline
+    Own Property lookup & ({}).hasOwnProperty.call(proxy,name) & handler.hasOwn(name)\\
+    \hline
+    Property access & receiver.name & handler.get(receiver, name)\\
+    \hline
+    Property assignment & receiver.name = val & handler.set(receiver, name, val)\\
+    \hline
+    Own key enumeration & Object.keys(proxy) & handler.enumerateOwn()\\
+    \hline
+    \end{tabular}
+  \end{center}
+  \caption{Operations reified by the intercession API}
+  \label{tab:operations}
+\end{table*}
 
-As an example, consider the following generic forwarding proxy abstraction. Each trap simply applies the operation to a target object \texttt{obj}. Most use cases of proxies will be variations on this simple forwarding semantics, usually just augmenting some operations.
+Table~\ref{tab:operations} lists those base-level operations applicable to objects that are reified by our API. The name \texttt{proxy} refers to a proxy instance, \texttt{handler} to that proxy's handler, \texttt{proto} to the prototype specified in \texttt{Proxy.create} and \texttt{receiver} to either a proxy or an object that delegates (directly or indirectly) to a proxy. The distinction between fundamental and derived traps is explained in Section~\ref{sub:fundamental_vs_derived_traps}.
+
+The simplest useful handler is that of a generic forwarding proxy. For such a handler, each trap simply applies the intercepted operation to a target object \texttt{obj}. Most use cases of proxies can be thought of as variations on this default forwarding semantics, usually just augmenting some operations.
 
 \begin{lstlisting}[language=javascript]
 function makeForwaringHandler(obj) {
@@ -449,6 +474,7 @@ In our particular case, proxies enable non-native code to run while evaluating t
 \textbf{Selective interception:} determine what properties of an object should be to committed to upfront. If these properties are required to be stable but may be configurable, turn them into parameters of the proxy constructor rather than retrieving them via a handler trap.
 
 \subsection{Fundamental versus derived traps}
+\label{sub:fundamental_vs_derived_traps}
 
 The handler protocol of our intercession API provides 12 traps in total, each intercepting a different Javascript operation applied to a proxy. The exact nature of the handler protocol will of course vary greatly from language to language. However, there is one interesting observation about our protocol that we think may apply to other languages as well: some traps can be expressed in terms of the semantics of other traps (i.e. the semantics of the operation which they intercept is subsumed by the semantics of some other operation). We will refer to such traps as \emph{derived} traps, since their implementation may in fact be derived from other, more \emph{fundamental} traps.
 
