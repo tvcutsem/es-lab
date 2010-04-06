@@ -154,6 +154,7 @@ At its core, Javascript is a simple dynamic language that inherits first-class l
 Before we discuss Javascript's support (and lack of support) for reflection, we introduce some terminology from the field of computational reflection~\cite{maes-oopsla87} and metaprogramming~\cite{kiczales-artofthemop}.
 
 \subsection{Metaobject Protocols}
+\label{sub:metaobject_protocols}
 
 A metaobject protocol is basically an object-oriented framework that describes the behavior of an object-oriented language.
 
@@ -243,6 +244,8 @@ So far in our discussion, we have limited the confusion caused by the lack of st
 function populate(id, obj) {
   var select = document.getElementById(id);
   for (var name in obj) {
+    // skip inherited properties
+    if (!obj.hasOwnProperty(name)) continue;
     var opt = document.createElement('option');
     opt.text = name;
     select.add(opt, null); // append opt
@@ -338,14 +341,12 @@ This brings us to our first design principle:
 
 \textbf{Stratification:} traps can be stratified by defining them on an object that is distinct from the proxy being intercepted.
 
-\subsection{Dealing with immutability}
+\subsection{Temporary Intercession}
 \label{sub:immutability}
 
 Recall from section~\cite{sub:introspection_in_js} that Ecmascript 5 introduces the notion of non-extensible, sealed and frozen objects. These objects provide useful guarantees that programmers can rely upon. When designing a proxy mechanism, care should be taken that proxies cannot break these guarantees. For example, if \texttt{o} is an object, then \texttt{Object.freeze(o)} freezes that object. If the programmer knows \texttt{o} is frozen, he can rely on the fact that \texttt{o.foo} will consistently return the same value. If \texttt{o} is a proxy, we do not want a proxy to violate this assumption.
 
 To reconcile non-extensible, sealed and frozen objects with proxies, we introduce an additional trap named \texttt{fix}.
-
-% Introduce the distinction between trapping and fixed proxies
 
 \begin{lstlisting}[language=javascript]
 return {
@@ -377,7 +378,8 @@ Because of the fixing-protocol, proxies can essentially be in two states. When a
 
 When an object proxy is fixed, the prototype of the generated object is the \texttt{proto} object passed during proxy construction or \texttt{null} if none was provided. The prototype of a function proxy is always \texttt{Function.prototype}, and this remains unchanged when fixing the function proxy.
 
-\textbf{Immutability:} if (parts of) an object can become immutable, the intercession API should be equipped with a mechanism to fix (parts of) a proxy. Fixed operations are no longer intercepted, and thus enable the language runtime to enforce the stronger invariants associated with immutability.
+\textbf{Temporary Intercession:} if an operation imposes strong consistency requirements on a proxy object (such as becoming immutable), intercession should be disabled for some or all of the operations intercepted by proxies.
+%and thus enable the language runtime to enforce the stronger invariants associated with immutability.
 
 Fixing does not necessarily need to be an ``all or nothing'' process. However, in the particular case of Ecmascript, we found this to be the simplest solution.
 
@@ -604,26 +606,20 @@ Support the claim that proxies enable intercession at (virtually) no cost to reg
 
 \section{Related Work}
 
-We categorize related work into three classes, based on whether the work supports:
-\begin{itemize}
-  \item intercession of multiple meta-level operations
-  \item intercession of method invocations
-  \item intercession of missing method invocations only
-\end{itemize}
+% AOP-based related work
+% Eric Tanter's Reflex?
 
-% TODO: we should check which of our design principles holds true for these systems
+We already discussed in Section~\ref{sub:metaobject_protocols} that many object-oriented systems provide ad hoc support for intercepting messages sent to objects. There is a general category of languages that provide a trap that triggers on missing method definitions only, as exemplified by Smalltalk's \texttt{doesNotUnderstand:}, Spidermonkey's \texttt{__noSuchMethod__}, Ruby's \texttt{methodMissing}, the E language's \texttt{match} clause, and so on. There are also languages that provide traps that trigger on every method invocation, whether a method is present or not. Examples of this category include Python's \texttt{__getattribute__} and Groovy's \texttt{invokeMethod}. What all of these systems have in common is that the intercession is not stratified. The trap is always defined in a namespace populated with application-level methods.
 
-\paragraph{Intercession of multiple meta-level operations}
+%In \textbf{Python}, class objects may define methods with special method names (starting with \texttt{__}) that are invoked when certain operations are performed on instances of the class. For example, \texttt{x.y} calls \texttt{type(x).__getattribute__(x, "y")}, where \texttt{type(x)} denotes the class of \texttt{x}. The difference between Python's hooks and proxies is that hooks are not defined on a separate handler object but rather on the class itself. Because hooks are not technically stratified into a separate object, a naming convention is used to avoid name clashes with application-level methods.
+
+Examples of stratified intercession API's include Java proxies, the CLOS metaobject protocol, AmbientTalk mirages and E proxies. We briefly discuss each of these and then summarize which of our design principles they uphold in Table~\ref{tab:related_work}.
 
 %Mirages in AmbientTalk: adds intercession to a Mirror API
 The design of Javascript proxies was most directly influenced by \textbf{AmbientTalk} \emph{mirages}~\cite{mirages_dls_07,spe_journal_08}. AmbientTalk mirages enable intercession in a Mirror-based API. Mirrors~\cite{bracha_04_mirrors_oopsla} are a particular kind of reflection API that enforces stratification of base and meta-level. In AmbientTalk, mirages are base-level objects whose meta-object (named a \emph{mirror}) describes their behavior. Mirages correspond to proxies and their mirror corresponds to proxy handlers. AmbientTalk mirrors, like our proxy handlers, implement a metaobject protocol API defining the behavior of all operations applicable to objects.
 
 %CLOS’s metaobject protocol / metaclasses, in particular: the instance structure protocol (intercept slot accesses, i.e. “property access”), the generic function invocation protocol (intercept generic function invocation, i.e. “method calls”)
 Metaclasses in the \textbf{CLOS} metaobject protocol~\cite{clos} support a stratified form of intercession. CLOS classes can be declared to have a certain metaclass, that will describe the behavior of that class. This behavior is categorized into different kinds of protocols. For instance, the ``instance structure protocol'' can be used to intercept slot access on the class's instances. The ``generic function invocation protocol'' can be used to intercept generic function invocation.
-
-In \textbf{Python}, class objects may define methods with special method names (starting with \texttt{__}) that are invoked when certain operations are performed on instances of the class. For example, \texttt{x.y} calls \texttt{type(x).__getattribute__(x, "y")}, where \texttt{type(x)} denotes the class of \texttt{x}. The difference between Python's hooks and proxies is that hooks are not defined on a separate handler object but rather on the class itself. Because hooks are not technically stratified into a separate object, a naming convention is used to avoid name clashes with application-level methods.
-
-\paragraph{Intercession of method invocations}
 
 \textbf{Java}'s \texttt{java.lang.reflect.Proxy} API directly influenced our intercession API for Javascript. In Java, one defines proxies that implement one or more interface types, by calling:
 
@@ -637,28 +633,84 @@ Here, the proxy \texttt{f} implements the \texttt{Foo} interface. \texttt{invoca
 
 The main difference between Java proxies and Javascript proxies is that Java proxies only trap method invocation. There are no other meta-level operations to trap. For instance, since interfaces cannot declare fields, proxies do not need to intercept field access. Implementation-wise, another important difference is that Java proxies can be supported by a JVM without the need for a special ``proxy'' object type. A description of the proxy (and all of its methods) can be generated from the given interfaces and subsequently instantiated as a normal object (whose class just happens to be synthesized at runtime).
 
-%Groovy’s invokeMethod and getProperty (require a class to implement the ‘GroovyInterceptable’ interface)
+\textbf{E} has a small intercession API for a special type of object reference known as an \emph{eventual reference}. The API is similar to the Javascript proxy API of this paper. To create custom eventual references, one calls the function \texttt{makeProxy}, passing a proxy handler that implements a small protocol (consisting of 3 traps, to be precise).
 
-%E’s proxies for eventual references
-
-\paragraph{Intercession of missing method invocations only}
-%Smalltalk’s doesNotUnderstand: is probably one of the more well-known traps out there
-
-%E’s match clause
-
-%__noSuchMethod__ in SpiderMonkey
-
-%Ruby’s method_missing (used extensively in ActiveRecord ORM for generating ‘dynamic finders’). Because object attributes are always accessed via accessor methods, method_missing also traps property access
-%Groovy’s methodMissing and propertyMissing (use case in GORM: methods that trigger methodMissing can be installed in a metaclass such that on subsequent invocations they will be found by regular dispatch logic, no longer triggering methodMissing)
+\begin{table*}
+  \begin{center}
+  \begin{tabular}{|p{0.2\textwidth}|p{0.2\textwidth}|p{0.2\textwidth}|p{0.2\textwidth}|p{0.2\textwidth}|}
+    \hline
+    Principle & Javascript proxies & Java proxies & AmbientTalk mirages & CLOS metaobjects & E proxies \\
+    \hline
+    Intercept on
+    & objects % Javascript
+    & objects % Java
+    & objects % AmbientTalk
+    & classes % CLOS
+    & references % E
+    \\
+    \hline
+    Stratification 
+    & Y (proxy - handler) % Javascript
+    & Y (Proxy - InvocationHandler) % Java
+    & Y (mirage - mirror) % AmbientTalk
+    & Y (object - metaobject) % CLOS
+    & Y (proxy - ProxyHandler) % E
+    \\
+    \hline
+    Temporary intercession
+    & Y (fix trap) % Javascript
+    & N % Java
+    & N % AmbientTalk
+    & N\? % CLOS
+    & N % E
+    \\
+    \hline
+    Meta-level shift
+    & Y (handler is proxy) % Javascript
+    & Y (handler is proxy) % Java
+    & Y (mirror is mirage) % AmbientTalk
+    & Y\? (class metaobject with non-standard class metaobject) % CLOS
+    & N\? (handler cannot be a proxy) % E
+    \\
+    \hline
+    Funneling
+    & Y (get trap) % Javascript
+    & Y (trivially) % Java
+    & Y (invoke trap) % AmbientTalk
+    & N (metalevel itself consists of many operations) % CLOS
+    & N\? % E
+    \\
+    \hline
+    Selective intercession
+    & Y (prototype and type are fixed) % Javascript
+    & Y (interfaces are fixed) % Java
+    & N % AmbientTalk
+    & Y (through specialization of metaobjects) % CLOS e.g. standard-class vs funcallable-standard-class
+    & Y (kind of reference is fixed) % E
+    \\
+    \hline
+    Fundamental vs Derived traps
+    & Y % Javascript
+    & N (just 1 trap) % Java
+    & N (all fundamental) % AmbientTalk
+    & constraints between methods % CLOS
+    & Y (send versus sendOnly) % E
+    \\
+    \hline
+  \end{tabular}
+  \end{center}
+  \caption{Comparison of stratified intercession APIs}
+  \label{tab:related_work}
+\end{table*}
 
 \section{Conclusion}
 
 Recapitulate our ``design principles''. Should be generally applicable (apart from Javascript).
 \begin{itemize}
   \item Stratification of proxy and handler.
-  \item What operations to intercept: committing to values upfront.
-  \item Fundamental versus derived traps: allocation.
-  \item Double lifting.
+  \item Selective interception: committing to values upfront.
+  \item Fundamental versus derived traps: less allocation vs consistency.
+  \item Meta-level shifting and funneling traps
   \item Fixing: dealing with immutability.
 \end{itemize}
 
