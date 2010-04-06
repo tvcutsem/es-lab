@@ -73,7 +73,7 @@
 \usepackage{graphicx}
 %\fi
 
-\title{Robust Intercession in Javascript using Proxies}
+\title{Design Principles for Robust Intercession APIs}
 % \subtitle[Extended Abstract]
 % \titlenote{}
 
@@ -327,7 +327,7 @@ return {
   ...,
   fix: function() {
     if (Object.isFrozen(obj)) {
-      return Object.getOwnProperties(obj); // assumed
+      return getOwnProperties(obj);
     }
     // As long as obj is not frozen, the proxy won't allow itself to be fixed
     return undefined; // will cause an exception to be thrown
@@ -341,19 +341,27 @@ The \texttt{fix} trap is introduced to enable a proxy to interact with the \text
 Proxies enforce these restrictions as follows: every time an external object tries to freeze, seal or make a proxy non-extensible, the \texttt{fix} trap is invoked on the proxy’s handler. At that point, the handler has two options:
 \begin{enumerate}
   \item either to refuse the request (by making its \texttt{fix} trap return \texttt{undefined}). The corresponding call to one of the restraining primitives will throw an exception.
-  \item or to honor the request, and committing to it by generating a description of an object. The implementation then generates a fresh object based on this description, and from that point on the proxy effectively becomes that object and the handler is bypassed entirely. Any reference to the handler by the implementation is at that point released, making it available for GC. The proxy is now said to be ``fixed''.  
+  \item or to honor the request, and committing to it by generating a description of an object. The implementation then generates a fresh object based on this description, and from that point on the proxy effectively becomes that object and the handler is bypassed entirely. Any reference to the handler by the implementation is at that point released, making it available for GC. The proxy is now said to be ``fixed''.
 \end{enumerate}
 
-Upon fixing an object proxy, the prototype of the generated object is the \texttt{proto} object passed during proxy construction or \texttt{null} if none was provided. The prototype of a function proxy is always \texttt{Function.prototype}, and this remains the case when fixing the function proxy.
+What does it mean to generate a description of an object? Ecmascript 5 defines the format of a ``property descriptor map'': an object whose keys map to property descriptors. Such a map effectively describes another object, and it can be instantiated using the built-in function \texttt{Object.create}. For example, the map \lstinline!{x : { value: 5, enumerable: false }}! essentially describes the object \lstinline!{x:5}! except that \texttt{x} will not be enumerated in \texttt{for-in} loops.
 
-% Design Principle: deal with immutability by providing traps that enable a proxy to 'fix' some or all of its aspects, after which intercession for those aspects is turned off.
+The \texttt{fix} trap reuses this existing object-description format to specify the object that the proxy is about to become.
+
+Because of the fixing-protocol, proxies can essentially be in two states. When a proxy is \emph{trapping}, it intercepts all operations and invokes the corresponding handler trap. Once the \texttt{fix} trap returns an object description, the proxy is \emph{fixed}. Once a proxy is fixed, it remains forever fixed.
+
+When an object proxy is fixed, the prototype of the generated object is the \texttt{proto} object passed during proxy construction or \texttt{null} if none was provided. The prototype of a function proxy is always \texttt{Function.prototype}, and this remains unchanged when fixing the function proxy.
+
+\textbf{Immutability:} if (parts of) an object can become immutable, the intercession API should be equipped with a mechanism to fix (parts of) a proxy. Fixed operations are no longer intercepted, and thus enable the language runtime to enforce the stronger invariants associated with immutability.
+
+Fixing does not necessarily need to be an ``all or nothing'' process. However, in the particular case of Ecmascript, we found this to be the simplest solution.
 
 %\texttt{Object.isExtensible(proxy)} always returns \texttt{true} if a proxy is trapping and \texttt{false} when it is fixed.
 
 %TODO: drop Proxy.isTrapping?
 %TODO: could be another important design principle: whether or not to fully virtualize an API
-A method is defined on \texttt{Proxy} to distinguish trapping proxies from regular objects or fixed proxies:
-\texttt{Proxy.isTrapping(anObject)} returns \texttt{true} if and only if \texttt{anObject} is a proxy and is in trapping mode. This is the single, reliable way of testing whether an object is a trapping proxy or not. Note that a proxy cannot influence the outcome of this method. Once a proxy is fixed, it is in all ways simply a normal object, with no built-in way to detect that it had ever been a trapping proxy.
+%A method is defined on \texttt{Proxy} to distinguish trapping proxies from regular objects or fixed proxies:
+%\texttt{Proxy.isTrapping(anObject)} returns \texttt{true} if and only if \texttt{anObject} is a proxy and is in trapping mode. This is the single, reliable way of testing whether an object is a trapping proxy or not. Note that a proxy cannot influence the outcome of this method. Once a proxy is fixed, it is in all ways simply a normal object, with no built-in way to detect that it had ever been a trapping proxy.
 
 %Design of metalevel API:
 %Start from the principle of stratification (cf. Mirrors and Java Proxies, distinction handler vs proxy)
@@ -493,7 +501,7 @@ get: function(rcvr, name) {
       // handle proxy.foo(a,b)
     } 
   } else ...
-}
+},
 invoke: function(rcvr, name, args) {
   if (name === 'foo') {
     // handle proxy.foo(args)
