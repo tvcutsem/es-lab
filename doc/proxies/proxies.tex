@@ -74,6 +74,8 @@
 \usepackage{graphicx}
 %\fi
 
+\newcommand{\noSuchMethod}{\texttt{\_\_noSuchMethod\_\_}}
+
 \title{Design Principles for Robust Intercession APIs}
 % \subtitle[Extended Abstract]
 % \titlenote{}
@@ -214,7 +216,7 @@ For the first time in the history of Javascript, the availability of these new a
 
 Javascript has no built-in support for intercession. It is not possible to redefine the application of the dot-operator, array indexing, the \texttt{in}-operator and so on.
 
-Spidermonkey, Mozilla's implementation of Javascript, has long included a non-standard way of interceding method calls based on Smalltalk's \texttt{doesNotUnderstand:} method. In Spidermonkey, this method is named \lstinline{__noSuchMethod__}. For example, a proxy that can generically forward all received messages to a target object \texttt{o} is created as follows:
+Spidermonkey, Mozilla's implementation of Javascript, has long included a non-standard way of interceding method calls based on Smalltalk's \texttt{doesNotUnderstand:} method. In Spidermonkey, this method is named \noSuchMethod{}. For example, a proxy that can generically forward all received messages to a target object \texttt{o} is created as follows:
 
 \begin{lstlisting}[language=javascript]
 function makeProxy(o) {
@@ -227,7 +229,7 @@ function makeProxy(o) {
 \end{lstlisting}
 
 % discuss the problems of __noSuchMethod__ (extension of Firefox to enable the creation of proxies in the tradition of Smalltalk-like 'doesNotUnderstand:' hooks)
-In what follows, we will refer to methods such as \texttt{__noSuchMethod__} and \texttt{doesNotUnderstand:} as \emph{traps}. The advantage of such traps is their perceived simplicity. The drawback is that the traps are not \emph{stratified}.
+In what follows, we will refer to methods such as \noSuchMethod{} and \texttt{doesNotUnderstand:} as \emph{traps}. The advantage of such traps is their perceived simplicity. The drawback is that the traps are not \emph{stratified}.
 
 The only way in which a trap is distinguished from a regular method is by their name. Programmers that are unaware of the naming convention could accidentally define a method with the same name, leading to unexpected interactions. A violation of stratification can lead to two subtly different kinds of confusion:
 
@@ -236,7 +238,7 @@ The only way in which a trap is distinguished from a regular method is by their 
   \item Say an object \texttt{o} accidentally overrides the trap, treating that method name as part of the application. The VM may then incidentally invoke the application method as if it were a trap. This confuses the base-level code, since the call ``originated'' from the meta-level.
 \end{itemize}
 
-Granted, for a method named \texttt{__noSuchMethod__} this hypothetical confusion may seem far-fetched, although in Smalltalk \texttt{doesNotUnderstand:} is a pretty reasonable name for an application to use. But this critique misses the essential point, which is that the intercession API is polluting the name space of the application. This is not a scalable approach. What if we were to introduce additional such traps to intercept not only method invocation, but also property access, assignment, lookup, enumeration, etc.? The number of ``reserved method names'' would quickly grow out of hand. The reason that the lack of stratification has not really posed a significant problem \emph{in practice} is that Spidermonkey and Smalltalk define only one such special method.
+Granted, for a method named \noSuchMethod{} this hypothetical confusion may seem far-fetched, although in Smalltalk \texttt{doesNotUnderstand:} is a pretty reasonable name for an application to use. But this critique misses the essential point, which is that the intercession API is polluting the name space of the application. This is not a scalable approach. What if we were to introduce additional such traps to intercept not only method invocation, but also property access, assignment, lookup, enumeration, etc.? The number of ``reserved method names'' would quickly grow out of hand. The reason that the lack of stratification has not really posed a significant problem \emph{in practice} is that Spidermonkey and Smalltalk define only one such special method.
 
 So far in our discussion, we have limited the confusion caused by the lack of stratification to the fact that a trap is invoked by the wrong code. However, there are many other ways in which the trap method may conflict with other base-level code. For example, in Javascript a common idiom is to enumerate all properties of an object. Say we want to populate the content of a drop-down list in an HTML form with id \texttt{id} with all of the properties of an object \texttt{obj}:
 
@@ -253,9 +255,9 @@ function populate(id, obj) {
 }
 \end{lstlisting}
 
-If \texttt{obj} defines \texttt{__noSuchMethod__} for the sake of intercepting method invocations, this method will show up in the enumeration of \texttt{obj}'s properties, probably leading to unexpected results.
+If \texttt{obj} defines \noSuchMethod{} for the sake of intercepting method invocations, this method will show up in the enumeration of \texttt{obj}'s properties, probably leading to unexpected results.
 
-Another drawback of defining the trap as part of the proxy is that it becomes impossible to recursively trap invocations of the trap \emph{itself}. Say \texttt{p} is a proxy. The invocation \lstinline{p.__noSuchMethod__('foo',[1])} itself cannot be intercepted. It is not transparently insert another proxy \texttt{p2} in between the caller and \texttt{p} such that \texttt{p2}'s \texttt{__noSuchMethod__} trap is invoked as \lstinline{p2.__noSuchMethod__('__noSuchMethod__',['foo',[1]])}. We will show in Section~\ref{sub:doublelifting} that this recursive pattern of proxying proxies themselves has benefits when proxies can trap more than a single operation.
+Another drawback of defining the trap as part of the proxy is that it becomes impossible to recursively trap invocations of the trap \emph{itself}. Say \texttt{p} is a proxy. The invocation \lstinline{p.__noSuchMethod__('foo',[1])} itself cannot be intercepted. It is not transparently insert another proxy \texttt{p2} in between the caller and \texttt{p} such that \texttt{p2}'s \noSuchMethod{} trap is invoked as \lstinline{p2.__noSuchMethod__('__noSuchMethod__',['foo',[1]])}. We will show in Section~\ref{sub:doublelifting} that this recursive pattern of proxying proxies themselves has benefits when proxies can trap more than a single operation.
 
 \section{Proxies for Javascript}
 \label{sec:proxies_for_javascript}
@@ -465,6 +467,7 @@ The second example is that proxies have to decide upfront whether or not they wi
 var f = Proxy.createFunction(handler, callTrap, constructTrap);
 f(); // calls callTrap
 new f(); // calls constructTrap
+f.x // calls handler.get(f,'x')
 \end{lstlisting}
 
 The first argument to \texttt{Proxy.createFunction} is exactly the same kind of handler object used to define object proxies. The additional arguments \texttt{callTrap} and \texttt{constructTrap} are functions that respectively reify Javascript's function call and \texttt{new} operator. By requiring proxies to determine at creation time whether or not they will proxy for an object or a function, the language runtime is able to uphold important invariants that it would have to forfeit if it would have to consult the \texttt{handler}. For example, unlike \texttt{create}, \texttt{createFunction} does not accept a prototype argument. Functions always inherit from \texttt{Function.prototype}, and this API enforces that invariant.
@@ -609,7 +612,7 @@ Support the claim that proxies enable intercession at (virtually) no cost to reg
 % AOP-based related work
 % Eric Tanter's Reflex?
 
-We already discussed in Section~\ref{sub:metaobject_protocols} that many object-oriented systems provide ad hoc support for intercepting messages sent to objects. There is a general category of languages that provide a trap that triggers on missing method definitions only, as exemplified by Smalltalk's \texttt{doesNotUnderstand:}, Spidermonkey's \texttt{__noSuchMethod__}, Ruby's \texttt{methodMissing}, the E language's \texttt{match} clause, and so on. There are also languages that provide traps that trigger on every method invocation, whether a method is present or not. Examples of this category include Python's \texttt{__getattribute__} and Groovy's \texttt{invokeMethod}. What all of these systems have in common is that the intercession is not stratified. The trap is always defined in a namespace populated with application-level methods.
+We already discussed in Section~\ref{sub:metaobject_protocols} that many object-oriented systems provide ad hoc support for intercepting messages sent to objects. There is a general category of languages that provide a trap that triggers on missing method definitions only, as exemplified by Smalltalk's \texttt{doesNotUnderstand:}, Spidermonkey's \noSuchMethod{}, Ruby's \texttt{methodMissing}, the E language's \texttt{match} clause, and so on. There are also languages that provide traps that trigger on every method invocation, whether a method is present or not. Examples of this category include Python's \texttt{\_\_getattribute\_\_} and Groovy's \texttt{invokeMethod}. What all of these systems have in common is that the intercession is not stratified. The trap is always defined in a namespace populated with application-level methods.
 
 %In \textbf{Python}, class objects may define methods with special method names (starting with \texttt{__}) that are invoked when certain operations are performed on instances of the class. For example, \texttt{x.y} calls \texttt{type(x).__getattribute__(x, "y")}, where \texttt{type(x)} denotes the class of \texttt{x}. The difference between Python's hooks and proxies is that hooks are not defined on a separate handler object but rather on the class itself. Because hooks are not technically stratified into a separate object, a naming convention is used to avoid name clashes with application-level methods.
 
@@ -637,7 +640,7 @@ The main difference between Java proxies and Javascript proxies is that Java pro
 
 \begin{table*}
   \begin{center}
-  \begin{tabular}{|p{0.2\textwidth}|p{0.2\textwidth}|p{0.2\textwidth}|p{0.2\textwidth}|p{0.2\textwidth}|}
+  \begin{tabular}{|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|}
     \hline
     Principle & Javascript proxies & Java proxies & AmbientTalk mirages & CLOS metaobjects & E proxies \\
     \hline
@@ -661,7 +664,7 @@ The main difference between Java proxies and Javascript proxies is that Java pro
     & Y (fix trap) % Javascript
     & N % Java
     & N % AmbientTalk
-    & N\? % CLOS
+    & N? % CLOS
     & N % E
     \\
     \hline
@@ -669,8 +672,8 @@ The main difference between Java proxies and Javascript proxies is that Java pro
     & Y (handler is proxy) % Javascript
     & Y (handler is proxy) % Java
     & Y (mirror is mirage) % AmbientTalk
-    & Y\? (class metaobject with non-standard class metaobject) % CLOS
-    & N\? (handler cannot be a proxy) % E
+    & Y? (class metaobject with non-standard class metaobject) % CLOS
+    & N? (handler cannot be a proxy) % E
     \\
     \hline
     Funneling
@@ -678,7 +681,7 @@ The main difference between Java proxies and Javascript proxies is that Java pro
     & Y (trivially) % Java
     & Y (invoke trap) % AmbientTalk
     & N (metalevel itself consists of many operations) % CLOS
-    & N\? % E
+    & N? % E
     \\
     \hline
     Selective intercession
