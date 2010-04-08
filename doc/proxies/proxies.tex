@@ -83,7 +83,7 @@
 \numberofauthors{2}
 \author{
 \alignauthor
-Tom Van Cutsem\titlenote{Tom Van Cutsem is a Postdoctoral Fellow of the Research Foundation, Flanders (FWO). This work was carried out while he was a Visiting Faculty at Google, sponsored by Google and a travel grant from the FWO.}\\
+Tom Van Cutsem\titlenote{Tom Van Cutsem is a Postdoctoral Fellow of the Research Foundation, Flanders (FWO). This work was carried out while on a Visiting Faculty appointment at Google, sponsored by Google and a travel grant from the FWO.}\\
        \affaddr{Vrije Universiteit Brussel}\\
        \affaddr{Pleinlaan 2}\\
        \affaddr{1050 Brussels}\\
@@ -146,10 +146,10 @@ The goals of this paper are:
 The official, standardized version of the Javascript language is named ECMAScript. The latest edition of ECMAScript, ECMA-262, 5th edition~\cite{ecma262}, adds to the language support for defensively consistent objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). ECMAScript 5 also defines a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived ``language warts'', edge cases and inconsistencies.
 
 % Execution environment: the browser (DOM API for interacting with webpage, XHR object)
-Javascript is conceived as a scripting language which implies that the language runtime is often embedded within a larger execution environment. By far the most common execution environment for Javascript is the web browser. In this environment, the global object is named \texttt{window} and gives Javascript objects access to the content and structure of web pages via the ``Document Object Model'' (DOM) API. Other important objects include the \texttt{XmlHttpRequest} (XHR) object that allows Javascript code to asynchronously communicate with its originating server.
+Javascript is a scripting language which implies that the language runtime is often embedded within a larger execution environment. By far the most common execution environment for Javascript is the web browser. In this environment, the global object is named \texttt{window} and gives Javascript objects access to the content and structure of web pages via the Document Object Model (DOM), and allows them to communicate with their originating server through XmlHttpRequests (XHR).
 
 % The 'good parts': objects, arrays, functions
-At its core, Javascript is a simple dynamic language that inherits first-class lexically scoped functions from Scheme~\cite{scheme} and prototype-based objects from Self~\cite{self}. Javascript has a surprisingly expressive object literal notation that enables the lightweight creation of one-off, anonymous, objects.
+While the full Javascript language as we know it today is the product of a complex evolutionary process, at its core (what Doug Crockford refers to as ``just the good parts''~\cite{crockford_goodparts}) it is actually a simple dynamic language with first-class lexically scoped functions and a prototype-based object model. Javascript has a surprisingly expressive object literal notation that enables the lightweight creation of one-off, anonymous, objects.
 
 \section{Reflection in Javascript}
 
@@ -546,35 +546,94 @@ Note that, even if the programmer of a proxy handler has the best intentions to 
 
 \textbf{Fundamental versus Derived Traps:} an intercession API faces a tradeoff between defining a minimal API consisting only of fundamental traps versus defining a more complex API that introduces derived traps. Derived traps may be more efficient, but may break invariants that hold between the operations corresponding to the fundamental and the derived trap.
 
-\section{Case: Membranes and Script Compartments}
+\section{Examples}
+\label{sec:examples}
+
+We now show how to apply our proxy API to a number of concrete programming examples.
+
+\subsection{Revocable Object References}
+\label{sub:revoker}
+
+Say an object \texttt{A} wants to hand out a reference to \texttt{C} to another object \texttt{B}. \texttt{C} could provide access to a precious resource, and for that reason \texttt{A} may want to limit the lifetime of the reference it hands out to \texttt{B}. In other words, \texttt{A} wants to have the ability to revoke \texttt{B}'s access to \texttt{C}.
+
+One can implement this pattern of access control by wrapping \texttt{C} in a forwarder that additionally supports a method to stop forwarding. Such a forwarder is also known as a \emph{caretaker}~\cite{robust_composition}. Without proxies, the programmer is forced to write a distinct caretaker for each kind of object that should be wrapped. Proxies enable the programmer to abstract from the details of the wrapped object's protocol and instead write a \emph{generic} caretaker\footnote{For brevity, we left out the case in which \texttt{target} is a function, requiring the caretaker to be a function proxy.}:
+
+\begin{lstlisting}[language=javascript]
+function makeRevocableRef(target) {
+  var enabled = true;
+  return Object.freeze({
+    caretaker: Proxy.create({
+      get: function(rcvr, name) {
+        if (!enabled) { throw new Error("revoked"); }
+        return target[name];
+      },
+      has: function(name) {
+        if (!enabled) { throw new Error("revoked"); }
+        return name in target;      
+      },
+      // ... and so on for all other traps
+    }, Object.getPrototypeOf(target)),
+    revoker: Object.freeze({
+      revoke: function() { enabled = false; }
+    })
+  });
+}
+\end{lstlisting}
+
+Given this abstraction, \texttt{A} can now wrap \texttt{C} in a revokable reference, pass the caretaker to \texttt{B}, and hold on to the revoker such that the reference can later be severed.
+
+The caretaker is a proxy whose handler is very similar to the generic forwarder defined in Section~\ref{sec:proxies_for_javascript} except that it explicitly checks the \texttt{enabled} flag before forwarding. As noted in Section~\ref{sub:doublelifting}, this is itself a pattern that can be abstracted by shifting meta-levels once more. If the caretaker's handler is itself a proxy, the meta-level handler can funnel all meta-level operations through a single \texttt{get} trap:
+
+\begin{lstlisting}[language=javascript]
+function makeRevocableRef(target) {
+  var enabled = true;
+  var baseHandler = makeForwaringHandler(target);
+  var metaHandler = Proxy.create(Object.freeze({
+    get: function(rcvr, name) {
+      if (!enabled) { throw new Error("revoked"); }
+      return baseHandler[name];
+    }
+  }));
+  return Object.freeze({
+    caretaker: Proxy.create(metaHandler, 
+                 Object.getPrototypeOf(target)),
+    revoker: Object.freeze({
+      revoke: function() { enabled = false; }
+    });
+  });
+}
+\end{lstlisting}
+
+A limitation of the above caretaker abstraction is that objects exchanged via the caretaker are themselves not recursively wrapped in a revocable reference. In particular, if \texttt{C} defines a method that returns \texttt{this}, \texttt{B} could circumvent the caretaker and get hold of a direct reference to \texttt{C} by invoking that method. The abstraction discussed in the following section addresses this issue.
+
+\subsection{Membranes}
 \label{sec:membranes}
 % es-lab's compartments building on membranes
 
-As with the simple membrane of figure 9.3, p 71 of Robust Composition, the following is the simplest expository membrane that satisfies the formal property of unavoidable transitive interposition.
-However: missing identity preservation. This can be fixed with Ephemeron tables (ref) but is outside the scope of this paper.
+A membrane is an extension of a caretaker that transitively imposes revocability on all references exchanged via the membrane~\cite{robust_composition}. In the following implementation, we make use of meta-level funneling once more to centralize the access control in a single trap:
 
 \begin{lstlisting}[language=javascript]
-function makeSimpleMembrane(target) {
+function makeMembrane(target) {
   var enabled = true;
   
   function wrap(wrapped) {
-    if (wrapped !== Object(wrapped)) {
-      // this test is only true for primitives
-      // primitives provide only irrevocable knowledge,
-      // so don't bother wrapping it.
-      return wrapped;
+    if (Object.isPrimitive(wrapped)) {
+      // primitives provide only irrevocable knowledge
+      return wrapped; // so don't bother wrapping them
     }
  
-    var baseHandler = handlerMaker(wrapped);
-    var revokeHandler = Proxy.create(Object.freeze({
-      invoke: function(rcvr, name, args) {
+    var baseHandler = makeForwaringHandler(wrapped);
+    var metaHandler = Proxy.create(Object.freeze({
+      get: function(rcvr, name) {
         if (!enabled) { throw new Error("disabled"); }
+        return Proxy.create(wrap())
+        
         return wrap(baseHandler[name].call(baseHandler,args.map(wrap)));
       }
     }));
           
-    return Proxy.create(revokeHandler, 
-                        wrap(Object.getPrototype(wrapped)));
+    return Proxy.create(metaHandler, 
+                        wrap(Object.getPrototypeOf(wrapped)));
   }
     
   return Object.freeze({
@@ -585,6 +644,11 @@ function makeSimpleMembrane(target) {
   });
 }
 \end{lstlisting}
+
+
+However: missing identity preservation. This can be fixed with Ephemeron tables (ref) but is outside the scope of this paper.
+
+\subsection{Script Compartments}
 
 Application of the membrane abstraction to the isolation of mutually distrustful code:
 
@@ -611,17 +675,53 @@ Support the claim that proxies enable intercession at (virtually) no cost to reg
 
 % AOP-based related work
 % Eric Tanter's Reflex?
+% Mirrors
+
+\subsection{Intercepting Method Invocations}
 
 We already discussed in Section~\ref{sub:metaobject_protocols} that many object-oriented systems provide ad hoc support for intercepting messages sent to objects. There is a general category of languages that provide a trap that triggers on missing method definitions only, as exemplified by Smalltalk's \texttt{doesNotUnderstand:}, Spidermonkey's \noSuchMethod{}, Ruby's \texttt{methodMissing}, the E language's \texttt{match} clause, and so on. There are also languages that provide traps that trigger on every method invocation, whether a method is present or not. Examples of this category include Python's \texttt{\_\_getattribute\_\_} and Groovy's \texttt{invokeMethod}. What all of these systems have in common is that the intercession is not stratified. The trap is always defined in a namespace populated with application-level methods.
 
+``Under ParcPlace Smalltalk (PS) we implemented our specialized method lookup routines in Smalltalk-80 itself. Whenever an object belonging to a class designated as a dispatching class (using a bit in the class object's header) is sent a message, that object is instead sent dispatchMessage: aMessage.''~\cite{foote_johnson}
+% Reflective facilities in Smalltalk-80
+
 %In \textbf{Python}, class objects may define methods with special method names (starting with \texttt{__}) that are invoked when certain operations are performed on instances of the class. For example, \texttt{x.y} calls \texttt{type(x).__getattribute__(x, "y")}, where \texttt{type(x)} denotes the class of \texttt{x}. The difference between Python's hooks and proxies is that hooks are not defined on a separate handler object but rather on the class itself. Because hooks are not technically stratified into a separate object, a naming convention is used to avoid name clashes with application-level methods.
+
+\subsection{Mirrors}
+
+The intercession API discussed in this paper is heavily influenced by the design principles of mirror-based reflective architectures~\cite{bracha_04_mirrors_oopsla}. Mirror-based architectures enforce stratification of base and meta-level. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
+
+A mirror is a meta-level object that defines a view on a base-level object. Mirrors are manufactured by mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with what kind of object is no longer tied to an object's representation.
+
+One can think of a proxy handler as defining a mirror on the proxy. Upholding the Mirrors principle of stratification, given only a reference to a proxy, it's impossible to acquire a reference to its handler. If such a relationship is required, it can be provided as follows:
+
+\begin{lstlisting}[language=javascript]
+function makeCustomProxyFactory() {
+  var customProxies = new EphemeronTable();
+  return {
+    create: function(handler, proto) {
+      var proxy = Proxy.create(handler, proto);
+      customProxies.put(proxy, handler);
+      return proxy;
+    },
+    handlerOf: function(proxy) {
+      return customProxies.get(proxy);
+    }
+  };
+} 
+\end{lstlisting}
+
+Given such an abstraction, an object with a reference to a proxy \texttt{p} created by such a factory \texttt{f} can reference the proxy's handler as \texttt{f.handlerOf(p)}. This design conforms to the stratification principle of a mirror-based architecture.
+
+\subsection{Comparison with other Stratified Intercession APIs}
 
 Examples of stratified intercession API's include Java proxies, the CLOS metaobject protocol, AmbientTalk mirages and E proxies. We briefly discuss each of these and then summarize which of our design principles they uphold in Table~\ref{tab:related_work}.
 
 %Mirages in AmbientTalk: adds intercession to a Mirror API
-The design of Javascript proxies was most directly influenced by \textbf{AmbientTalk} \emph{mirages}~\cite{mirages_dls_07,spe_journal_08}. AmbientTalk mirages enable intercession in a Mirror-based API. Mirrors~\cite{bracha_04_mirrors_oopsla} are a particular kind of reflection API that enforces stratification of base and meta-level. In AmbientTalk, mirages are base-level objects whose meta-object (named a \emph{mirror}) describes their behavior. Mirages correspond to proxies and their mirror corresponds to proxy handlers. AmbientTalk mirrors, like our proxy handlers, implement a metaobject protocol API defining the behavior of all operations applicable to objects.
+The design of Javascript proxies was most directly influenced by \textbf{AmbientTalk} \emph{mirages}~\cite{mirages_dls_07,spe_journal_08}. AmbientTalk mirages enable intercession in a Mirror-based API. In AmbientTalk, mirages are base-level objects whose meta-object (named a \emph{mirror}) describes their behavior. Mirages correspond to proxies and their mirror corresponds to proxy handlers. AmbientTalk mirrors, like our proxy handlers, implement a metaobject protocol API defining the behavior of all operations applicable to objects.
 
 %CLOS’s metaobject protocol / metaclasses, in particular: the instance structure protocol (intercept slot accesses, i.e. “property access”), the generic function invocation protocol (intercept generic function invocation, i.e. “method calls”)
+%TODO: distinguish between message-oriented vs function-oriented object systems
+% and leave CLOS out of the comparison
 Metaclasses in the \textbf{CLOS} metaobject protocol~\cite{clos} support a stratified form of intercession. CLOS classes can be declared to have a certain metaclass, that will describe the behavior of that class. This behavior is categorized into different kinds of protocols. For instance, the ``instance structure protocol'' can be used to intercept slot access on the class's instances. The ``generic function invocation protocol'' can be used to intercept generic function invocation.
 
 \textbf{Java}'s \texttt{java.lang.reflect.Proxy} API directly influenced our intercession API for Javascript. In Java, one defines proxies that implement one or more interface types, by calling:
@@ -638,66 +738,98 @@ The main difference between Java proxies and Javascript proxies is that Java pro
 
 \textbf{E} has a small intercession API for a special type of object reference known as an \emph{eventual reference}. The API is similar to the Javascript proxy API of this paper. To create custom eventual references, one calls the function \texttt{makeProxy}, passing a proxy handler that implements a small protocol (consisting of 3 traps, to be precise).
 
+% TODO: include discussion on non-methodical objects
+% def obj match [verb, args] { ... }
+
+% TODO: summarize the table with Y/N only and place markers in the table that refer to the text
 \begin{table*}
   \begin{center}
-  \begin{tabular}{|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|}
+  \begin{tabular}{|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}|p{0.15\textwidth}||p{0.15\textwidth}}
     \hline
-    Principle & Javascript proxies & Java proxies & AmbientTalk mirages & CLOS metaobjects & E proxies \\
+    Principle & Javascript proxies & Java proxies & AmbientTalk mirages & E eventual proxies & E non-methodical objects & Smalltalk \texttt{doesNotUnderstand:} \\
     \hline
-    Intercept on
+    Virtualizes
     & objects % Javascript
     & objects % Java
     & objects % AmbientTalk
-    & classes % CLOS
-    & references % E
+    & eventual references % E eventual proxies
+    & objects % E non-methodical objects
+    & objects % Smalltalk
     \\
     \hline
-    Stratification 
-    & Y (proxy - handler) % Javascript
-    & Y (Proxy - InvocationHandler) % Java
-    & Y (mirage - mirror) % AmbientTalk
-    & Y (object - metaobject) % CLOS
-    & Y (proxy - ProxyHandler) % E
+    Stratification
+    & proxy vs handler % Javascript
+    & Proxy vs InvocationHandler % Java
+    & mirage vs mirror % AmbientTalk
+    & proxy vs ProxyHandler % E eventual proxies
+    & non-reified handling % E non-methodical objects
+    & not stratified % Smalltalk
+    \\
+    \hline
+    Meta-level encapsulation % can handler be accessed from proxy
+    %TODO: introduce this principle
+    & Y % Javascript
+    & N (\texttt{Proxy.getInvocationHandler(proxy)}) % Java
+    & Y (\texttt{reflect: mirage} consults mirror factory) % AmbientTalk
+    & Y % E eventual proxies
+    & Y % E non-methodical objects
+    & N % Smalltalk
     \\
     \hline
     Temporary intercession
     & Y (fix trap) % Javascript
     & N % Java
     & N % AmbientTalk
-    & N? % CLOS
-    & N % E
+    & Y (resolutionSlot) % E eventual proxies
+    & N % E non-methodical objects
+    & Y (replacing an object using \texttt{become}) % Smalltalk
     \\
     \hline
     Meta-level shift
     & Y (handler is proxy) % Javascript
     & Y (handler is proxy) % Java
     & Y (mirror is mirage) % AmbientTalk
-    & Y? (class metaobject with non-standard class metaobject) % CLOS
-    & N? (handler cannot be a proxy) % E
+    & N (handler cannot be an eventual proxy) % E eventual proxies
+    & N (non-methodicals have no handler) % E non-methodical objects
+    & N (can't trap invocations of \texttt{doesNotUnderstand} itself) % Smalltalk
     \\
     \hline
     Funneling
     & Y (get trap) % Javascript
     & Y (trivially) % Java
     & Y (invoke trap) % AmbientTalk
-    & N (metalevel itself consists of many operations) % CLOS
-    & N? % E
+    & Y (handler is a non-methodical object) % E
+    & Y (trivially) % E non-methodical objects
+    & Y (only external operation on object is message sending) % Smalltalk
     \\
     \hline
-    Selective intercession
-    & Y (prototype and type are fixed) % Javascript
-    & Y (interfaces are fixed) % Java
-    & N % AmbientTalk
-    & Y (through specialization of metaobjects) % CLOS e.g. standard-class vs funcallable-standard-class
-    & Y (kind of reference is fixed) % E
+    Uniform intercession %TODO: introduce this principle
+    % can all values in the language be virtualized?
+    & N (primitives) % Javascript
+    & N (classes, primitives) % Java
+    & Y (everything is an object or reference) % AmbientTalk
+    % TODO: \multirow to collapse E cases
+    & Y (everything is an object or reference) % E eventual proxies and non-methodicals
+    & Y (everything is an object) % Smalltalk
+    \\
+    \hline
+    Full intercession % what operations on a value can be intercessed
+    % for those values that can be interceded on, are all applicable operations interceded?
+    & N (prototype, typeof and identity are fixed) % Javascript
+    & N (identity, instanceof, getClass, wait and notify are fixed) % Java
+    & Y % AmbientTalk
+    & N (identity is fixed, reference state is enforced) % E eventual proxies
+    & N (identity, trademarks) % E non-methodical objects
+    & Y (if the defining class does not inherit from \texttt{Object}) % Smalltalk
     \\
     \hline
     Fundamental vs Derived traps
-    & Y % Javascript
+    & Y (cf. table~\ref{tab:operations})% Javascript
     & N (just 1 trap) % Java
     & N (all fundamental) % AmbientTalk
-    & constraints between methods % CLOS
-    & Y (send versus sendOnly) % E
+    & Y (\texttt{send} versus \texttt{sendOnly}) % E eventual proxies
+    & N (just 1 trap) % E non-methodical objects
+    & N (just 1 trap) % Smalltalk
     \\
     \hline
   \end{tabular}
