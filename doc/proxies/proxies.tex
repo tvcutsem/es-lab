@@ -422,7 +422,7 @@ Fixing does not necessarily need to be an ``all or nothing'' process. However, i
 
 A common use case for proxy handlers is, for example, to perform an access control check before performing the operation on some wrapped object. Only if the check succeeds is the operation forwarded. Since there are 12 different operations that proxy handlers can intercept, a straightforward implementation would have to duplicate the pattern of access checking and forwarding the operation in each trap. It's difficult to abstract this pattern, because each operation has to be ``forwarded'' in a different way, as exemplified by the forwarding handler in Section~\ref{sec:proxies_for_javascript}. Ideally, if all operations could be uniformly funneled through a single trap, the handler would only have to perform the access check once, in the single trap.
 
-We can achieve such funneling of all operations through a single trap by treating a proxy handler \emph{itself} as a proxy. In meta-programming terms, this corresponds to shifting to the meta-meta-level. To avoid the confusion that invariably follows from such shifting between meta-levels, let us introduce some terminology. The \emph{base-level proxy} is the proxy object that with which other regular application objects will interact. That proxy's handler is the \emph{base-level handler}. If the base-level handler is itself a proxy, it is \emph{also} a \emph{meta-level proxy}. The handler of a meta-level proxy is a \emph{meta-level handler}.
+We can achieve such funneling of all operations through a single trap by treating a proxy handler \emph{itself} as a proxy. In meta-programming terms, this corresponds to shifting to the meta-meta-level. To avoid the confusion that invariably follows from such shifting between meta-levels, let us introduce some terminology. The \emph{base-level proxy} is the proxy object with which other regular application objects directly interact. That proxy's handler is the \emph{base-level handler}. If the base-level handler is itself a proxy, it is \emph{also} a \emph{meta-level proxy}. The handler of a meta-level proxy is a \emph{meta-level handler}.
 
 We carefully designed the intercession API such that proxies only interact with their associated handler by invoking their traps. Proxies never assign, enumerate or test for the presence of traps on their handler. Because of this invariant, if the base-level handler is \emph{only} used in its role as the handler for a base-level proxy, the meta-level handler only needs to implement the \texttt{get} trap. Because method invocation is the only operation performed on meta-level proxies, only this single trap is triggered on meta-level handlers.
 
@@ -436,7 +436,9 @@ We carefully designed the intercession API such that proxies only interact with 
 
 Another way to explain why this funneling works is as follows. At the base-level, there is an assortment of operations that are performed on Javascript objects as computation progresses (e.g. property lookup, access, assignment, enumeration, \ldots). At the meta-level (that is: in the intercession API), all of these operations are reified uniformly as method invocations on handlers. Therefore, at the meta-level, the only operation performed on meta-level objects (base-level handlers) is property access, and meta-meta-level objects (meta-level handlers) only need to handle this single operation in their protocol.
 
-We will show an example of this technique of funneling all methods in Section~\ref{sec:membranes}.
+If one shifts an extra level upwards to funnel all operations through a single trap of a meta-level handler, one must also shift an extra level downwards if these operations must eventually be applied to a base-level object. This can be accomplished by having the meta-level handler forward the operations to a generic forwarding \emph{handler}. The forwarding handler essentially translates meta-level operations back into base-level operations on a target object.
+
+We will show an example of this technique of funneling all methods in Section~\ref{sec:examples}.
 
 Naturally, one can apply this trick of shifting meta-levels at the meta-meta-level recursively. The API allows an arbitrary number of such meta-level shifts. This brings up the question of infinite meta-regress. Such an infinite regress is avoided as long as a proxy handler is eventually implemented as a concrete Javascript object, rather than as yet another proxy.
 
@@ -582,71 +584,102 @@ function makeRevocableRef(target) {
 
 Given this abstraction, \texttt{A} can now wrap \texttt{C} in a revokable reference, pass the caretaker to \texttt{B}, and hold on to the revoker such that the reference can later be severed.
 
-The caretaker is a proxy whose handler is very similar to the generic forwarder defined in Section~\ref{sec:proxies_for_javascript} except that it explicitly checks the \texttt{enabled} flag before forwarding. As noted in Section~\ref{sub:doublelifting}, this is itself a pattern that can be abstracted by shifting meta-levels once more. If the caretaker's handler is itself a proxy, the meta-level handler can funnel all meta-level operations through a single \texttt{get} trap:
+The caretaker is a proxy whose handler is very similar to the generic forwarder defined in Section~\ref{sec:proxies_for_javascript} except that it explicitly checks the \texttt{enabled} flag before forwarding. As noted in Section~\ref{sub:doublelifting}, this is a pattern that can itself be abstracted by shifting meta-levels once more. If the caretaker's handler is itself a proxy, the meta-level handler can funnel all meta-level operations through a single \texttt{get} trap:
 
 \begin{lstlisting}[language=javascript]
 function makeRevocableRef(target) {
   var enabled = true;
-  var baseHandler = makeForwaringHandler(target);
-  var metaHandler = Proxy.create(Object.freeze({
+  var baseHandler = makeForwardingHandler(target);
+  var metaHandler = Proxy.create({
     get: function(rcvr, name) {
       if (!enabled) { throw new Error("revoked"); }
       return baseHandler[name];
     }
-  }));
+  });
   return Object.freeze({
     caretaker: Proxy.create(metaHandler, 
                  Object.getPrototypeOf(target)),
     revoker: Object.freeze({
       revoke: function() { enabled = false; }
-    });
+    })
   });
 }
 \end{lstlisting}
 
+% insert figure of an invocation through a revocable ref
+% ref.foo()
+%   metaHandler.get(metaHandler, 'foo')()
+%     metametaHandler.get(metametaHandler, 'get')(metaHandler,'foo')()
+%   baseHandler['get'](metaHandler, 'foo')()
+% target['foo']()
+
 A limitation of the above caretaker abstraction is that objects exchanged via the caretaker are themselves not recursively wrapped in a revocable reference. In particular, if \texttt{C} defines a method that returns \texttt{this}, \texttt{B} could circumvent the caretaker and get hold of a direct reference to \texttt{C} by invoking that method. The abstraction discussed in the following section addresses this issue.
 
 \subsection{Membranes}
-\label{sec:membranes}
+\label{sub:membranes}
 % es-lab's compartments building on membranes
 
 A membrane is an extension of a caretaker that transitively imposes revocability on all references exchanged via the membrane~\cite{robust_composition}. In the following implementation, we make use of meta-level funneling once more to centralize the access control in a single trap:
 
 \begin{lstlisting}[language=javascript]
-function makeMembrane(target) {
+function makeMembrane(initTarget) {
   var enabled = true;
   
-  function wrap(wrapped) {
-    if (Object.isPrimitive(wrapped)) {
+  function wrap(target) {
+    if (Object.isPrimitive(target)) {
       // primitives provide only irrevocable knowledge
-      return wrapped; // so don't bother wrapping them
+      return target; // so don't bother wrapping them
     }
  
-    var baseHandler = makeForwaringHandler(wrapped);
-    var metaHandler = Proxy.create(Object.freeze({
-      get: function(rcvr, name) {
-        if (!enabled) { throw new Error("disabled"); }
-        return Proxy.create(wrap())
-        
-        return wrap(baseHandler[name].call(baseHandler,args.map(wrap)));
+    function wrapCall(fun, theThis, args) {
+      if (!enabled) { throw new Error("revoked"); }
+      try {
+        return wrap(fun.apply(theThis, args.map(wrap)));
+      } catch (e) {
+        throw wrap(e);
       }
-    }));
-          
-    return Proxy.create(metaHandler, 
-                        wrap(Object.getPrototypeOf(wrapped)));
-  }
+    }
+ 
+    var baseHandler = makeForwardingHandler(target);
+    var metaHandler = Proxy.create({
+      get: function(rcvr, name) {
+        return function() {
+          return wrapCall(baseHandler[name], baseHandler, toArray(arguments));
+        };
+      }
+    });
     
+    if (typeof wrapped === "function") {
+      return Proxy.createFunction(metaHandler, function() {
+        return wrapCall(wrapped, wrap(this), toArray(arguments));
+      });
+    } else {
+      return Proxy.create(metaHandler, 
+                          wrap(Object.getPrototypeOf(wrapped)));
+    }
+  }
+
   return Object.freeze({
-    wrapper: wrap(target),
+    wrapper: wrap(initTarget),
     gate: Object.freeze({
       revoke: function() { enabled = false; }
-    });
+    })
   });
 }
 \end{lstlisting}
 
+A membrane consists of one or more wrappers. Every such wrapper is created by a call to the \texttt{wrap} function. Note that all wrappers belonging to the same membrane share a single \texttt{enabled} variable. Assigning the variable to \texttt{false} revokes all of the membrane's wrappers simultaneously.
 
-However: missing identity preservation. This can be fixed with Ephemeron tables (ref) but is outside the scope of this paper.
+Note how the handler of each membrane wrapper wraps all values crossing the membrane in both directions: arguments to methods cross the membrane in one direction, returned values or thrown exceptions in the other direction.
+
+Recall that this example makes use of meta-level funneling. The \texttt{metaHandler} resides at the meta-meta-level. Therefore, it knows that it need only implement a \texttt{get} trap, and it knows that whatever it returns from the \texttt{get} trap will be treated as a meta-level trap (a function) that will immediately be invoked. To be able to wrap the arguments of these invocations, the \texttt{get} trap returns a variable-argument function. When this function is invoked, the \texttt{get} trap can collect the arguments\footnote{In Javascript, \texttt{arguments} is an object that contains all arguments passed to a function. It is used to write variable-argument functions, and it is customary to convert this object into a proper array first.}
+
+% TODO: explain: the 'get' trap only wraps meta-level arguments
+% the function proxy's call trap wraps base-level arguments
+
+One problem with the above membrane abstraction is that it fails to uphold object identity across both sides of the membrane. If an object \texttt{o} is passed through the same membrane twice, an object on the other side of the membrane will receive two distinct wrappers \texttt{w1} and \texttt{w2}, such that \texttt{w1 !== w2}, even though both wrap an identical object. Likewise, passing \texttt{w1} or \texttt{w2} back through the membrane does not unwrap them but rather wraps them again. These limitations can be addressed by having the membrane maintain a map from objects to their wrappers, such that only one canonical wrapper is created per object. Maintaining a map from wrappers to objects allows wrappers to be unwrapped when they cross the membrane in the other direction.
+
+Unfortunately, implementing these maps in Javascript is impossible without introducing severe memory leaks. Ephemeron tables are a proposed language feature for the upcoming Ecmascript standard that address this issue~\cite{ephemeron_proposal}.
 
 \subsection{Script Compartments}
 
