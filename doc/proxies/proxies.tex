@@ -624,38 +624,33 @@ A membrane is an extension of a caretaker that transitively imposes revocability
 \begin{lstlisting}[language=javascript]
 function makeMembrane(initTarget) {
   var enabled = true;
-  
+  function wrapFunction(f) {
+    return function() { // variable-arg function
+      if (!enabled) { throw new Error("revoked"); }
+      try {
+        return wrap(f.apply(wrap(this),
+                    toArray(arguments).map(wrap)));
+      } catch (e) { throw wrap(e); } 
+    }
+  }
   function wrap(target) {
     if (Object.isPrimitive(target)) {
       // primitives provide only irrevocable knowledge
       return target; // so don't bother wrapping them
-    }
- 
-    function wrapCall(fun, theThis, args) {
-      if (!enabled) { throw new Error("revoked"); }
-      try {
-        return wrap(fun.apply(theThis, args.map(wrap)));
-      } catch (e) {
-        throw wrap(e);
-      }
-    }
- 
+    } 
     var baseHandler = makeForwardingHandler(target);
     var metaHandler = Proxy.create({
       get: function(rcvr, name) {
-        return function() {
-          return wrapCall(baseHandler[name], baseHandler, toArray(arguments));
-        };
+        return wrapFunction(baseHandler[name]);
       }
     });
     
-    if (typeof wrapped === "function") {
-      return Proxy.createFunction(metaHandler, function() {
-        return wrapCall(wrapped, wrap(this), toArray(arguments));
-      });
+    if (typeof target === "function") {
+      return Proxy.createFunction(metaHandler,
+                                  wrapFunction(target));
     } else {
       return Proxy.create(metaHandler, 
-                          wrap(Object.getPrototypeOf(wrapped)));
+                          wrap(Object.getPrototypeOf(target)));
     }
   }
 
