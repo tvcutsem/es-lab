@@ -130,7 +130,7 @@ var EnumerableTrait = <strong>Trait</strong>({
     });
     return seq;
   },
-  reduce: function(fun, optInit) {
+  reduce: function(optInit, fun) {
     var result = optInit;
     this.forEach(function(e,i) {
       result = fun(result, e, i);
