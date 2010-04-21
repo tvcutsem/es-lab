@@ -607,7 +607,7 @@ The advantage of having a uniform intercession API is that it does not restrict 
 Java proxies are also a non-uniform intercession API. Proxies can only be constructed for interface types, not class types. As a result, proxies cannot be used in any situation where code is typed using class types rather than interface types, severely limiting their applicability in general.
 
 %TODO: discuss Proxy.isTrapping?
-%TODO: could be another important design principle: whether or not to fully virtualize an API
+%could be another important design principle: whether or not to fully virtualize an API
 %A method is defined on \texttt{Proxy} to distinguish trapping proxies from regular objects or fixed proxies:
 %\texttt{Proxy.isTrapping(anObject)} returns \texttt{true} if and only if \texttt{anObject} is a proxy and is in trapping mode. This is the single, reliable way of testing whether an object is a trapping proxy or not. Note that a proxy cannot influence the outcome of this method. Once a proxy is fixed, it is in all ways simply a normal object, with no built-in way to detect that it had ever been a trapping proxy.
 
@@ -770,69 +770,98 @@ Reflex differs from our proxy approach in that it enables the creation of meta-o
 
 Another way of looking at Reflex is that it is a meta-proxy system: using Reflex, a programmer can define many different particular intercession APIs, each with their own settings for entity, operation and temporal selection.
 
-\subsection{Intercepting Method Invocations}
+%\subsection{Intercepting Method Invocations}
 
-We already discussed in Section~\ref{sub:metaobject_protocols} that many object-oriented systems provide ad hoc support for intercepting messages sent to objects. There is a general category of languages that provide a trap that triggers on missing method definitions only, as exemplified by Smalltalk's \texttt{doesNotUnderstand:}, Spidermonkey's \noSuchMethod{}, Ruby's \texttt{methodMissing}, the E language's \texttt{match} clause, and so on. There are also languages that provide traps that trigger on every method invocation, whether a method is present or not. Examples of this category include Python's \texttt{\_\_getattribute\_\_} and Groovy's \texttt{invokeMethod}. What all of these systems have in common is that the intercession is not stratified. The trap is always defined in a namespace populated with application-level methods.
+%We already discussed in Section~\ref{sub:metaobject_protocols} that many object-oriented systems provide ad hoc support for intercepting messages sent to objects. There is a general category of languages that provide a trap that triggers on missing method definitions only, as exemplified by Smalltalk's \texttt{doesNotUnderstand:}, Spidermonkey's \noSuchMethod{}, Ruby's \texttt{methodMissing}, the E language's \texttt{match} clause, and so on. There are also languages that provide traps that trigger on every method invocation, whether a method is present or not. Examples of this category include Python's \texttt{\_\_getattribute\_\_} and Groovy's \texttt{invokeMethod}. What all of these systems have in common is that the intercession is not stratified. The trap is always defined in a namespace populated with application-level methods.
 
 %In \textbf{Python}, class objects may define methods with special method names (starting with \texttt{__}) that are invoked when certain operations are performed on instances of the class. For example, \texttt{x.y} calls \texttt{type(x).__getattribute__(x, "y")}, where \texttt{type(x)} denotes the class of \texttt{x}. The difference between Python's hooks and proxies is that hooks are not defined on a separate handler object but rather on the class itself. Because hooks are not technically stratified into a separate object, a naming convention is used to avoid name clashes with application-level methods.
 
 \subsection{Mirrors}
 
-The intercession API discussed in this paper is heavily influenced by the design principles of mirror-based reflective architectures~\cite{bracha_04_mirrors_oopsla}. Mirror-based architectures enforce stratification of base and meta-level. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
+This paper was heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha_04_mirrors_oopsla} discuss the design principles of mirror-based meta-level architectures. The principle of stratification can be directly attributed to the mirror-based design. The use of mirrors naturally leads to a stratification of base and meta-level. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
 
-A mirror is a meta-level object that defines a view on a base-level object. Mirrors are manufactured by mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with what kind of object is no longer tied to an object's representation.
+A mirror is a meta-level object that defines a view on a base-level object. Mirrors are manufactured by distinct objects known as mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with what kind of object is not tied to an object's representation.
 
-One can think of a proxy handler as defining a mirror on the proxy. Upholding the Mirrors principle of stratification, given only a reference to a proxy, it's impossible to acquire a reference to its handler. If such a relationship is required, it can be provided as follows:
+Systems with a mirror-based architecture include Self~\cite{ungar87power}, the Java Debugger API~\cite{jdi} and Newspeak~\cite{newspeak}. Mirrors naturally support introspection, reflective invocation and self-modification. It was an open question whether mirror-based architectures could support intercession. AmbientTalk answered this question affirmatively: it introduced the concept of a \emph{mirage}~\cite{mirages_dls_07,spe_journal_08}. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The only difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
 
-\begin{lstlisting}[language=javascript]
-function makeCustomProxyFactory() {
-  var customProxies = new EphemeronTable();
-  return {
-    create: function(handler, proto) {
-      var proxy = Proxy.create(handler, proto);
-      customProxies.put(proxy, handler);
-      return proxy;
-    },
-    handlerOf: function(proxy) {
-      return customProxies.get(proxy);
-    }
-  };
-} 
-\end{lstlisting}
+%One can think of a proxy handler as defining a mirror on the proxy. Upholding the Mirrors principle of stratification, given only a reference to a proxy, it's impossible to acquire a reference to its handler. If such a relationship is required, it can be provided as follows:
 
-Given such an abstraction, an object with a reference to a proxy \texttt{p} created by such a factory \texttt{f} can reference the proxy's handler as \texttt{f.handlerOf(p)}. This design conforms to the stratification principle of a mirror-based architecture.
+%\begin{lstlisting}[language=javascript]
+%function makeCustomProxyFactory() {
+%  var customProxies = new EphemeronTable();
+%  return {
+%    create: function(handler, proto) {
+%      var proxy = Proxy.create(handler, proto);
+%      customProxies.put(proxy, handler);
+%      return proxy;
+%    },
+%    handlerOf: function(proxy) {
+%      return customProxies.get(proxy);
+%    }
+%  };
+%} 
+%\end{lstlisting}
+
+%Given such an abstraction, an object with a reference to a proxy \texttt{p} created by such a factory \texttt{f} can reference the proxy's handler as \texttt{f.handlerOf(p)}. This design conforms to the stratification principle of a mirror-based architecture.
 
 \subsection{CLOS}
 
-%CLOS’s metaobject protocol / metaclasses, in particular: the instance structure protocol (intercept slot accesses, i.e. “property access”), the generic function invocation protocol (intercept generic function invocation, i.e. “method calls”)
-Metaclasses in the \textbf{CLOS} metaobject protocol~\cite{clos} support a stratified form of intercession. CLOS classes can be declared to have a certain metaclass, that will describe the behavior of that class. This behavior is categorized into different kinds of protocols. For instance, the ``instance structure protocol'' can be used to intercept slot access on the class's instances. The ``generic function invocation protocol'' can be used to intercept generic function invocation.
+The Common Lisp Object System (CLOS) is known for its extensibility through its metaobject protocol~\cite{kiczales_artmop}. Because CLOS is a function-oriented as opposed to a message-oriented object system, it is difficult to transpose the design principles described in this paper to CLOS. In CLOS, computation proceeds mainly through generic function invocation, as opposed to sending messages to objects. The dispatch mechanism of generic functions can be modified through the ``generic function invocation protocol''. Most common use cases do not require this, however: if one simply wants to wrap existing methods, CLOS offers a powerful method combination protocol that can be used to insert behavior before, after or around existing methods.
 
-Because CLOS is a function-oriented as opposed to a message-oriented object system, it is difficult to transpose the design principles put forth in this paper to CLOS. Another key difference between our proxy-based approach and the CLOS approach to stratified intercession is that CLOS introduces reflection at the class-level, while Javascript proxies (and the other message-oriented approaches discussed in the following section) introduce reflection at the object-level.
+CLOS supports a stratified form of intercession. CLOS classes can be declared to have a custom metaclass. That metaclass can then specialize the various protocols in which the class metaobject takes part. For example, the ``instance structure protocol'' describes the structure of, and access to, the class's instance variables. The main difference between the proxy approach and the CLOS metaclass approach is that metaclasses introduces customization of behavior at the class-level, while proxies introduce customization of behavior at the object-level.
 
 \subsection{OO Intercession APIs: a comparison}
+\label{sub:survey}
 
-Examples of stratified object-oriented intercession APIs include Java proxies, AmbientTalk mirages and E proxies. We briefly discuss each of these and then summarize which of our design principles they uphold in Table~\ref{tab:related_work}. Although Smalltalk's \texttt{doesNotUnderstand:} trap is not stratified,  we include it in our discussion as a useful basis for comparison.
+In this section we summarize a variety of object-oriented intercession APIs. For each of these APIs, we discuss whether and how they adhere to the design principles put forth in this paper. We do not guarantee that the range of systems described here covers all possible approaches, but the systems described here, taken together, do constitute a very wide range of possible intercession APIs. Each of these APIs has its own peculiarities. We briefly discuss the surveyed mechanisms and then summarize which of our design principles they uphold in Table~\ref{tab:related_work}.
 
-%Mirages in AmbientTalk: adds intercession to a Mirror API
-The design of Javascript proxies was most directly influenced by \textbf{AmbientTalk} \emph{mirages}~\cite{mirages_dls_07,spe_journal_08}. AmbientTalk mirages enable intercession in a Mirror-based API. In AmbientTalk, mirages are base-level objects whose meta-object (named a \emph{mirror}) describes their behavior. Mirages correspond to proxies and their mirror corresponds to proxy handlers. AmbientTalk mirrors, like our proxy handlers, implement a metaobject protocol API defining the behavior of all operations applicable to objects.
-
-\textbf{Java}'s \texttt{java.lang.reflect.Proxy} API directly influenced our intercession API for Javascript. In Java, one defines proxies that implement one or more interface types, by calling:
+\textbf{Java} The Java 1.3 \texttt{java.lang.reflect.Proxy} API is a major precedent to our Javascript proxy API. Java's dynamic proxies can be used to emulate instances of interface types:
 
 \begin{lstlisting}[language=java]
 InvocationHandler h = new InvocationHandler() {
-  public Object invoke(Method m) {...}
+  public Object invoke(Method m, Object[] args) {...}
 }
 Foo proxy = (Foo) Proxy.newProxyInstance(
   aClassloader, new Class[] { Foo.class }, h);
 \end{lstlisting}
 
-Here, \texttt{proxy} implements the \texttt{Foo} interface. \texttt{h} is an object that implements a single \texttt{invoke} method. All method invocations on \texttt{proxy} are reified by calling the \texttt{h.invoke} method.
+Here, \texttt{proxy} implements the \texttt{Foo} interface. \texttt{h} is an object that implements a single \texttt{invoke} method. All method invocations on \texttt{proxy} are reified by calling the \texttt{h.invoke} method, passing along a description of the invoked method and the arguments of the call.
 
-The main difference between Java proxies and Javascript proxies is that Java proxies only trap method invocation. There are no other meta-level operations to trap. For instance, since interfaces cannot declare fields, proxies do not need to intercept field access. Implementation-wise, another important difference is that Java proxies can be supported by a JVM without the need for a special ``proxy'' object type. A description of the proxy (and all of its methods) can be generated from the given interfaces and subsequently instantiated as a normal object (whose class just happens to be synthesized at runtime).
+The main difference between Java proxies and Javascript proxies is that Java proxies can only intercept method invocation. There are no other meta-level operations to trap. For instance, since interfaces cannot declare fields, proxies do not need to intercept field access.
+%Implementation-wise, another important difference is that Java proxies can be supported by a JVM without the need for a special ``proxy'' object type. A description of the proxy (and all of its methods) can be generated from the given interfaces and subsequently instantiated as a normal object (whose class just happens to be synthesized at runtime).
 
-\textbf{E} has a small intercession API for a special type of object reference known as an \emph{eventual reference}. The API is similar to the Javascript proxy API of this paper. To create custom eventual references, one calls the function \texttt{makeProxy}, passing a proxy handler that implements a small protocol (consisting of 3 traps, to be precise).
+%Mirages in AmbientTalk: adds intercession to a Mirror API
+\textbf{AmbientTalk} The design of Javascript proxies was influenced by AmbientTalk \emph{mirages}~\cite{mirages_dls_07,spe_journal_08}. AmbientTalk is a distributed dynamic language, with a mirror-based meta-level API. AmbientTalk enables intercession through mirages, which are proxy-like objects controlled explicitly by a separate mirror object:
 
-Next to eventual reference proxies, E supports another form of reflection. A \emph{non-methodical object} is an object whose only method is a \texttt{doesNotUnderstand}-like trap. A non-methodical object is defined as follows:
+\begin{lstlisting}[]
+def mirage := object: { ... } mirroredBy: (mirror: {
+  def invoke(receiver, message) { ... };
+  def addSlot(slot) { ... };
+  def removeSlot(slot) { ... };
+  ...
+});
+\end{lstlisting}
+
+The mirror is to the mirage what the proxy handler is to a Javascript proxy. Like Javascript proxy handlers, mirrors define an extensive set of traps, enabling near-complete control over the mirage.
+
+\textbf{E} E is a secure, distributed dynamic language~\cite{miller05strangers}. In E, everything is an object, but there are two kinds of object references: \emph{near} and \emph{eventual} references. Similarly, there are two message passing operators: immediate call (\texttt{o.m()}, a synchronous method invocation) and eventual send (\texttt{o<-m()}, an asynchronous message send). Both operations are allowed on near references, but eventual references carry only asynchronous messages. Because of this distinction, E has two separate intercession APIs: one for objects and one for references.
+
+E has a proxy-based API to represent user-defined eventual references~\cite{e_wiki}:
+%http://wiki.erights.org/wiki/Proxy
+\begin{lstlisting}[]
+def handler {
+  to handleSend(verb :String, args :List) {...}
+  to handleSendOnly(verb :String, args :List) {...}
+  to handleOptSealedDispatch(brand) {...}
+}
+def proxy := makeProxy(handler, slot, state);
+\end{lstlisting}
+
+This API is very similar to the one of Javascript proxies. The proxy represents an eventual reference, and any asynchronous send \texttt{proxy<-m()} either triggers the handler's \texttt{handleSend} or \texttt{handleSendOnly} trap, depending on whether the sender expects a return value.
+
+The \texttt{handleOptSealedDispatch} trap is part of E's trademarking system and is beyond the scope of this paper. The \texttt{slot} argument to \texttt{makeProxy} can be used to turn the proxy reference into an actual, so-called \emph{resolved} reference. Once a reference is resolved, the proxy is bypassed and the handler no longer consulted. It fulfills a role similar to the \texttt{fix} trap highlighted in Section~\ref{sub:immutability}.
+
+E has a distinct intercession API for objects. A \emph{non-methodical object} is an empty object with no methods. Instead, its implementation consists of a single \texttt{match} clause that encodes an explicit message dispatch:
 
 \begin{lstlisting}
 def obj match [verb, args] {
@@ -840,14 +869,16 @@ def obj match [verb, args] {
 }
 \end{lstlisting}
 
-This piece of code declares a variable named \texttt{obj} that is bound to a new object whose behavior is entirely encoded in the \texttt{match} clause. The invocation \texttt{obj.m(x)} will trigger this clause, binding \texttt{verb} to \texttt{"m"} and \texttt{args} to \texttt{[x]}.
+The variable \texttt{obj} is bound to a new object whose dispatch logic is explicitly encoded in the \texttt{match} clause. An immediate call \texttt{obj.m(x)} will trigger this clause, binding \texttt{verb} to \texttt{"m"} and \texttt{args} to a list \texttt{[x]}.
 
-\textbf{Smalltalk} Smalltalk-80 popularized generic message handling through its \texttt{doesNotUnderstand:} mechanism. Its lack of stratification did lead Smalltalk programmers to look for alternative interception mechanisms. Foote and Johnson describe a particular extension to ParcPlace Smalltalk called a \emph{dispatching class}: ``Whenever an object belonging to a class designated as a dispatching class (using a bit in the class object's header) is sent a message, that object is instead sent \texttt{dispatchMessage: aMessage}.''~\cite{foot_johnson_reflection_in_st80}. Instances of dispatching classes are effectively proxies, the \texttt{dispatchMessage:} method acting as its sole handler.
+Finally, it is worth noting that AmbientTalk inherits from E the distinction between near and eventual references and the distinction between immediate call and eventual send. Unlike E, AmbientTalk has only one intercession API (mirages), but a mirage can represent \emph{both} objects and eventual references, depending on how the handler implements its traps.
 
-Ducasse~\cite{ducasse} gives an overview of the various message passing control techniques in Smalltalk. Next to generic method dispatch, the most frequently used technique seems to be based on method wrappers~\cite{brant}. In this approach, rather than changing the \emph{method lookup}, the \emph{method objects} returned by the lookup algorithm are modified. This is possible because Smalltalk methods and method dictionaries are accessible from within the language. Method wrappers are similar to CLOS method combinations, enabling before/after/around augmentation of existing methods. As their name suggests, they are great for creating wrappers, but they seem less suitable to implement virtual objects.
-% Evaluating Message Passing Control Techniques in Smalltalk, Stephane Ducasse, JOOP
+\textbf{Smalltalk} Smalltalk-80 popularized generic message dispatch via its \texttt{doesNotUnderstand:} mechanism. Briefly, if standard method lookup does not find a method corresponding to a message, the Smalltalk VM instead sends the message \texttt{doesNotUnderstand: msg} to the original receiver object. Here, \texttt{msg} is an object containing the message's selector and arguments. The default behavior of this method, inherited from \texttt{Object} is to throw an exception.
 
-% TODO: summarize the table with Y/N only and place markers in the table that refer to the text
+The \texttt{doesNotUnderstand:} trap is not stratified. It occupies the same namespace as plain application-level methods. This lack of stratification did lead Smalltalk programmers to look for alternative interception mechanisms. Foote and Johnson describe a particular extension to ParcPlace Smalltalk called a \emph{dispatching class}: ``Whenever an object belonging to a class designated as a dispatching class (using a bit in the class object's header) is sent a message, that object is instead sent \texttt{dispatchMessage: aMessage}.''~\cite{foote_st80}. Instances of dispatching classes are effectively proxies, the \texttt{dispatchMessage:} method acting as the sole trap of an implicit handler.
+
+Ducasse~\cite{ducasse99joop} gives an overview of the various message passing control techniques in Smalltalk. He concludes that \texttt{doesNotUnderstand:} is not always the most appropriate mechanism. Rather, he stresses the usefulness of \emph{method wrappers}. This approach was later elaborated by Brant \emph{et. al}~\cite{brant}. In this approach, rather than changing the \emph{method lookup}, the \emph{method objects} returned by the lookup algorithm are modified. This is possible because Smalltalk methods and method dictionaries are accessible from within the language. The method wrapper approach is in many ways similar to CLOS method combinations, enabling before/after/around augmentation of existing methods. As their name suggests, they are great for wrapping existing methods, but they seem less suitable to implement virtual objects.
+
 \begin{table*}
 \centering
 \begin{tabular}{|p{0.20\textwidth}|p{0.80\textwidth}|}
