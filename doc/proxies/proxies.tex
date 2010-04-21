@@ -278,11 +278,12 @@ Here, \texttt{handler} is an object that is supposed to implement a particular m
 
 \begin{table*}[t]
   \begin{center}
-    \begin{tabular}{|l|l|l|}
+    \begin{small}
+    \begin{tabular}{|l|p{0.35\textwidth}|p{0.4\textwidth}|}
     \hline
     \textbf{Operation} & \textbf{Triggered by} & \textbf{Reified as}\\
     \hline
-    \multicolumn{3}{|l|}{Fundamental traps}\\
+    \multicolumn{3}{|l|}{\textbf{Fundamental traps}}\\
     \hline
     Descriptor access & Object.getOwnPropertyDescriptor(proxy,name) & handler.getOwnPropertyDescriptor(name)\\
     \hline
@@ -294,13 +295,13 @@ Here, \texttt{handler} is an object that is supposed to implement a particular m
     \hline
     Key enumeration & for (name in proxy) {...} & handler.enumerate().forEach(function(name) { ... })\\
     \hline
-    Object fixing & Object.\{freeze,seal,preventExtensions\}(proxy) & Object.\{freeze,seal,preventExtensions\}(Object.create(proto, handler.fix()))\\
+    Object fixing & Object.freeze(proxy)\footnote{Analogous for \texttt{seal} and \texttt{preventExtensions}.} & Object.freeze(Object.create(proto, handler.fix()))\\
     \hline
-    \multicolumn{3}{|l|}{Derived traps}\\
+    \multicolumn{3}{|l|}{\textbf{Derived traps}}\\
     \hline
     Property lookup & name in proxy & handler.has(name)\\
     \hline
-    Own Property lookup & ({}).hasOwnProperty.call(proxy,name) & handler.hasOwn(name)\\
+    Own Property lookup & (\{\}).hasOwnProperty.call(proxy,name) & handler.hasOwn(name)\\
     \hline
     Property access & receiver.name & handler.get(receiver, name)\\
     \hline
@@ -309,6 +310,7 @@ Here, \texttt{handler} is an object that is supposed to implement a particular m
     Own key enumeration & Object.keys(proxy) & handler.enumerateOwn()\\
     \hline
     \end{tabular}
+    \end{small}
   \end{center}
   \caption{Operations reified by the intercession API}
   \label{tab:operations}
@@ -319,13 +321,15 @@ Table~\ref{tab:operations} lists those base-level operations applicable to objec
 The simplest useful handler is that of a generic forwarding proxy. For such a handler, each trap simply applies the intercepted operation to a target object \texttt{obj}. Most use cases of proxies can be thought of as variations on this default forwarding semantics, usually just augmenting some operations.
 
 \begin{lstlisting}[language=javascript]
-function makeForwaringHandler(obj) {
+function makeForwardingHandler(obj) {
   return {
-   has:        function(name) { return name in obj; },
-   get:        function(receiver, name) { return obj[name]; },
-   set:        function(receiver, name, val) { obj[name] = val; return true; },
-   delete:     function(name) { return delete obj[name]; },
-   keys:       function() { return Object.keys(obj) },
+   has: function(name) { return name in obj; },
+   get: function(rcvr,name) { return obj[name]; },
+   set: function(rcvr,name,val) {
+     obj[name] = val; return true;
+   },
+   delete: function(name) { return delete obj[name]; },
+   keys: function() { return Object.keys(obj) },
    ...
   };
 };
