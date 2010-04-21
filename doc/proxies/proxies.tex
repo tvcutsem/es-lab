@@ -139,19 +139,6 @@ The goals of this paper are:
   \item To share some design principles that we have applied successfully to our API, but which we think should be applicable to similar such APIs for other languages or systems.
 \end{itemize}
 
-\section{A Brief History of Javascript}
-
-% Javascript vs ECMAScript
-% ECMAScript 3, ECMAScript 5, es5-strict, ECMAScript Harmony
-%  we should definitely introduce es5 seal,freeze,preventExtensions and property attributes
-The official, standardized version of the Javascript language is named ECMAScript. The latest edition of ECMAScript, ECMA-262, 5th edition~\cite{ecma262}, adds to the language support for defensively consistent objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). ECMAScript 5 also defines a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived ``language warts'', edge cases and inconsistencies.
-
-% Execution environment: the browser (DOM API for interacting with webpage, XHR object)
-Javascript is a scripting language which implies that the language runtime is often embedded within a larger execution environment. By far the most common execution environment for Javascript is the web browser. In this environment, the global object is named \texttt{window} and gives Javascript objects access to the content and structure of web pages via the Document Object Model (DOM), and allows them to communicate with their originating server through XmlHttpRequests (XHR).
-
-% The 'good parts': objects, arrays, functions
-While the full Javascript language as we know it today is the product of a complex evolutionary process, at its core (what Doug Crockford refers to as ``just the good parts''~\cite{crockford_goodparts}) it is actually a simple dynamic language with first-class lexically scoped functions and a prototype-based object model. Javascript has a surprisingly expressive object literal notation that enables the lightweight creation of one-off, anonymous, objects.
-
 \section{Background: Reflection}
 
 Before we discuss Javascript's support (and lack of support) for reflection, we introduce some terminology from the field of computational reflection~\cite{maes-oopsla87} and metaprogramming~\cite{kiczales-artofthemop}.
@@ -167,9 +154,9 @@ The first three operations are typically well-supported by most metaobject proto
 
 It is customary for a metaobject protocol to represent language operations defined on objects as methods of their meta-objects. Throughout the rest of this paper, we use the term ``operation'' to characterize operations such as message sending, property access, assignment, method definition, performing an \texttt{instanceof} operation, and so on.
 
-In a proper object-oriented language, the dominant operation applied to objects is the message send (or method invocation). It is therefore unsurprising to observe that, historically, many programming languages have provided ``ad hoc'' intercession of method invocations. For example, in Smalltalk, the class \texttt{Object} defines a method named \texttt{doesNotUnderstand:}. When the Smalltalk VM cannot find a method selector in an object's class or superclasses, it invokes the object's \texttt{doesNotUnderstand:} method instead, passing along the selector and the arguments, reified as an array. Objects are free to treat the invocation however they please. The default response is to raise an exception stating that the message was not understood. While this approach is simple and flexible, we describe the drawbacks of this approach in section~\ref{sub:intercession_in_javascript}.
+In a pure object-oriented language, the dominant operation applied to objects is the message send (or method invocation). It is therefore unsurprising to observe that, historically, many object-oriented languages have provided ``ad hoc'' intercession of method invocations. For example, in Smalltalk, the class \texttt{Object} defines a method named \texttt{doesNotUnderstand:}. When the Smalltalk VM cannot find a method selector in an object's class or superclasses, it invokes the object's \texttt{doesNotUnderstand:} method instead, passing along a reified message object. While this approach is simple and flexible, we describe its drawbacks in section~\ref{sub:intercession_in_javascript}.
 
-Another well-known example of an ad-hoc intercession API is Java's \texttt{java.lang.reflect.Proxy} abstraction. Proxies are instances of classes that implement one or more interfaces. A proxy instance is created with a reference to an \texttt{InvocationHandler} instance and a list of interface types. The Java VM synthesizes a new class that implements these interfaces. All invocations on the proxy are reified as calls to the proxy's associated invocation handler's \texttt{invoke} method. The distinction between proxies and invocation handlers avoids the pitfalls of the \texttt{doesNotUnderstand:} approach, and our intercession API for Javascript is based on Java's proxy mechanism (cf. Section~\ref{sec:proxies_for_javascript}).
+%Another well-known example of an ad-hoc intercession API is Java's \texttt{java.lang.reflect.Proxy} abstraction. Proxies are instances of classes that implement one or more interfaces. A proxy instance is created with a reference to an \texttt{InvocationHandler} instance and a list of interface types. The Java VM synthesizes a new class that implements these interfaces. All invocations on the proxy are reified as calls to the proxy's associated invocation handler's \texttt{invoke} method. The distinction between proxies and invocation handlers avoids the pitfalls of the \texttt{doesNotUnderstand:} approach, and our intercession API for Javascript is based on Java's proxy mechanism (cf. Section~\ref{sec:proxies_for_javascript}).
 
 \subsection{Intercession: use cases}
 \label{sub:use_cases}
@@ -181,7 +168,22 @@ Distinction based on whether the proxy is proxying another object within the sam
   \item[Virtual objects] persistent objects, remote objects, transparent futures/promises, ...
 \end{description}
 
-\section{Reflection in Javascript}
+\section{Javascript}
+
+\section{A Brief History of Javascript}
+
+Javascript is a scripting language whose language runtime is often embedded within a larger execution environment. By far the most common execution environment for Javascript is the web browser.
+
+% Javascript vs ECMAScript
+% ECMAScript 3, ECMAScript 5, es5-strict, ECMAScript Harmony
+%  we should definitely introduce es5 seal,freeze,preventExtensions and property attributes
+The official, standardized version of the Javascript language is named ECMAScript. The latest edition of ECMAScript, ECMA-262, 5th edition~\cite{ecma262}, adds to the language support for defensively consistent objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). ECMAScript 5 also defines a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived ``language warts'', edge cases and inconsistencies.
+
+% Execution environment: the browser (DOM API for interacting with webpage, XHR object)
+%In this environment, the global object is named \texttt{window} and gives Javascript objects access to the content and structure of web pages via the Document Object Model (DOM), and allows them to communicate with their originating server through XmlHttpRequests (XHR).
+
+% The 'good parts': objects, arrays, functions
+While the full Javascript language as we know it today is the product of a complex evolutionary process, at its core it is actually a simple dynamic language with first-class lexical closures and a surprisingly expressive object literal notation that enables the lightweight creation of one-off, anonymous, objects. This simple core is what Crockford refers to as ``the good parts''~\cite{crockford_goodparts}.
 
 \subsection{Introspection and Invocation in Javascript}
 \label{sub:introspection_in_js}
@@ -314,9 +316,9 @@ Here, \texttt{handler} is an object that is supposed to implement a particular m
     \hline
     Property deletion & delete proxy.name & handler.delete(name)\\
     \hline
-    Key enumeration & for (name in proxy) {...} & handler.enumerate().forEach(function(name) { ... })\\
+    Key enumeration & for (name in proxy) \{...\} & handler.enumerate()\\
     \hline
-    Object fixing & Object.freeze(proxy)\footnote{Analogous for \texttt{seal} and \texttt{preventExtensions}.} & Object.freeze(Object.create(proto, handler.fix()))\\
+    Object fixing & Object.\{freeze,seal,preventExtensions\}(proxy) & handler.fix()\\
     \hline
     \multicolumn{3}{|l|}{\textbf{Derived traps}}\\
     \hline
@@ -877,13 +879,15 @@ Finally, it is worth noting that AmbientTalk inherits from E the distinction bet
 
 The \texttt{doesNotUnderstand:} trap is not stratified. It occupies the same namespace as plain application-level methods. This lack of stratification did lead Smalltalk programmers to look for alternative interception mechanisms. Foote and Johnson describe a particular extension to ParcPlace Smalltalk called a \emph{dispatching class}: ``Whenever an object belonging to a class designated as a dispatching class (using a bit in the class object's header) is sent a message, that object is instead sent \texttt{dispatchMessage: aMessage}.''~\cite{foote_st80}. Instances of dispatching classes are effectively proxies, the \texttt{dispatchMessage:} method acting as the sole trap of an implicit handler.
 
-Ducasse~\cite{ducasse99joop} gives an overview of the various message passing control techniques in Smalltalk. He concludes that \texttt{doesNotUnderstand:} is not always the most appropriate mechanism. Rather, he stresses the usefulness of \emph{method wrappers}. This approach was later elaborated by Brant \emph{et. al}~\cite{brant}. In this approach, rather than changing the \emph{method lookup}, the \emph{method objects} returned by the lookup algorithm are modified. This is possible because Smalltalk methods and method dictionaries are accessible from within the language. The method wrapper approach is in many ways similar to CLOS method combinations, enabling before/after/around augmentation of existing methods. As their name suggests, they are great for wrapping existing methods, but they seem less suitable to implement virtual objects.
+Ducasse~\cite{ducasse99joop} gives an overview of the various message passing control techniques in Smalltalk. He concludes that \texttt{doesNotUnderstand:} is not always the most appropriate mechanism. Rather, he stresses the usefulness of \emph{method wrappers}. This approach was later elaborated by Brant \emph{et. al}~\cite{brant}. In this approach, rather than changing the \emph{method lookup}, the \emph{method objects} returned by the lookup algorithm are modified. This is possible because Smalltalk methods and method dictionaries are accessible from within the language. The method wrapper approach is in many ways similar to CLOS method combinations, enabling before/after/around augmentation of existing methods. As their name suggests, they are great for wrapping existing methods, but they seem less suitable to implement virtual objects and thus only support part of the use cases covered by \texttt{doesNotUnderstand:}.
+
+\textbf{Summary} Table~\ref{tab:related_work} shows that each of the aforementioned intercession APIs has its own set of characteristics. It is difficult to declare one API to be better than another one. By their very nature, meta-level APIs are strongly tied to their particular language. The tradeoffs made by these APIs cannot be understood without reference to the idiosyncratic constraints and motivations of their respective languages. However, the one principle that we believe should be present in all robust OO intercession APIs is stratification.
 
 \begin{table*}
 \centering
 \begin{tabular}{|p{0.20\textwidth}|p{0.80\textwidth}|}
     \hline
-    \multicolumn{2}{|l|}{\textbf{What is virtualized?}}\\
+    \multicolumn{2}{|l|}{\textbf{What type of value is virtualized?}}\\
     \hline
     JS proxies        & Objects\\
     Java proxies      & Objects\\
@@ -894,10 +898,10 @@ Ducasse~\cite{ducasse99joop} gives an overview of the various message passing co
     \hline
     \multicolumn{2}{|l|}{\textbf{Is the API stratified?}}\\
     \hline
-    JS proxies        & Yes, proxy vs handler\\
-    Java proxies      & Yes, Proxy vs InvocationHandler\\
-    AT mirages        & Yes, mirage vs mirror\\
-    E proxies         & Yes, proxy vs ProxyHandler\\
+    JS proxies        & Yes, proxy versus handler\\
+    Java proxies      & Yes, Proxy versus InvocationHandler\\
+    AT mirages        & Yes, mirage versus mirror\\
+    E proxies         & Yes, proxy versus ProxyHandler\\
     E non-methodicals & Yes, non-methodicals have no behavior other than their \texttt{match} clause\\
     ST \texttt{doesNotUnderstand:}  & No, proxy and handler are the same object\\
     \hline
