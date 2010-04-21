@@ -16,7 +16,7 @@
 %\usepackage{subfigure}
 
 \usepackage{multirow}
-\usepackage{rotating}
+% \usepackage{rotating} % for \begin{sidewaystable}
 
 % Package for including code in the document
 \usepackage{listings}
@@ -141,7 +141,7 @@ The goals of this paper are:
 
 \section{Background: Reflection}
 
-Before we discuss Javascript's support (and lack of support) for reflection, we introduce some terminology from the field of computational reflection~\cite{maes-oopsla87} and metaprogramming~\cite{kiczales-artofthemop}.
+Before we discuss Javascript's support (and lack of support) for reflection, we introduce some terminology from the field of computational reflection~\cite{smith84reflection,maes87concepts} and metaprogramming~\cite{kiczales91art}.
 
 \subsection{Metaobject Protocols}
 \label{sub:metaobject_protocols}
@@ -150,7 +150,7 @@ A metaobject protocol is basically an object-oriented framework that describes t
 
 A metaobject protocol supports \emph{introspection} if it enables reflective access to the structure of an object, and the values contained in this structure. It supports \emph{self-modification} if it is possible to modify this structure (e.g. add a new method, assign a field). It further supports \emph{invocation} if it enables the reflective invocation of an object's behavior. Finally, it supports \emph{intercession} if it enables the creation of meta-objects with custom structure and behavior.
 
-The first three operations are typically well-supported by most metaobject protocols. Java's \texttt{java.lang.reflect} package, for example, supports introspection, invocation and limited self-modification. However, metaobject protocols that additionally support intercession are rare. The CLOS metaobject protocol is the foremost example of a metaobject protocol supporting intercession~\cite{clos}.
+The first three operations are typically well-supported by most metaobject protocols. Java's \texttt{java.lang.reflect} package, for example, supports introspection, invocation and limited self-modification. However, metaobject protocols that additionally support intercession are rare. The CLOS metaobject protocol is the foremost example of a metaobject protocol supporting intercession~\cite{kiczales91art}.
 
 It is customary for a metaobject protocol to represent language operations defined on objects as methods of their meta-objects. Throughout the rest of this paper, we use the term ``operation'' to characterize operations such as message sending, property access, assignment, method definition, performing an \texttt{instanceof} operation, and so on.
 
@@ -177,13 +177,13 @@ Javascript is a scripting language whose language runtime is often embedded with
 % Javascript vs ECMAScript
 % ECMAScript 3, ECMAScript 5, es5-strict, ECMAScript Harmony
 %  we should definitely introduce es5 seal,freeze,preventExtensions and property attributes
-The official, standardized version of the Javascript language is named ECMAScript. The latest edition of ECMAScript, ECMA-262, 5th edition~\cite{ecma262}, adds to the language support for defensively consistent objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). ECMAScript 5 also defines a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived ``language warts'', edge cases and inconsistencies.
+The official, standardized version of the Javascript language is named ECMAScript. The latest edition of ECMAScript, ECMA-262, 5th edition~\cite{ECMA262}, adds to the language support for defensively consistent objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). ECMAScript 5 also defines a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived ``language warts'', edge cases and inconsistencies.
 
 % Execution environment: the browser (DOM API for interacting with webpage, XHR object)
 %In this environment, the global object is named \texttt{window} and gives Javascript objects access to the content and structure of web pages via the Document Object Model (DOM), and allows them to communicate with their originating server through XmlHttpRequests (XHR).
 
 % The 'good parts': objects, arrays, functions
-While the full Javascript language as we know it today is the product of a complex evolutionary process, at its core it is actually a simple dynamic language with first-class lexical closures and a surprisingly expressive object literal notation that enables the lightweight creation of one-off, anonymous, objects. This simple core is what Crockford refers to as ``the good parts''~\cite{crockford_goodparts}.
+While the full Javascript language as we know it today is the product of a complex evolutionary process, at its core it is actually a simple dynamic language with first-class lexical closures and a surprisingly expressive object literal notation that enables the lightweight creation of one-off, anonymous, objects. This simple core is what Crockford refers to as ``the good parts''~\cite{crockford08good}.
 
 \subsection{Introspection and Invocation in Javascript}
 \label{sub:introspection_in_js}
@@ -207,7 +207,7 @@ o.z = 7 // add a property
 delete o.z // remove a property
 \end{lstlisting}
 
-One of the major changes of the latest standard, ECMAScript 5, is the addition of a new object-manipulation API that provides programmers with more fine-grained control over the nature of properties~\cite{ecma262}. Ecmascript 5 associates with each property in an object a set of attributes, describing whether the property is writable (i.e.~can be set), enumerable (~i.e. appears in \texttt{for-in} loops) or configurable (~i.e. whether these attributes themselves are mutable). The following code snippet shows how these attributes can be inspected and defined.
+One of the major changes of the latest standard, ECMAScript 5, is the addition of a new object-manipulation API that provides programmers with more fine-grained control over the nature of properties~\cite{ECMA262}. Ecmascript 5 associates with each property in an object a set of attributes, describing whether the property is writable (i.e.~can be set), enumerable (~i.e. appears in \texttt{for-in} loops) or configurable (~i.e. whether these attributes themselves are mutable). The following code snippet shows how these attributes can be inspected and defined.
 
 \begin{lstlisting}[language=javascript]
 var pd = Object.getOwnPropertyDescriptor(o, 'x');
@@ -232,7 +232,7 @@ The \texttt{pd} object and the third argument to \texttt{defineProperty} are cal
 
 The built-in \texttt{Object.create} function can be used to generate new objects based on a set of property descriptors. Its first argument specifies the prototype of the object to be created. Its second argument is an object serving as a record mapping property names to property descriptors. These descriptors then the attributes of the new object's properties.
 
-For the first time in the history of Javascript, the availability of these new attributes enables the creation of objects that can prevent their clients from tampering with their properties. Ecmascript 5 introduces the notion of non-extensible, sealed and frozen objects. Non-extensible objects cannot be extended with new properties. Sealed objects are non-extensible and all of their properties are non-configurable. Frozen objects are sealed and all of their properties are non-writable. To freeze an object \texttt{obj}, one invokes \texttt{Object.freeze(obj)}. We describe in Section~\ref{} how the addition of these kinds of objects has influenced the design of our intercession API.
+For the first time in the history of Javascript, the availability of these new attributes enables the creation of tamper-proof objects, objects that can prevent their clients from tampering with their properties. Ecmascript 5 introduces the notion of non-extensible, sealed and frozen objects. Non-extensible objects cannot be extended with new properties. Sealed objects are non-extensible and all of their properties are non-configurable. Frozen objects are sealed and all of their properties are non-writable. To freeze an object \texttt{obj}, one invokes \texttt{Object.freeze(obj)}. Section~\ref{sub:immutability} goes into detail on how the addition of tamper-proof objects has influenced the design of our intercession API.
 
 \subsection{Intercession in Javascript}
 \label{sub:intercession_in_javascript}
@@ -289,7 +289,7 @@ Our intercession API for Javascript supports intercession only for distinct prox
 
 The distinction between a proxy and its handler object enforces stratification of the traps. Traps are no longer methods defined as part of the intercepted object, but are defined on handlers. Handlers can be treated as ``meta-objects'' and their API is effectively the ``metaobject protocol''.
 
-Also, the distinction between proxy objects and regular objects ensures that non-proxy objects (which we expect makes up the vast majority of objects in a system) do not pay the overhead associated with intercession. We support this claim with empirical data in section~\ref{benchmarks}.
+Also, the distinction between proxy objects and regular objects ensures that non-proxy objects (which we expect makes up the vast majority of objects in a system) do not pay the overhead associated with intercession (cf. Section~\ref{sub:benchmarks}).
 
 A proxy for an object is created as follows:
 
@@ -596,7 +596,7 @@ function MyProxyFactory() {
 
 If a proxy \texttt{p} was generated using such a proxy factory \texttt{pf}, objects are able to retrieve the proxy's handler by invoking \texttt{pf.handlerOf(p)}.
 
-An \texttt{EphemeronTable} is a special kind of weak-key hashtable. It is based on Smalltalk's Ephemerons~\cite{et_paper} and is a new data type proposed for inclusion in ES-Harmony~\cite{et_proposal}.
+An \texttt{EphemeronTable} is a special kind of weak-key hashtable. It is based on Smalltalk's Ephemerons~\cite{et_paper} and is a new data type proposed for inclusion in ES-Harmony~\cite{miller10et}.
 Using ephemeron tables, it's fairly straightforward to link a proxy to its handler without actually having to manipulate the proxy.
 
 \subsection{Uniform Intercession}
@@ -623,7 +623,7 @@ We now show how to apply our proxy API to a number of concrete programming examp
 
 Say an object \texttt{A} wants to hand out a reference to \texttt{C} to another object \texttt{B}. \texttt{C} could provide access to a precious resource, and for that reason \texttt{A} may want to limit the lifetime of the reference it hands out to \texttt{B}. In other words, \texttt{A} wants to have the ability to revoke \texttt{B}'s access to \texttt{C}.
 
-One can implement this pattern of access control by wrapping \texttt{C} in a forwarder that additionally supports a method to stop forwarding. Such a forwarder is also known as a \emph{caretaker}~\cite{robust_composition}. Without proxies, the programmer is forced to write a distinct caretaker for each kind of object that should be wrapped. Proxies enable the programmer to abstract from the details of the wrapped object's protocol and instead write a \emph{generic} caretaker\footnote{For brevity, we left out the case in which \texttt{target} is a function, requiring the caretaker to be a function proxy.}:
+One can implement this pattern of access control by wrapping \texttt{C} in a forwarder that additionally supports a method to stop forwarding. Such a forwarder is also known as a \emph{caretaker}~\cite{miller06robust}. Without proxies, the programmer is forced to write a distinct caretaker for each kind of object that should be wrapped. Proxies enable the programmer to abstract from the details of the wrapped object's protocol and instead write a \emph{generic} caretaker\footnote{For brevity, we left out the case in which \texttt{target} is a function, requiring the caretaker to be a function proxy.}:
 
 \begin{lstlisting}[language=javascript]
 function makeRevocableRef(target) {
@@ -684,7 +684,7 @@ A limitation of the above caretaker abstraction is that objects exchanged via th
 \label{sub:membranes}
 % es-lab's compartments building on membranes
 
-A membrane is an extension of a caretaker that transitively imposes revocability on all references exchanged via the membrane~\cite{robust_composition}. In the following implementation, we make use of meta-level funneling once more to centralize the access control in a single trap:
+A membrane is an extension of a caretaker that transitively imposes revocability on all references exchanged via the membrane~\cite{miller06robust}. In the following implementation, we make use of meta-level funneling once more to centralize the access control in a single trap:
 
 \begin{lstlisting}[language=javascript]
 function makeMembrane(initTarget) {
@@ -737,7 +737,7 @@ If the object to be wrapped is a function (or a method, because Javascript metho
 
 One problem with the above membrane abstraction is that it fails to uphold object identity across both sides of the membrane. If an object \texttt{o} is passed through the same membrane twice, an object on the other side of the membrane will receive two distinct wrappers \texttt{w1} and \texttt{w2}, such that \texttt{w1 !== w2}, even though both wrap an identical object. Likewise, passing \texttt{w1} or \texttt{w2} back through the membrane does not unwrap them but rather wraps them again. These limitations can be addressed by having the membrane maintain a map from objects to their wrappers, such that only one canonical wrapper is created per object. Maintaining a map from wrappers to objects allows wrappers to be unwrapped when they cross the membrane in the other direction.
 
-Unfortunately, implementing these maps in Javascript is impossible without introducing severe memory leaks. Ephemeron tables are a proposed language feature for the upcoming Ecmascript standard that address this issue~\cite{ephemeron_proposal}.
+Unfortunately, implementing these maps in Javascript is impossible without introducing severe memory leaks. Ephemeron tables are a proposed language feature for the upcoming Ecmascript standard that address this issue~\cite{miller10et}.
 
 \subsection{Script Compartments}
 
@@ -759,12 +759,12 @@ A membrane around an SES \texttt{eval}\footnote{Ref to \texttt{es-lab} project f
 \section{Implementation}
 Briefly discuss Andreas Gal's Tracemonkey implementation.
 
-\subsection{Micro-benchmarks}
+\subsection{Micro-benchmarks}\label{sub:benchmarks}
 Support the claim that proxies enable intercession at (virtually) no cost to regular objects.
 
 \section{Related Work}
 
-\textbf{Partial Behavioral Reflection} (PBH)~\cite{tanter} is a framework that describes the spatiotemporal extent of reification. Reflex is an intercession API for Java, based on bytecode rewriting, that supports partial behavioral reflection. Reflex allows one to define meta-objects for a particular group of Java objects. Furthermore, it allows the programmer to delimit the spatiotemporal scope during which a particular meta-object reifies the operations performed on its associated base-level objects.
+\textbf{Partial Behavioral Reflection} (PBH)~\cite{tanter03pbh} is a framework that describes the spatiotemporal extent of reification. Reflex is an intercession API for Java, based on bytecode rewriting, that supports partial behavioral reflection. Reflex allows one to define meta-objects for a particular group of Java objects. Furthermore, it allows the programmer to delimit the spatiotemporal scope during which a particular meta-object reifies the operations performed on its associated base-level objects.
 
 In a PBH system, a single meta-object can control multiple base-level objects. The spatial scope of meta-objects is controlled using \emph{entity selection} and \emph{operation selection}: entity selection enables a meta-object to control what objects it will control. For example, all instances of one or more classes, or only a particular instance of a certain class. Operation selection determines what particular operations of the affected objects will be reified (e.g. only message sending or field access). PBH even enables intra-operation selection, where reification will only occur if the operation satisfies further conditions (e.g. only reify calls to a method named \texttt{foo}). A PBH system additionally enables \emph{temporal selection}, which allows meta-programmers to explicitly control the temporal scope during which a meta-object is active.
 
@@ -780,11 +780,11 @@ Another way of looking at Reflex is that it is a meta-proxy system: using Reflex
 
 \subsection{Mirrors}
 
-This paper was heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha_04_mirrors_oopsla} discuss the design principles of mirror-based meta-level architectures. The principle of stratification can be directly attributed to the mirror-based design. The use of mirrors naturally leads to a stratification of base and meta-level. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
+This paper was heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha04mirrors} discuss the design principles of mirror-based meta-level architectures. The principle of stratification can be directly attributed to the mirror-based design. The use of mirrors naturally leads to a stratification of base and meta-level. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
 
 A mirror is a meta-level object that defines a view on a base-level object. Mirrors are manufactured by distinct objects known as mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with what kind of object is not tied to an object's representation.
 
-Systems with a mirror-based architecture include Self~\cite{ungar87power}, the Java Debugger API~\cite{jdi} and Newspeak~\cite{newspeak}. Mirrors naturally support introspection, reflective invocation and self-modification. It was an open question whether mirror-based architectures could support intercession. AmbientTalk answered this question affirmatively: it introduced the concept of a \emph{mirage}~\cite{mirages_dls_07,spe_journal_08}. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The only difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
+Systems with a mirror-based architecture include Self~\cite{ungar87power}, the Java Debugger API~\cite{jdi} and Newspeak~\cite{bracha10newspeak}. Mirrors naturally support introspection, reflective invocation and self-modification. It was an open question whether mirror-based architectures could support intercession. AmbientTalk answered this question affirmatively: it introduced the concept of a \emph{mirage}~\cite{mostinckx07behavioral,mostinckx09mirrors}. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The only difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
 
 %One can think of a proxy handler as defining a mirror on the proxy. Upholding the Mirrors principle of stratification, given only a reference to a proxy, it's impossible to acquire a reference to its handler. If such a relationship is required, it can be provided as follows:
 
@@ -808,7 +808,7 @@ Systems with a mirror-based architecture include Self~\cite{ungar87power}, the J
 
 \subsection{CLOS}
 
-The Common Lisp Object System (CLOS) is known for its extensibility through its metaobject protocol~\cite{kiczales_artmop}. Because CLOS is a function-oriented as opposed to a message-oriented object system, it is difficult to transpose the design principles described in this paper to CLOS. In CLOS, computation proceeds mainly through generic function invocation, as opposed to sending messages to objects. The dispatch mechanism of generic functions can be modified through the ``generic function invocation protocol''. Most common use cases do not require this, however: if one simply wants to wrap existing methods, CLOS offers a powerful method combination protocol that can be used to insert behavior before, after or around existing methods.
+The Common Lisp Object System (CLOS) is known for its extensibility through its metaobject protocol~\cite{kiczales91art}. Because CLOS is a function-oriented as opposed to a message-oriented object system, it is difficult to transpose the design principles described in this paper to CLOS. In CLOS, computation proceeds mainly through generic function invocation, as opposed to sending messages to objects. The dispatch mechanism of generic functions can be modified through the ``generic function invocation protocol''. Most common use cases do not require this, however: if one simply wants to wrap existing methods, CLOS offers a powerful method combination protocol that can be used to insert behavior before, after or around existing methods.
 
 CLOS supports a stratified form of intercession. CLOS classes can be declared to have a custom metaclass. That metaclass can then specialize the various protocols in which the class metaobject takes part. For example, the ``instance structure protocol'' describes the structure of, and access to, the class's instance variables. The main difference between the proxy approach and the CLOS metaclass approach is that metaclasses introduces customization of behavior at the class-level, while proxies introduce customization of behavior at the object-level.
 
@@ -833,7 +833,7 @@ The main difference between Java proxies and Javascript proxies is that Java pro
 %Implementation-wise, another important difference is that Java proxies can be supported by a JVM without the need for a special ``proxy'' object type. A description of the proxy (and all of its methods) can be generated from the given interfaces and subsequently instantiated as a normal object (whose class just happens to be synthesized at runtime).
 
 %Mirages in AmbientTalk: adds intercession to a Mirror API
-\textbf{AmbientTalk} The design of Javascript proxies was influenced by AmbientTalk \emph{mirages}~\cite{mirages_dls_07,spe_journal_08}. AmbientTalk is a distributed dynamic language, with a mirror-based meta-level API. AmbientTalk enables intercession through mirages, which are proxy-like objects controlled explicitly by a separate mirror object:
+\textbf{AmbientTalk} The design of Javascript proxies was influenced by AmbientTalk \emph{mirages}~\cite{mostinckx07behavioral,mostinckx09mirrors}. AmbientTalk is a distributed dynamic language, with a mirror-based meta-level API. AmbientTalk enables intercession through mirages, which are proxy-like objects controlled explicitly by a separate mirror object:
 
 \begin{lstlisting}[]
 def mirage := object: { ... } mirroredBy: (mirror: {
@@ -846,10 +846,10 @@ def mirage := object: { ... } mirroredBy: (mirror: {
 
 The mirror is to the mirage what the proxy handler is to a Javascript proxy. Like Javascript proxy handlers, mirrors define an extensive set of traps, enabling near-complete control over the mirage.
 
-\textbf{E} E is a secure, distributed dynamic language~\cite{miller05strangers}. In E, everything is an object, but there are two kinds of object references: \emph{near} and \emph{eventual} references. Similarly, there are two message passing operators: immediate call (\texttt{o.m()}, a synchronous method invocation) and eventual send (\texttt{o<-m()}, an asynchronous message send). Both operations are allowed on near references, but eventual references carry only asynchronous messages. Because of this distinction, E has two separate intercession APIs: one for objects and one for references.
+\textbf{E} E is a secure, distributed dynamic language~\cite{miller05concurrency}. In E, everything is an object, but there are two kinds of object references: \emph{near} and \emph{eventual} references. Similarly, there are two message passing operators: immediate call (\texttt{o.m()}, a synchronous method invocation) and eventual send (\texttt{o<-m()}, an asynchronous message send). Both operations are allowed on near references, but eventual references carry only asynchronous messages. Because of this distinction, E has two separate intercession APIs: one for objects and one for references.
 
-E has a proxy-based API to represent user-defined eventual references~\cite{e_wiki}:
-%http://wiki.erights.org/wiki/Proxy
+E has a proxy-based API to represent user-defined eventual references~\cite{eproxies}:
+
 \begin{lstlisting}[]
 def handler {
   to handleSend(verb :String, args :List) {...}
@@ -877,9 +877,9 @@ Finally, it is worth noting that AmbientTalk inherits from E the distinction bet
 
 \textbf{Smalltalk} Smalltalk-80 popularized generic message dispatch via its \texttt{doesNotUnderstand:} mechanism. Briefly, if standard method lookup does not find a method corresponding to a message, the Smalltalk VM instead sends the message \texttt{doesNotUnderstand: msg} to the original receiver object. Here, \texttt{msg} is an object containing the message's selector and arguments. The default behavior of this method, inherited from \texttt{Object} is to throw an exception.
 
-The \texttt{doesNotUnderstand:} trap is not stratified. It occupies the same namespace as plain application-level methods. This lack of stratification did lead Smalltalk programmers to look for alternative interception mechanisms. Foote and Johnson describe a particular extension to ParcPlace Smalltalk called a \emph{dispatching class}: ``Whenever an object belonging to a class designated as a dispatching class (using a bit in the class object's header) is sent a message, that object is instead sent \texttt{dispatchMessage: aMessage}.''~\cite{foote_st80}. Instances of dispatching classes are effectively proxies, the \texttt{dispatchMessage:} method acting as the sole trap of an implicit handler.
+The \texttt{doesNotUnderstand:} trap is not stratified. It occupies the same namespace as plain application-level methods. This lack of stratification did lead Smalltalk programmers to look for alternative interception mechanisms. Foote and Johnson describe a particular extension to ParcPlace Smalltalk called a \emph{dispatching class}: ``Whenever an object belonging to a class designated as a dispatching class (using a bit in the class object's header) is sent a message, that object is instead sent \texttt{dispatchMessage: aMessage}.''~\cite{foote89reflective}. Instances of dispatching classes are effectively proxies, the \texttt{dispatchMessage:} method acting as the sole trap of an implicit handler.
 
-Ducasse~\cite{ducasse99joop} gives an overview of the various message passing control techniques in Smalltalk. He concludes that \texttt{doesNotUnderstand:} is not always the most appropriate mechanism. Rather, he stresses the usefulness of \emph{method wrappers}. This approach was later elaborated by Brant \emph{et. al}~\cite{brant}. In this approach, rather than changing the \emph{method lookup}, the \emph{method objects} returned by the lookup algorithm are modified. This is possible because Smalltalk methods and method dictionaries are accessible from within the language. The method wrapper approach is in many ways similar to CLOS method combinations, enabling before/after/around augmentation of existing methods. As their name suggests, they are great for wrapping existing methods, but they seem less suitable to implement virtual objects and thus only support part of the use cases covered by \texttt{doesNotUnderstand:}.
+Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various message passing control techniques in Smalltalk. He concludes that \texttt{doesNotUnderstand:} is not always the most appropriate mechanism. Rather, he stresses the usefulness of \emph{method wrappers}. This approach was elaborated by Brant \emph{et. al}~\cite{brant98wrappers}. In this approach, rather than changing the \emph{method lookup}, the \emph{method objects} returned by the lookup algorithm are modified. This is possible because Smalltalk methods and method dictionaries are accessible from within the language. The method wrapper approach is in many ways similar to CLOS method combinations, enabling before/after/around augmentation of existing methods. As their name suggests, they are great for wrapping existing methods, but they seem less suitable to implement virtual objects and thus only support part of the use cases covered by \texttt{doesNotUnderstand:}.
 
 \textbf{Summary} Table~\ref{tab:related_work} shows that each of the aforementioned intercession APIs has its own set of characteristics. It is difficult to declare one API to be better than another one. By their very nature, meta-level APIs are strongly tied to their particular language. The tradeoffs made by these APIs cannot be understood without reference to the idiosyncratic constraints and motivations of their respective languages. However, the one principle that we believe should be present in all robust OO intercession APIs is stratification.
 
@@ -985,5 +985,5 @@ Recapitulate our ``design principles''. Should be generally applicable (apart fr
 \end{itemize}
 
 \bibliographystyle{abbrv}
-\bibliography{}
+\bibliography{proxies}
 \end{document}
