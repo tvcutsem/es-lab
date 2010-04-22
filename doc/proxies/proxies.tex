@@ -17,6 +17,7 @@
 
 \usepackage{multirow}
 % \usepackage{rotating} % for \begin{sidewaystable}
+\usepackage{url}
 
 % Package for including code in the document
 \usepackage{listings}
@@ -576,27 +577,30 @@ Note that, even if the programmer of a proxy handler has the best intentions to 
 
 An intercession API can be said to encapsulate its meta-level if, given a reference to a proxy, one cannot gain direct access to the proxy's handler. For our proxy API, this is the case. This ensures that the handler remains encapsulated behind its proxy. This allows the handler to ensure that its traps can only ever be invoked though the manipulation of its corresponding proxy.
 
-If access to a proxy's handler is required, it is fairly straightforward for the proxy creator to provide such access. For example, the proxy creator could define its own proxy factory:
+If the handler explicitly wants to be accessible from its proxy, it can always possible for the handler to cater to such access.
+% TODO: should we discuss this in detail?
 
-\begin{lstlisting}[language=javascript]
-function MyProxyFactory() {
-  var proxies = new EphemeronTable();
-  return {
-    create: function(handler, proto) {
-      var proxy = Proxy.create(handler, proto);
-      proxies.put(proxy, handler);
-      return proxy;
-    },
-    handlerOf: function(proxy) {
-      return proxies.get(proxy);
-    }
-  };
-}
-\end{lstlisting}
+%If access to a proxy's handler is required, it is fairly straightforward for the proxy creator to provide such access. For example, the proxy creator could define its own proxy factory:
 
-If a proxy \texttt{p} was generated using such a proxy factory \texttt{pf}, objects are able to retrieve the proxy's handler by invoking \texttt{pf.handlerOf(p)}.
+%\begin{lstlisting}[language=javascript]
+%function MyProxyFactory() {
+%  var proxies = new EphemeronTable();
+%  return {
+%    create: function(handler, proto) {
+%      var proxy = Proxy.create(handler, proto);
+%      proxies.put(proxy, handler);
+%      return proxy;
+%   },
+%    handlerOf: function(proxy) {
+%      return proxies.get(proxy);
+%    }
+%  };
+%}
+%\end{lstlisting}
 
-An \texttt{EphemeronTable} is a special kind of weak-key hashtable. It is based on Smalltalk's Ephemerons~\cite{et_paper} and is a new data type proposed for inclusion in ES-Harmony~\cite{miller10et}.
+%If a proxy \texttt{p} was generated using such a proxy factory \texttt{pf}, objects are able to retrieve the proxy's handler by invoking \texttt{pf.handlerOf(p)}.
+
+%An \texttt{EphemeronTable} is almost identical to a non-enumerable weak-key hashtable, but it avoids a crucial memory leak when cyclic dependencies exist between the keys and the values stored in the table. It is based on Smalltalk's Ephemerons~\cite{et_paper} and is a new abstraction proposed for inclusion in ES-Harmony~\cite{miller10et}.
 Using ephemeron tables, it's fairly straightforward to link a proxy to its handler without actually having to manipulate the proxy.
 
 \subsection{Uniform Intercession}
@@ -737,7 +741,7 @@ If the object to be wrapped is a function (or a method, because Javascript metho
 
 One problem with the above membrane abstraction is that it fails to uphold object identity across both sides of the membrane. If an object \texttt{o} is passed through the same membrane twice, an object on the other side of the membrane will receive two distinct wrappers \texttt{w1} and \texttt{w2}, such that \texttt{w1 !== w2}, even though both wrap an identical object. Likewise, passing \texttt{w1} or \texttt{w2} back through the membrane does not unwrap them but rather wraps them again. These limitations can be addressed by having the membrane maintain a map from objects to their wrappers, such that only one canonical wrapper is created per object. Maintaining a map from wrappers to objects allows wrappers to be unwrapped when they cross the membrane in the other direction.
 
-Unfortunately, implementing these maps in Javascript is impossible without introducing severe memory leaks. Ephemeron tables are a proposed language feature for the upcoming Ecmascript standard that address this issue~\cite{miller10et}.
+Unfortunately, implementing these maps in Javascript is impossible without introducing severe memory leaks. Ephemeron tables are a proposed language feature for the upcoming Ecmascript standard that address this issue~\cite{miller10et}. An ephemeron table is almost identical to a non-enumerable weak-key hashtable, but it avoids a crucial memory leak when cyclic dependencies exist between the keys and the values stored in the table. It is based on Smalltalk's Ephemeron pairs~\cite{et_paper}.
 
 \subsection{Script Compartments}
 
@@ -762,55 +766,16 @@ Briefly discuss Andreas Gal's Tracemonkey implementation.
 \subsection{Micro-benchmarks}\label{sub:benchmarks}
 Support the claim that proxies enable intercession at (virtually) no cost to regular objects.
 
+\begin{figure}[htbp]
+  \centering
+    \includegraphics[scale=1.0\columnwidth]{proxies_bm.png}
+  \caption{Overhead of operations on a forwarding Proxy}
+  \label{fig:benchmarks}
+\end{figure}
+
+% TODO: explanation of results
+
 \section{Related Work}
-
-\textbf{Partial Behavioral Reflection} (PBH)~\cite{tanter03pbh} is a framework that describes the spatiotemporal extent of reification. Reflex is an intercession API for Java, based on bytecode rewriting, that supports partial behavioral reflection. Reflex allows one to define meta-objects for a particular group of Java objects. Furthermore, it allows the programmer to delimit the spatiotemporal scope during which a particular meta-object reifies the operations performed on its associated base-level objects.
-
-In a PBH system, a single meta-object can control multiple base-level objects. The spatial scope of meta-objects is controlled using \emph{entity selection} and \emph{operation selection}: entity selection enables a meta-object to control what objects it will control. For example, all instances of one or more classes, or only a particular instance of a certain class. Operation selection determines what particular operations of the affected objects will be reified (e.g. only message sending or field access). PBH even enables intra-operation selection, where reification will only occur if the operation satisfies further conditions (e.g. only reify calls to a method named \texttt{foo}). A PBH system additionally enables \emph{temporal selection}, which allows meta-programmers to explicitly control the temporal scope during which a meta-object is active.
-
-Reflex differs from our proxy approach in that it enables the creation of meta-objects that will act upon arbitrary existing objects. Nevertheless, some aspects of our proxy API can be understood in terms of PBH. Proxies induce a static form of entity selection: operations on proxy objects are reified, operations on non-proxy objects are not. Proxies may support temporal selection. For example, Javascript proxies only reify while they are in a trapping state. Once fixed, the proxy no longer reifies operations. Finally, proxies enable a static form of operation selection: some operations on proxies (e.g. \texttt{typeof}) are never reified, whereas others such as property access are always reified.
-
-Another way of looking at Reflex is that it is a meta-proxy system: using Reflex, a programmer can define many different particular intercession APIs, each with their own settings for entity, operation and temporal selection.
-
-%\subsection{Intercepting Method Invocations}
-
-%We already discussed in Section~\ref{sub:metaobject_protocols} that many object-oriented systems provide ad hoc support for intercepting messages sent to objects. There is a general category of languages that provide a trap that triggers on missing method definitions only, as exemplified by Smalltalk's \texttt{doesNotUnderstand:}, Spidermonkey's \noSuchMethod{}, Ruby's \texttt{methodMissing}, the E language's \texttt{match} clause, and so on. There are also languages that provide traps that trigger on every method invocation, whether a method is present or not. Examples of this category include Python's \texttt{\_\_getattribute\_\_} and Groovy's \texttt{invokeMethod}. What all of these systems have in common is that the intercession is not stratified. The trap is always defined in a namespace populated with application-level methods.
-
-%In \textbf{Python}, class objects may define methods with special method names (starting with \texttt{__}) that are invoked when certain operations are performed on instances of the class. For example, \texttt{x.y} calls \texttt{type(x).__getattribute__(x, "y")}, where \texttt{type(x)} denotes the class of \texttt{x}. The difference between Python's hooks and proxies is that hooks are not defined on a separate handler object but rather on the class itself. Because hooks are not technically stratified into a separate object, a naming convention is used to avoid name clashes with application-level methods.
-
-\subsection{Mirrors}
-
-This paper was heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha04mirrors} discuss the design principles of mirror-based meta-level architectures. The principle of stratification can be directly attributed to the mirror-based design. The use of mirrors naturally leads to a stratification of base and meta-level. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
-
-A mirror is a meta-level object that defines a view on a base-level object. Mirrors are manufactured by distinct objects known as mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with what kind of object is not tied to an object's representation.
-
-Systems with a mirror-based architecture include Self~\cite{ungar87power}, the Java Debugger API~\cite{jdi} and Newspeak~\cite{bracha10newspeak}. Mirrors naturally support introspection, reflective invocation and self-modification. It was an open question whether mirror-based architectures could support intercession. AmbientTalk answered this question affirmatively: it introduced the concept of a \emph{mirage}~\cite{mostinckx07behavioral,mostinckx09mirrors}. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The only difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
-
-%One can think of a proxy handler as defining a mirror on the proxy. Upholding the Mirrors principle of stratification, given only a reference to a proxy, it's impossible to acquire a reference to its handler. If such a relationship is required, it can be provided as follows:
-
-%\begin{lstlisting}[language=javascript]
-%function makeCustomProxyFactory() {
-%  var customProxies = new EphemeronTable();
-%  return {
-%    create: function(handler, proto) {
-%      var proxy = Proxy.create(handler, proto);
-%      customProxies.put(proxy, handler);
-%      return proxy;
-%    },
-%    handlerOf: function(proxy) {
-%      return customProxies.get(proxy);
-%    }
-%  };
-%} 
-%\end{lstlisting}
-
-%Given such an abstraction, an object with a reference to a proxy \texttt{p} created by such a factory \texttt{f} can reference the proxy's handler as \texttt{f.handlerOf(p)}. This design conforms to the stratification principle of a mirror-based architecture.
-
-\subsection{CLOS}
-
-The Common Lisp Object System (CLOS) is known for its extensibility through its metaobject protocol~\cite{kiczales91art}. Because CLOS is a function-oriented as opposed to a message-oriented object system, it is difficult to transpose the design principles described in this paper to CLOS. In CLOS, computation proceeds mainly through generic function invocation, as opposed to sending messages to objects. The dispatch mechanism of generic functions can be modified through the ``generic function invocation protocol''. Most common use cases do not require this, however: if one simply wants to wrap existing methods, CLOS offers a powerful method combination protocol that can be used to insert behavior before, after or around existing methods.
-
-CLOS supports a stratified form of intercession. CLOS classes can be declared to have a custom metaclass. That metaclass can then specialize the various protocols in which the class metaobject takes part. For example, the ``instance structure protocol'' describes the structure of, and access to, the class's instance variables. The main difference between the proxy approach and the CLOS metaclass approach is that metaclasses introduces customization of behavior at the class-level, while proxies introduce customization of behavior at the object-level.
 
 \subsection{OO Intercession APIs: a comparison}
 \label{sub:survey}
@@ -821,15 +786,15 @@ In this section we summarize a variety of object-oriented intercession APIs. For
 
 \begin{lstlisting}[language=java]
 InvocationHandler h = new InvocationHandler() {
-  public Object invoke(Method m, Object[] args) {...}
-}
+  Object invoke(Object pxy, Method m, Object[] args) {...}
+};
 Foo proxy = (Foo) Proxy.newProxyInstance(
   aClassloader, new Class[] { Foo.class }, h);
 \end{lstlisting}
 
 Here, \texttt{proxy} implements the \texttt{Foo} interface. \texttt{h} is an object that implements a single \texttt{invoke} method. All method invocations on \texttt{proxy} are reified by calling the \texttt{h.invoke} method, passing along a description of the invoked method and the arguments of the call.
 
-The main difference between Java proxies and Javascript proxies is that Java proxies can only intercept method invocation. There are no other meta-level operations to trap. For instance, since interfaces cannot declare fields, proxies do not need to intercept field access.
+The main difference between Java proxies and Javascript proxies is that Java proxies can only intercept method invocation. There are no other meta-level operations to trap. For instance, since interfaces cannot declare fields, proxies do not need to intercept field access. Eugster~\cite{eugster06uniform} describes how to extend the Java Proxy API to work uniformly with instances of non-interface classes.
 %Implementation-wise, another important difference is that Java proxies can be supported by a JVM without the need for a special ``proxy'' object type. A description of the proxy (and all of its methods) can be generated from the given interfaces and subsequently instantiated as a normal object (whose class just happens to be synthesized at runtime).
 
 %Mirages in AmbientTalk: adds intercession to a Mirror API
@@ -861,7 +826,7 @@ def proxy := makeProxy(handler, slot, state);
 
 This API is very similar to the one of Javascript proxies. The proxy represents an eventual reference, and any asynchronous send \texttt{proxy<-m()} either triggers the handler's \texttt{handleSend} or \texttt{handleSendOnly} trap, depending on whether the sender expects a return value.
 
-The \texttt{handleOptSealedDispatch} trap is part of E's trademarking system and is beyond the scope of this paper. The \texttt{slot} argument to \texttt{makeProxy} can be used to turn the proxy reference into an actual, so-called \emph{resolved} reference. Once a reference is resolved, the proxy is bypassed and the handler no longer consulted. It fulfills a role similar to the \texttt{fix} trap highlighted in Section~\ref{sub:immutability}.
+The \texttt{handleOptSealedDispatch} trap is part of E's trademarking system and is beyond the scope of this paper. The \texttt{slot} argument to \texttt{makeProxy} can be used to turn the proxy reference into an actual, so-called \emph{resolved} reference. Once a reference is resolved, the proxy is bypassed and the handler no longer consulted. It fulfills a role similar to the \texttt{fix} trap highlighted in Section~\ref{sub:immutability}. The \texttt{state} argument to \texttt{makeProxy} determines the state of the reference. The details are outside the scope of this paper, but note that this allows the eventual reference proxy to determine its state without consulting the handler, similar to how Javascript proxies can determine their prototype without consulting the handler.
 
 E has a distinct intercession API for objects. A \emph{non-methodical object} is an empty object with no methods. Instead, its implementation consists of a single \texttt{match} clause that encodes an explicit message dispatch:
 
@@ -944,18 +909,18 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
     \multicolumn{2}{|l|}{\textbf{Can all types of values in the language be virtualized (uniform intercession)?}}\\
     \hline
     JS proxies        & No, primitives cannot\\
-    Java proxies      & No, instances of a non-interface class and primitives cannot\\
-    AT mirages        & Yes, everything is an object or a reference (mirages cover both)\\
-    E proxies         & Yes, everything is an object or a reference (proxies cover references)\\
-    E non-methodicals & Yes, everything is an object or a reference (non-methodicals cover objects)\\
-    ST \texttt{doesNotUnderstand:}  & Yes, everything is an object\\
+    Java proxies      & No, instances of non-interface classes and primitives cannot\\
+    AT mirages        & Yes, all values are objects or references (mirages cover both)\\
+    E proxies         & Yes, all values are objects or references (proxies cover references)\\
+    E non-methodicals & Yes, all values are objects or references (non-methodicals cover objects)\\
+    ST \texttt{doesNotUnderstand:}  & Yes, all values are objects\\
     \hline
     \multicolumn{2}{|l|}{\textbf{Are there some operations applicable on proxies that cannot be intercepted (selective interception)?}}\\
     \hline
     JS proxies        & Yes, identity, prototype and \texttt{typeof} are fixed\\
-    Java proxies      & Yes, identity, class, and the \texttt{wait} and \texttt{notify} methods inherited from \texttt{Object}\\
+    Java proxies      & Yes, identity, class, and the final \texttt{wait} and \texttt{notify} methods inherited from \texttt{Object}\\
     AT mirages        & Yes, an object's mirror is determined by a separate mirror factory object\\
-    E proxies         & Yes, identity is fixed and the ``state'' of a reference is enforced\\
+    E proxies         & Yes, identity and the ``state'' of a reference are fixed\\
     E non-methodicals & Yes, identity and ``trademarks'' (unforgeable types) are fixed\\
     ST \texttt{doesNotUnderstand:}  & Yes, calls to methods implemented in or inherited by the defining class will not be intercepted\\
     \hline
@@ -972,6 +937,97 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
   \caption{Comparison of object-oriented intercession APIs}
   \label{tab:related_work}
 \end{table*}
+
+%\subsection{Intercepting Method Invocations}
+
+%We already discussed in Section~\ref{sub:metaobject_protocols} that many object-oriented systems provide ad hoc support for intercepting messages sent to objects. There is a general category of languages that provide a trap that triggers on missing method definitions only, as exemplified by Smalltalk's \texttt{doesNotUnderstand:}, Spidermonkey's \noSuchMethod{}, Ruby's \texttt{methodMissing}, the E language's \texttt{match} clause, and so on. There are also languages that provide traps that trigger on every method invocation, whether a method is present or not. Examples of this category include Python's \texttt{\_\_getattribute\_\_} and Groovy's \texttt{invokeMethod}. What all of these systems have in common is that the intercession is not stratified. The trap is always defined in a namespace populated with application-level methods.
+
+%In \textbf{Python}, class objects may define methods with special method names (starting with \texttt{__}) that are invoked when certain operations are performed on instances of the class. For example, \texttt{x.y} calls \texttt{type(x).__getattribute__(x, "y")}, where \texttt{type(x)} denotes the class of \texttt{x}. The difference between Python's hooks and proxies is that hooks are not defined on a separate handler object but rather on the class itself. Because hooks are not technically stratified into a separate object, a naming convention is used to avoid name clashes with application-level methods.
+
+\subsection{Mirrors}
+
+This paper was heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha04mirrors} discuss the design principles of mirror-based meta-level architectures. The principle of stratification can be directly attributed to the mirror-based design. The use of mirrors naturally leads to a stratification of base and meta-level. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
+
+A mirror is a meta-level object that defines a view on a base-level object. Mirrors are manufactured by distinct objects known as mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with what kind of object is not tied to an object's representation.
+
+Systems with a mirror-based architecture include Self~\cite{ungar87power}, the Java Debugger API~\cite{jdi} and Newspeak~\cite{bracha10newspeak}. Mirrors naturally support introspection, reflective invocation and self-modification. It was an open question whether mirror-based architectures could support intercession. AmbientTalk answered this question affirmatively: it introduced the concept of a \emph{mirage}~\cite{mostinckx07behavioral,mostinckx09mirrors}. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The only difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
+
+%One can think of a proxy handler as defining a mirror on the proxy. Upholding the Mirrors principle of stratification, given only a reference to a proxy, it's impossible to acquire a reference to its handler. If such a relationship is required, it can be provided as follows:
+
+%\begin{lstlisting}[language=javascript]
+%function makeCustomProxyFactory() {
+%  var customProxies = new EphemeronTable();
+%  return {
+%    create: function(handler, proto) {
+%      var proxy = Proxy.create(handler, proto);
+%      customProxies.put(proxy, handler);
+%      return proxy;
+%    },
+%    handlerOf: function(proxy) {
+%      return customProxies.get(proxy);
+%    }
+%  };
+%} 
+%\end{lstlisting}
+
+%Given such an abstraction, an object with a reference to a proxy \texttt{p} created by such a factory \texttt{f} can reference the proxy's handler as \texttt{f.handlerOf(p)}. This design conforms to the stratification principle of a mirror-based architecture.
+
+
+\textbf{Partial Behavioral Reflection} (PBH)~\cite{tanter03pbh} is a framework that describes the spatiotemporal extent of reification. Reflex is an intercession API for Java, based on bytecode rewriting, that supports partial behavioral reflection. Reflex allows one to define meta-objects for a particular group of Java objects. Furthermore, it allows the programmer to delimit the spatiotemporal scope during which a particular meta-object reifies the operations performed on its associated base-level objects.
+
+In a PBH system, a single meta-object can control multiple base-level objects. The spatial scope of meta-objects is controlled using \emph{entity selection} and \emph{operation selection}: entity selection enables a meta-object to control what objects it will control. For example, all instances of one or more classes, or only a particular instance of a certain class. Operation selection determines what particular operations of the affected objects will be reified (e.g. only message sending or field access). PBH even enables intra-operation selection, where reification will only occur if the operation satisfies further conditions (e.g. only reify calls to a method named \texttt{foo}). A PBH system additionally enables \emph{temporal selection}, which allows meta-programmers to explicitly control the temporal scope during which a meta-object is active.
+
+Reflex differs from our proxy approach in that it enables the creation of meta-objects that will act upon arbitrary existing objects. Nevertheless, some aspects of our proxy API can be understood in terms of PBH. Proxies induce a static form of entity selection: operations on proxy objects are reified, operations on non-proxy objects are not. Proxies may support temporal selection. For example, Javascript proxies only reify while they are in a trapping state. Once fixed, the proxy no longer reifies operations. Finally, proxies enable a static form of operation selection: some operations on proxies (e.g. \texttt{typeof}) are never reified, whereas others such as property access are always reified.
+
+Another way of looking at Reflex is that it is a meta-proxy system: using Reflex, a programmer can define many different particular intercession APIs, each with their own settings for entity, operation and temporal selection.
+
+\subsection{The Two-body Problem}
+
+Eugster~\cite{eugster06uniform} draws our attention to a potential limitation of the proxy approach to generic wrappers, which he coins the \emph{two-body problem}: the fact that the proxy and the wrapped object are distinct entities. The problem is that the proxy abstraction may ``leak'' the wrapped object, in two ways:
+\begin{enumerate}
+  \item If the proxy handler simply forwards a method call to the wrapped target object, and the target object subsequently performs a self-send, the proxy cannot intercept that method call anymore.
+  \item If the wrapped object returns a reference to itself, it may expose a direct (unwrapped) reference to itself to its clients. It is the task of the proxy handler to detect this and instead return a reference to the proxy.
+\end{enumerate}
+
+Problem 1 can be solved by having the proxy handler \emph{delegate} the request rather than \emph{forward} the request. Delegation, unlike normal method invocation, does not modify the receiver of the invocation~\cite{lieberman86prototypical}. In Javascript, proxy handlers can easily encode delegation by rebinding a wrapped function's \texttt{this} pseudovariable to the proxy instead.
+
+If one factors out the specifics of revocation, the membrane abstraction from Section~\ref{sub:membranes} is in fact a general-purpose solution to problem 2. However, as mentioned previously in that section, for a workable membrane to be practically useful, it is crucial that the membrane uphold object-equality on both sides of the membrane (i.e. two proxies are \texttt{===} if and only if their wrapped objects are). Ephemeron tables~\cite{miller10et} are the key abstraction that enable this without introducing memory leaks.
+
+\begin{quote}
+For associating a behavior through 
+a dynamic proxy as a meta-level object with an existing base-level 
+object, the invocation handler associated with the corresponding 
+proxy would most likely have to be given a reference to that object, 
+and henceforth, the proxy would always have to be used instead of 
+the original object, for instance also for self-invocations. However, 
+when a method of the actual target object invokes a further method 
+of that very object, there is no way of intercepting that invocation 
+(“self problem” [19]). Similarly, self-references returned by a base- 
+level object invoked through a proxy would have to be recognized 
+as such (e.g., by the associated invocation handler in the case of 
+Java’s proxies), such that again a proxy could be returned instead 
+(“encapsulation problem” [19]). 
+The detecting and handling of all such situations is very hard. 
+Base-level objects can for instance also return references to their 
+fields which are difficult to identify, but would have to be shielded 
+behind proxies as well.
+\end{quote}
+
+Solution: membranes, ephemeron tables.
+
+% TODO: discuss Eugster's proxification criteria?
+% COMPLETENESS, SAFETY, SECURITY, OVERHEAD, TRANSPARENCY
+% completeness = our uniform intercession + selective interception
+% safety = ? unexpected exceptions and side-effects
+% security = ?
+% overhead
+% transparency -> 
+
+\subsection{CLOS}
+
+The Common Lisp Object System (CLOS) is known for its extensibility through its metaobject protocol~\cite{kiczales91art}. Because CLOS is a function-oriented as opposed to a message-oriented object system, it is difficult to transpose the design principles described in this paper to CLOS. In CLOS, computation proceeds mainly through generic function invocation, as opposed to sending messages to objects. The dispatch mechanism of generic functions can be modified through the ``generic function invocation protocol''. Most common use cases do not require this, however: if one simply wants to wrap existing methods, CLOS offers a powerful method combination protocol that can be used to insert behavior before, after or around existing methods.
+
+CLOS supports a stratified form of intercession. CLOS classes can be declared to have a custom metaclass. That metaclass can then specialize the various protocols in which the class metaobject takes part. For example, the ``instance structure protocol'' describes the structure of, and access to, the class's instance variables. The main difference between the proxy approach and the CLOS metaclass approach is that metaclasses introduces customization of behavior at the class-level, while proxies introduce customization of behavior at the object-level.
 
 \section{Conclusion}
 
