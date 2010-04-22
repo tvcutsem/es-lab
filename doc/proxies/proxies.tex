@@ -336,7 +336,7 @@ Here, \texttt{handler} is an object that is supposed to implement a particular m
     \end{tabular}
     \end{small}
   \end{center}
-  \caption{Operations reified by the intercession API}
+  \caption{Operations reified on handlers by the Proxy API}
   \label{tab:operations}
 \end{table*}
 
@@ -442,7 +442,7 @@ We can achieve such funneling of all operations through a single trap by treatin
 
 We carefully designed the intercession API such that proxies only interact with their associated handler by invoking their traps. Proxies never assign, enumerate or test for the presence of traps on their handler. Because of this invariant, if the base-level handler is \emph{only} used in its role as the handler for a base-level proxy, the meta-level handler only needs to implement the \texttt{get} trap. Because method invocation is the only operation performed on meta-level proxies, only this single trap is triggered on meta-level handlers.
 
-% TODO: include picture
+% TODO: explain picture and introduce legend
 % a --> b means 'b is the handler of a'
 % a ==> b means 'a forwards operations to b'
 % base-level proxy --> base-level handler --> meta-level handler ==> forwarding handler ==> target
@@ -456,6 +456,8 @@ We carefully designed the intercession API such that proxies only interact with 
   \caption{Meta-level shift using proxies as handlers}
   \label{fig:shift}
 \end{figure}
+
+Figure~\ref{fig:shift} depicts how meta-level shifting works. Note that the base handler is both a handler and itself a proxy. Note also how all operations performed on \texttt{p} are intercepted by \texttt{mh}'s \texttt{get} trap.
 
 Another way to explain why this funneling works is as follows. At the base-level, there is an assortment of operations that are performed on Javascript objects as computation progresses (e.g. property lookup, access, assignment, enumeration, \ldots). At the meta-level (that is: in the intercession API), all of these operations are reified uniformly as method invocations on handlers. Therefore, at the meta-level, the only operation performed on meta-level objects (base-level handlers) is property access, and meta-meta-level objects (meta-level handlers) only need to handle this single operation in their protocol.
 
@@ -479,6 +481,7 @@ To summarize, this section reveals two important design principles of proxy-base
 For Javascript proxies, \texttt{get} is the funneling trap.
 
 \subsection{Selective Interception}
+\label{sub:selective}
 % tradeoff between what to intercess and what to fix upfront
 
 A proxy-based intercession API introduces a tradeoff between what operations can be intercepted by proxy handlers on the one hand, versus what operations have a reliable outcome from the language runtime and the programmer's point of view. We already briefly touched upon this issue in Section~\ref{sub:immutability} when discussing how proxies interact with operations that make non-extensible, sealed or frozen. As we have discussed, the \texttt{fix} trap enables a proxy handler to dynamically decide whether or not to commit to a fixed representation.
@@ -584,8 +587,8 @@ Note that, even if the programmer of a proxy handler has the best intentions to 
 An intercession API can be said to encapsulate its meta-level if, given a reference to a proxy, one cannot gain direct access to the proxy's handler. For our proxy API, this is the case. This ensures that the handler remains encapsulated behind its proxy. This allows the handler to ensure that its traps can only ever be invoked though the manipulation of its corresponding proxy.
 
 If the handler explicitly wants to be accessible from its proxy, it can always possible for the handler to cater to such access.
-% TODO: should we discuss this in detail?
 
+% TODO: should we discuss this in detail?
 %If access to a proxy's handler is required, it is fairly straightforward for the proxy creator to provide such access. For example, the proxy creator could define its own proxy factory:
 
 %\begin{lstlisting}[language=javascript]
@@ -766,20 +769,42 @@ gate.revoke();
 
 A membrane around an SES \texttt{eval}\footnote{Ref to \texttt{es-lab} project for SES and Securable ES5.} creates a compartment in which one can run potentially malicious code, confident that the resulting potentially malicious objects can interact with the world outside this compartment only as permitted by the objects you provide them. Once the compartment is revoked, not only is all their connectivity severed, it is severed in ways the garbage collector can recognize. Given a good enough collector, these hostile objects cannot even continue to occupy your memory.
 
-\section{Implementation}
-Briefly discuss Andreas Gal's Tracemonkey implementation.
+\section{Micro-benchmarks}
+\label{sub:benchmarks}
 
-\subsection{Micro-benchmarks}\label{sub:benchmarks}
-Support the claim that proxies enable intercession at (virtually) no cost to regular objects.
+Andreas Gal has implemented a prototype of our proposed Proxy API for Javascript as an extension of Tracemonkey. Tracemonkey is an extension of Spidermonkey, Mozilla's Javascript engine, that employs trace trees for aggressive optimization~\cite{gal06efficient}\footnote{Progress on this extension can be tracked at \url{https://bugzilla.mozilla.org/show_bug.cgi?id=546590}}.
 
-\begin{figure}[htbp]
-  \centering
-    \includegraphics[scale=1.0\columnwidth]{proxies_bm.png}
-  \caption{Overhead of operations on a forwarding Proxy}
-  \label{fig:benchmarks}
-\end{figure}
+We have used the prototype implementation to get an initial idea of the overhead of our Proxy API. To this end, we performed the following micro-benchmark: first, we measured the runtime of the various operations applied to regular objects in regular Tracemonkey, without any Proxy API extensions. Next, we measured the runtime of the same operations, this time on regular, \emph{non-proxy} objects in the Tracemonkey extension with support for proxies. Finally, we measured the runtime of the operations on a \emph{proxy} object whose handler is the default forwarding handler introduced in Section~\ref{sec:proxies_for_javascript}.
 
-% TODO: explanation of results
+\begin{table}
+  \begin{center}
+  \begin{tabular}{r|r|r|r|r|r}
+    %\hline
+              & \multicolumn{1}{|c|}{Proxies} & \multicolumn{4}{|c}{Proxies}\\
+              & \multicolumn{1}{|c|}{Disabled} & \multicolumn{4}{|c}{Enabled}\\
+    \hline
+           &   & \multicolumn{2}{|c|}{(non-proxy)} & \multicolumn{2}{|c}{(proxy)}\\
+           \cline{3-6}
+ Operation & \multicolumn{1}{|c|}{$a$} & \multicolumn{1}{|c|}{$b$} & \multicolumn{1}{|c|}{$c=b/a$} & \multicolumn{1}{|c|}{$d$} & \multicolumn{1}{|c}{$e=d/c$}\\
+    \hline
+    typeof     & ~.38 $\mu$\emph{s} & .39 & \textbf{1.02} & .39 & \textbf{1.00}\\
+    instanceof & ~.49 $\mu$\emph{s} & .51 & \textbf{1.04} & .52 & \textbf{1.01}\\
+    call       & ~.47 $\mu$\emph{s} & .47 & \textbf{1.00} & .61 & \textbf{1.29}\\
+    delete     & ~.42 $\mu$\emph{s} & .42 & \textbf{1.00} & .71 & \textbf{1.69}\\
+    has        & ~.41 $\mu$\emph{s} & .41 & \textbf{1.00} & .73 & \textbf{1.78}\\
+    set        & ~.40 $\mu$\emph{s} & .41 & \textbf{1.02} & .74 & \textbf{1.80}\\
+    get        & ~.38 $\mu$\emph{s} & .39 & \textbf{1.03} & .73 & \textbf{1.87}\\
+    enumerate  & 1.58$\mu$\emph{s} & 1.58 & \textbf{1.00} & 4.0 & \textbf{2.53}\\
+   % \hline
+  \end{tabular}
+  \end{center}
+  \caption{Micro-benchmarks measuring overhead of the Proxy API (c) and of a proxy wrapper (e).}
+  \label{tab:benchmarks}
+\end{table}
+
+The results are show in Table~\ref{tab:benchmarks} for a subset of the operations. They were obtained on a MacPro Dual-core Intel Xeon (2.66Ghz) with 4GB Memory, running Mac OS X 10.5.8, using the following version of Tracemonkey: \url{http://hg.mozilla.org/tracemonkey/file/eba4f78cdca4}. Runtimes shown are an average over multiple runs.
+
+The results in column (c) show that the Proxy API introduces no significant overhead in the virtual machine. The results in column (e) show the overhead of using proxies to implement generic wrappers. Traps are ordered from least to most overhead. Our results confirm that operations like \texttt{typeof} and \texttt{instanceof} that do not consult the handler introduce no overhead. All intercepted operations, except enumeration, are between 1.2 and 1.9 times slower on proxies. The overhead comes from the additional invocation of the handler method. Presumably, the \texttt{get} and \texttt{set} traps introduce the most overhead because they are the most optimized for non-proxy objects. Enumeration is the only operation that is more than twice as slow when applied to proxies. This is because enumeration must now proceed by iterating over a user-created array returned by the \texttt{enumerate} trap, rather than using the built-in iteration algorithm.
 
 \section{Related Work}
 
@@ -989,7 +1014,7 @@ Another way of looking at Reflex is that it is a meta-proxy system: using Reflex
 
 \subsection{The Two-body Problem}
 
-Eugster~\cite{eugster06uniform} draws our attention to a potential limitation of the proxy approach to generic wrappers, which he coins the \emph{two-body problem}: the fact that the proxy and the wrapped object are distinct entities. The problem is that the proxy abstraction may ``leak'' the wrapped object, in two ways:
+Eugster~\cite{eugster06uniform} calls attention to a limitation of the proxy approach to generic wrappers, which he coins the \emph{two-body problem}: the fact that the proxy and the wrapped object are distinct entities. The problem is that the proxy abstraction may ``leak'' the wrapped object, in two ways:
 \begin{enumerate}
   \item If the proxy handler simply forwards a method call to the wrapped target object, and the target object subsequently performs a self-send, the proxy cannot intercept that method call anymore.
   \item If the wrapped object returns a reference to itself, it may expose a direct (unwrapped) reference to itself to its clients. It is the task of the proxy handler to detect this and instead return a reference to the proxy.
@@ -999,35 +1024,7 @@ Problem 1 can be solved by having the proxy handler \emph{delegate} the request 
 
 If one factors out the specifics of revocation, the membrane abstraction from Section~\ref{sub:membranes} is in fact a general-purpose solution to problem 2. However, as mentioned previously in that section, for a workable membrane to be practically useful, it is crucial that the membrane uphold object-equality on both sides of the membrane (i.e. two proxies are \texttt{===} if and only if their wrapped objects are). Ephemeron tables~\cite{miller10et} are the key abstraction that enable this without introducing memory leaks.
 
-\begin{quote}
-For associating a behavior through 
-a dynamic proxy as a meta-level object with an existing base-level 
-object, the invocation handler associated with the corresponding 
-proxy would most likely have to be given a reference to that object, 
-and henceforth, the proxy would always have to be used instead of 
-the original object, for instance also for self-invocations. However, 
-when a method of the actual target object invokes a further method 
-of that very object, there is no way of intercepting that invocation 
-(“self problem” [19]). Similarly, self-references returned by a base- 
-level object invoked through a proxy would have to be recognized 
-as such (e.g., by the associated invocation handler in the case of 
-Java’s proxies), such that again a proxy could be returned instead 
-(“encapsulation problem” [19]). 
-The detecting and handling of all such situations is very hard. 
-Base-level objects can for instance also return references to their 
-fields which are difficult to identify, but would have to be shielded 
-behind proxies as well.
-\end{quote}
-
-Solution: membranes, ephemeron tables.
-
-% TODO: discuss Eugster's proxification criteria?
-% COMPLETENESS, SAFETY, SECURITY, OVERHEAD, TRANSPARENCY
-% completeness = our uniform intercession + selective interception
-% safety = ? unexpected exceptions and side-effects
-% security = ?
-% overhead
-% transparency -> 
+Note that the two-body problem is \emph{not} related to the fact that a proxy and its \emph{handler} are distinct. It is a limitation inherent to using proxies as generic wrappers, not to using separate proxy handlers to achieve stratification.
 
 \subsection{CLOS}
 
