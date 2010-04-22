@@ -347,13 +347,12 @@ The simplest useful handler is that of a generic forwarding proxy. For such a ha
 \begin{lstlisting}[language=javascript]
 function makeForwardingHandler(obj) {
   return {
-   has: function(name) { return name in obj; },
    get: function(rcvr,name) { return obj[name]; },
    set: function(rcvr,name,val) {
      obj[name] = val; return true;
    },
+   has: function(name) { return name in obj; },
    delete: function(name) { return delete obj[name]; },
-   keys: function() { return Object.keys(obj) },
    ...
   };
 };
@@ -450,6 +449,13 @@ We carefully designed the intercession API such that proxies only interact with 
 %                    = meta-level proxy
 % p.x                blh.get(p,'x')          mlh.get(blh,'get').apply(blh,[p,'x'])
 %                                                                    fh.get(p,'x')      target['x']
+
+\begin{figure}[htbp]
+  \centering
+    \includegraphics[width=1.0\columnwidth]{MetaLevelShifting.png}
+  \caption{Meta-level shift using proxies as handlers}
+  \label{fig:shift}
+\end{figure}
 
 Another way to explain why this funneling works is as follows. At the base-level, there is an assortment of operations that are performed on Javascript objects as computation progresses (e.g. property lookup, access, assignment, enumeration, \ldots). At the meta-level (that is: in the intercession API), all of these operations are reified uniformly as method invocations on handlers. Therefore, at the meta-level, the only operation performed on meta-level objects (base-level handlers) is property access, and meta-meta-level objects (meta-level handlers) only need to handle this single operation in their protocol.
 
