@@ -120,7 +120,7 @@ Mark S. Miller\\%\titlenote{}\\
 
 \section{Introduction}
 
-We describe the design of a new metalevel API for Javascript that enables the creation of generic proxies for objects. Such proxies are useful for creating generic interposing abstractions between objects, which are in turn useful for enforcing access control (sandboxing), for implementing adaptors around older libraries to enable change in the face of legacy compatibility constraints, etc. Proxies can also be used to create ``virtualized'' objects: persistent objects, remote objects, lazy creation of objects, \ldots
+We describe the design of a new metalevel API for Javascript that enables the creation of generic proxies for objects.
 
 %General context/motivation
 %need for proxy metalevel APIs to enable objects (and by extension entire APIs) to be fully virtualized.
@@ -142,47 +142,43 @@ The goals of this paper are:
 
 \section{Background: Reflection}
 
-Before we discuss Javascript's support (and lack of support) for reflection, we introduce some terminology from the field of computational reflection~\cite{smith84reflection,maes87concepts} and metaprogramming~\cite{kiczales91art}.
+Before we discuss the particulars of Javascript and our proposed Proxy API, we introduce some terminology from the domain of metaprogramming.
+%computational reflection~\cite{smith84reflection,maes87concepts} and metaprogramming.
 
 \subsection{Metaobject Protocols}
 \label{sub:metaobject_protocols}
 
-A metaobject protocol is basically an object-oriented framework that describes the behavior of an object-oriented language.
+A metaobject protocol~\cite{kiczales91art} is an object-oriented framework that describes the behavior of an object-oriented system. It is a term most commonly associated with reflective object-oriented programming languages.
 
 A metaobject protocol supports \emph{introspection} if it enables reflective access to the structure of an object, and the values contained in this structure. It supports \emph{self-modification} if it is possible to modify this structure (e.g. add a new method, assign a field). It further supports \emph{invocation} if it enables the reflective invocation of an object's behavior. Finally, it supports \emph{intercession} if it enables the creation of meta-objects with custom structure and behavior.
 
-The first three operations are typically well-supported by most metaobject protocols. Java's \texttt{java.lang.reflect} package, for example, supports introspection, invocation and limited self-modification. However, metaobject protocols that additionally support intercession are rare. The CLOS metaobject protocol is the foremost example of a metaobject protocol supporting intercession~\cite{kiczales91art}.
+The first three categories are typically well-supported by most meta-level APIs. Java's \texttt{java.lang.reflect} package, for example, supports introspection, invocation and limited self-modification. However, meta-level APIs that additionally support intercession are rare in mainstream languages. The CLOS metaobject protocol is the foremost example of a metaobject protocol supporting intercession~\cite{kiczales91art}.
 
-It is customary for a metaobject protocol to represent language operations defined on objects as methods of their meta-objects. Throughout the rest of this paper, we use the term ``operation'' to characterize operations such as message sending, property access, assignment, method definition, performing an \texttt{instanceof} operation, and so on.
+It is customary for a metaobject protocol to represent language operations defined on objects as method invocaitons on their meta-objects. Throughout the rest of this paper, we use the term ``operation'' to characterize operations such as message sending, property access, assignment, method definition, performing an \texttt{instanceof} operation, and so on.
 
-In a pure object-oriented language, the dominant operation applied to objects is the message send (or method invocation). It is therefore unsurprising to observe that, historically, many object-oriented languages have provided ``ad hoc'' intercession of method invocations. For example, in Smalltalk, the class \texttt{Object} defines a method named \texttt{doesNotUnderstand:}. When the Smalltalk VM cannot find a method selector in an object's class or superclasses, it invokes the object's \texttt{doesNotUnderstand:} method instead, passing along a reified message object. While this approach is simple and flexible, we describe its drawbacks in section~\ref{sub:intercession_in_javascript}.
+In a pure object-oriented language, the dominant operation applied to objects is the message send (or method invocation). It is therefore unsurprising to observe that, historically, many object-oriented languages have provided ``ad hoc'' intercession of method invocations. For example, in Smalltalk, the class \texttt{Object} defines a method named \texttt{doesNotUnderstand:}. When the Smalltalk VM cannot find a method selector in an object's class or superclasses, it invokes the object's \texttt{doesNotUnderstand:} method instead, passing along a reified message object~\cite{ducasse99evaluatingmessage}. While this approach is simple and flexible, we describe its drawbacks in section~\ref{sub:intercession_in_javascript}.
 
 %Another well-known example of an ad-hoc intercession API is Java's \texttt{java.lang.reflect.Proxy} abstraction. Proxies are instances of classes that implement one or more interfaces. A proxy instance is created with a reference to an \texttt{InvocationHandler} instance and a list of interface types. The Java VM synthesizes a new class that implements these interfaces. All invocations on the proxy are reified as calls to the proxy's associated invocation handler's \texttt{invoke} method. The distinction between proxies and invocation handlers avoids the pitfalls of the \texttt{doesNotUnderstand:} approach, and our intercession API for Javascript is based on Java's proxy mechanism (cf. Section~\ref{sec:proxies_for_javascript}).
 
 \subsection{Intercession: use cases}
 \label{sub:use_cases}
 
-Distinction based on whether the proxy is proxying another object within the same physical address space.
+The use cases of proxies that can intercept base-level language operations can be distinguished primarily based on whether the proxy is proxying another object within the same physical address space:
 
 \begin{description}
-  \item[Generic wrappers] access control, profiling, coverage, tracing, ...
-  \item[Virtual objects] persistent objects, remote objects, transparent futures/promises, ...
+  \item[Generic wrappers] Proxies that wrap existing objects. Useful for creating access control wrappers, collecting profiling and code coverage information, implementing adaptors that intermediate between different versions of an API, and so on.
+  \item[Virtual objects] Proxies that \emph{emulate} a particular type of object, without that object ever having to be physically represented in the same address space. Examples include remote object proxies (where the ``wrapped'' object resides in another address space), persistent objects (where the represented object is stored in a database), transparent futures~\cite{eugster06uniform} that act as placeholders for the value of asynchronous computations, and so on.
 \end{description}
 
 \section{Javascript}
 
-Javascript is a scripting language whose language runtime is often embedded within a larger execution environment. By far the most common execution environment for Javascript is the web browser.
-
-% Javascript vs ECMAScript
-% ECMAScript 3, ECMAScript 5, es5-strict, ECMAScript Harmony
-%  we should definitely introduce es5 seal,freeze,preventExtensions and property attributes
-The standardized version of the Javascript language is named ECMAScript. The latest edition of ECMAScript, ECMA-262, 5th edition~\cite{ECMA262}, adds to the language support for defensively consistent objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). ECMAScript 5 also defines a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived pitfalls, edge cases and inconsistencies.
+Javascript is a scripting language whose language runtime is often embedded within a larger execution environment. By far the most common execution environment for Javascript is the web browser. The standardized version of the Javascript language is named ECMAScript. The latest edition of ECMAScript, ECMA-262, 5th edition~\cite{ECMA262}, adds a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived pitfalls, edge cases and inconsistencies.
 
 % Execution environment: the browser (DOM API for interacting with webpage, XHR object)
 %In this environment, the global object is named \texttt{window} and gives Javascript objects access to the content and structure of web pages via the Document Object Model (DOM), and allows them to communicate with their originating server through XmlHttpRequests (XHR).
 
 % The 'good parts': objects, arrays, functions
-While the full Javascript language as we know it today is the product of a complex evolutionary process, at its core it is actually a simple dynamic language with first-class lexical closures and a surprisingly expressive object literal notation that enables the lightweight creation of one-off, anonymous, objects. This simple core is what Crockford refers to as ``the good parts''~\cite{crockford08good}.
+While the full Javascript language as we know it today has a lot of accidental complexity as a side-effect of a complex evolutionary process, at its core it is actually a simple dynamic language with first-class lexical closures and an concise object literal notation that makes it easy to create one-off, anonymous, objects. This simple core is what Crockford refers to as ``the good parts''~\cite{crockford08good}.
 
 \subsection{Introspection and Invocation in Javascript}
 \label{sub:introspection_in_js}
@@ -196,10 +192,10 @@ var o = {
 };
 // introspection:
 o["x"] // property access
-"y" in o // property lookup
+"x" in o // property lookup
 Object.keys(o) // array of own property names
 // invocation:
-o["m"].call(o,2) // method call
+o["m"].apply(o,[2]) // method call
 // self-modification:
 o["x"] = 6 // property assignment
 o.z = 7 // add a property
@@ -229,9 +225,16 @@ var obj = Object.create(proto, {
 
 The \texttt{pd} object and the third argument to \texttt{defineProperty} are called \emph{property descriptors}. They are objects that describe properties of objects.
 
-The built-in \texttt{Object.create} function can be used to generate new objects based on a set of property descriptors. Its first argument specifies the prototype of the object to be created. Its second argument is an object serving as a record mapping property names to property descriptors. These descriptors then the attributes of the new object's properties.
+The built-in \texttt{Object.create} function can be used to generate new objects based on a set of property descriptors. Its first argument specifies the prototype of the object to be created. Its second argument is an object serving as a record mapping property names to property descriptors. These descriptors describe the attributes of the new object's properties.
 
-For the first time in the history of Javascript, the availability of these new attributes enables the creation of tamper-proof objects, objects that can prevent their clients from tampering with their properties. Ecmascript 5 introduces the notion of non-extensible, sealed and frozen objects. Non-extensible objects cannot be extended with new properties. Sealed objects are non-extensible and all of their properties are non-configurable. Frozen objects are sealed and all of their properties are non-writable. To freeze an object \texttt{obj}, one invokes \texttt{Object.freeze(obj)}. Section~\ref{sub:immutability} goes into detail on how the addition of tamper-proof objects has influenced the design of our intercession API.
+\subsection{Tamper-proof Objects}
+\label{sub:tamper_proof}
+
+Ecmascript 5th edition adds to the language support for creating tamper-proof objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). More specifically, Ecmascript 5 introduces the notion of non-extensible, sealed and frozen objects.
+
+Non-extensible objects prevent the addition of new properties to the object. Sealed objects are non-extensible and additionally do not prevent deletion of properties or alteration of their attributes. Finally, frozen objects are sealed and additionally, all of their properties are non-writable. To freeze an object \texttt{obj}, one invokes \texttt{Object.freeze(obj)}.
+
+Section~\ref{sub:immutability} goes into detail on how the addition of tamper-proof objects has influenced the design of our intercession API.
 
 \subsection{Intercession in Javascript}
 \label{sub:intercession_in_javascript}
