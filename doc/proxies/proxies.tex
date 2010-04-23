@@ -49,7 +49,7 @@
    %extendedchars=true,
    basicstyle=\scriptsize,
    showstringspaces=false,
-   numbers=left,
+   %numbers=left,
    numberstyle=\tiny,
    stepnumber=5,
    numbersep=5pt,
@@ -171,14 +171,12 @@ Distinction based on whether the proxy is proxying another object within the sam
 
 \section{Javascript}
 
-\section{A Brief History of Javascript}
-
 Javascript is a scripting language whose language runtime is often embedded within a larger execution environment. By far the most common execution environment for Javascript is the web browser.
 
 % Javascript vs ECMAScript
 % ECMAScript 3, ECMAScript 5, es5-strict, ECMAScript Harmony
 %  we should definitely introduce es5 seal,freeze,preventExtensions and property attributes
-The official, standardized version of the Javascript language is named ECMAScript. The latest edition of ECMAScript, ECMA-262, 5th edition~\cite{ECMA262}, adds to the language support for defensively consistent objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). ECMAScript 5 also defines a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived ``language warts'', edge cases and inconsistencies.
+The standardized version of the Javascript language is named ECMAScript. The latest edition of ECMAScript, ECMA-262, 5th edition~\cite{ECMA262}, adds to the language support for defensively consistent objects: objects that can protect themselves from unwanted modifications by untrusted client objects (such as inadvertent addition, overriding or removal of properties). ECMAScript 5 also defines a ``strict mode'' subset of the language. Strict mode addresses many of Javascript's perceived pitfalls, edge cases and inconsistencies.
 
 % Execution environment: the browser (DOM API for interacting with webpage, XHR object)
 %In this environment, the global object is named \texttt{window} and gives Javascript objects access to the content and structure of web pages via the Document Object Model (DOM), and allows them to communicate with their originating server through XmlHttpRequests (XHR).
@@ -262,7 +260,7 @@ The only way in which a trap is distinguished from a regular method is by their 
   \item Say an object \texttt{o} accidentally overrides the trap, treating that method name as part of the application. The VM may then incidentally invoke the application method as if it were a trap. This confuses the base-level code, since the call ``originated'' from the meta-level.
 \end{itemize}
 
-Granted, for a method named \noSuchMethod{} this hypothetical confusion may seem far-fetched, although in Smalltalk \texttt{doesNotUnderstand:} is a pretty reasonable name for an application to use. But this critique misses the essential point, which is that the intercession API is polluting the name space of the application. This is not a scalable approach. What if we were to introduce additional such traps to intercept not only method invocation, but also property access, assignment, lookup, enumeration, etc.? The number of ``reserved method names'' would quickly grow out of hand. The reason that the lack of stratification has not really posed a significant problem \emph{in practice} is that Spidermonkey and Smalltalk define only one such special method.
+Granted, for a method named \noSuchMethod{} this hypothetical confusion may seem far-fetched, although in Smalltalk \texttt{doesNotUnderstand:} is a reasonable name for an application to use. But this critique misses the essential point, which is that the intercession API is polluting the name space of the application. This is not a scalable approach. What if we were to introduce additional such traps to intercept not only method invocation, but also property access, assignment, lookup, enumeration, etc.? The number of ``reserved method names'' would quickly grow out of hand. The reason that the lack of stratification has not really posed a significant problem \emph{in practice} is that Spidermonkey and Smalltalk define only one such special method.
 
 So far in our discussion, we have limited the confusion caused by the lack of stratification to the fact that a trap is invoked by the wrong code. However, there are many other ways in which the trap method may conflict with other base-level code. For example, in Javascript a common idiom is to enumerate all properties of an object. Say we want to populate the content of a drop-down list in an HTML form with id \texttt{id} with all of the properties of an object \texttt{obj}:
 
@@ -364,7 +362,7 @@ var proxy = Proxy.create(makeForwaringHandler(obj),
 
 The handler is a regular object. It may delegate to other objects and its delegation chain and is completely independent from that of the proxy it handles. A single handler may handle multiple proxies. The handler can be a proxy itself (we will illustrate a use case of this in Section~\ref{sub:doublelifting}).
 
-Calling \lstinline{aProxy.get}, \lstinline{aProxy.fix} explicitly on a proxy will not trigger the proxy's corresponding traps. Instead, the call will be reified like any other. That is, \lstinline{aProxy.fix([])} invokes the handler's \lstinline{invoke(aProxy,'fix',[])} trap. Traps can only be invoked explicitly on a proxy's handler, not on the proxy itself. This enforces stratification (the meta-level traps should not interfere with base-level method names). Thus, proxies continue to work correctly if an application (by accident or by design) uses the names \texttt{get}, \texttt{set}, \texttt{has}, etc.
+Calling \lstinline{aProxy.has} explicitly on a proxy will not trigger the proxy's corresponding \texttt{has} trap. Instead, the call will be reified like any other. That is, \lstinline{aProxy.has('foo')} invokes \lstinline{handler.get(aProxy,'has',['foo'])}. Likewise, \lstinline{aProxy.get} is reified as \lstinline{handler.get(aProxy,'get')}. Traps can only be invoked explicitly on a proxy's handler, not on the proxy itself. This enforces stratification (the meta-level traps should not interfere with base-level method names). Thus, proxies continue to work correctly if an application (by accident or by design) uses the names \texttt{get}, \texttt{set}, \texttt{has}, etc.
 
 This brings us to our first design principle:
 
@@ -754,20 +752,20 @@ Unfortunately, implementing these maps in Javascript is impossible without intro
 
 \subsection{Script Compartments}
 
-Application of the membrane abstraction to the isolation of mutually distrustful code:
+In a capability-secure subset of ECMAScript~\cite{ses}, if a membrane is used to wrap the \texttt{eval} function, it becomes possible to write mash-ups combining mutually suspicious pieces of code that can be isolated from one another and the container page:
 
 \begin{lstlisting}[language=javascript]
 var compartment = makeMembrane(eval);
-var eval1 = compartment.wrapper;
+var safeEval = compartment.wrapper;
 var gate = compartment.gate;
 var badCode = //load potentially malicious code
-var result = eval1(badCode);
+var result = safeEval(badCode);
 //use result
 gate.revoke();
 //contents of compartment gone and collectible
 \end{lstlisting}
 
-A membrane around an SES \texttt{eval}\footnote{Ref to \texttt{es-lab} project for SES and Securable ES5.} creates a compartment in which one can run potentially malicious code, confident that the resulting potentially malicious objects can interact with the world outside this compartment only as permitted by the objects you provide them. Once the compartment is revoked, not only is all their connectivity severed, it is severed in ways the garbage collector can recognize. Given a good enough collector, these hostile objects cannot even continue to occupy your memory.
+A membrane around an SES \texttt{eval}\footnote{Ref to \texttt{es-lab} project for SES and Securable ES5.} creates a compartment in which one can run potentially malicious code, confident that the resulting potentially malicious objects can interact with the world outside this compartment only as permitted by the objects you provide them. Once the compartment is revoked, all their connectivity with its outside environment is severed, rendering it powerless.
 
 \section{Micro-benchmarks}
 \label{sub:benchmarks}
@@ -1040,8 +1038,12 @@ Recapitulate our ``design principles''. Should be generally applicable (apart fr
   \item Selective interception: committing to values upfront.
   \item Fundamental versus derived traps: less allocation vs consistency.
   \item Meta-level shifting and funneling traps
-  \item Fixing: dealing with immutability.
+  \item Temporary intercession: dealing with immutability.
 \end{itemize}
+
+\section*{Acknowledgements}
+
+We would like to thank the members of the ECMA TC-39 committee and the readers of the \texttt{es-discuss@mozilla.org} for their comments and feedback on our Proxy API. In particular, we would like to thank Brendan Eich, Andreas Gal and Dave Herman for their detailed comments and Andreas Gal for the work he put in prototyping proxies in Tracemonkey.
 
 \bibliographystyle{abbrv}
 \bibliography{proxies}
