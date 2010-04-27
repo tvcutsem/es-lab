@@ -19,6 +19,7 @@
 \usepackage{multirow}
 % \usepackage{rotating} % for \begin{sidewaystable}
 \usepackage{url}
+\usepackage{mdwlist}
 
 % Package for including code in the document
 \usepackage{listings}
@@ -94,7 +95,7 @@ Tom Van Cutsem\titlenote{Tom Van Cutsem is a Postdoctoral Fellow of the Research
 % 2nd. author
 \alignauthor
 Mark S. Miller\\%\titlenote{}\\
-       \affaddr{Google}\\
+       \affaddr{Google Research}\\
        \affaddr{1600 Amphitheatre Parkway}\\
        \affaddr{Mountain View, CA, USA}\\
        \email{erights@google.com}
@@ -113,29 +114,33 @@ Mark S. Miller\\%\titlenote{}\\
 \maketitle
 
 \begin{abstract}
+% TODO: abstract
 \end{abstract}
 
-%\category{H.4}{Information Systems Applications}{Miscellaneous}
-%\terms{Theory}
-%\keywords{}
+\category{D.3.2}{Language Classifications}{Object-oriented languages}
+\terms{Design, Languages}
+\keywords{Proxies, Javascript, Reflection, Intercession}
+
+%\conferenceinfo{Acronym}{'YY City, Country}
+%\CopyrightYear{2010}
 
 \section{Introduction}
 
 We introduce a new meta-level API for Javascript based on dynamic proxies. Proxies have a wide array of use cases~\cite{eugster06uniform}. In this paper, we distinguish two general use cases depending on whether the proxy is proxying another object within the same physical address space:
 
-\begin{description}
+\begin{description*}
   \item[Generic wrappers] Proxies that wrap existing objects. Useful for creating access control wrappers, collecting profiling and code coverage information, implementing adaptors that intermediate between different versions of an API, and so on.
   \item[Virtual objects] Proxies that \emph{emulate} a particular type of object, without that object ever having to be physically represented in the same address space. Examples include remote object proxies (where the ``wrapped'' object resides in another address space), persistent objects (where the represented object is stored in a database), transparent futures that act as placeholders for the value of asynchronous computations, etc.
-\end{description}
+\end{description*}
 
 The contributions of this paper are first, the introduction of a proxy-based metaprogramming API for Javascript (Section~\ref{sec:proxies_for_javascript}), second, to list a number of design principles that can be used to characterize general message-based object-oriented metaprogramming APIs (Sections~\ref{sub:wrappers} through \ref{sub:uniform_intercession}) and third, to provide an overview of related metaprogramming APIs in terms of these design principles (Section~\ref{sub:survey}).
 
-The goal of the design principles discussed in this paper is to foster \emph{robust} metaprogramming APIs in the sense that they minimize interference with application-level code. We have applied these principles successfully to our API but have found them generally applicable to APIs for other languages or systems as well.
+The goal of the design principles discussed in this paper is to foster \emph{robust} metaprogramming APIs in the sense that the API tries to minimize the interference with application code. We have used these principles to characterize our own API, but have found them generally applicable to meta-level APIs for other systems as well.
 
 \section{Background: Reflection}
 \label{sec:reflection}
 
-Before we discuss the particulars of Javascript and our proposed Proxy API, we introduce some required terminology.
+%Before we discuss our proposed Proxy API for Javascript, we introduce some required terminology.
 %computational reflection~\cite{smith84reflection,maes87concepts} and metaprogramming.
 
 %\subsection{Metaobject Protocols}
@@ -143,13 +148,13 @@ Before we discuss the particulars of Javascript and our proposed Proxy API, we i
 
 A metaobject protocol (MOP)~\cite{kiczales91art} is an object-oriented framework that describes the behavior of an object-oriented system. It is a term most commonly associated with reflective object-oriented programming languages. It is customary for a MOP to represent language operations defined on objects as method invocations on their meta-objects. Throughout the rest of this paper, we use the general term \emph{operation} to denote mechanisms such as message sending, field access and assignment, defining a method, performing an \texttt{instanceof} operation, and so on.
 
-Ferber~\cite{ferber89computational} distinguishes between \emph{structural} and \emph{behavioral} reflection, where the former reifies the structure of an object and the latter reifies the behavior of an object. Kiczales \emph{et. al}~\cite{kiczales91art} introduce a more fine-grained distinction. A MOP supports \emph{introspection} if it enables reflective access to the structure of an object. It supports \emph{self-modification} if it is possible to modify this structure. It further supports \emph{invocation} if it enables the reflective invocation of operations. Finally, it supports \emph{intercession} if it enables the creation of meta-objects with custom structure and behavior (enabling one to essentially change the semantics of certain operations of the programming language).
+According to Kiczales \emph{et. al}~\cite{kiczales91art} a MOP supports \emph{introspection} if it enables reflective access to the structure of an object. It supports \emph{self-modification} if it is possible to modify this structure. It further supports \emph{invocation} if it enables the reflective invocation of operations. Finally, it supports \emph{intercession} if it enables the creation of meta-objects with custom structure and behavior (enabling one to essentially change the semantics of certain operations of the programming language).
 
 The first three categories are typically well-supported by most meta-level APIs. Java's \texttt{java.lang.reflect} package, for example, mainly supports introspection and invocation, although it also supports a limited form of intercession through proxies (see Section~\ref{sub:survey}). Meta-level APIs with extensive support for intercession are rare in mainstream languages, the CLOS MOP being a notable exception (see Section~\ref{sub:clos}).
 
-In a pure object-oriented language, the dominant operation is the message send (or method invocation). It is therefore unsurprising that, historically, many object-oriented languages have provided ``ad hoc'' intercession support for method invocations, such as the \texttt{doesNotUnderstand:} method in Smalltalk (see Section~\ref{sub:survey}). While simple and flexible, we describe the drawbacks of this approach in section~\ref{sub:intercession_in_javascript}.
+The Proxy API proposed in this paper is about achieving intercession, also known as \emph{behavioral reflection}~\cite{ferber89computational}. We will use the term \emph{intercession API} to refer to any API, framework or language feature that enables the creation of new base-level objects with custom meta-level behavior.
 
-We will use the term \emph{intercession API} to refer to any API, framework or language feature that enables the creation of new base-level objects with custom meta-level behavior.
+%In a pure object-oriented language, the dominant operation is the message send (or method invocation). It is therefore unsurprising that, historically, many object-oriented languages have provided ``ad hoc'' intercession support for method invocations, such as the \texttt{doesNotUnderstand:} method in Smalltalk (see Section~\ref{sub:survey}). While simple and flexible, we describe the drawbacks of this approach in section~\ref{sub:intercession_in_javascript}.
 
 %For example, in Smalltalk, the class \texttt{Object} defines a method named \texttt{doesNotUnderstand:}. When the Smalltalk VM cannot find a method selector in an object's class or superclasses, it invokes the object's \texttt{doesNotUnderstand:} method instead, passing along a reified message object~\cite{ducasse99evaluatingmessage}. 
 
@@ -232,7 +237,7 @@ The new property descriptor API discussed in the previous section provides for m
 \subsection{Intercession in Javascript}
 \label{sub:intercession_in_javascript}
 
-Javascript has no standard support for intercession. It is not possible to intercept an object's property access, how it responds to the \texttt{in}-operator, \texttt{for-in} loops and so on. Mozilla's Spidermonkey engine has long included a non-standard way of intercepting method calls based on Smalltalk's \texttt{doesNotUnderstand:} method. In Spidermonkey, this method is named \noSuchMethod{}. For example, a proxy that can generically forward all received messages to a target object \texttt{o} is created as follows:
+Javascript has no standard support for intercession. It is not possible to intercept an object's property access, how it responds to the \texttt{in}-operator, \texttt{for-in} loops and so on. Mozilla's Spidermonkey engine has long included a non-standard way of intercepting method calls based on Smalltalk's \texttt{doesNotUnderstand:} mechanism (see Section~\ref{sub:survey}). In Spidermonkey, the equivalent method is named \noSuchMethod{}. For example, a proxy that can generically forward all received messages to a target object \texttt{o} is created as follows:
 
 \begin{lstlisting}[language=javascript]
 function makeProxy(o) {
@@ -625,7 +630,6 @@ Eugster~\cite{eugster06uniform} introduces the term \emph{uniform proxies} to de
 
 The advantage of having a uniform intercession API is that it does not restrict programmers to use only language values that can be proxied. Conversely, it enables meta-programmers to potentially use the intercession API on more base-level objects.
 
-% TODO: discuss Proxy.isTrapping?
 %could be another important design principle: whether or not to fully virtualize an API
 %A method is defined on \texttt{Proxy} to distinguish trapping proxies from regular objects or fixed proxies:
 %\texttt{Proxy.isTrapping(anObject)} returns \texttt{true} if and only if \texttt{anObject} is a proxy and is in trapping mode. This is the single, reliable way of testing whether an object is a trapping proxy or not. Note that a proxy cannot influence the outcome of this method. Once a proxy is fixed, it is in all ways simply a normal object, with no built-in way to detect that it had ever been a trapping proxy.
@@ -1008,7 +1012,7 @@ A mirror is a meta-level object that defines a view on a base-level object. Mirr
 
 Systems with a mirror-based architecture include Self~\cite{ungar87power}, the Java Debugger API~\cite{jdi} and Newspeak~\cite{bracha10newspeak}. Mirrors naturally support introspection, reflective invocation and self-modification. It was an open question whether mirror-based architectures could support intercession. AmbientTalk answered this question affirmatively: it introduced the concept of a \emph{mirage}~\cite{mostinckx07behavioral,mostinckx09mirrors}. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The only difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
 
-% TODO: should we discuss Encapsulation and Ontological correspondence, the two other mirror principles?
+% should we discuss Encapsulation and Ontological correspondence, the two other mirror principles?
 
 %One can think of a proxy handler as defining a mirror on the proxy. Upholding the Mirrors principle of stratification, given only a reference to a proxy, it's impossible to acquire a reference to its handler. If such a relationship is required, it can be provided as follows:
 
@@ -1053,7 +1057,7 @@ This paper introduces an intercession API for Javascript based on proxies. The A
 
 The second contribution of this paper is the identification of general design principles for proxy-based intercession APIs. These design principles are more generally applicable to other programming languages, as summarized in Table~\ref{tab:related_work}. To summarize, the design principles put forward include:
 
-\begin{description}
+\begin{description*}
   \item[Stratification] are proxy traps defined on a separate handler object?
   \item[Selective interception] do proxies trap all operations? Are some values determined at proxy-creation time?
   \item[Fundamental versus derived traps] tradeoff between introducing more efficient traps versus introducing the potential for inconsistent behavior.
@@ -1061,11 +1065,11 @@ The second contribution of this paper is the identification of general design pr
   \item[Temporary intercession] can proxies become fixed or disabled?
   \item[Meta-level encapsulation] is the handler encapsulated by the proxy?
   \item[Uniform intercession] can one proxy all runtime values in the system?
-\end{description}
+\end{description*}
 
 \section*{Acknowledgements}
 
-We thank the members of the ECMA TC-39 committee and the \texttt{es-discuss@mozilla.org} community for their comments and feedback on our Proxy API. Thanks to Brendan Eich, Andreas Gal and Dave Herman for their detailed comments and Andreas Gal for his work on the Tracemonkey implementation.
+We thank the members of the ECMA TC-39 committee and the \texttt{es-discuss@mozilla.org} community for their feedback on our Proxy API. Thanks to Brendan Eich, Andreas Gal and Dave Herman for detailed comments and to Andreas Gal for his work on the Tracemonkey implementation.
 
 \bibliographystyle{abbrv}
 \bibliography{proxies}
