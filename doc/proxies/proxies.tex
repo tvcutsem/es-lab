@@ -43,7 +43,8 @@
    comment=[l]{//},
    morecomment=[s]{/*}{*/}, 
    commentstyle=\itshape,
-   stringstyle=\ttfamily
+   stringstyle=\ttfamily,
+   columns=flexible,
 }
 
 \lstset{
@@ -114,7 +115,7 @@ Mark S. Miller\\%\titlenote{}\\
 \maketitle
 
 \begin{abstract}
-% TODO: abstract
+Dynamic proxies are a powerful approach to implement meta-objects in object-oriented languages with minimal impact on overall system performance. We introduce such a meta-level API based on proxies for Javascript. We simultaneously introduce a set of design principles that characterize such APIs in general, and compare similar APIs of other languages in terms of these principles. We highlight how principled proxy-based APIs improve code robustness by avoiding interference between base and meta-level code that occur in more common reflective interception mechanisms.
 \end{abstract}
 
 \category{D.3.2}{Language Classifications}{Object-oriented languages}
@@ -152,7 +153,7 @@ According to Kiczales \emph{et. al}~\cite{kiczales91art} a MOP supports \emph{in
 
 The first three categories are typically well-supported by most meta-level APIs. Java's \texttt{java.lang.reflect} package, for example, mainly supports introspection and invocation, although it also supports a limited form of intercession through proxies (see Section~\ref{sub:survey}). Meta-level APIs with extensive support for intercession are rare in mainstream languages, the CLOS MOP being a notable exception (see Section~\ref{sub:clos}).
 
-The Proxy API proposed in this paper is about achieving intercession, also known as \emph{behavioral reflection}~\cite{ferber89computational}. We will use the term \emph{intercession API} to refer to any API, framework or language feature that enables the creation of new base-level objects with custom meta-level behavior.
+The Proxy API proposed in this paper enables intercession, also known as \emph{behavioral reflection}~\cite{ferber89computational}. We will use the term \emph{intercession API} to refer to any API that enables the creation of new base-level objects with custom meta-level behavior.
 
 %In a pure object-oriented language, the dominant operation is the message send (or method invocation). It is therefore unsurprising that, historically, many object-oriented languages have provided ``ad hoc'' intercession support for method invocations, such as the \texttt{doesNotUnderstand:} method in Smalltalk (see Section~\ref{sub:survey}). While simple and flexible, we describe the drawbacks of this approach in section~\ref{sub:intercession_in_javascript}.
 
@@ -205,9 +206,9 @@ The \texttt{Object.create} function can be used to generate new objects based on
 
 \begin{lstlisting}[language=javascript]
 var point = Object.create(Object.prototype, {
-  x: { value: 5, enumerable: true, ... },
-  y: { get: function() { return this.x; }, ... },
-  m: { value: function() {...}, enumerable: true, ...}
+  x: { value: 5,enumerable: true,writable: true,configurable: true },
+  y: { get: function() { return this.x; }, enumerable: true, ... },
+  toString: { value: function() {...}, enumerable: true, ...}
 });
 \end{lstlisting}
 
@@ -370,12 +371,10 @@ To implement generic wrappers around existing objects, a useful handler is one t
 \begin{lstlisting}[language=javascript]
 function makeForwardingHandler(target) {
   return {
-   get: function(rcvr,name){return target[name];},
-   set: function(rcvr,name,val) {
-     target[name] = val; return true;
-   },
-   has: function(name){return name in target;},
-   delete: function(name){return delete target[name];},
+   get: function(rcvr,name) { return target[name];},
+   set: function(rcvr,name,val) { target[name] = val; return true; },
+   has: function(name) { return name in target; },
+   delete: function(name) { return delete target[name]; },
    ...
   };
 };
@@ -409,8 +408,7 @@ var props = handler.fix();
 if (props === undefined) {
   throw new TypeError();
 } else {
-  become(proxy, Object.freeze(
-    Object.create(proto, props)));
+  become(proxy, Object.freeze(Object.create(proto, props)));
 }
 \end{lstlisting}
 
@@ -541,8 +539,7 @@ As a concrete example, consider the expression \texttt{name in obj}. The \texttt
 
 \begin{lstlisting}[language=javascript]
 has: function(name) {
-  return this.getPropertyDescriptor(name) !==
-           undefined;
+  return this.getPropertyDescriptor(name) !== undefined;
 }
 \end{lstlisting}
 
@@ -829,7 +826,9 @@ We used the prototype implementation to get an initial idea of the overhead of o
 
 The results are shown in Table~\ref{tab:benchmarks} for a subset of the operations. They were obtained on a MacPro Dual-core Intel Xeon (2.66Ghz) with 4GB Memory, running Mac OS X 10.5.8, using the following version of Tracemonkey: \url{http://hg.mozilla.org/tracemonkey/file/eba4f78cdca4}. Runtimes shown are an average over multiple runs.
 
-The results in column (c) show that the Proxy API introduces no significant overhead in the virtual machine. The results in column (e) show the overhead of using proxies to implement generic wrappers. Traps are ordered from least to most overhead. Our results confirm that operations like \texttt{typeof} and \texttt{instanceof} that do not consult the handler introduce no overhead. The overhead of intercepting the other operations, save enumeration, is less than a factor of 2. The overhead comes from the additional invocation of the handler method. Presumably, the \texttt{get} and \texttt{set} traps introduce the most overhead because they are the most optimized for non-proxy objects. Enumeration is the only operation that is more than twice as slow when applied to proxies. This is because enumeration must now proceed by iterating over a user-created array returned by the \texttt{enumerate} trap, rather than using the built-in iteration algorithm.
+The results in column (c) show that the addition of proxies in the virtual machine introduces no significant overhead for non-proxy objects. Hence, proxies only introduce a performance penalty when they are needed.
+
+The results in column (e) show the overhead of using proxies to implement generic wrappers. Traps are ordered from least to most overhead. Our results confirm that operations like \texttt{typeof} and \texttt{instanceof} that do not consult the handler introduce no overhead. The overhead of intercepting the other operations, save enumeration, is less than a factor of 2. The overhead comes from the additional invocation of the handler method. Presumably, the \texttt{get} and \texttt{set} traps introduce the most overhead because they are the most optimized for non-proxy objects. Enumeration is the only operation that is more than twice as slow when applied to proxies. This is because enumeration must now proceed by iterating over a user-created array returned by the \texttt{enumerate} trap, rather than using the built-in iteration algorithm.
 
 \section{Related Work}
 
@@ -842,7 +841,7 @@ In this section we summarize a variety of message-based, object-oriented interce
 
 \begin{lstlisting}[language=java]
 InvocationHandler h = new InvocationHandler() {
-  Object invoke(Object p,Method m,Object[] a){...}
+  Object invoke(Object pxy, Method m, Object[] args) {...}
 };
 Foo proxy = (Foo) Proxy.newProxyInstance(
   aClassloader, new Class[] { Foo.class }, h);
@@ -860,7 +859,7 @@ The Java Proxy API is non-uniform: proxies can only be constructed for interface
 \textbf{AmbientTalk} The design of Javascript proxies was influenced by AmbientTalk \emph{mirages}~\cite{mostinckx07behavioral,mostinckx09mirrors}. AmbientTalk is a distributed dynamic language, with a mirror-based meta-level API. AmbientTalk enables intercession through mirages, which are proxy-like objects controlled explicitly by a separate mirror object:
 
 \begin{lstlisting}[]
-def mirage := object: {...} mirroredBy: (mirror:{
+def mirage := object: {...} mirroredBy: (mirror: {
   def invoke(receiver, message) { ... };
   def addSlot(slot) { ... };
   def removeSlot(slot) { ... };
@@ -876,9 +875,9 @@ E has a proxy-based API to represent user-defined eventual references~\cite{epro
 
 \begin{lstlisting}[]
 def handler {
-  to handleSend(verb :String, args :List){...}
-  to handleSendOnly(verb :String, args :List){...}
-  to handleOptSealedDispatch(brand){...}
+  to handleSend(verb :String, args :List) {...}
+  to handleSendOnly(verb :String, args :List) {...}
+  to handleOptSealedDispatch(brand) {...}
 }
 def proxy := makeProxy(handler, slot, state);
 \end{lstlisting}
