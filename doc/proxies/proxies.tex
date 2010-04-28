@@ -151,8 +151,7 @@ According to Kiczales \emph{et. al}~\cite{kiczales91art} a MOP supports \emph{in
 
 The first three categories are typically well-supported by most meta-level APIs. Java's \texttt{java.lang.reflect} package, for example, mainly supports introspection and invocation, although it also supports a limited form of intercession through proxies (see Section~\ref{sub:survey}). Meta-level APIs with extensive support for intercession are rare in mainstream languages, the CLOS MOP being a notable exception (see Section~\ref{sub:clos}).
 
-% TODO: reintroduce the term structural reflection such that we can refer to it when talking about mirrors?
-The Proxy API proposed in this paper enables intercession, also known as \emph{behavioral reflection}~\cite{ferber89computational}. We will use the term \emph{intercession API} to refer to any API that enables the creation of new base-level objects with custom meta-level behavior.
+Ferber~\cite{ferber89computational} makes a more coarse-grained distinction between \emph{structural} and \emph{behavioral} reflection. The Proxy API proposed in this paper enables the latter type of reflection. We will use the term \emph{intercession API} to refer to any API that enables the creation of new base-level objects with custom meta-level behavior.
 
 %In a pure object-oriented language, the dominant operation is the message send (or method invocation). It is therefore unsurprising that, historically, many object-oriented languages have provided ``ad hoc'' intercession support for method invocations, such as the \texttt{doesNotUnderstand:} method in Smalltalk (see Section~\ref{sub:survey}). While simple and flexible, we describe the drawbacks of this approach in section~\ref{sub:intercession_in_javascript}.
 
@@ -386,14 +385,15 @@ We make use of this handler in Sections~\ref{sub:doublelifting} and \ref{sec:exa
 \subsection{Stratification}
 \label{sub:stratification}
 
+Bracha and Ungar~\cite{bracha04mirrors} introduce the principle of stratification for mirror-based architectures. The principle highlights the importance of separating base and meta-level code, and is described in more detail in Section~\ref{sub:mirrors}. While Bracha and Ungar focus mostly on the benefits of stratification for \emph{structural} reflection, in this paper we focus on the benefits for \emph{behavioral} reflection.
+
 The distinction between a proxy and its handler object enforces stratification of the traps. Traps are not defined as part of the interface of the proxy object, but as part of the interface of the handler.
 
 The handler is a regular object. It may delegate to other objects and its delegation chain and is completely independent from that of the proxy it handles. A single handler may handle multiple proxies. The handler can be a proxy itself (we will illustrate a use case of this in Section~\ref{sub:doublelifting}).
 
 Calling \lstinline{aProxy.has} explicitly on a proxy will not trigger the proxy's corresponding \texttt{has} trap. Instead, the call will be reified like any other. That is, \lstinline{aProxy.has(`foo')} invokes \lstinline{handler.get(aProxy,`has',[`foo'])}. Likewise, \lstinline{aProxy.get} is reified as \lstinline{handler.get(aProxy,`get')}. Traps can only be invoked explicitly on a proxy's handler, not on the proxy itself. This enforces stratification (the meta-level traps should not interfere with base-level method names). Thus, proxies continue to work correctly if an application (by accident or by design) uses the names \texttt{get}, \texttt{set}, \texttt{has}, etc.
 
-% TODO: emphasize that the stratification principle was in fact first proposed by Bracha and Ungar for Mirrors. They mostly talked about this in the context of structural reflection. We talk about it in the context of behavioral reflection.
-This brings us to our first design principle:
+The principle of stratification when applied to proxies can be summarized as follows.
 
 \textbf{Stratification:} traps can be stratified by defining them on an object that is distinct from the proxy being intercepted.
 
@@ -592,13 +592,12 @@ The requirement of mutual consistency between operations is an opposing force in
 
 %Since the \texttt{get} trap does not get direct access to the arguments of a call, it has to return a function to curry over the arguments of the invocation. The \texttt{invoke} trap does not need to allocate this intermediate function. Eventually, we dropped the \texttt{invoke} trap because the invariant that it can break is so deeply rooted in the understanding of Javascript's method invocation semantics.
 
-\subsection{Meta-level Encapsulation}
+\subsection{Handler Encapsulation}
 \label{sub:meta_level_encapsulation}
 
-% TODO: make it more explicit that this principle in part stems from Mirrors
-A Proxy-based intercession API encapsulates its meta-level if, given a reference to a proxy, one cannot gain direct access to the proxy's handler. For our proxy API, this is the case. This ensures that the handler remains encapsulated behind its proxy, allowing the handler to ensure that its traps can only ever be invoked though the manipulation of its corresponding proxy.
+A Proxy-based intercession API encapsulates its handler if, given a reference to a proxy, one cannot gain direct access to the proxy's handler. For our proxy API, this is the case. If a handler can be encapsulated behind its proxy, the handler can ensure that its traps can only ever be invoked by manipulating its corresponding proxy.
 
-If the handler explicitly wants to be accessible from its proxy, it can cater to such access itself without violating stratification. The handler could register the association between itself and its proxy in a registry, from which other objects can later look up the handler, using the proxy as a key. Such a registry plays a similar role in our architecture as mirror factories in a mirror-based architecture, as further explained in Section~\ref{sub:mirrors}.
+If the handler explicitly wants to be accessible from its proxy, it can cater to such access itself without violating stratification. The handler could register the association between its proxy and itself in a registry. Objects with access to this registry and to the proxy can then look up the handler, using the proxy as a key. Such a registry plays a similar role in our architecture as mirror factories in a mirror-based architecture (see Section~\ref{sub:mirrors}).
 
 %If access to a proxy's handler is required, it is fairly straightforward for the proxy creator to provide such access. For example, the proxy creator could define its own proxy factory:
 
@@ -994,7 +993,9 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
 \subsection{Mirrors}
 \label{sub:mirrors}
 
-This work is heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha04mirrors} discuss the design principles of mirror-based meta-level architectures. The principles of stratification and encapsulation can be directly attributed to their corresponding mirror design principles. The use of mirrors naturally leads to a stratification of base and meta-level. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
+This work is heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha04mirrors} discuss the design principles of mirror-based meta-level architectures. The principles of stratification and handler encapsulation as stated in this paper correspond to the same principles for mirrors, but with a focus on behavioral rather than structural reflection.
+
+Mirror-based architectures strive to decouple base-level from meta-level code. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
 
 Mirrors are meta-level objects that are manufactured by objects known as mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with an object is not tied to that object's representation. As discussed in Section~\ref{sub:meta_level_encapsulation}, our Proxy API does not enable clients of proxies to directly access the handler through the proxy. If such access is required, the cleanest solution is to introduce a separate registry abstraction which can be regarded as a ``handler factory''.
 
@@ -1039,18 +1040,18 @@ The Common Lisp Object System (CLOS) has an extensive metaobject protocol~\cite{
 
 \section{Conclusion}
 
-This paper introduces an intercession API for Javascript based on proxies. The API enables Javascript programmers to implement generic wrappers and virtual objects using proxies. We characterize our API as \emph{robust}, primarily due to its stratified design and because it upholds important invariants (pertaining to e.g. identity, runtime types and tamper-proofness).
+This paper introduces an intercession API for Javascript based on proxies, enabling the creation of generic wrappers and virtual objects. We characterize our API as \emph{robust}, primarily due to its stratified design and because it upholds important invariants (pertaining to e.g. identity, runtime types and tamper-proofness).
 
-The second contribution of this paper is the identification of general design principles for proxy-based intercession APIs. These design principles are more generally applicable to other programming languages, as summarized in Table~\ref{tab:related_work}. To summarize, the design principles put forward include:
+The second contribution of this paper is the identification of general design principles for proxy-based intercession APIs. These design principles can be used to characterize similar APIs of other programming languages, as summarized in Table~\ref{tab:related_work}. The design principles put forward are:
 
 \begin{description*}
-  \item[Stratification] are traps defined on a separate handler?
-  \item[Selective interception] do proxies trap all operations? Are some values determined at proxy-creation time?
-  \item[Fundamental versus derived traps] tradeoff between introducing more efficient traps versus introducing the potential for inconsistent behavior.
-  \item[Meta-level shifting] can one shift levels by implementing a handler as a proxy?
-  \item[Temporary intercession] can proxies become fixed?
-  \item[Meta-level encapsulation] does the proxy encapsulate its handler?
-  \item[Uniform intercession] can all types of values be proxified?
+  \item[Stratification] traps are defined on a separate handler.
+  \item[Selective interception] some operations are not trapped or their semantics is determined at proxy-creation time.
+  \item[Derived traps] can be more efficient than \textbf{fundamental traps} but introduce the potential for inconsistencies.
+  \item[Meta-level shifting] handlers as proxies shift meta-levels.
+  \item[Temporary intercession] proxies can become fixed.
+  \item[Handler encapsulation] a proxy encapsulates its handler.
+  \item[Uniform intercession] every value can be proxified.
 \end{description*}
 
 \section*{Acknowledgements}
