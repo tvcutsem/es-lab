@@ -115,7 +115,7 @@ Mark S. Miller\\%\titlenote{}\\
 \maketitle
 
 \begin{abstract}
-Dynamic proxies are a powerful approach to implement meta-objects in object-oriented languages with minimal impact on overall system performance. We introduce such a meta-level API based on proxies for Javascript. We simultaneously introduce a set of design principles that characterize such APIs in general, and compare similar APIs of other languages in terms of these principles. We highlight how principled proxy-based APIs improve code robustness by avoiding interference between base and meta-level code that occur in more common reflective interception mechanisms.
+Proxies are a powerful approach to implement meta-objects in object-oriented languages without having to resort to metacircular interpretation. We introduce such a meta-level API based on proxies for Javascript. We simultaneously introduce a set of design principles that characterize such APIs in general, and compare similar APIs of other languages in terms of these principles. We highlight how principled proxy-based APIs improve code robustness by avoiding interference between base and meta-level code that occur in more common reflective interception mechanisms.
 \end{abstract}
 
 \category{D.3.2}{Language Classifications}{Object-oriented languages}
@@ -127,16 +127,14 @@ Dynamic proxies are a powerful approach to implement meta-objects in object-orie
 
 \section{Introduction}
 
-We introduce a new meta-level API for Javascript based on dynamic proxies. Proxies have a wide array of use cases~\cite{eugster06uniform}. In this paper, we distinguish two general use cases depending on whether the proxy is proxying another object within the same physical address space:
+We introduce a new meta-level API for Javascript based on dynamic proxies. Proxies have a wide array of use cases~\cite{eugster06uniform}. In this paper, we distinguish two general cases depending on whether the proxy is proxying another object within the same physical address space:
 
 \begin{description*}
-  \item[Generic wrappers] Proxies that wrap existing objects. Useful for creating access control wrappers, collecting profiling and code coverage information, implementing adaptors that intermediate between different versions of an API, and so on.
-  \item[Virtual objects] Proxies that \emph{emulate} a particular type of object, without that object ever having to be physically represented in the same address space. Examples include remote object proxies (where the ``wrapped'' object resides in another address space), persistent objects (where the represented object is stored in a database), transparent futures that act as placeholders for the value of asynchronous computations, etc.
+  \item[Generic wrappers] are proxies that wrap existing objects. Example uses include access control, collecting profiling and code coverage information, implementing adaptors that intermediate between different versions of an interface, etc.
+  \item[Virtual objects] are proxies that emulate other objects, without the emulated objects ever having to be physically present in the same address space. Examples include remote object proxies (the emulated object resides in another address space), persistent objects (the emulated object is stored in a database), transparent futures that represent the value of asynchronous computations, etc.
 \end{description*}
 
-The contributions of this paper are first, the introduction of a proxy-based metaprogramming API for Javascript (Section~\ref{sec:proxies_for_javascript}), second, to list a number of design principles that can be used to characterize general message-based object-oriented metaprogramming APIs (Sections~\ref{sub:wrappers} through \ref{sub:uniform_intercession}) and third, to provide an overview of related metaprogramming APIs in terms of these design principles (Section~\ref{sub:survey}).
-
-The goal of the design principles discussed in this paper is to foster \emph{robust} metaprogramming APIs in the sense that the API tries to minimize the interference with application code. We have used these principles to characterize our own API, but have found them generally applicable to meta-level APIs for other systems as well.
+The contributions of this paper are first, the introduction of a proxy-based metaprogramming API for Javascript (Section~\ref{sec:proxies_for_javascript}), second, the enumeration of a set of design principles that characterize general message-based object-oriented metaprogramming APIs (Sections~\ref{sub:wrappers} through \ref{sub:uniform_intercession}), third, a characterization of related metaprogramming APIs in terms of these design principles (Section~\ref{sub:survey}) and fourth, the identification that common message interception mechanisms lead to interference with application code which are avoided using a stratified Proxy API (Sections~\ref{sub:intercession_in_javascript} and \ref{sub:stratification}).
 
 \section{Background: Reflection}
 \label{sec:reflection}
@@ -255,13 +253,13 @@ In what follows, we will refer to methods that intercept language-level operatio
 
 The problem with \texttt{doesNotUnderstand:} and derivatives is that the trap is not \emph{stratified}: it is defined in the same name space as the rest of the application code. The only way in which a trap is distinguished from a regular method is by its name. This violation of stratification can lead to confusion:
 
-\begin{itemize}
+\begin{itemize*}
   \item Say an object purposely defines the trap to intercept invocations. Since the trap is part of the object's interface, its clients can accidentally invoke the trap as if it were an application-level method. This confuses meta-level code, since the call ``originated'' from the base-level.
   %Since traps are plain methods, nothing prevents them from being invoked as a plain method. 
   \item Say an object accidentally defines an application-level method whose name matches that of the trap. The VM may then incidentally invoke the application method as if it were a trap. This confuses the base-level code, since the call ``originated'' from the meta-level.
-\end{itemize}
+\end{itemize*}
 
-Without stratification, the intercession API pollutes the name space of the application.
+Without stratification, the intercession API pollutes the application's namespace.
 %Why shouldn't a Smalltalk program about e.g. natural language translators be able to define a method named \texttt{doesNotUnderstand:}?
 We conjecture that this lack of stratification has not posed a significant problem in practice because systems such as Smalltalk and Spidermonkey define only \emph{one} such special method. But the approach does not scale. What if we were to introduce additional such traps to intercept not only method invocation, but also property access, assignment, lookup, enumeration, etc.? The number of ``reserved method names'' would quickly grow out of control.
 
@@ -366,7 +364,7 @@ Unlike \texttt{Proxy.create}, \texttt{Proxy.createFunction} does not accept a pr
 \subsection{Generic Wrappers}
 \label{sub:wrappers}
 
-To implement generic wrappers around existing objects, a useful handler is one that simply forwards all operations applied to the proxy to another target object. The particular operations that a particular generic wrapper wants to intercept can then be defined as extensions of this generic forwarding handler.
+To implement generic wrappers around existing objects, a useful handler is one that simply forwards all operations applied to the proxy to another target object. A particular generic wrapper can then delegate to this forwarder and override only the methods for the operations that it wants to intercept.
 
 \begin{lstlisting}[language=javascript]
 function makeForwardingHandler(target) {
@@ -382,9 +380,10 @@ var proxy = Proxy.create(makeForwardingHandler(target),
                          Object.getPrototypeOf(target));
 \end{lstlisting}
 
-We will make use of this handler in Sections~\ref{sub:doublelifting} and \ref{sec:examples}.
+We make use of this handler in Sections~\ref{sub:doublelifting} and \ref{sec:examples}.
 
 \subsection{Stratification}
+\label{sub:stratification}
 
 The distinction between a proxy and its handler object enforces stratification of the traps. Traps are not defined as part of the interface of the proxy object, but as part of the interface of the handler.
 
@@ -467,7 +466,7 @@ Such funneling of all operations through a single trap can be achieved by implem
 
 We carefully designed the intercession API such that proxies only interact with their associated handler by invoking their traps. Proxies never assign, enumerate or test for the presence of traps on their handler. Because of this uniformity, if the base-level handler is \emph{only} used in its role as the handler for a base-level proxy, the meta-level handler only needs to implement the \texttt{get} trap. Because method invocation is the only operation performed on meta-level proxies, only this single trap is triggered on meta-level handlers.
 
-% TODO: explain picture and introduce legend
+% TODO: make legend bigger
 % a --> b means 'b is the handler of a'
 % a ==> b means 'a forwards operations to b'
 % base-level proxy --> base-level handler --> meta-level handler ==> forwarding handler ==> target
@@ -478,7 +477,7 @@ We carefully designed the intercession API such that proxies only interact with 
 \begin{figure}[htbp]
   \centering
     \includegraphics[width=1.0\columnwidth]{MetaLevelShifting.png}
-  \caption{Meta-level shift using proxies as handlers}
+  \caption{Meta-level shift using a proxy as a handler}
   \label{fig:shift}
 \end{figure}
 
@@ -641,7 +640,7 @@ We now show how to apply our Proxy API to implement generic wrappers for access 
 
 Say an object \texttt{Alice} wants to hand out to \texttt{Bob} a reference to \texttt{Carol}. \texttt{Carol} could represent a precious resource, and for that reason \texttt{Alice} may want to limit the lifetime of the reference it hands out to \texttt{Bob}. In other words, \texttt{Alice} wants to have the ability to revoke \texttt{Bob}'s access to \texttt{Carol}.
 
-One can implement this pattern of access control by wrapping \texttt{Carol} in a forwarder that additionally supports a method to stop forwarding. Such a forwarder is also known as a \emph{caretaker}~\cite{redell74naming}. Without proxies, the programmer is forced to write a distinct caretaker for each kind of object that should be wrapped. Proxies enable the programmer to abstract from the details of the wrapped object's protocol and instead write a \emph{generic} caretaker\footnote{For brevity, we left out the case in which \texttt{target} is a function, requiring the caretaker to be a function proxy.}:
+One can implement this pattern of access control by wrapping \texttt{Carol} in a forwarder that can be made to stop forwarding. Such a forwarder is also known as a \emph{caretaker}~\cite{redell74naming}. Without proxies, the programmer is forced to write a distinct caretaker for each kind of object that should be wrapped. Proxies enable the programmer to abstract from the details of the wrapped object's protocol and instead write a \emph{generic} caretaker\footnote{For brevity, we left out the case in which \texttt{target} is a function, requiring the caretaker to be a function proxy.}:
 
 \begin{lstlisting}[language=javascript]
 function makeRevocableRef(target) {
@@ -649,11 +648,11 @@ function makeRevocableRef(target) {
   return Object.freeze({
     caretaker: Proxy.create({
       get: function(rcvr, name) {
-        if (!enabled) {throw new Error("revoked");}
+        if (!enabled) { throw new Error("revoked"); }
         return target[name];
       },
       has: function(name) {
-        if (!enabled) {throw new Error("revoked");}
+        if (!enabled) { throw new Error("revoked"); }
         return name in target;      
       },
       // ... and so on for all other traps
@@ -665,23 +664,22 @@ function makeRevocableRef(target) {
 }
 \end{lstlisting}
 
-Given this abstraction, \texttt{Alice} can now wrap \texttt{Carol} in a revokable reference, pass the caretaker to \texttt{Bob}, and hold on to the revoker such that the reference can later be severed.
+Given this abstraction, \texttt{Alice} can now wrap \texttt{Carol} in a revokable reference, pass the caretaker to \texttt{Bob}, and hold on to the revoker such that access can later be revoked.
 
 The caretaker is a proxy whose handler is very similar to the generic forwarder defined in Section~\ref{sec:proxies_for_javascript} except that it explicitly checks the \texttt{enabled} flag before forwarding. As noted in Section~\ref{sub:doublelifting}, this is a pattern that can itself be abstracted by shifting meta-levels once more. If the caretaker's handler is itself a proxy, the meta-level handler can funnel all meta-level operations through a single \texttt{get} trap:
 
 \begin{lstlisting}[language=javascript]
 function makeRevocableRef(target) {
   var enabled = true;
-  var baseHandler = makeForwardingHandler(target);
-  var metaHandler = Proxy.create({
+  var fwdHandler = makeForwardingHandler(target);
+  var baseHandler = Proxy.create({
     get: function(rcvr, name) {
-      if (!enabled) {throw new Error("revoked");}
-      return baseHandler[name];
+      if (!enabled) { throw new Error("revoked"); }
+      return fwdHandler[name];
     }
   });
   return Object.freeze({
-    caretaker: Proxy.create(metaHandler, 
-                 Object.getPrototypeOf(target)),
+    caretaker: Proxy.create(baseHandler,Object.getPrototypeOf(target)),
     revoker: Object.freeze({
       revoke: function() { enabled = false; }
     })
@@ -689,14 +687,7 @@ function makeRevocableRef(target) {
 }
 \end{lstlisting}
 
-% insert figure of an invocation through a revocable ref
-% ref.foo()
-%   metaHandler.get(metaHandler, 'foo')()
-%     metametaHandler.get(metametaHandler, 'get')(metaHandler,'foo')()
-%   baseHandler['get'](metaHandler, 'foo')()
-% target['foo']()
-
-A limitation of the above caretaker abstraction is that objects exchanged via the caretaker are themselves not recursively wrapped in a revocable reference. In particular, if \texttt{Carol} defines a method that returns \texttt{this}, an unwrapped reference is exposed to \texttt{Bob}, circumventing the caretaker. This is an instance of the \emph{two-body problem}~\cite{eugster06uniform} -- the fact that the wrapping proxy and the wrapped object are distinct entities -- which may result in ``leaky'' wrappers. The abstraction discussed in the following section addresses this issue.
+A limitation of the above caretaker abstraction is that objects exchanged via the caretaker are themselves not recursively wrapped in a revocable reference. For example, if \texttt{Carol} defines a method that returns \texttt{this}, an unwrapped reference may be exposed to \texttt{Bob}, circumventing the caretaker. This is an instance of the \emph{two-body problem}~\cite{eugster06uniform}, the fact that wrappers may be ``leaky'' because the wrapping proxy and the wrapped object are distinct entities. The abstraction discussed in the following section addresses this issue.
 
 %Note that the two-body problem is \emph{not} related to the fact that a proxy and its \emph{handler} are distinct. It is a limitation inherent to using proxies as generic wrappers, not to using separate proxy handlers to achieve stratification.
 
@@ -722,34 +713,29 @@ A membrane is an extension of a caretaker that transitively imposes revocability
 function makeMembrane(initTarget) {
   var enabled = true;
   function wrapFunction(f) {
-    return function() { // variable-arg function
+    return function() { // variable-argument function
       if (!enabled) {throw new Error("revoked");}
       try {
-        return wrap(f.apply(wrap(this),
-                    toArray(arguments).map(wrap)));
+        return wrap(f.apply(wrap(this), toArray(arguments).map(wrap)));
       } catch (e) { throw wrap(e); } 
     }
   }
   function wrap(target) {
-    if (Object.isPrimitive(target)) {
-      //primitives provide irrevocable knowledge
-      return target; //no need to wrap them
-    } 
-    var baseHandler = makeForwardingHandler(target);
-    var metaHandler = Proxy.create({
+    //primitives provide irrevocable knowledge, no need to wrap them
+    if (isPrimitive(target)) { return target; }
+    var fwdHandler = makeForwardingHandler(target);
+    var baseHandler = Proxy.create({
       get: function(rcvr, name) {
-        return wrapFunction(baseHandler[name]);
+        return wrapFunction(fwdHandler[name]);
       }
     });
     
     if (typeof target === "function") {
       var wrappedF = wrapFunction(target);
-      return Proxy.createFunction(
-        metaHandler, wrappedF, wrappedF);
+      return Proxy.createFunction(baseHandler, wrappedF, wrappedF);
     } else {
-      return Proxy.create(
-        metaHandler,
-        wrap(Object.getPrototypeOf(target)));
+      return Proxy.create(baseHandler,
+                          wrap(Object.getPrototypeOf(target)));
     }
   }
   return Object.freeze({
@@ -763,13 +749,13 @@ function makeMembrane(initTarget) {
 
 A membrane consists of one or more wrappers. Every such wrapper is created by a call to the \texttt{wrap} function. Note that all wrappers belonging to the same membrane share a single \texttt{enabled} variable. Assigning the variable to \texttt{false} revokes all of the membrane's wrappers simultaneously.
 
-Recall that this example makes use of meta-level funneling. The \texttt{metaHandler} resides at the meta-meta-level. Therefore, it knows that it need only implement a \texttt{get} trap, and it knows that whatever it returns from the \texttt{get} trap will be treated as a meta-level trap (a function) that will immediately be invoked. To be able to wrap the arguments of these invocations, the \texttt{get} trap returns a wrapped version of the default forwarding trap as defined by \texttt{makeForwardingHandler}.
+Recall that this example makes use of meta-level funneling. The \texttt{baseHandler} is itself a proxy with a handler. This handler need only implement a \texttt{get} trap that returns a meta-level trap (a function) that will immediately be invoked. To be able to wrap the arguments of these invocations, the \texttt{get} trap returns a wrapped version of the default forwarding trap contained in the \texttt{fwdHandler}.
 
 If the object to be wrapped is a function (or a method, because Javascript methods are just functions), a function proxy is returned whose call trap is a wrapped version of the function, as defined by \texttt{wrapFunction}. The variable-argument function\footnote{In Javascript, \texttt{arguments} is an object that contains all arguments passed to a function. It is used to write variable-argument functions, and it is customary to convert this object into a proper array first.} returned by \texttt{wrapFunction} performs the actual wrapping of values that cross the membrane: arguments to methods cross the membrane in one direction, returned values or thrown exceptions in the other direction.
 
 The membrane abstraction in Javascript enables innovative new ways of composing code from untrusted third parties on a single web page (so-called ``mash-ups''). By loading the untrusted code using a membrane-wrapped \texttt{eval} function, it becomes possible to isolate scripts from one another and from their container page.
 
-\paragraph{Identity-preserving Membranes} One problem with the above membrane abstraction is that it fails to uphold object identity across both sides of the membrane. If an object \texttt{o} is passed through the same membrane twice, an object on the other side of the membrane will receive two distinct wrappers \texttt{w1} and \texttt{w2}, such that \texttt{w1 !== w2}, even though both wrap an identical object. Likewise, passing \texttt{w1} or \texttt{w2} back through the membrane does not unwrap them but rather wraps them again. These limitations can be addressed by having the membrane maintain two maps. The first maps objects to their wrappers, such that only one canonical wrapper is created per object. The second maps wrappers back to the objects they wrap, allowing these objects to be unwrapped when they cross the membrane in the other direction.
+\paragraph{Identity-preserving Membranes} One problem with the above membrane abstraction is that it fails to uphold object identity across both sides of the membrane. If an object \texttt{o} is passed through the same membrane twice, an object on the other side of the membrane will receive two distinct wrappers \texttt{w1} and \texttt{w2}, such that \texttt{w1~!==~w2}, even though both wrap an identical object. Likewise, passing \texttt{w1} or \texttt{w2} back through the membrane does not unwrap them but rather wraps them again. These limitations can be addressed by having the membrane maintain two maps. The first maps objects to their wrappers, such that only one canonical wrapper is created per object. The second maps wrappers back to the objects they wrap, allowing these objects to be unwrapped when they cross the membrane in the other direction.
 
 Unfortunately, implementing these maps in Javascript is impossible without introducing memory leaks. Ephemeron tables are a proposed language feature for the upcoming ECMAScript standard that address this issue~\cite{miller10et}. An ephemeron table is almost identical to a non-enumerable weak-key identity hashtable, but it avoids a crucial memory leak when cyclic dependencies exist between the keys and the values stored in the table.
 %It is based on Smalltalk's Ephemeron pairs~\cite{et_paper}.
@@ -910,10 +896,10 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
 \centering
 \begin{tabular}{|p{0.20\textwidth}|p{0.80\textwidth}|}
     \hline
-    \multicolumn{2}{|l|}{\textbf{What type of value is virtualized?}}\\
+    \multicolumn{2}{|l|}{\textbf{What type of value can be virtualized?}}\\
     \hline
     JS proxies        & Objects and functions\\
-    Java proxies      & Objects (instances of interface types)\\
+    Java proxies      & Objects whose static type is an interface or \texttt{Object}\\
     AT mirages        & Objects and eventual references\\
     E proxies         & Eventual references\\
     E non-methodicals & Objects\\
@@ -1005,11 +991,11 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
 \subsection{Mirrors}
 \label{sub:mirrors}
 
-This work is heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha04mirrors} discuss the design principles of mirror-based meta-level architectures. Our use of the principle of stratification can be directly attributed to their corresponding mirror design principle. The use of mirrors naturally leads to a stratification of base and meta-level. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
+This work is heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha04mirrors} discuss the design principles of mirror-based meta-level architectures. The principles of stratification and encapsulation can be directly attributed to their corresponding mirror design principles. The use of mirrors naturally leads to a stratification of base and meta-level. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
 
-A mirror is a meta-level object that defines a view on a base-level object. Mirrors are manufactured by distinct objects known as mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with what kind of object is not tied to an object's representation. As discussed in Section~\ref{sub:meta_level_encapsulation}, our Proxy API does not enable clients of proxies to directly access the handler through the proxy. If such is required, the cleanest solution is to introduce a separate registry abstraction which plays a role similar to mirror factories.
+Mirrors are meta-level objects that are manufactured by objects known as mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with an object is not tied to that object's representation. As discussed in Section~\ref{sub:meta_level_encapsulation}, our Proxy API does not enable clients of proxies to directly access the handler through the proxy. If such access is required, the cleanest solution is to introduce a separate registry abstraction which can be regarded as a ``handler factory''.
 
-Systems with a mirror-based architecture include Self~\cite{ungar87power}, the Java Debugger API~\cite{jdi} and Newspeak~\cite{bracha10newspeak}. Mirrors naturally support introspection, reflective invocation and self-modification. It was an open question whether mirror-based architectures could support intercession. AmbientTalk answered this question affirmatively: it introduced the concept of a \emph{mirage}~\cite{mostinckx07behavioral,mostinckx09mirrors}. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The only difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
+Systems with a mirror-based architecture include Self~\cite{ungar87power}, the Java Debugger API and Newspeak~\cite{bracha10newspeak}. Mirrors naturally support introspection, reflective invocation and self-modification. It was an open question whether mirror-based architectures could support intercession. AmbientTalk answered this question affirmatively: it introduced the concept of a \emph{mirage}~\cite{mostinckx07behavioral,mostinckx09mirrors}. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The only difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
 
 % should we discuss Encapsulation and Ontological correspondence, the two other mirror principles?
 
@@ -1035,18 +1021,16 @@ Systems with a mirror-based architecture include Self~\cite{ungar87power}, the J
 
 \subsection{Partial Behavioral Reflection}
 
-Partial Behavioral Reflection (PBH)~\cite{tanter03pbh} is a framework that describes the spatiotemporal extent of reification. Reflex is an intercession API for Java, based on bytecode rewriting, that supports partial behavioral reflection. Reflex allows one to define meta-objects for a particular group of Java objects. Furthermore, it allows the programmer to delimit the spatiotemporal scope during which a particular meta-object reifies the operations performed on its associated base-level objects.
+Partial Behavioral Reflection (PBH)~\cite{tanter03pbh} is a framework that describes the spatiotemporal extent of reification. Reflex is an intercession API for Java, based on bytecode rewriting, that supports PBH. Reflex enables the definition of meta-objects for Java objects. A single meta-object can control multiple base-level objects. The spatial scope of meta-objects is delimited using three concepts: \emph{entity selection} enables a meta-object to specify what objects it will control (e.g. all instances of a class, or only a particular instance of a class). \emph{Operation selection} determines what particular operations of the affected objects are reified (e.g. only field access). \emph{Intra-operation selection} enables reification to occur only if the operation satisfies further conditions (e.g. only reify calls to the \texttt{foo} method). Finally, \emph{temporal selection} controls the time during which a meta-object is active.
 
-In a PBH system, a single meta-object can control multiple base-level objects. The spatial scope of meta-objects is delimited using \emph{entity selection} and \emph{operation selection}: entity selection enables a meta-object to specify what objects it will control (e.g. all instances of a class, or only a particular instance of a class). Operation selection determines what particular operations of the affected objects will be reified (e.g. only field access). PBH even enables intra-operation selection, where reification will only occur if the operation satisfies further conditions (e.g. only reify calls to the \texttt{foo} method). A PBH system additionally enables \emph{temporal selection}, which controls the time during which a meta-object is active.
-
-Reflex differs from our proxy approach in that it enables the creation of meta-objects that can act upon arbitrary existing objects. Nevertheless, some aspects of our proxy API can be understood in terms of PBH. Proxies induce a static form of entity selection: operations on proxy objects are reified, operations on non-proxy objects are not. Proxies may support temporal selection. For example, Javascript proxies only reify while they are in a trapping state. Once fixed, the proxy no longer reifies operations. Finally, proxies enable a static form of operation selection: some operations on proxies (e.g. \texttt{typeof}) are never reified, whereas others such as property access are always reified.
+Reflex differs from our Proxy API in that it enables the creation of meta-objects that can act upon objects not explicitly declared as proxies. Nevertheless, some aspects of our proxy API can be understood in terms of PBH. Proxies induce a static form of entity selection: operations on proxy objects are reified, operations on non-proxy objects are not. Proxies may support temporal selection. For example, Javascript proxies only reify while they are in a trapping state. Once fixed, the proxy no longer reifies operations. Finally, proxies enable a static form of operation selection: some operations on proxies (e.g. \texttt{typeof}) are never reified, whereas others such as property access are always reified.
 
 One could characterize Reflex as a meta-intercession API: using Reflex, one can define many different specific intercession APIs, each with its own settings for entity, operation and temporal selection.
 
 \subsection{CLOS}
 \label{sub:clos}
 
-The Common Lisp Object System (CLOS) is known for its extensibility through its metaobject protocol~\cite{kiczales91art}. Because CLOS is a function-oriented as opposed to a message-oriented object system, it is difficult to transpose the design principles described in this paper to CLOS. In CLOS, computation proceeds mainly through generic function invocation, as opposed to sending messages to objects. The dispatch mechanism of generic functions can be modified through the ``generic function invocation protocol''. Most common use cases do not require this, however: if one simply wants to wrap existing methods, CLOS offers a powerful method combination protocol that can be used to insert behavior before, after or around existing methods.
+The Common Lisp Object System (CLOS) has an extensive metaobject protocol~\cite{kiczales91art}. Because CLOS is function-oriented as opposed to a message-oriented, it is difficult to transpose the design principles described in this paper to CLOS. In CLOS, computation proceeds mainly through generic function invocation, as opposed to sending messages to objects. The dispatch mechanism of generic functions can be modified through the ``generic function invocation protocol''. Most common use cases do not require this, however: if one simply wants to wrap existing methods, CLOS offers a method combination protocol that can be used to insert behavior before, after or around existing methods.
 
 %CLOS supports a stratified form of intercession. CLOS classes can be declared to have a custom metaclass. That metaclass can then specialize the various protocols in which the class metaobject takes part. For example, the ``instance structure protocol'' describes the structure of, and access to, the class's instance variables. The main difference between the proxy approach and the CLOS metaclass approach is that metaclasses introduces customization of behavior at the class-level, while proxies introduce customization of behavior at the object-level.
 
@@ -1057,13 +1041,13 @@ This paper introduces an intercession API for Javascript based on proxies. The A
 The second contribution of this paper is the identification of general design principles for proxy-based intercession APIs. These design principles are more generally applicable to other programming languages, as summarized in Table~\ref{tab:related_work}. To summarize, the design principles put forward include:
 
 \begin{description*}
-  \item[Stratification] are proxy traps defined on a separate handler object?
+  \item[Stratification] are traps defined on a separate handler?
   \item[Selective interception] do proxies trap all operations? Are some values determined at proxy-creation time?
   \item[Fundamental versus derived traps] tradeoff between introducing more efficient traps versus introducing the potential for inconsistent behavior.
   \item[Meta-level shifting] can one shift levels by implementing a handler as a proxy?
-  \item[Temporary intercession] can proxies become fixed or disabled?
-  \item[Meta-level encapsulation] is the handler encapsulated by the proxy?
-  \item[Uniform intercession] can one proxy all runtime values in the system?
+  \item[Temporary intercession] can proxies become fixed?
+  \item[Meta-level encapsulation] does the proxy encapsulate its handler?
+  \item[Uniform intercession] can all types of values be proxified?
 \end{description*}
 
 \section*{Acknowledgements}
