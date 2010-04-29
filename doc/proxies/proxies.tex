@@ -147,11 +147,15 @@ The contributions of this paper are first, the introduction of a proxy-based met
 
 A metaobject protocol (MOP)~\cite{kiczales91art} is an object-oriented framework that describes the behavior of an object-oriented system. It is a term most commonly associated with reflective object-oriented programming languages. It is customary for a MOP to represent language operations defined on objects as method invocations on their meta-objects. Throughout the rest of this paper, we use the general term \emph{operation} to denote mechanisms such as message sending, field access and assignment, defining a method, performing an \texttt{instanceof} operation, and so on.
 
-According to Kiczales \emph{et. al}~\cite{kiczales91art} a MOP supports \emph{introspection} if it enables reflective access to the structure of an object. It supports \emph{self-modification} if it is possible to modify this structure. It further supports \emph{invocation} if it enables the reflective invocation of operations. Finally, it supports \emph{intercession} if it enables the creation of meta-objects with custom structure and behavior (enabling one to essentially change the semantics of certain operations of the programming language).
+According to Kiczales \emph{et. al}~\cite{kiczales91art} a MOP supports \emph{introspection} if it enables reflective read-only access to the structure of an object. It supports \emph{self-modification} if it is possible to modify this structure. It further supports \emph{invocation} if it enables the reflective invocation of operations. Finally, it supports \emph{intercession} if it enables programmers to redefine the semantics of operations.
+%the creation of meta-objects with custom structure and behavior (enabling one to essentially change the semantics of certain operations of the programming language).
 
-The first three categories are typically well-supported by most meta-level APIs. Java's \texttt{java.lang.reflect} package, for example, mainly supports introspection and invocation, although it also supports a limited form of intercession through proxies (see Section~\ref{sub:survey}). Meta-level APIs with extensive support for intercession are rare in mainstream languages, the CLOS MOP being a notable exception (see Section~\ref{sub:clos}).
+Introspection and reflective invocation are typically well-supported by most meta-level APIs. Self-modification is more exceptional, and
+%Java's \texttt{java.lang.reflect} package, for example, mainly supports introspection and invocation, although it also supports a limited form of intercession through proxies (see Section~\ref{sub:survey}).
+meta-level APIs with extensive support for intercession are rare in mainstream languages, the CLOS MOP being a notable exception (see Section~\ref{sub:clos}).
 
-Ferber~\cite{ferber89computational} makes a more coarse-grained distinction between \emph{structural} and \emph{behavioral} reflection. The Proxy API proposed in this paper enables the latter type of reflection. We will use the term \emph{intercession API} to refer to any API that enables the creation of new base-level objects with custom meta-level behavior.
+%Ferber~\cite{ferber89computational} makes a more coarse-grained distinction between \emph{structural} and \emph{behavioral} reflection. The Proxy API proposed in this paper enables both structural and behavioral intercession.
+We will use the term \emph{intercession API} to refer to any API that enables the creation of new base-level objects with custom meta-level behavior.
 
 %In a pure object-oriented language, the dominant operation is the message send (or method invocation). It is therefore unsurprising that, historically, many object-oriented languages have provided ``ad hoc'' intercession support for method invocations, such as the \texttt{doesNotUnderstand:} method in Smalltalk (see Section~\ref{sub:survey}). While simple and flexible, we describe the drawbacks of this approach in section~\ref{sub:intercession_in_javascript}.
 
@@ -304,31 +308,31 @@ Here, \texttt{handler} is an object that must implement a particular meta-level 
     \hline
     \multicolumn{3}{|l|}{\textbf{Fundamental traps}}\\
     \hline
-    Own descriptor access & Object.getOwnPropertyDescriptor(proxy,name) & handler.getOwnPropertyDescriptor(name)\\
+    Own descriptor access & \texttt{Object.getOwnPropertyDescriptor(proxy,name)} & \texttt{handler.getOwnPropertyDescriptor(name)}\\
     \hline
-    Descriptor access & Object.getPropertyDescriptor(proxy,name) & handler.getPropertyDescriptor(name)\\
+    Descriptor access & \texttt{Object.getPropertyDescriptor(proxy,name)} & \texttt{handler.getPropertyDescriptor(name)}\\
     \hline
-    Descriptor definition & Object.defineProperty(proxy,name,pd) & handler.defineProperty(name,pd)\\
+    Descriptor definition & \texttt{Object.defineProperty(proxy,name,pd)} & \texttt{handler.defineProperty(name,pd)}\\
     \hline
-    Own key listing & Object.getOwnPropertyNames(proxy) & handler.getOwnPropertyNames()\\
+    Own keys & \texttt{Object.getOwnPropertyNames(proxy)} & \texttt{handler.getOwnPropertyNames()}\\
     \hline
-    Property deletion & delete proxy.name & handler.delete(name)\\
+    Property deletion & \texttt{delete proxy.name} & \texttt{handler.delete(name)}\\
     \hline
-    Key enumeration & for (name in proxy) \{...\} & handler.enumerate()\\
+    Key enumeration & \texttt{for (name in proxy) \{...\}} & \texttt{handler.enumerate()}\\
     \hline
-    Object fixing & Object.\{freeze,seal,preventExtensions\}(proxy) & handler.fix()\\
+    Object fixing & \texttt{Object.}\{\texttt{freeze},\texttt{seal},\texttt{preventExtensions}\}\texttt{(proxy)} & \texttt{handler.fix()}\\
     \hline
     \multicolumn{3}{|l|}{\textbf{Derived traps}}\\
     \hline
-    Property lookup & name in proxy & handler.has(name)\\
+    Property lookup & \texttt{name in proxy} & \texttt{handler.has(name)}\\
     \hline
-    Own Property lookup & (\{\}).hasOwnProperty.call(proxy,name) & handler.hasOwn(name)\\
+    Own Property lookup & \texttt{(\{\}).hasOwnProperty.call(proxy,name)} & \texttt{handler.hasOwn(name)}\\
     \hline
-    Property access & receiver.name & handler.get(receiver, name)\\
+    Property access & \texttt{receiver.name} & \texttt{handler.get(receiver, name)}\\
     \hline
-    Property assignment & receiver.name = val & handler.set(receiver, name, val)\\
+    Property assignment & \texttt{receiver.name = val} & \texttt{handler.set(receiver, name, val)}\\
     \hline
-    Own key enumeration & Object.keys(proxy) & handler.enumerateOwn()\\
+    Own enumerable keys & \texttt{Object.keys(proxy)} & \texttt{handler.enumerateOwn()}\\
     \hline
     \end{tabular}
     \end{small}
@@ -361,6 +365,12 @@ The first argument to \texttt{Proxy.createFunction} is exactly the same kind of 
 
 Unlike \texttt{Proxy.create}, \texttt{Proxy.createFunction} does not accept a prototype argument. Functions always inherit from \texttt{Function.prototype}, and so do function proxies.
 
+% TODO: summary
+% Ferber~\cite{ferber89computational} makes the distinction between \emph{structural} and \emph{behavioral} reflection.
+% Object.* methods enable structural introspection and self-modification
+% Object proxies enable structural intercession (intercepting property lookup, enumeration, ...)
+% Function proxies enable behavioral intercession (overriding 'apply' of functions/methods)
+
 \subsection{Generic Wrappers}
 \label{sub:wrappers}
 
@@ -385,7 +395,7 @@ We make use of this handler in Sections~\ref{sub:doublelifting} and \ref{sec:exa
 \subsection{Stratification}
 \label{sub:stratification}
 
-Bracha and Ungar~\cite{bracha04mirrors} introduce the principle of stratification for mirror-based architectures. The principle highlights the importance of separating base and meta-level code, and is described in more detail in Section~\ref{sub:mirrors}. While Bracha and Ungar focus mostly on the benefits of stratification for \emph{structural} reflection, in this paper we focus on the benefits for \emph{behavioral} reflection.
+Bracha and Ungar~\cite{bracha04mirrors} introduce the principle of stratification for mirror-based architectures. The principle states that meta-level facilities must be separated from base-level functionality. Bracha and Ungar focus mostly on stratification in the context of introspection and self-modification. In this paper we focus on the application of this principle to intercession. We discuss the relationship with mirrors in Section~\ref{sub:mirrors}.
 
 The distinction between a proxy and its handler object enforces stratification of the traps. Traps are not defined as part of the interface of the proxy object, but as part of the interface of the handler.
 
@@ -395,7 +405,7 @@ Calling \lstinline{aProxy.has} explicitly on a proxy will not trigger the proxy'
 
 The principle of stratification when applied to proxies can be summarized as follows.
 
-\textbf{Stratification:} traps can be stratified by defining them on an object that is distinct from the proxy being intercepted.
+\textbf{Stratification:} a proxy's traps should be stratified by defining them on a separate handler object.
 
 \subsection{Temporary Intercession}
 \label{sub:immutability}
@@ -468,7 +478,6 @@ Such funneling of all operations through a single trap can be achieved by implem
 
 We carefully designed the intercession API such that proxies only interact with their associated handler by invoking their traps. Proxies never assign, enumerate or test for the presence of traps on their handler. Because of this uniformity, if the base-level handler is \emph{only} used in its role as the handler for a base-level proxy, the meta-level handler only needs to implement the \texttt{get} trap. Because method invocation is the only operation performed on meta-level proxies, only this single trap is triggered on meta-level handlers.
 
-% TODO: make legend bigger
 % a --> b means 'b is the handler of a'
 % a ==> b means 'a forwards operations to b'
 % base-level proxy --> base-level handler --> meta-level handler ==> forwarding handler ==> target
@@ -734,7 +743,7 @@ function makeMembrane(initTarget) {
     
     if (typeof target === "function") {
       var wrappedF = wrapFunction(target);
-      return Proxy.createFunction(baseHandler, wrappedF, wrappedF);
+      return Proxy.createFunction(baseHandler, wrappedF);
     } else {
       return Proxy.create(baseHandler,
                           wrap(Object.getPrototypeOf(target)));
@@ -844,7 +853,7 @@ The Java Proxy API is non-uniform: proxies can only be constructed for interface
 %Implementation-wise, another important difference is that Java proxies can be supported by a JVM without the need for a special ``proxy'' object type. A description of the proxy (and all of its methods) can be generated from the given interfaces and subsequently instantiated as a normal object (whose class just happens to be synthesized at runtime).
 
 %Mirages in AmbientTalk: adds intercession to a Mirror API
-\textbf{AmbientTalk} The design of Javascript proxies was influenced by AmbientTalk \emph{mirages}~\cite{mostinckx07behavioral,mostinckx09mirrors}. AmbientTalk is a distributed dynamic language, with a mirror-based meta-level API. AmbientTalk enables intercession through mirages, which are proxy-like objects controlled explicitly by a separate mirror object:
+\textbf{AmbientTalk} The design of Javascript proxies was influenced by AmbientTalk \emph{mirages}~\cite{mostinckx07behavioral}. AmbientTalk is a distributed dynamic language, with a mirror-based meta-level API. AmbientTalk enables intercession through mirages, which are proxy-like objects controlled explicitly by a separate mirror object:
 
 \begin{lstlisting}[]
 def mirage := object: {...} mirroredBy: (mirror: {
@@ -993,13 +1002,13 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
 \subsection{Mirrors}
 \label{sub:mirrors}
 
-This work is heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha04mirrors} discuss the design principles of mirror-based meta-level architectures. The principles of stratification and handler encapsulation as stated in this paper correspond to the same principles for mirrors, but with a focus on behavioral rather than structural reflection.
+This work is heavily influenced by the work on mirrors. Bracha and Ungar~\cite{bracha04mirrors} discuss the design principles of mirror-based meta-level architectures. The principles of stratification and handler encapsulation as stated in this paper are related to the corresponding principles for mirror-based architectures, but with a focus on how they apply to intercession rather than to introspection and self-modification.
 
-Mirror-based architectures strive to decouple base-level from meta-level code. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a strong coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a mirror on a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
+Mirror-based architectures strive to decouple base-level from meta-level code. Traditional reflection APIs usually define access to the reflective interface of an object as part of that object's own interface. A prominent example is the \texttt{getClass()} method defined on \texttt{java.lang.Object}. The result is a tight coupling between the base-level object and its meta-level representation (in the case of Java the resulting \texttt{Class} object). As a point in case, consider the difficulty of defining a local mirror for a remote object. In Java, the \texttt{getClass()} method, when applied to a remote object proxy would invariably break the abstraction, as \texttt{getClass()} would reveal the proxy's class.
 
 Mirrors are meta-level objects that are manufactured by objects known as mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with an object is not tied to that object's representation. As discussed in Section~\ref{sub:meta_level_encapsulation}, our Proxy API does not enable clients of proxies to directly access the handler through the proxy. If such access is required, the cleanest solution is to introduce a separate registry abstraction which can be regarded as a ``handler factory''.
 
-Systems with a mirror-based architecture include Self~\cite{ungar87power}, the Java Debugger API and Newspeak~\cite{bracha10newspeak}. Mirrors naturally support introspection, reflective invocation and self-modification. It was an open question whether mirror-based architectures could support intercession. AmbientTalk answered this question affirmatively: it introduced the concept of a \emph{mirage}~\cite{mostinckx07behavioral,mostinckx09mirrors}. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The only difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
+Systems with a mirror-based architecture include Self~\cite{ungar87power}, Strongtalk~\cite{bracha93strongtalk}, Newspeak~\cite{bracha10newspeak} and the Java Debugger API. Each of these architectures supports introspection, reflective invocation and self-modification, but have very limited support for intercession. To the best of our knowledge, AmbientTalk's meta-level architecture based on \emph{mirages}~\cite{mostinckx07behavioral} was the first to reconcile mirrors with support for intercession. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The main difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
 
 % should we discuss Encapsulation and Ontological correspondence, the two other mirror principles?
 
