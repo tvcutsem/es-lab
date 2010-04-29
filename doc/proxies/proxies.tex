@@ -289,7 +289,7 @@ If \texttt{obj} is a proxy that defines \noSuchMethod{} for the sake of intercep
 \section{Javascript Proxies}
 \label{sec:proxies_for_javascript}
 
-We now describe an intercession API for Javascript. This API has officially been proposed for inclusion in the next version of the ECMAScript standard\footnote{Its draft specification is available at \url{www.tinyurl.com/harmony-proxies}.}.
+We now describe an intercession API for Javascript. This API is officially proposed for inclusion in the next version of the ECMAScript standard\footnote{Its draft specification is available at \url{www.tinyurl.com/harmony-proxies}.}.
 
 Our intercession API for Javascript supports intercession by means of distinct \emph{proxy} objects. The behavior of a proxy object is controlled by a separate handler object. The methods of the handler object are effectively traps that are called whenever a corresponding operation is applied to the proxy object. Handlers are effectively ``meta-objects'' and their interface effectively define a ``metaobject protocol''. A proxy object is created as follows:
 
