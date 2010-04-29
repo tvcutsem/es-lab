@@ -130,13 +130,13 @@ Proxies are a powerful approach to implement meta-objects in object-oriented lan
 We introduce a new meta-level API for Javascript based on dynamic proxies. Proxies have a wide array of use cases~\cite{eugster06uniform}. In this paper, we distinguish two general cases depending on whether the proxy is proxying another object within the same physical address space:
 
 \begin{description*}
-  \item[Generic wrappers] are proxies that wrap existing objects. Example uses include access control, collecting profiling and code coverage information, implementing adaptors that intermediate between different versions of an interface, etc.
-  \item[Virtual objects] are proxies that emulate other objects, without the emulated objects ever having to be physically present in the same address space. Examples include remote object proxies (the emulated object resides in another address space), persistent objects (the emulated object is stored in a database), transparent futures that represent the value of asynchronous computations, etc.
+  \item[Generic wrappers] are proxies that wrap existing objects. Example uses include access control, profiling, adaptors that intermediate between different versions of an interface, etc.
+  \item[Virtual objects] are proxies that emulate other objects, without the emulated objects ever having to be physically present in the same address space. Examples include remote object proxies (emulate objects in other address spaces), persistent objects (emulate objects stored in databases), transparent futures (emulate results not yet computed), etc.
 \end{description*}
 
 The contributions of this paper are first, the introduction of a proxy-based metaprogramming API for Javascript (Section~\ref{sec:proxies_for_javascript}), second, the enumeration of a set of design principles that characterize general message-based object-oriented metaprogramming APIs (Sections~\ref{sub:wrappers} through \ref{sub:uniform_intercession}), third, a characterization of related metaprogramming APIs in terms of these design principles (Section~\ref{sub:survey}) and fourth, the identification that common message interception mechanisms lead to interference with application code which are avoided using a stratified Proxy API (Sections~\ref{sub:intercession_in_javascript} and \ref{sub:stratification}).
 
-\section{Background: Reflection}
+\section{Reflection Terminology}
 \label{sec:reflection}
 
 %Before we discuss our proposed Proxy API for Javascript, we introduce some required terminology.
@@ -147,10 +147,11 @@ The contributions of this paper are first, the introduction of a proxy-based met
 
 A metaobject protocol (MOP)~\cite{kiczales91art} is an object-oriented framework that describes the behavior of an object-oriented system. It is a term most commonly associated with reflective object-oriented programming languages. It is customary for a MOP to represent language operations defined on objects as method invocations on their meta-objects. Throughout the rest of this paper, we use the general term \emph{operation} to denote mechanisms such as message sending, field access and assignment, defining a method, performing an \texttt{instanceof} operation, and so on.
 
-According to Kiczales \emph{et. al}~\cite{kiczales91art} a MOP supports \emph{introspection} if it enables reflective read-only access to the structure of an object. It supports \emph{self-modification} if it is possible to modify this structure. It further supports \emph{invocation} if it enables the reflective invocation of operations. Finally, it supports \emph{intercession} if it enables programmers to redefine the semantics of operations.
+According to Kiczales \emph{et. al}~\cite{kiczales91art} a MOP supports \emph{introspection} if it enables reflective read-only access to the structure of an object. It supports \emph{self-modification} if it is possible to modify this structure.
+%It further supports \emph{explicit invocation} if it enables the reflective invocation of operations. 
+Finally, it supports \emph{intercession} if it enables programmers to redefine the semantics of operations.
 %the creation of meta-objects with custom structure and behavior (enabling one to essentially change the semantics of certain operations of the programming language).
-
-Introspection and reflective invocation are typically well-supported by most meta-level APIs. Self-modification is more exceptional, and
+Introspection is typically supported by all meta-level APIs. Self-modification is more exceptional, and
 %Java's \texttt{java.lang.reflect} package, for example, mainly supports introspection and invocation, although it also supports a limited form of intercession through proxies (see Section~\ref{sub:survey}).
 meta-level APIs with extensive support for intercession are rare in mainstream languages, the CLOS MOP being a notable exception (see Section~\ref{sub:clos}).
 
@@ -219,23 +220,22 @@ ECMAScript 5 supports the creation of tamper-proof objects that can protect them
 \subsection{Reflection in Javascript}
 \label{sub:introspection_in_js}
 
-Javascript has built-in support for introspection, invocation and self-modification. These features are provided as part of the language, rather than through a distinct metaobject protocol. This is largely because Javascript objects are represented as flexible records mapping strings to values. Property names can be computed at runtime and their value can be retrieved using array indexing notation. The following code snippet demonstrates introspection, invocation and self-modification:
+Javascript has built-in support for introspection and self-modification. These features are provided as part of the language, rather than through a distinct metaobject protocol. This is largely because Javascript objects are represented as flexible records mapping strings to values. Property names can be computed at runtime and their value can be retrieved using array indexing notation. The following code snippet demonstrates introspection and self-modification:
 
 \begin{lstlisting}[language=javascript]
 var o = { x: 5, m: function(a) {...} };
 // introspection:
-o["x"] // property access
+o["x"] // computed property access
 "x" in o // property lookup
 for (prop in o) {...} // property enumeration
-// invocation:
-o["m"].apply(o,[42]) // method call
-o["x"] = 6 // property assignment
+o["m"].apply(o,[42]) // reflective method call
 // self-modification:
+o["x"] = 6 // computed property assignment
 o.z = 7 // add a property
 delete o.z // remove a property
 \end{lstlisting}
 
-The new property descriptor API discussed in the previous section provides for more fine-grained introspection, invocation and self-modification of Javascript objects, as it additionally reveals the property attributes.
+The new property descriptor API discussed in the previous section provides for more fine-grained introspection and self-modification of Javascript objects, as it additionally reveals the property attributes.
 
 \subsection{Intercession in Javascript}
 \label{sub:intercession_in_javascript}
@@ -374,7 +374,7 @@ Unlike \texttt{Proxy.create}, \texttt{Proxy.createFunction} does not accept a pr
 \subsection{Generic Wrappers}
 \label{sub:wrappers}
 
-To implement generic wrappers around existing objects, a useful handler is one that simply forwards all operations applied to the proxy to another target object. A particular generic wrapper can then delegate to this forwarder and override only the methods for the operations that it wants to intercept.
+To implement generic wrappers around existing objects, a useful handler is one that simply forwards all operations applied to the proxy to the wrapped object:
 
 \begin{lstlisting}[language=javascript]
 function makeForwardingHandler(target) {
@@ -390,12 +390,12 @@ var proxy = Proxy.create(makeForwardingHandler(target),
                          Object.getPrototypeOf(target));
 \end{lstlisting}
 
-We make use of this handler in Sections~\ref{sub:doublelifting} and \ref{sec:examples}.
+A particular generic wrapper can delegate to this forwarder and override only the methods for the operations that it needs to intercept. We make use of this handler in Sections~\ref{sub:doublelifting} and \ref{sec:examples}.
 
 \subsection{Stratification}
 \label{sub:stratification}
 
-Bracha and Ungar~\cite{bracha04mirrors} introduce the principle of stratification for mirror-based architectures. The principle states that meta-level facilities must be separated from base-level functionality. Bracha and Ungar focus mostly on stratification in the context of introspection and self-modification. In this paper we focus on the application of this principle to intercession. We discuss the relationship with mirrors in Section~\ref{sub:mirrors}.
+Bracha and Ungar~\cite{bracha04mirrors} introduce the principle of stratification for mirror-based architectures. The principle states that meta-level facilities must be separated from base-level functionality. Bracha and Ungar focus mostly on stratification in the context of introspection and self-modification. In this paper we focus on the application of this principle to intercession. Mirrors are further discussed in Section~\ref{sub:mirrors}.
 
 The distinction between a proxy and its handler object enforces stratification of the traps. Traps are not defined as part of the interface of the proxy object, but as part of the interface of the handler.
 
@@ -897,7 +897,7 @@ Finally, it is worth noting that AmbientTalk inherits from E the distinction bet
 
 \textbf{Smalltalk} Smalltalk-80 popularized generic message dispatch via its \texttt{doesNotUnderstand:} mechanism. Briefly, if standard method lookup does not find a method corresponding to a message, the Smalltalk VM instead sends the message \texttt{doesNotUnderstand: msg} to the original receiver object. Here, \texttt{msg} is an object containing the message's selector and arguments. The default behavior of this method, inherited from \texttt{Object} is to throw an exception.
 
-The \texttt{doesNotUnderstand:} trap is not stratified. It occupies the same namespace as plain application-level methods. This lack of stratification did lead Smalltalk programmers to look for alternative interception mechanisms. Foote and Johnson describe a particular extension to ParcPlace Smalltalk called a \emph{dispatching class}: ``Whenever an object belonging to a class designated as a dispatching class (using a bit in the class object's header) is sent a message, that object is instead sent \texttt{dispatchMessage: aMessage}.''~\cite{foote89reflective}. Instances of dispatching classes are effectively proxies, the \texttt{dispatchMessage:} method acting as the sole trap of an implicit handler.
+The \texttt{doesNotUnderstand:} trap is not stratified. It occupies the same namespace as application-level methods. This lack of stratification did lead Smalltalk programmers to look for alternative interception mechanisms. Foote and Johnson describe a particular extension to ParcPlace Smalltalk called a \emph{dispatching class}: ``Whenever an object belonging to a class designated as a dispatching class (using a bit in the class object's header) is sent a message, that object is instead sent \texttt{dispatchMessage: aMessage}.''~\cite{foote89reflective}. Instances of dispatching classes are effectively proxies, the \texttt{dispatchMessage:} method acting as the sole trap of an implicit handler.
 
 Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various message passing control techniques in Smalltalk. He concludes that \texttt{doesNotUnderstand:} is not always the most appropriate mechanism. Rather, he stresses the usefulness of \emph{method wrappers}. This approach was elaborated by Brant \emph{et. al}~\cite{brant98wrappers}. In this approach, rather than changing the method \emph{lookup}, the method \emph{objects} returned by the lookup algorithm are modified. This is possible because Smalltalk methods and method dictionaries are accessible from within the language. The method wrapper approach is in many ways similar to CLOS method combinations, enabling before/after/around augmentation of existing methods. As their name suggests, they are great for wrapping existing methods, but they seem less suitable to implement virtual objects and thus only support part of the use cases covered by \texttt{doesNotUnderstand:}.
 
@@ -1008,7 +1008,7 @@ Mirror-based architectures strive to decouple base-level from meta-level code. T
 
 Mirrors are meta-level objects that are manufactured by objects known as mirror factories. To acquire a mirror on an object \texttt{o}, one does not ask \texttt{o} for its mirror but rather asks a mirror factory for a mirror on \texttt{o}. The logic of what kind of mirror to associate with an object is not tied to that object's representation. As discussed in Section~\ref{sub:meta_level_encapsulation}, our Proxy API does not enable clients of proxies to directly access the handler through the proxy. If such access is required, the cleanest solution is to introduce a separate registry abstraction which can be regarded as a ``handler factory''.
 
-Systems with a mirror-based architecture include Self~\cite{ungar87power}, Strongtalk~\cite{bracha93strongtalk}, Newspeak~\cite{bracha10newspeak} and the Java Debugger API. Each of these architectures supports introspection, reflective invocation and self-modification, but have very limited support for intercession. To the best of our knowledge, AmbientTalk's meta-level architecture based on \emph{mirages}~\cite{mostinckx07behavioral} was the first to reconcile mirrors with support for intercession. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The main difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
+Systems with a mirror-based architecture include Self~\cite{ungar87power}, Strongtalk~\cite{bracha93strongtalk}, Newspeak~\cite{bracha10newspeak} and the Java Debugger API. Each of these architectures supports introspection and self-modification, but they have very limited support for intercession. To the best of our knowledge, AmbientTalk's meta-level architecture based on \emph{mirages}~\cite{mostinckx07behavioral} was the first to reconcile mirrors with support for intercession. Mirages directly inspired our work on Javascript proxies. A mirage is very much like our proxy. Its behavior is controlled by a separate handler, which in AmbientTalk is also a mirror. The main difference between AmbientTalk and Javascript in this regard, is that Javascript has no built-in notion of mirrors or mirror factories.
 
 % should we discuss Encapsulation and Ontological correspondence, the two other mirror principles?
 
@@ -1043,7 +1043,7 @@ One could characterize Reflex as a meta-intercession API: using Reflex, one can 
 \subsection{CLOS}
 \label{sub:clos}
 
-The Common Lisp Object System (CLOS) has an extensive metaobject protocol~\cite{kiczales91art}. Because CLOS is function-oriented as opposed to a message-oriented, it is difficult to transpose the design principles described in this paper to CLOS. In CLOS, computation proceeds mainly through generic function invocation, as opposed to sending messages to objects. The dispatch mechanism of generic functions can be modified through the ``generic function invocation protocol''. Most common use cases do not require this, however: if one simply wants to wrap existing methods, CLOS offers a method combination protocol that can be used to insert behavior before, after or around existing methods.
+The Common Lisp Object System (CLOS) has an extensive MOP~\cite{kiczales91art}. Because CLOS is function-oriented as opposed to a message-oriented, it is difficult to transpose the design principles described in this paper to CLOS. In CLOS, computation proceeds mainly through generic function invocation, as opposed to sending messages to objects. The dispatch mechanism of generic functions can be modified via the MOP. However, if one simply wants to wrap existing methods, CLOS offers a method combination protocol that can be used to insert behavior before, after or around existing methods without modifying the protocol.
 
 %CLOS supports a stratified form of intercession. CLOS classes can be declared to have a custom metaclass. That metaclass can then specialize the various protocols in which the class metaobject takes part. For example, the ``instance structure protocol'' describes the structure of, and access to, the class's instance variables. The main difference between the proxy approach and the CLOS metaclass approach is that metaclasses introduces customization of behavior at the class-level, while proxies introduce customization of behavior at the object-level.
 
