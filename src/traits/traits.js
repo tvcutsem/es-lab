@@ -596,3 +596,7 @@ var Trait = (function(){
   return freeze(Trait);
   
 })();
+
+if (typeof exports !== "undefined") { // CommonJS module support
+  exports.Trait = Trait;
+}
