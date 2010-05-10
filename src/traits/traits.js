@@ -507,8 +507,10 @@ var Trait = (function(){
       var pd = trait[name];
       // check for remaining 'required' properties
       // Note: it's OK for the prototype to provide the properties
-      if (pd.required && !(name in proto)) {
-        throw new Error('Missing required property: '+name);
+      if (pd.required) {
+        if (!(name in proto)) {
+          throw new Error('Missing required property: '+name);
+        }
       } else if (pd.conflict) { // check for remaining conflicting properties
         throw new Error('Remaining conflicting property: '+name);
       } else if ('value' in pd) { // data property
