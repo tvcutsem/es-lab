@@ -887,16 +887,16 @@ ES5Parser.initialize = function() {
 };
 
 ES5Parser.isKeyword = function(k) {
-  return !!keywords[k] && !Object.prototype.hasProperty(k);
+  return !!keywords[k] && !Object.prototype.hasOwnProperty(k);
 };
 
 ES5Parser.isFutureReservedWord = function(k) {
   if (this.strictmode) {
     return  !!(strictFutureKws[k] || nonStrictFutureKws[k]) &&
-            !Object.prototype.hasProperty(k);
+            !Object.prototype.hasOwnProperty(k);
   } else {
     return !!nonStrictFutureKws[k] &&
-            !Object.prototype.hasProperty(k);
+            !Object.prototype.hasOwnProperty(k);
   }
 };
 
