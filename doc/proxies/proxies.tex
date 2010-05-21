@@ -112,6 +112,7 @@ Mark S. Miller\\%\titlenote{}\\
 \DeclareGraphicsExtensions{.eps, .jpg}
 \fi
 
+\toappear{Submitted to DLS 2010, October 2010, Reno, Nevada.}
 \maketitle
 
 \begin{abstract}
@@ -394,6 +395,8 @@ A particular generic wrapper can delegate to this forwarder and override only th
 
 \subsection{Stratification}
 \label{sub:stratification}
+% TODO: advantages for internal spec. consistency, no overhead on non-proxy objects
+% contrast with __get__, __set__, ...
 
 Bracha and Ungar~\cite{bracha04mirrors} introduce the principle of stratification for mirror-based architectures. The principle states that meta-level facilities must be separated from base-level functionality. Bracha and Ungar focus mostly on stratification in the context of introspection and self-modification. In this paper we focus on the application of this principle to intercession. Mirrors are further discussed in Section~\ref{sub:mirrors}.
 
