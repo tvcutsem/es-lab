@@ -127,7 +127,7 @@ function createTracer(target) {
       var entry = {
         op: 'construct',
         args: Array.prototype.slice.call(arguments, 0),
-        result: new target.bind(arguments) // FIXME: bind not yet implemented
+        result: new target(); // FIXME: need Function.prototype.bind to write a var-args 'new'
       };
       log.push(entry);
       return entry.result;
