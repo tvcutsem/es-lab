@@ -103,7 +103,7 @@ function initSES(global, whitelist, verify, ObjTable) {
       var body = params.pop();
       body = body || ''; // Worry about NaN
       params = params.join(',');
-      var expr = 'function(' + params + '){' + body + '}';
+      var expr = 'function(' + params + '\n){' + body + '}';
       expr = verify(expr, 'FunctionExpr', whitelist);
       return unsafeEval('"use strict";(' + expr +');');
     };
