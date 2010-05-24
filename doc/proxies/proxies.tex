@@ -801,9 +801,10 @@ Unfortunately, implementing these maps in Javascript is impossible without intro
 \section{Implementation}
 \label{sub:benchmarks}
 
-Andreas Gal has implemented a prototype of our proposed Proxy API for Javascript as an extension of Tracemonkey. Tracemonkey is an extension of Spidermonkey, Mozilla's Javascript engine, that employs trace trees for aggressive optimization~\cite{gal06efficient}\footnote{Progress on this extension can be tracked at \url{https://bugzilla.mozilla.org/show_bug.cgi?id=546590}}.
+Andreas Gal has implemented a prototype of our proposed Proxy API as an extension of Tracemonkey. Tracemonkey is an adaptation of Spidermonkey, Mozilla's Javascript engine, that employs trace trees for aggressive optimization~\cite{gal06efficient}\footnote{At the time of writing, proxies are in the tracemonkey tree of the Firefox 3.7a5 pre-release at \url{http://ftp.mozilla.org/pub/mozilla.org/firefox/tinderbox-builds}}.
+%Progress on this extension can be tracked at \url{https://bugzilla.mozilla.org/show_bug.cgi?id=546590}}.
 
-We used the prototype implementation to get an initial idea of the overhead of our Proxy API. To this end, we performed the following micro-benchmark: first, we measured the runtime of the various operations applied to regular objects in regular Tracemonkey, without any Proxy API extensions. Next, we measured the runtime of the same operations, this time on regular, \emph{non-proxy} objects in the Tracemonkey extension with support for proxies. Finally, we measured the runtime of the operations on a \emph{proxy} object whose handler is the default forwarding handler introduced in Section~\ref{sec:proxies_for_javascript}.
+We used the prototype implementation to get an initial idea of the overhead of our Proxy API. To this end, we performed the following micro-benchmark: first, we measured the runtime of operations applied to regular objects in regular Tracemonkey, without the Proxy API extensions. Next, we measured the runtime of the same operations on regular, \emph{non-proxy} objects in the Tracemonkey extension with support for proxies. Finally, we measured the runtime of the operations on a \emph{proxy} object whose handler is the default forwarding handler from Section~\ref{sec:proxies_for_javascript}.
 
 \begin{table}
   \begin{center}
@@ -831,7 +832,7 @@ We used the prototype implementation to get an initial idea of the overhead of o
   \label{tab:benchmarks}
 \end{table}
 
-The results are shown in Table~\ref{tab:benchmarks} for a subset of the operations. They were obtained on a MacPro Dual-core Intel Xeon (2.66Ghz) with 4GB Memory, running Mac OS X 10.5.8, using the following version of Tracemonkey: \url{http://hg.mozilla.org/tracemonkey/file/eba4f78cdca4}. Runtimes shown are an average over multiple runs.
+Table~\ref{tab:benchmarks} shows results for a subset of the operations, obtained on a MacPro Dual-core Intel Xeon (2.66Ghz) with 4GB Memory, running Mac OS X 10.5.8, using the following version of the Tracemonkey prototype: \url{http://hg.mozilla.org/tracemonkey/file/eba4f78cdca4}. Runtimes shown are an average over multiple runs. We should note that these results are obtained from a non-optimized prototype implementation. The final tracemonkey implementation may generate significantly different results.
 
 The results in column (c) show that the addition of proxies in the virtual machine introduces no significant overhead for non-proxy objects. Hence, proxies only introduce a performance penalty when they are needed.
 
@@ -854,7 +855,7 @@ Foo proxy = (Foo) Proxy.newProxyInstance(
   aClassloader, new Class[] { Foo.class }, h);
 \end{lstlisting}
 
-Here, \texttt{proxy} implements the \texttt{Foo} interface. \texttt{h} is an object that implements a single \texttt{invoke} method. All method invocations on \texttt{proxy} are reified by calling the \texttt{h.invoke} method, passing along a description of the invoked method and the arguments of the call.
+Here, \texttt{proxy} implements the \texttt{Foo} interface. \texttt{h} is an object that implements a single \texttt{invoke} method. All method invocations on \texttt{proxy} are reified by calling the \texttt{h.invoke} method.%, passing along a description of the invoked method and the arguments of the call.
 
 The main difference between Java proxies and Javascript proxies is that Java proxies can only intercept method invocation. There are no other meta-level operations to trap. For instance, since interfaces cannot declare fields, proxies do not need to intercept field access.
 
