@@ -128,11 +128,11 @@ Proxies are a powerful approach to implement meta-objects in object-oriented lan
 
 \section{Introduction}
 
-We introduce a new meta-level API for Javascript based on dynamic proxies. Proxies have a wide array of use cases~\cite{eugster06uniform}. In this paper, we distinguish two general cases depending on whether the proxy is proxying another object within the same physical address space:
+We introduce a new meta-level API for Javascript based on dynamic proxies. Proxies have a wide array of use cases~\cite{eugster06uniform}. In this paper, we distinguish two general cases depending on whether the proxy is proxying another object within the same address space:
 
 \begin{description*}
-  \item[Generic wrappers] are proxies that wrap existing objects. Example uses include access control, profiling, adaptors that intermediate between different versions of an interface, etc.
-  \item[Virtual objects] are proxies that emulate other objects, without the emulated objects ever having to be physically present in the same address space. Examples include remote object proxies (emulate objects in other address spaces), persistent objects (emulate objects stored in databases), transparent futures (emulate results not yet computed), etc.
+  \item[Generic wrappers] are proxies that wrap other objects in the same address space. Example uses include access control, profiling, adaptors that intermediate between different versions of an interface, etc.
+  \item[Virtual objects] are proxies that emulate other objects, without the emulated objects ever having to be present in the same address space. Examples include remote object proxies (emulate objects in other address spaces), persistent objects (emulate objects stored in databases), transparent futures (emulate results not yet computed), etc.
 \end{description*}
 
 The contributions of this paper are first, the introduction of a proxy-based metaprogramming API for Javascript (Section~\ref{sec:proxies_for_javascript}), second, the enumeration of a set of design principles that characterize general message-based object-oriented metaprogramming APIs (Sections~\ref{sub:wrappers} through \ref{sub:uniform_intercession}), third, a characterization of related metaprogramming APIs in terms of these design principles (Section~\ref{sub:survey}) and fourth, the characterization of Proxy APIs as stratified APIs that avoid interference between message interception and application-level code (Sections~\ref{sub:intercession_in_javascript} and \ref{sub:stratification}).
@@ -220,7 +220,7 @@ var point = Object.create(Object.prototype, {
 });
 \end{lstlisting}
 
-ECMAScript 5 supports the creation of tamper-proof objects that can protect themselves from undesirable modifications by client objects. Objects can be made \emph{non-extensible}, \emph{sealed} or \emph{frozen}. A non-extensible object cannot be extended with new properties. A sealed object is a non-extensible object whose own properties are all non-configurable. Finally, a frozen object is a sealed object whose own properties are all non-writable. The call \texttt{Object.freeze(obj)} freezes the object \texttt{obj}. Section~\ref{sub:immutability} details how the addition of tamper-proof objects has influenced the design of our intercession API.
+ECMAScript 5 supports the creation of tamper-proof objects that can protect themselves from modifications by client objects. Objects can be made \emph{non-extensible}, \emph{sealed} or \emph{frozen}. A non-extensible object cannot be extended with new properties. A sealed object is a non-extensible object whose own (non-inherited) properties are all non-configurable. Finally, a frozen object is a sealed object whose own properties are all non-writable. The call \texttt{Object.freeze(obj)} freezes the object \texttt{obj}. Section~\ref{sub:immutability} details how tamper-proof objects have influenced the design of our intercession API.
 
 \subsection{Reflection in Javascript}
 \label{sub:introspection_in_js}
@@ -296,7 +296,7 @@ If \texttt{obj} is a proxy that defines \noSuchMethod{} for the sake of intercep
 
 We now describe an intercession API for Javascript. This API is officially proposed for inclusion in the next version of the ECMAScript standard\footnote{Its draft specification is available at \url{www.tinyurl.com/harmony-proxies}.}.
 
-Our intercession API for Javascript supports intercession by means of distinct \emph{proxy} objects. The behavior of a proxy object is controlled by a separate handler object. The methods of the handler object are effectively traps that are called whenever a corresponding operation is applied to the proxy object. Handlers are effectively ``meta-objects'' and their interface effectively define a ``metaobject protocol''. A proxy object is created as follows:
+Our intercession API for Javascript supports intercession by means of distinct \emph{proxy} objects. The behavior of a proxy object is controlled by a separate handler object. The methods of the handler object are traps that are called whenever a corresponding operation is applied to the proxy object. Handlers are effectively ``meta-objects'' and their interface effectively defines a ``metaobject protocol''. A proxy object is created as follows:
 
 \begin{lstlisting}[language=javascript]
 var proxy = Proxy.create(handler, proto);
@@ -348,7 +348,7 @@ Here, \texttt{handler} is an object that must implement a particular meta-level 
 
 Table~\ref{tab:operations} lists those base-level operations applicable to objects that can be trapped by handlers. The name \texttt{proxy} refers to a proxy instance, \texttt{handler} to that proxy's handler, \texttt{proto} to the prototype specified in \texttt{Proxy.create} and \texttt{receiver} to either a proxy or an object that inherits (directly or indirectly) from a proxy. The distinction between fundamental and derived traps is explained in Section~\ref{sub:fundamental_vs_derived_traps}.
 
-For most traps, the relationship between the trap and the trapped operation should be clear. The \texttt{fix} trap is described in Section~\ref{sub:immutability}. The \texttt{enumerate} trap must return an array of strings representing the enumerable property names of the proxy. The corresponding \texttt{for-in} loop will then be driven by iterating over this array rather than over the proxy.
+The relationship between traps and the operations they trap should be clear in most cases. The \texttt{fix} trap is described in Section~\ref{sub:immutability}. The \texttt{enumerate} trap must return an array of strings representing the enumerable property names of the proxy. The corresponding \texttt{for-in} loop is then driven by iterating over this array. Because Javascript methods are just functions, method invocation, as in \lstinline{proxy.m(a,b)} is reified as a property access \lstinline{handler.get(proxy,'m')} that is expected to return a function. That function is immediately applied to the arguments \lstinline{[a,b]} and with \texttt{this} bound to \texttt{proxy}.
 
 The distinction between proxy objects and regular objects ensures that non-proxy objects (which we expect make up the vast majority of objects in a system) do not pay the runtime costs associated with intercession (cf. Section~\ref{sub:benchmarks}). Finally, note that the link between a proxy and its handler is immutable and inaccessible to clients of the proxy.
 
@@ -357,7 +357,7 @@ The distinction between proxy objects and regular objects ensures that non-proxy
 \subsection{Function Proxies}
 \label{sub:funproxies}
 
-In Javascript, functions are objects. However, they differ from non-function objects in a number of ways. Most importantly functions support two operations not applicable to plain objects: they can be called and constructed. For reasons that will be made clear in Section~\ref{sub:selective}, our API explicitly distinguishes between object proxies and function proxies. The call \texttt{Proxy.create} returns object proxies. To create a function proxy, one invokes the method \texttt{Proxy.createFunction}, as follows:
+In Javascript, functions are objects. However, they differ from non-function objects in a number of ways. In particular functions support two operations not applicable to objects: they can be called and constructed. For reasons that will be made clear in Section~\ref{sub:selective}, our API explicitly distinguishes between object proxies and function proxies. The call \texttt{Proxy.create} returns object proxies. To create a function proxy, one invokes the method \texttt{Proxy.createFunction}:
 
 \begin{lstlisting}[language=javascript]
 var call = function() { ... };
@@ -409,7 +409,7 @@ The distinction between a proxy and its handler object enforces stratification o
 
 The handler is a regular object. It may inherit from other objects, and its inheritance chain is completely independent from that of the proxy it handles. A single handler may handle multiple proxies. The handler can be a proxy itself (we will illustrate a use case of this in Section~\ref{sub:doublelifting}).
 
-Calling \lstinline{aProxy.has} explicitly on a proxy will not trigger the proxy's corresponding \texttt{has} trap. Instead, the call will be reified like any other. That is, \lstinline{aProxy.has(`foo')} invokes \lstinline{handler.get(aProxy,`has',[`foo'])}. Likewise, \lstinline{aProxy.get} is reified as \lstinline{handler.get(aProxy,`get')}. Traps can only be invoked explicitly on a proxy's handler, not on the proxy itself. This enforces stratification (the meta-level traps should not interfere with base-level method names). Thus, proxies continue to work correctly if an application (by accident or by design) uses the names \texttt{get}, \texttt{set}, \texttt{has}, etc.
+Accessing \lstinline{aProxy.has} explicitly on a proxy will not trigger the proxy's corresponding \texttt{has} trap. Instead, the access will be reified like any other as \lstinline{handler.get(aProxy,`has')}. Likewise, \lstinline{aProxy.get} is reified as \lstinline{handler.get(aProxy,`get')}. Traps can only be invoked explicitly on a proxy's handler, not on the proxy itself. This enforces stratification (the meta-level traps should not interfere with base-level method names). Thus, proxies continue to work correctly if an application (by accident or by design) uses the names \texttt{get}, \texttt{set}, etc.
 
 The principle of stratification when applied to proxies can be summarized as follows.
 
@@ -484,16 +484,11 @@ Fixing does not necessarily need to be an ``all or nothing'' process. However, i
 
 A common use case for proxy handlers is, for example, to perform an access control check before performing the operation on some wrapped object. Only if the check succeeds is the operation forwarded. Since there are 12 different operations that proxy handlers can intercept, a straightforward implementation would have to duplicate the pattern of access checking and forwarding the operation in each trap. It's difficult to abstract this pattern, because each operation has to be ``forwarded'' in a different way, as exemplified by the forwarding handler in Section~\ref{sub:wrappers}. Ideally, if all operations could be uniformly funneled through a single trap, the handler would only have to perform the access check once, in the single trap.
 
-Such funneling of all operations through a single trap can be achieved by implementing the proxy handler itself as a proxy. In meta-programming terms, this corresponds to shifting to the meta-meta-level. To avoid the confusion that invariably follows from such shifting between meta-levels, let us introduce some terminology. The \emph{base-level proxy} is the proxy object with which other regular application objects directly interact. That proxy's handler is the \emph{base-level handler}. If the base-level handler is itself a proxy, it is \emph{also} a \emph{meta-level proxy}. The handler of a meta-level proxy is a \emph{meta-level handler}.
+Such funneling of all operations through a single trap can be achieved by implementing the proxy handler itself as a proxy. In meta-programming terms, this corresponds to shifting to the meta-meta-level.
+Figure~\ref{fig:shift} depicts how meta-level shifting works. The \emph{base-level proxy} is the proxy object with which other regular application objects directly interact. That proxy's handler is the \emph{base handler}. The crucial part is that the base handler is itself a proxy, call it a \emph{meta-level proxy}. The handler of a meta-level proxy is a \emph{meta handler}.
 
-We carefully designed the intercession API such that proxies only interact with their associated handler by invoking their traps. Proxies never assign, enumerate or test for the presence of traps on their handler. Because of this uniformity, if the base-level handler is \emph{only} used in its role as the handler for a base-level proxy, the meta-level handler only needs to implement the \texttt{get} trap. Because method invocation is the only operation performed on meta-level proxies, only this single trap is triggered on meta-level handlers.
-
-% a --> b means 'b is the handler of a'
-% a ==> b means 'a forwards operations to b'
-% base-level proxy --> base-level handler --> meta-level handler ==> forwarding handler ==> target
-%                    = meta-level proxy
-% p.x                blh.get(p,'x')          mlh.get(blh,'get').apply(blh,[p,'x'])
-%                                                                    fh.get(p,'x')      target['x']
+Note how all operations performed on \texttt{p} are intercepted by \texttt{mh}'s \texttt{get} trap.
+We carefully designed the intercession API such that proxies only interact with their associated handler by invoking their traps. Proxies never assign, enumerate or test for the presence of traps on their handler. Because of this uniformity, if the base handler is \emph{only} used in its role as the handler for a base-level proxy, the meta handler only needs to implement the \texttt{get} trap. Because method invocation is the only operation performed on meta-level proxies, only this single trap is triggered on meta handlers.
 
 \begin{figure}[htbp]
   \centering
@@ -502,13 +497,18 @@ We carefully designed the intercession API such that proxies only interact with 
   \label{fig:shift}
 \end{figure}
 
-Figure~\ref{fig:shift} depicts how meta-level shifting works. Note that the base handler is both a handler and itself a proxy. Note also how all operations performed on \texttt{p} are intercepted by \texttt{mh}'s \texttt{get} trap.
+% a --> b means 'b is the handler of a'
+% a ==> b means 'a forwards operations to b'
+% base-level proxy --> base-level handler --> meta-level handler ==> forwarding handler ==> target
+%                    = meta-level proxy
+% p.x                blh.get(p,'x')          mlh.get(blh,'get').apply(blh,[p,'x'])
+%                                                                    fh.get(p,'x')      target['x']
 
-Another way to explain why this funneling works is as follows. At the base-level, there is an assortment of operations that are performed on Javascript objects as computation progresses (e.g. property lookup, access, assignment, enumeration, \ldots). At the meta-level (that is: in the intercession API), all of these operations are reified uniformly as method invocations on handlers. Therefore, at the meta-level, the only operation performed on meta-level objects (base-level handlers) is property access, and meta-meta-level objects (meta-level handlers) only need to handle this single operation in their protocol.
+Another way to explain why this funneling works is as follows. At the base-level, running programs perform an assortment of operations on Javascript objects (e.g. property lookup, access, assignment, enumeration, \ldots). At the meta-level (that is: in the intercession API), all of these operations are reified uniformly as method invocations on handlers. Therefore, at the meta-level, the only operation performed on meta-level objects (base-level handlers) is property access, and meta-meta-level objects (meta-level handlers) only need to handle this single operation in their protocol.
 
-If one shifts an extra level upwards to funnel all operations through a single trap of a meta-level handler, one must also shift an extra level downwards if these operations must eventually be applied to a base-level object. This can be accomplished by having the meta-level handler forward the operations to a generic forwarding handler. The forwarding handler essentially translates meta-level operations back into base-level operations on a target object.
+If one shifts an extra level upwards to funnel all operations through a single trap of a meta-level handler, one must also shift an extra level downwards if these operations must eventually be applied to a base-level object. This can be accomplished by having the meta handler forward the operations to a generic forwarding handler. The forwarding handler essentially translates meta-level operations back into base-level operations on a target object.
 
-Naturally, one can apply this trick of shifting meta-levels at the meta-meta-level recursively. The API allows an arbitrary number of such meta-level shifts. This brings up the question of infinite meta-regress. Such an infinite regress is avoided as long as a proxy handler is eventually implemented as a concrete Javascript object, rather than as yet another proxy.
+Naturally, one can apply this trick of shifting meta-levels at the meta-meta-level recursively. The API allows an arbitrary number of such meta-level shifts. This brings up the question of infinite meta-regress. Such an infinite regress is avoided as long as a handler is eventually implemented as a concrete Javascript object, rather than as yet another proxy.
 
 % Design Principle: handlers can be proxies themselves
 % Design Principle: express all meta-level computation (interaction with the handler)
@@ -532,11 +532,11 @@ Meta-level funneling is demonstrated in Section~\ref{sub:revoker}.
 A proxy-based intercession API introduces a tradeoff between what operations can be intercepted by proxy handlers on the one hand, versus what operations have a reliable outcome from the language runtime and the programmer's point of view. We already briefly touched upon this issue in Section~\ref{sub:immutability} when discussing how proxies interact with operations that make objects non-extensible, sealed or frozen. As we have discussed, the \texttt{fix} trap enables a proxy handler to dynamically decide whether or not to commit to a fixed representation.
 
 % commit to identity upfront (possible because we don't intercess equality)
-Some operations may be so critical that we don't want proxies to influence their outcome. One such operation is testing for equality. In Javascript, the expression \texttt{a === b} determines whether \texttt{a} and \texttt{b} refer to identical objects. The \texttt{===} operator comes with an entire list of guarantees that are implicitly taken for granted by programmers. For example, \texttt{===} on objects is commutative, transitive, symmetric and deterministic (it always reports the same answer given the same arguments). Furthermore, testing \texttt{a} and \texttt{b} for equality should not grant \texttt{a} access to \texttt{b} or vice versa. For all these reasons, we decided not to enable proxy handlers to trap \texttt{===}. Proxies cannot influence the outcome of this operation.
+Some operations may be so critical that we don't want proxies to ever influence their outcome. One such operation is testing for equality. In Javascript, the expression \texttt{a === b} determines whether \texttt{a} and \texttt{b} refer to identical objects. The \texttt{===} operator comes with a number of guarantees that are implicitly taken for granted by programmers. For example, \texttt{===} on objects is commutative, transitive, symmetric and deterministic (it always reports the same answer given the same arguments). Furthermore, testing \texttt{a} and \texttt{b} for equality should not grant \texttt{a} access to \texttt{b} or vice versa. For all these reasons, we decided not to enable proxy handlers to trap \texttt{===}. Proxies cannot influence the outcome of this operation.
 
 As in the case of \texttt{===}, the fact that an operation should be deterministic is a requirement for many operations. To uphold determinism, the operation should not trap to a proxy handler. However, just because an operation should have a deterministic result does not mean that it cannot be reliably intercepted. When an operation requires a deterministic, stable result, this result can be provided once to the proxy when it is created. There are two concrete examples of this in our intercession API.
 
-The first example is that proxies must commit to their prototype upfront. Recall from section~\ref{sec:proxies_for_javascript} that the second argument to \texttt{Proxy.create} denotes the proxy's prototype. This has two important effects: the first is that ECMAScript's built-in operation \texttt{Object.getPrototypeOf} remains deterministic, even when applied to a proxy. The second is that proxies cannot influence \texttt{instanceof} when they are used as the left-hand operand: to determine whether \texttt{proxy instanceof Foo} is true, the implementation need only look at the prototype of \texttt{proxy}, which using our API it can do without consulting the proxy.
+The first example is that proxies must commit to their prototype upfront. Recall from section~\ref{sec:proxies_for_javascript} that the second argument to \texttt{Proxy.create} denotes the proxy's prototype. This has two important effects: the first is that ECMAScript's built-in operation \texttt{Object.getPrototypeOf} remains deterministic, even when applied to a proxy. The second is that proxies cannot influence \texttt{instanceof} when they are used as the left-hand operand: to determine whether \texttt{proxy instanceof Foo} is true, the implementation need only look at the prototype of \texttt{proxy}, which using our API it can do without consulting the proxy handler.
 
 The second example is that proxies have to decide upfront whether they will proxy a plain object or a function object. By requiring proxies to commit to representing either an object or a function at proxy creation time, the language runtime is able to uphold important invariants that it would have to forfeit if it would have to consult the \texttt{handler}. For example the expression \texttt{typeof o} should evaluate to \texttt{"function"} if \texttt{o} is a function, and to \texttt{"object"} otherwise. Also, functions always inherit from \texttt{Function.prototype}. The distinction between object and function proxies allows our API to enforce these invariants.
 
@@ -729,7 +729,8 @@ A limitation of the above caretaker abstraction is that objects exchanged via th
 % es-lab's compartments building on membranes
 
 A membrane is an extension of a caretaker that transitively imposes revocability on all references exchanged via the membrane~\cite{miller06robust}. In the following implementation, we make use of meta-level funneling once more to centralize the access control in a single trap:
-
+\\
+\\
 \begin{lstlisting}[language=javascript]
 function makeMembrane(initTarget) {
   var enabled = true;
@@ -768,11 +769,11 @@ function makeMembrane(initTarget) {
 }
 \end{lstlisting}
 
-A membrane consists of one or more wrappers. Every such wrapper is created by a call to the \texttt{wrap} function. Note that all wrappers belonging to the same membrane share a single \texttt{enabled} variable. Assigning the variable to \texttt{false} revokes all of the membrane's wrappers simultaneously.
+A membrane consists of one or more wrappers. Every such wrapper is created by a call to the \texttt{wrap} function. Note that all wrappers belonging to the same membrane share a single \texttt{enabled} variable. Assigning the variable to \texttt{false} instantaneously revokes all of the membrane's wrappers.
 
 Recall that this example makes use of meta-level funneling. The \texttt{baseHandler} is itself a proxy with a handler. This handler need only implement a \texttt{get} trap that returns a meta-level trap (a function) that will immediately be invoked. To be able to wrap the arguments of these invocations, the \texttt{get} trap returns a wrapped version of the default forwarding trap contained in the \texttt{fwdHandler}.
 
-If the object to be wrapped is a function (or a method, because Javascript methods are just functions), a function proxy is returned whose call trap is a wrapped version of the function, as defined by \texttt{wrapFunction}. The variable-argument function\footnote{In Javascript, \texttt{arguments} is an object that contains all arguments passed to a function. It is used to write variable-argument functions, and it is customary to convert this object into a proper array first.} returned by \texttt{wrapFunction} performs the actual wrapping of values that cross the membrane: arguments to methods cross the membrane in one direction, returned values or thrown exceptions in the other direction.
+If the object to be wrapped is a function (or a method, because Javascript methods are just functions), a function proxy is returned whose call trap is a wrapped version of the function, as defined by \texttt{wrapFunction}. The variable-argument function\footnote{In Javascript, \texttt{arguments} is an array-like object that contains all arguments passed to a function. It is used to define variable-argument functions, and it is customary to convert this object into a proper array first.} returned by \texttt{wrapFunction} performs the actual wrapping of values that cross the membrane: arguments to methods cross the membrane in one direction, returned values or thrown exceptions in the other direction.
 
 The membrane abstraction in Javascript enables innovative new ways of composing code from untrusted third parties on a single web page (so-called ``mash-ups''). By loading the untrusted code using a membrane-wrapped \texttt{eval} function, it becomes possible to isolate scripts from one another and from their container page.
 
@@ -801,7 +802,7 @@ Unfortunately, implementing these maps in Javascript is impossible without intro
 \section{Implementation}
 \label{sub:benchmarks}
 
-Andreas Gal has implemented a prototype of our proposed Proxy API as an extension of Tracemonkey. Tracemonkey is an adaptation of Spidermonkey, Mozilla's Javascript engine, that employs trace trees for aggressive optimization~\cite{gal06efficient}\footnote{At the time of writing, proxies are in the tracemonkey tree of the Firefox 3.7a5 pre-release at \url{http://ftp.mozilla.org/pub/mozilla.org/firefox/tinderbox-builds}}.
+Andreas Gal has implemented a prototype of our proposed Proxy API as an extension of Tracemonkey. Tracemonkey is an adaptation of Spidermonkey, Mozilla's Javascript engine, that employs trace trees for aggressive optimization~\cite{gal06efficient}\footnote{At the time of writing, proxies are in the tracemonkey build of the Firefox 3.7a5 pre-release at \url{http://ftp.mozilla.org/pub/mozilla.org/firefox/tinderbox-builds}}.
 %Progress on this extension can be tracked at \url{https://bugzilla.mozilla.org/show_bug.cgi?id=546590}}.
 
 We used the prototype implementation to get an initial idea of the overhead of our Proxy API. To this end, we performed the following micro-benchmark: first, we measured the runtime of operations applied to regular objects in regular Tracemonkey, without the Proxy API extensions. Next, we measured the runtime of the same operations on regular, \emph{non-proxy} objects in the Tracemonkey extension with support for proxies. Finally, we measured the runtime of the operations on a \emph{proxy} object whose handler is the default forwarding handler from Section~\ref{sec:proxies_for_javascript}.
@@ -877,7 +878,7 @@ def mirage := object: {...} mirroredBy: (mirror: {
 
 The mirror is to the mirage what the proxy handler is to a Javascript proxy. Like Javascript proxy handlers, mirrors define an extensive set of traps, enabling near-complete control over the mirage.
 
-\textbf{E} E is a secure, distributed dynamic language~\cite{miller05concurrency}. In E, everything is an object, but there are two kinds of object references: \emph{near} and \emph{eventual} references. Similarly, there are two message passing operators: immediate call (\texttt{o.m()}, a synchronous method invocation) and eventual send (\texttt{o<-m()}, an asynchronous message send). Both operations are allowed on near references, but eventual references carry only asynchronous messages. Because of this distinction, E has two separate intercession APIs: one for objects and one for references.
+\textbf{E} is a secure, distributed dynamic language~\cite{miller05concurrency}. In E, everything is an object, but there are two kinds of object references: \emph{near} and \emph{eventual} references. Similarly, there are two message passing operators: immediate call (\lstinline{o.m()}, a synchronous method invocation) and eventual send (\lstinline{o<-m()}, an asynchronous message send). Both operations are allowed on near references, but eventual references carry only asynchronous messages. Because of this distinction, E has two separate intercession APIs: one for objects and one for references.
 
 E has a proxy-based API to represent user-defined eventual references~\cite{eproxies}:
 
@@ -970,7 +971,7 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
     AT mirages        & Yes, the \texttt{invoke} trap, for a meta-handler\\
     E proxies         & Yes, if handler is a non-methodical object, its \texttt{match} clause funnels all operations\\
     E non-methodicals & Yes, the \texttt{match} clause\\
-    ST \texttt{doesNotUnderstand:}  & Yes, \texttt{doesNotUnderstand:} itself, if class is otherwise empty (no implemented or inherited methods). In this case, the class may not eventually inherit from \texttt{Object}\\
+    ST \texttt{doesNotUnderstand:}  & Yes, \texttt{doesNotUnderstand:} itself, if class is otherwise empty (no implemented or inherited methods). In this case, the class may not inherit from \texttt{Object}\\
     \hline
     \multicolumn{2}{|l|}{\textbf{Can all types of values in the language be virtualized (uniform intercession)?}}\\
     \hline
@@ -1065,13 +1066,13 @@ This paper introduces an intercession API for Javascript based on proxies, enabl
 The second contribution of this paper is the identification of general design principles for proxy-based intercession APIs. These design principles can be used to characterize similar APIs of other programming languages, as summarized in Table~\ref{tab:related_work}. The design principles put forward are:
 
 \begin{description*}
-  \item[Stratification] traps are defined on a separate handler.
-  \item[Selective interception] some operations are not trapped or their semantics is determined at proxy-creation time.
+  \item[Stratification:] traps are defined on a separate handler.
+  \item[Selective interception:] some operations are not trapped or their semantics is determined at proxy-creation time.
   \item[Derived traps] can be more efficient than \textbf{fundamental traps} but introduce the potential for inconsistencies.
-  \item[Meta-level shifting] handlers as proxies shift meta-levels.
-  \item[Temporary intercession] proxies can become fixed.
-  \item[Handler encapsulation] a proxy encapsulates its handler.
-  \item[Uniform intercession] every value can be proxified.
+  \item[Meta-level shifting:] handlers as proxies shift meta-levels.
+  \item[Temporary intercession:] proxies can become fixed.
+  \item[Handler encapsulation:] a proxy encapsulates its handler.
+  \item[Uniform intercession:] every value can be proxified.
 \end{description*}
 
 \section*{Acknowledgements}
