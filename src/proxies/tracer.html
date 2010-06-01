@@ -127,7 +127,7 @@ function createTracer(target) {
       var entry = {
         op: 'construct',
         args: Array.prototype.slice.call(arguments, 0),
-        result: new target(); // FIXME: need Function.prototype.bind to write a var-args 'new'
+        result: new target() // FIXME: need Function.prototype.bind to write a var-args 'new'
       };
       log.push(entry);
       return entry.result;
@@ -189,7 +189,7 @@ function runTest() {
   // FIXME: fproxy.toString(); fails with error 'Function.prototype.toString called on incompatible function'
   // it appears the built-in toString cannot cope with function proxies
   // fproxy.toString();
-  // Function.prototype.toString(fproxy);
+  // Function.prototype.toString.call(fproxy);
   
   fproxy(5);
   
