@@ -19,9 +19,39 @@ var Trait = (function(){
 
   // == Ancillary functions ==
   
-  // this signals that the current ES implementation supports properties,
-  // so probably also accessor properties
-  var SUPPORTS_DEFINEPROP = !!Object.defineProperty;
+  var SUPPORTS_DEFINEPROP = (function() {
+    try {
+      var test = {};
+      Object.defineProperty(test, 'x', {get: function() { return 0; } } );
+      return test.x === 0;
+    } catch(e) {
+      return false;
+    }
+  })();
+  
+  // IE8 implements Object.defineProperty and Object.getOwnPropertyDescriptor
+  // only for DOM objects. These methods don't work on plain objects.
+  // Hence, we need a more elaborate feature-test to see whether the browser truly
+  // supports these methods:
+  function supportsGOPD() {
+    try {
+      if (Object.getOwnPropertyDescriptor) {
+        var test = {x:0};
+        return !!Object.getOwnPropertyDescriptor(test,'x');        
+      }
+    } catch(e) {}
+    return false;
+  };
+  function supportsDP() {
+    try {
+      if (Object.defineProperty) {
+        var test = {};
+        Object.defineProperty(test,'x',{value:0});
+        return test.x === 0;
+      }
+    } catch(e) {}
+    return false;
+  };
 
   var call = Function.prototype.call;
 
@@ -55,7 +85,7 @@ var Trait = (function(){
         for (var p in obj) { if (hasOwnProperty(obj,p)) { props.push(p); } }
         return props;
       };
-  var getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor ||
+  var getOwnPropertyDescriptor = supportsGOPD() ? Object.getOwnPropertyDescriptor :
       function(obj, name) {
         return {
           value: obj[name],
@@ -64,7 +94,7 @@ var Trait = (function(){
           configurable: true
         };
       };
-  var defineProperty = Object.defineProperty ||
+  var defineProperty = supportsDP() ? Object.defineProperty :
       function(obj, name, pd) {
         obj[name] = pd.value;
       };
@@ -507,8 +537,10 @@ var Trait = (function(){
       var pd = trait[name];
       // check for remaining 'required' properties
       // Note: it's OK for the prototype to provide the properties
-      if (pd.required && !(name in proto)) {
-        throw new Error('Missing required property: '+name);
+      if (pd.required) {
+        if (!(name in proto)) {
+          throw new Error('Missing required property: '+name);
+        }
       } else if (pd.conflict) { // check for remaining conflicting properties
         throw new Error('Remaining conflicting property: '+name);
       } else if ('value' in pd) { // data property
@@ -594,3 +626,7 @@ var Trait = (function(){
   return freeze(Trait);
   
 })();
+
+if (typeof exports !== "undefined") { // CommonJS module support
+  exports.Trait = Trait;
+}

@@ -167,14 +167,17 @@ this.runTraitsTests = function() {
           "ordering of trait properties is irrelevant");
   
   (function() {
-    // note: only works for ES5 or ES3 implementations that support accessor syntax
     if (Object.getOwnPropertyDescriptor) {
-      var record = {get a() {}, set a(v) {} };
-      var get = Object.getOwnPropertyDescriptor(record,'a').get;
-      var set = Object.getOwnPropertyDescriptor(record,'a').set;
-      testEqv(Trait(record),
-              { a: accessorP(get,set) },
-              "trait with accessor property"); 
+      try {
+        // syntax only parses on ES5 or ES3 implementations that support
+        // accessors. We therefore eval it, and skip the test if eval fails
+        var record = eval("({get a() {}, set a(v) {} })");
+        var get = Object.getOwnPropertyDescriptor(record,'a').get;
+        var set = Object.getOwnPropertyDescriptor(record,'a').set;
+        testEqv(Trait(record),
+                { a: accessorP(get,set) },
+                "trait with accessor property");
+      } catch (e) { /* browser does not support getter/setter syntax, ignore */ }
     }
   })();
   
