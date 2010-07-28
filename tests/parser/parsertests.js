@@ -362,6 +362,8 @@ function parserTestSuite() {
   testExpression("f(x)(y)", [ "CallExpr", {},
                              [ "CallExpr",{}, Expr("f"), Expr("x") ],
                              Expr("y") ]);
+  testExpression("f().x", [ "MemberExpr", {}, [ "CallExpr",{},["IdExpr",{name:"f"}] ],
+                                              [ "LiteralExpr",{type:"string",value:"x"} ] ]);
 
   // EvalExpressions (identify possible uses of a 'direct call' to eval)
   testExpression("eval('x')", ["EvalExpr", {}, Expr("'x'") ]);
