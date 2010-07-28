@@ -460,7 +460,7 @@ ometa ES5Parser {
                    ( this.ast(_fromIdx, "MemberExpr",{},[cexp,iexp]) )
                  | CallExpression:cexp "." scanIdentifierName:id ->
                    ( this.ast(_fromIdx, "MemberExpr",{},[cexp,
-                              this.ast(_fromIdx, "Literal",{type:"string",value:id},[])]) )
+                              this.ast(_fromIdx, "LiteralExpr",{type:"string",value:id},[])]) )
                  | CallExpression:cexp Arguments:args ->
                                  ( this.ast(_fromIdx, "CallExpr",{},[cexp].concat(args)) )
                  | MemberExpression:mexp Arguments:args ->
