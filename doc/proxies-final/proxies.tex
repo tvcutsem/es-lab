@@ -112,7 +112,7 @@ Mark S. Miller\\%\titlenote{}\\
 \DeclareGraphicsExtensions{.eps, .jpg}
 \fi
 
-\toappear{Submitted to DLS 2010, October 2010, Reno, Nevada.}
+\toappear{DLS 2010, October 2010, Reno, Nevada.}
 \maketitle
 
 \begin{abstract}
@@ -337,7 +337,7 @@ Here, \texttt{handler} is an object that must implement a particular meta-level 
     \hline
     Property assignment & \texttt{receiver.name = val} & \texttt{handler.set(receiver, name, val)}\\
     \hline
-    Own enumerable keys & \texttt{Object.keys(proxy)} & \texttt{handler.enumerateOwn()}\\
+    Own enumerable keys & \texttt{Object.keys(proxy)} & \texttt{handler.keys()}\\
     \hline
     \end{tabular}
     \end{small}
@@ -779,7 +779,7 @@ The membrane abstraction in Javascript enables innovative new ways of composing 
 
 \paragraph{Identity-preserving Membranes} One problem with the above membrane abstraction is that it fails to uphold object identity across both sides of the membrane. If an object \texttt{o} is passed through the same membrane twice, an object on the other side of the membrane will receive two distinct wrappers \texttt{w1} and \texttt{w2}, such that \texttt{w1~!==~w2}, even though both wrap an identical object. Likewise, passing \texttt{w1} or \texttt{w2} back through the membrane does not unwrap them but rather wraps them again. These limitations can be addressed by having the membrane maintain two maps. The first maps objects to their wrappers, such that only one canonical wrapper is created per object. The second maps wrappers back to the objects they wrap, allowing these objects to be unwrapped when they cross the membrane in the other direction.
 
-Unfortunately, implementing these maps in Javascript is impossible without introducing memory leaks. Ephemeron tables are a proposed language feature for the upcoming ECMAScript standard that address this issue~\cite{miller10et}. An ephemeron table is almost identical to a non-enumerable weak-key identity hashtable, but it avoids a crucial memory leak when cyclic dependencies exist between the keys and the values stored in the table.
+Unfortunately, implementing these maps in Javascript is impossible without introducing memory leaks. Weak maps are a proposed language feature for the upcoming ECMAScript standard that address this issue~\cite{miller10et}. A weak map is like a non-enumerable weak-key identity hashtable, but it avoids a crucial memory leak when cyclic dependencies exist between the keys and the values stored in the table.
 %It is based on Smalltalk's Ephemeron pairs~\cite{et_paper}.
 %A membrane around an SES \texttt{eval}\footnote{Ref to \texttt{es-lab} project for SES and Securable ES5.} creates a compartment in which one can run potentially malicious code, confident that the resulting potentially malicious objects can interact with the world outside this compartment only as permitted by the objects you provide them. Once the compartment is revoked, all their connectivity with its outside environment is severed, rendering it powerless.
 
@@ -802,7 +802,7 @@ Unfortunately, implementing these maps in Javascript is impossible without intro
 \section{Implementation}
 \label{sub:benchmarks}
 
-Andreas Gal has implemented a prototype of our proposed Proxy API as an extension of Tracemonkey. Tracemonkey is an adaptation of Spidermonkey, Mozilla's Javascript engine, that employs trace trees for aggressive optimization~\cite{gal06efficient}\footnote{At the time of writing, proxies are in the tracemonkey build of the Firefox 3.7a5 pre-release at \url{http://ftp.mozilla.org/pub/mozilla.org/firefox/tinderbox-builds}}.
+Andreas Gal has implemented a prototype of our proposed Proxy API as an extension of Tracemonkey. Tracemonkey is an adaptation of Spidermonkey, Mozilla's Javascript engine, that employs trace trees for aggressive optimization~\cite{gal06efficient}\footnote{At the time of writing, proxies are available in Tracemonkey and in the Firefox 4.0 betas at \url{http://www.mozilla.com/en/firefox/beta/}}.
 %Progress on this extension can be tracked at \url{https://bugzilla.mozilla.org/show_bug.cgi?id=546590}}.
 
 We used the prototype implementation to get an initial idea of the overhead of our Proxy API. To this end, we performed the following micro-benchmark: first, we measured the runtime of operations applied to regular objects in regular Tracemonkey, without the Proxy API extensions. Next, we measured the runtime of the same operations on regular, \emph{non-proxy} objects in the Tracemonkey extension with support for proxies. Finally, we measured the runtime of the operations on a \emph{proxy} object whose handler is the default forwarding handler from Section~\ref{sec:proxies_for_javascript}.
