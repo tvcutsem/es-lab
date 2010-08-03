@@ -21,6 +21,9 @@
 \usepackage{url}
 \usepackage{mdwlist}
 
+\usepackage{rotating}% => for \begin{sidewaystable}...\end{sidewaystable} (landscape tables)
+\usepackage{tabularx}
+
 % Package for including code in the document
 \usepackage{listings}
 \lstdefinelanguage{javascript}{
@@ -915,95 +918,114 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
 
 \textbf{Summary} Table~\ref{tab:related_work} shows that each of the aforementioned intercession APIs has its own set of characteristics. It is difficult to declare one API to be better than another one. By their very nature, meta-level APIs are strongly tied to their particular language. The tradeoffs made by these APIs cannot be understood without reference to the idiosyncratic constraints and motivations of their respective languages. However, for an OO intercession API to be called robust, we believe it should adhere to the principle of stratification.
 
-\begin{table*}
+\begin{sidewaystable*}\small
 \centering
-\begin{tabular}{|p{0.20\textwidth}|p{0.80\textwidth}|}
+%\begin{tabular}{|p{0.07\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|}
+\begin{tabularx}{\textwidth}{|p{0.07\textwidth}|X|X|X|X|X|X|X|X|X|}
     \hline
-    \multicolumn{2}{|l|}{\textbf{Types of values that can be virtualized:}}\\
+    \textbf{API} &
+    \raggedright \textbf{Values that can be virtualized} &
+    \textbf{Stratification} &
+    \raggedright \textbf{Temporary Intercession} &
+    \textbf{Meta-level shifting} &
+    \textbf{Meta-level funnelling} &
+    \raggedright \textbf{Selective interception} &
+    \raggedright \textbf{Fundamental vs. Derived Traps} &
+    \raggedright \textbf{Handler Encapsulation} &
+    \textbf{Uniform intercession}\\
     \hline
-    JS proxies        & Objects and functions, not primitives\\
-    Java proxies      & Objects whose static type is an interface or \texttt{Object}, not primitives\\
-    AT mirages        & Objects and eventual references\\
-    E proxies         & Eventual references\\
-    E non-methodicals & Objects\\
-    ST \texttt{doesNotUnderstand:}  & Objects\\
+    \raggedright \textbf{Javascript proxies} &
+    \raggedright Objects and functions, not primitives &
+    \raggedright Yes, proxy versus handler &
+    \raggedright Yes, by fixing the proxy &
+    \raggedright Yes, if handler is itself a proxy &
+    \raggedright Yes, via the \texttt{get} trap, for a meta-handler &
+    \raggedright Yes, identity, prototype and \texttt{typeof} are fixed &
+    \raggedright Yes, see Table~\ref{tab:operations} &
+    \raggedright Yes &
+    No, primitives can't be virtualized\\
     \hline
-    \multicolumn{2}{|l|}{\textbf{Stratification: is the API stratified?}}\\
+    \raggedright \textbf{Java proxies} &
+    \raggedright Objects whose static type is an interface or \texttt{Object}, not primitives &
+    \raggedright Yes, \texttt{Proxy} versus \texttt{InvocationHandler}&
+    \raggedright No, proxies remain proxies forever&
+    \raggedright Yes, if handler is itself a proxy&
+    \raggedright Yes, via the \texttt{invoke} trap, for any handler&
+    \raggedright Yes, identity, class, interfaces and final methods inherited from \texttt{Object}&
+    \raggedright No, \texttt{invoke} is the only trap&
+    \raggedright No, because of \texttt{Proxy.get\-Invocation\-Handler(proxy)}&
+    No, instances of non-interface classes and primitives can't be virtualized\\
     \hline
-    JS proxies        & Yes, proxy versus handler\\
-    Java proxies      & Yes, Proxy versus InvocationHandler\\
-    AT mirages        & Yes, mirage versus mirror\\
-    E proxies         & Yes, proxy versus ProxyHandler\\
-    E non-methodicals & Yes, non-methodicals have no behavior other than their \texttt{match} clause\\
-    ST \texttt{doesNotUnderstand:}  & No, proxy and handler are the same object\\
+    \raggedright \textbf{Eugster's Uniform Java proxies} &
+    \raggedright Objects, not primitives &
+    \raggedright Yes, \texttt{Proxy} versus \texttt{InvocationHandler} and \texttt{AccessHandler}&
+    \raggedright No, proxies remain proxies forever&
+    \raggedright Yes, if invocation- and accesshandler are themselves a proxy&
+    \raggedright Yes, via the \texttt{invoke} trap, for a meta-invocation- and accesshandler &
+    \raggedright Yes, identity, class and interfaces are fixed (final fields/methods can be virtualized)&
+    \raggedright No, all traps are fundamental &
+    \raggedright No, because of \texttt{Proxy.get\-Invocation\-Handler(proxy)}&
+    No, primitives can't be virtualized\\
     \hline
-    \multicolumn{2}{|l|}{\textbf{Temporary Intercession: can intercession be limited in time?}}\\
+    \raggedright \textbf{Ambient\-Talk mirages} &
+    \raggedright Objects and eventual references &
+    \raggedright Yes, mirage versus mirror &
+    \raggedright No, mirages remain mirages forever &
+    \raggedright Yes, if mirror is itself a mirage &
+    \raggedright Yes, via the \texttt{invoke} trap, for a meta-handler &
+    \raggedright Yes, an object's mirror is determined by a mirror factory, not by the mirage &
+    \raggedright No, all traps are fundamental &
+    \raggedright Yes, but can access the mirror indirectly via a mirror factory &
+    Yes, all values are objects or references (mirages virtualize both)\\
     \hline
-    JS proxies        & Yes, by fixing the proxy (see Section~\ref{sub:immutability})\\
-    Java proxies      & No, proxies remain proxies forever\\
-    AT mirages        & No, mirages remain mirages forever\\
-    E proxies         & Yes, by \emph{resolving} the proxied reference into a real reference\\
-    E non-methodicals & No, non-methodicals remain non-methodicals forever\\
-    ST \texttt{doesNotUnderstand:}  & Yes, by replacing the object using Smalltalk's \texttt{become:} primitive\\
+    \raggedright \textbf{E proxies} &
+    \raggedright Eventual references &
+    \raggedright Yes, proxy versus \texttt{ProxyHandler} &
+    \raggedright Yes, by \emph{resolving} the proxied reference into a real reference &
+    \raggedright No, handler cannot itself be an eventual reference proxy &
+    \raggedright Yes, if handler is a non-methodical object, via its \texttt{match} clause &
+    \raggedright Yes, identity and the ``state'' of a reference are fixed &
+    \raggedright Yes, \texttt{sendOnly} can be derived from \texttt{send} &
+    Yes &
+    Yes, all values are objects or references (proxies virtualize references)\\
     \hline
-    \multicolumn{2}{|l|}{\textbf{Meta-level shifting: can one shift meta-levels?}}\\
+    \raggedright \textbf{E non-methodicals} &
+    Objects &
+    \raggedright Yes, non-methodicals have no behavior other than their \texttt{match} clause &
+    \raggedright No, non-methodicals remain non-methodicals forever &
+    \raggedright No, non-methodicals have no handler &
+    \raggedright Yes, via the \texttt{match} clause &
+    \raggedright Yes, identity and ``trademarks'' (unforgeable types) are fixed &
+    \raggedright No, the \texttt{match} clause is the only trap &
+    Yes &
+    Yes, all values are objects or references (non-methodicals virtualize objects)\\
     \hline
-    JS proxies        & Yes, if handler is itself a proxy\\
-    Java proxies      & Yes, if handler is itself a proxy\\
-    AT mirages        & Yes, if mirror is itself a mirage\\
-    E proxies         & No, handler cannot itself be an eventual reference proxy\\
-    E non-methodicals & No, non-methodicals have no handler\\
-    ST \texttt{doesNotUnderstand:}  & No, cannot trap invocations of \texttt{doesNotUnderstand:} itself\\
+    \raggedright \textbf{Smalltalk} \texttt{doesNotUnderstand:} &
+    Objects &
+    \raggedright No, proxy and handler are the same object &
+    \raggedright Yes, by replacing the object using Smalltalk's \texttt{become:} primitive &
+    \raggedright No, cannot trap invocations of \texttt{doesNotUnderstand:} itself &
+    \raggedright Yes, via \texttt{doesNotUnderstand:} itself, if class implements or inherits no other methods &
+    \raggedright Yes, calls to methods implemented in or inherited by the defining class will not be intercepted &
+    \raggedright No, the \texttt{doesNotUnderstand:} method is the only trap &
+    \raggedright No, proxy and handler are the same object &
+    Yes, all values are objects\\
     \hline
-    \multicolumn{2}{|l|}{\textbf{Meta-level funnelling: can all operations be funnelled through a single trap?}}\\
+    \raggedright \textbf{ParcPlace Smalltalk dispatching classes} &
+    Objects &
+    \raggedright Yes, dispatching classes define only \texttt{dispatchMessage:} &
+    \raggedright Yes, by replacing the object using Smalltalk's \texttt{become:} primitive &
+    \raggedright Yes, by sending a \texttt{dispatchMessage:} explicitly to a dispatching class &
+    \raggedright Yes, via the \texttt{dispatchMessage:} method &
+    \raggedright No, since all interaction is via messages, and all messages are trapped &
+    \raggedright No, the \texttt{dispatchMessage:} method is the only trap &
+    Yes &
+    Yes, all values are objects\\
     \hline
-    JS proxies        & Yes, the \texttt{get} trap, for a meta-handler\\
-    Java proxies      & Yes, the \texttt{invoke} trap, for any handler\\
-    AT mirages        & Yes, the \texttt{invoke} trap, for a meta-handler\\
-    E proxies         & Yes, if handler is a non-methodical object, its \texttt{match} clause funnels all operations\\
-    E non-methodicals & Yes, the \texttt{match} clause\\
-    ST \texttt{doesNotUnderstand:}  & Yes, \texttt{doesNotUnderstand:} itself, if class is otherwise empty (no implemented or inherited methods). In this case, the class may not inherit from \texttt{Object}\\
-    \hline
-    \multicolumn{2}{|l|}{\textbf{Selective interception: are there some operations applicable on proxies that cannot be intercepted?}}\\
-    \hline
-    JS proxies        & Yes, identity, prototype and \texttt{typeof} are fixed\\
-    Java proxies      & Yes, identity, class, implemented interfaces and final methods inherited from \texttt{Object}\\
-    AT mirages        & Yes, an object's mirror is determined by a separate mirror factory object\\
-    E proxies         & Yes, identity and the ``state'' of a reference are fixed\\
-    E non-methodicals & Yes, identity and ``trademarks'' (unforgeable types) are fixed\\
-    ST \texttt{doesNotUnderstand:}  & Yes, calls to methods implemented in or inherited by the defining class will not be intercepted\\
-    \hline
-    \multicolumn{2}{|l|}{\textbf{Fundamental vs. Derived Traps: does the API make this distinction?}}\\
-    \hline
-    JS proxies        & Yes, see Table~\ref{tab:operations}\\
-    Java proxies      & No, \texttt{invoke} is the only trap\\
-    AT mirages        & No, all traps are fundamental\\
-    E proxies         & Yes, \texttt{sendOnly} can be derived from \texttt{send}\\
-    E non-methodicals & No, the \texttt{match} clause is the only trap\\
-    ST \texttt{doesNotUnderstand:}  & No, the \texttt{doesNotUnderstand:} method is the only trap\\
-    \hline
-    \multicolumn{2}{|l|}{\textbf{Handler Encapsulation: is the handler encapsulated?}}\\
-    \hline
-    JS proxies        & Yes\\
-    Java proxies      & No, because of \texttt{Proxy.getInvocationHandler(proxy)}\\
-    AT mirages        & Yes, but can get access indirectly via a mirror factory\\
-    E proxies         & Yes\\
-    E non-methodicals & Yes\\
-    ST \texttt{doesNotUnderstand:}  & No, proxy and handler are the same object\\
-    \hline
-    \multicolumn{2}{|l|}{\textbf{Uniform intercession: can all types of values in the language be virtualized?}}\\
-    \hline
-    JS proxies        & No, primitives cannot\\
-    Java proxies      & No, instances of non-interface classes and primitives cannot\\
-    AT mirages        & Yes, all values are objects or references (mirages cover both)\\
-    E proxies         & Yes, all values are objects or references (proxies cover references)\\
-    E non-methodicals & Yes, all values are objects or references (non-methodicals cover objects)\\
-    ST \texttt{doesNotUnderstand:}  & Yes, all values are objects\\
-    \hline
-  \end{tabular}
+  \end{tabularx}
   \caption{Comparison of object-oriented intercession APIs}
   \label{tab:related_work}
-\end{table*}
+\end{sidewaystable*}
 
 %\subsection{Intercepting Method Invocations}
 
