@@ -5,7 +5,7 @@
 %  Copyright (c) 2010 Google. All rights reserved.
 %
 %\documentclass{acm_proc_article-sp}
-\documentclass{sig-alternate}
+\documentclass[10pt]{sigplanconf}
 
 % Use utf-8 encoding for foreign characters
 %\usepackage[utf8]{inputenc}
@@ -88,26 +88,33 @@
 % \subtitle[Extended Abstract]
 % \titlenote{}
 
-\numberofauthors{2}
-\author{
-\alignauthor
-Tom Van Cutsem\titlenote{Tom Van Cutsem is a Postdoctoral Fellow of the Research Foundation, Flanders (FWO). This work was carried out while on a Visiting Faculty appointment at Google, sponsored by Google and a travel grant from the FWO.}\\
-       \affaddr{Vrije Universiteit Brussel}\\
-       \affaddr{Pleinlaan 2}\\
-       \affaddr{1050 Brussels, Belgium}\\
-       \email{tvcutsem@vub.ac.be}
+%\numberofauthors{2}
+%\author{
+%\alignauthor
+%Tom Van Cutsem\titlenote{Tom Van Cutsem is a Postdoctoral Fellow of the Research Foundation, Flanders (FWO). This work was carried out while on a Visiting Faculty appointment at Google, sponsored by Google and a travel grant from the FWO.}\\
+%       \affaddr{Vrije Universiteit Brussel}\\
+%       \affaddr{Pleinlaan 2}\\
+%       \affaddr{1050 Brussels, Belgium}\\
+%       \email{tvcutsem@vub.ac.be}
 % 2nd. author
-\alignauthor
-Mark S. Miller\\%\titlenote{}\\
-       \affaddr{Google Research}\\
-       \affaddr{1600 Amphitheatre Parkway}\\
-       \affaddr{Mountain View, CA, USA}\\
-       \email{erights@google.com}
-}
+%\alignauthor
+%Mark S. Miller\\%\titlenote{}\\
+%       \affaddr{Google Research}\\
+%       \affaddr{1600 Amphitheatre Parkway}\\
+%       \affaddr{Mountain View, CA, USA}\\
+%       \email{erights@google.com}
+%}
+
+\authorinfo{Tom Van Cutsem\titlenote{Tom Van Cutsem is a Postdoctoral Fellow of the Research Foundation, Flanders (FWO). This work was carried out while on a Visiting Faculty appointment at Google, sponsored by Google and a travel grant from the FWO.}}{Vrije Universiteit Brussel\\Pleinlaan 2\\ Brussels, Belgium}{tvcutsem@vub.ac.be}
+\authorinfo{Mark S. Miller}{Google Research\\1600 Amphitheatre Parkway\\Mountain View, CA, USA}{erights@google.com}
 
 \date{}
 
 \begin{document}
+
+\conferenceinfo{DLS 2010,} {October 18, 2010, Reno/Tahoe, Nevada, USA.}
+\CopyrightYear{2010}
+\copyrightdata{978-1-4503-0405-4/10/10}
 
 \ifpdf
 \DeclareGraphicsExtensions{.pdf, .jpg, .tif}
@@ -115,7 +122,7 @@ Mark S. Miller\\%\titlenote{}\\
 \DeclareGraphicsExtensions{.eps, .jpg}
 \fi
 
-\toappear{DLS 2010, October 2010, Reno, Nevada.}
+%\toappear{DLS 2010, October 2010, Reno, Nevada.}
 \maketitle
 
 \begin{abstract}
@@ -248,7 +255,7 @@ The new property descriptor API discussed in the previous section provides for m
 \subsection{Intercession in Javascript}
 \label{sub:intercession_in_javascript}
 
-Javascript has no standard support for intercession. It is not possible to intercept an object's property access, how it responds to the \texttt{in}-operator, \texttt{for-in} loops and so on. Mozilla's Spidermonkey engine has long included a non-standard way of intercepting method calls based on Smalltalk's \texttt{doesNotUnderstand:} mechanism (see Section~\ref{sub:survey}). In Spidermonkey, the equivalent method is named \noSuchMethod{}. For example, a proxy that can generically forward all received messages to a target object \texttt{o} is created as follows:
+Javascript has no standard support for intercession. It is not possible to intercept an object's property access, how it responds to the \texttt{in}-operator, \texttt{for-in} loops and so on. Mozilla's Spidermonkey engine has long included a non-standard way of intercepting method calls based on Smalltalk's \texttt{doesNotUnderstand:} method (see Section~\ref{sub:survey}). In Spidermonkey, the equivalent method is named \noSuchMethod{}. For example, a proxy that can generically forward all received messages to a target object \texttt{o} is created as follows:
 
 \begin{lstlisting}[language=javascript]
 function makeProxy(o) {
@@ -310,7 +317,7 @@ Here, \texttt{handler} is an object that must implement a particular meta-level 
 \begin{table*}[t]
   \begin{center}
     \begin{small}
-    \begin{tabular}{|l|p{0.39\textwidth}|p{0.39\textwidth}|}
+    \begin{tabular}{|l|p{0.40\textwidth}|p{0.38\textwidth}|}
     \hline
     \textbf{Operation} & \textbf{Triggered by} & \textbf{Reified as}\\
     \hline
@@ -566,7 +573,7 @@ has: function(name) {
 }
 \end{lstlisting}
 
-The downside of this implementation is that \texttt{getPropertyDescriptor} must needlessly allocate a property descriptor object if the named property exists. A custom implementation of \texttt{has} can often avoid this allocation.
+The downside of this implementation is that \texttt{getProperty\-Descriptor} must needlessly allocate a property descriptor object if the named property exists. A custom implementation of \texttt{has} can often avoid this allocation.
 
 %Note that it's possible to create an ``abstract'' prototype object that implements all derived traps in terms of the more fundamental traps. Since a handler is just a regular object, it can inherit the default derived traps from this abstract prototype, provided it implements the fundamental traps.
 
@@ -576,7 +583,7 @@ While defining the intercession API, we found that there is another force at pla
 
 One reason not to introduce a derived trap, even in the face of improved efficiency, is that introducing the distinction may break language invariants that may surprise the language runtime and programmers.
 
-Once the API provides a proxy handler with both a fundamental and a derived trap, there is no guarantee that a proxy handler will effectively make sure that the derived trap is indeed semantically equivalent to the canonical derived implementation. For example, if a proxy handler is given the option to override both the \texttt{has} and the \texttt{getPropertyDescriptor} traps, it is not enforced that these traps return mutually consistent results. Without proxies, the programmer can count on the invariant that \texttt{name in obj} is equivalent to \texttt{Object.getPropertyDescriptor(obj, name) !== undefined}. If \texttt{obj} is a proxy, this invariant is no longer guaranteed: \texttt{has} could return true and \texttt{getPropertyDescriptor} could nevertheless return \texttt{undefined}.
+Once the API provides a proxy handler with both a fundamental and a derived trap, there is no guarantee that a proxy handler will effectively make sure that the derived trap is indeed semantically equivalent to the canonical derived implementation. For example, if a proxy handler is given the option to override both the \texttt{has} and the \texttt{getPropertyDescriptor} traps, it is not enforced that these traps return mutually consistent results. Without proxies, the programmer can count on the invariant that \texttt{name in obj} is equivalent to \texttt{Object.getPropertyDescriptor(obj, name) !== undefined}. If \texttt{obj} is a proxy, this invariant is no longer guaranteed: \texttt{has} could return true and \texttt{getPropertyDescriptor} could nevertheless return \texttt{un\-defined}.
 
 For proxies, both the language runtime and programmers can no longer count on such invariants being upheld, although a ``correct'' handler should attempt to uphold them. Even if the handler implementor does not intend to violate the invariants, the distinction between fundamental and derived traps nevertheless introduces a maintenance cost: if either of the two traps is changed or gets overridden in a delegating object, the other trap should be changed or overridden in a compatible way.
 
@@ -918,7 +925,7 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
 
 \textbf{Summary} Table~\ref{tab:related_work} shows that each of the aforementioned intercession APIs has its own set of characteristics. It is difficult to declare one API to be better than another one. By their very nature, meta-level APIs are strongly tied to their particular language. The tradeoffs made by these APIs cannot be understood without reference to the idiosyncratic constraints and motivations of their respective languages. However, for an OO intercession API to be called robust, we believe it should adhere to the principle of stratification.
 
-\begin{sidewaystable*}\small
+\begin{sidewaystable*}\footnotesize
 \centering
 %\begin{tabular}{|p{0.07\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|p{0.09\textwidth}|}
 \begin{tabularx}{\textwidth}{|p{0.07\textwidth}|X|X|X|X|X|X|X|X|X|}
@@ -947,7 +954,7 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
     \hline
     \raggedright \textbf{Java proxies} &
     \raggedright Objects whose static type is an interface or \texttt{Object}, not primitives &
-    \raggedright Yes, \texttt{Proxy} versus \texttt{InvocationHandler}&
+    \raggedright Yes, \texttt{Proxy} versus \texttt{Invocation\-Handler}&
     \raggedright No, proxies remain proxies forever&
     \raggedright Yes, if handler is itself a proxy&
     \raggedright Yes, via the \texttt{invoke} trap, for any handler&
@@ -958,7 +965,7 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
     \hline
     \raggedright \textbf{Eugster's Uniform Java proxies} &
     \raggedright Objects, not primitives &
-    \raggedright Yes, \texttt{Proxy} versus \texttt{InvocationHandler} and \texttt{AccessHandler}&
+    \raggedright Yes, \texttt{Proxy} versus \texttt{Invocation\-Handler} and \texttt{AccessHandler}&
     \raggedright No, proxies remain proxies forever&
     \raggedright Yes, if invocation- and accesshandler are themselves a proxy&
     \raggedright Yes, via the \texttt{invoke} trap, for a meta-invocation- and accesshandler &
@@ -1000,25 +1007,25 @@ Ducasse~\cite{ducasse99evaluatingmessage} gives an overview of the various messa
     Yes &
     Yes, all values are objects or references (non-methodicals virtualize objects)\\
     \hline
-    \raggedright \textbf{Smalltalk} \texttt{doesNotUnderstand:} &
+    \raggedright \textbf{Smalltalk} \texttt{doesNot\-Understand:} &
     Objects &
     \raggedright No, proxy and handler are the same object &
     \raggedright Yes, by replacing the object using Smalltalk's \texttt{become:} primitive &
-    \raggedright No, cannot trap invocations of \texttt{doesNotUnderstand:} itself &
-    \raggedright Yes, via \texttt{doesNotUnderstand:} itself, if class implements or inherits no other methods &
+    \raggedright No, cannot trap invocations of \texttt{doesNot\-Understand:} itself &
+    \raggedright Yes, via \texttt{doesNot\-Understand:} itself, if class implements or inherits no other methods &
     \raggedright Yes, calls to methods implemented in or inherited by the defining class will not be intercepted &
-    \raggedright No, the \texttt{doesNotUnderstand:} method is the only trap &
+    \raggedright No, the \texttt{doesNot\-Understand:} method is the only trap &
     \raggedright No, proxy and handler are the same object &
     Yes, all values are objects\\
     \hline
     \raggedright \textbf{ParcPlace Smalltalk dispatching classes} &
     Objects &
-    \raggedright Yes, dispatching classes define only \texttt{dispatchMessage:} &
+    \raggedright Yes, dispatching classes define only \texttt{dispatch\-Message:} &
     \raggedright Yes, by replacing the object using Smalltalk's \texttt{become:} primitive &
-    \raggedright Yes, by sending a \texttt{dispatchMessage:} explicitly to a dispatching class &
-    \raggedright Yes, via the \texttt{dispatchMessage:} method &
+    \raggedright Yes, by sending a \texttt{dispatch\-Message:} explicitly to a dispatching class &
+    \raggedright Yes, via the \texttt{dispatch\-Message:} method &
     \raggedright No, since all interaction is via messages, and all messages are trapped &
-    \raggedright No, the \texttt{dispatchMessage:} method is the only trap &
+    \raggedright No, the \texttt{dispatch\-Message:} method is the only trap &
     Yes &
     Yes, all values are objects\\
     \hline
@@ -1098,10 +1105,159 @@ The second contribution of this paper is the identification of general design pr
   \item[Uniform intercession:] every value can be proxified.
 \end{description*}
 
-\section*{Acknowledgements}
+%\section*{Acknowledgements}
+\acks
 
-We thank the members of the ECMA TC-39 committee and the \texttt{es-discuss@mozilla.org} community for their feedback on our Proxy API. Thanks to Brendan Eich, Andreas Gal and Dave Herman for detailed comments and to Andreas Gal for his work on the Tracemonkey implementation.
+We thank the members of the ECMA TC-39 committee and the \texttt{es-discuss@mozilla.org} community for their feedback on our Proxy API. Thanks to Brendan Eich, Andreas Gal and Dave Herman for detailed comments and to Andreas Gal for his work on the Tracemonkey implementation. Thanks to the anonymous referees for comments on an earlier draft of this article.
 
-\bibliographystyle{abbrv}
-\bibliography{proxies}
+\bibliographystyle{abbrvnat}
+\begin{thebibliography}{20}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Bracha and Griswold(1993)]{bracha93strongtalk}
+G.~Bracha and D.~Griswold.
+\newblock Strongtalk: typechecking smalltalk in a production environment.
+\newblock In \emph{OOPSLA '93: Proceedings of the eighth annual conference on
+  Object-oriented programming systems, languages, and applications}, pages
+  215--230, NY, USA, 1993. ACM.
+\newblock ISBN 0-89791-587-9.
+\newblock \doi{http://doi.acm.org/10.1145/165854.165893}.
+
+\bibitem[Bracha and Ungar(2004)]{bracha04mirrors}
+G.~Bracha and D.~Ungar.
+\newblock Mirrors: Design principles for meta-level facilities of
+  object-oriented programming languages.
+\newblock In \emph{OOPSLA '04: Proceedings of the 19th annual Conference on
+  Object-Oriented Programming, Systems, Languages and Applications}, pages
+  331--343, 2004.
+
+\bibitem[Bracha et~al.(2010)Bracha, Ah\'e, Bykov, Kashai, Maddox, and
+  Miranda]{bracha10newspeak}
+G.~Bracha, P.~Ah\'e, V.~Bykov, Y.~Kashai, W.~Maddox, and E.~Miranda.
+\newblock Modules as objects in newspeak.
+\newblock In \emph{ECOOP '10: Proceedings of the 24th European Conference on
+  Object Oriented Programming, Maribor, Slovenia}, LNCS. Springer Verlag, June
+  2010.
+
+\bibitem[Brant et~al.(1998)Brant, Foote, Johnson, and Roberts]{brant98wrappers}
+J.~Brant, B.~Foote, R.~E. Johnson, and D.~Roberts.
+\newblock Wrappers to the rescue.
+\newblock In \emph{ECOOP '98: Proceedings of the 12th European Conference on
+  Object-Oriented Programming}, pages 396--417, London, UK, 1998.
+  Springer-Verlag.
+\newblock ISBN 3-540-64737-6.
+
+\bibitem[Crockford(2008)]{crockford08good}
+D.~Crockford.
+\newblock \emph{Javascript: The Good Parts}.
+\newblock O'Reilly, 2008.
+
+\bibitem[Ducasse(1999)]{ducasse99evaluatingmessage}
+S.~Ducasse.
+\newblock Evaluating message passing control techniques in smalltalk.
+\newblock \emph{Journal of Object-Oriented Programming (JOOP)}, 12:\penalty0
+  39--44, 1999.
+
+\bibitem[{ECMA International}(2009)]{ECMA262}
+{ECMA International}.
+\newblock \emph{ECMA-262: ECMAScript Language Specification}.
+\newblock ECMA, Geneva, Switzerland, fifth edition, December 2009.
+\newblock URL
+  \url{http://www.ecma-international.org/publications/standards/Ecma-327.htm}.
+
+\bibitem[Eugster(2006)]{eugster06uniform}
+P.~Eugster.
+\newblock Uniform proxies for java.
+\newblock In \emph{OOPSLA '06: Proceedings of the 21st annual conference on
+  Object-oriented programming systems, languages, and applications}, pages
+  139--152, NY, USA, 2006. ACM.
+\newblock ISBN 1-59593-348-4.
+\newblock \doi{http://doi.acm.org/10.1145/1167473.1167485}.
+
+\bibitem[Foote and Johnson(1989)]{foote89reflective}
+B.~Foote and R.~E. Johnson.
+\newblock Reflective facilities in smalltalk-80.
+\newblock In \emph{OOPSLA '89: Conference proceedings on Object-oriented
+  programming systems, languages and applications}, pages 327--335, NY, USA,
+  1989. ACM.
+\newblock ISBN 0-89791-333-7.
+\newblock \doi{http://doi.acm.org/10.1145/74877.74911}.
+
+\bibitem[Gal(2006)]{gal06efficient}
+A.~Gal.
+\newblock \emph{Efficient bytecode verification and compilation in a virtual
+  machine}.
+\newblock PhD thesis, University of California, Irvine, Long Beach, CA, USA,
+  2006.
+
+\bibitem[Kiczales et~al.(1991)Kiczales, Rivieres, and Bobrow]{kiczales91art}
+G.~Kiczales, J.~D. Rivieres, and D.~G. Bobrow.
+\newblock \emph{The Art of the Metaobject Protocol}.
+\newblock MIT Press, Cambridge, MA, USA, 1991.
+\newblock ISBN 0262111586.
+
+\bibitem[Miller et~al.(2005)Miller, Tribble, and Shapiro]{miller05concurrency}
+M.~Miller, E.~D. Tribble, and J.~Shapiro.
+\newblock Concurrency among strangers: Programming in {E} as plan coordination.
+\newblock In \emph{Symposium on Trustworthy Global Computing}, pages 195--229.
+  Springer, 2005.
+
+\bibitem[Miller(2006)]{miller06robust}
+M.~S. Miller.
+\newblock \emph{Robust Composition: Towards a Unified Approach to Access
+  Control and Concurrency Control}.
+\newblock PhD thesis, John Hopkins University, Baltimore, Maryland, USA, May
+  2006.
+\balancecolumns
+\bibitem[Miller(2010)]{miller10et}
+M.~S. Miller.
+\newblock Weak maps proposal for {ECMAScript Harmony}, 2010.
+\newblock \url{tinyurl.com/weak-maps}.
+
+\bibitem[Miller and Reid(2009)]{eproxies}
+M.~S. Miller and K.~Reid.
+\newblock Proxies for eventual references in {E}, 2009.
+\newblock \url{wiki.erights.org/wiki/Proxy}.
+
+\bibitem[Miller et~al.(2008)Miller, Samuel, Laurie, Awad, and
+  Stay]{miller08caja}
+M.~S. Miller, M.~Samuel, B.~Laurie, I.~Awad, and M.~Stay.
+\newblock Caja: Safe active content in sanitized javascript, June 2008.
+\newblock \url{tinyurl.com/caja-spec}.
+
+\bibitem[{Mostinckx} et~al.(2007){Mostinckx}, {Van Cutsem}, {Timbermont}, and
+  {Tanter}]{mostinckx07behavioral}
+S.~{Mostinckx}, T.~{Van Cutsem}, S.~{Timbermont}, and E.~{Tanter}.
+\newblock Mirages: Behavioral intercession in a mirror-based architecture.
+\newblock In \emph{Proceedings of the Dynamic Languages Symposium - OOPSLA'07
+  Companion}, pages 222--248. ACM Press, 2007.
+
+\bibitem[Redell(1974)]{redell74naming}
+D.~D. Redell.
+\newblock \emph{Naming and Protection in Extensible Operating Systems}.
+\newblock PhD thesis, Department of Computer Science, University of California
+  at Berkeley, Nov 1974.
+
+\bibitem[Tanter et~al.(2003)Tanter, Noy{\'e}, Caromel, and Cointe]{tanter03pbh}
+{\'E}.~Tanter, J.~Noy{\'e}, D.~Caromel, and P.~Cointe.
+\newblock Partial behavioral reflection: spatial and temporal selection of
+  reification.
+\newblock In \emph{OOPSLA '03: Proceedings of the 2003 Conference on
+  Object-Oriented Programming Systems, Languages and Applications}, pages
+  27--46. ACM, 2003.
+
+\bibitem[Ungar and Smith(1987)]{ungar87power}
+D.~Ungar and R.~B. Smith.
+\newblock Self: The power of simplicity.
+\newblock In \emph{OOPSLA '87: Conference proceedings on Object-oriented
+  Programming Systems, Languages and Applications}, pages 227--242. ACM Press,
+  1987.
+\newblock ISBN 0-89791-247-0.
+\newblock \doi{http://doi.acm.org/10.1145/38765.38828}.
+
+\end{thebibliography}
 \end{document}
