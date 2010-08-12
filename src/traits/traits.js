@@ -77,9 +77,7 @@ var Trait = (function(){
         for (var i = 0, len = arr.length; i < len; i++) { fun(arr[i]); }
       };
   
-  // on v8 version 2.3.4.1, Object.freeze(obj) returns undefined instead of obj
-  var freeze = (Object.freeze ? function(obj) { Object.freeze(obj); return obj; }
-                              : function(obj) { return obj; });
+  var freeze = Object.freeze || function(obj) { return obj; };
   var getPrototypeOf = Object.getPrototypeOf || function(obj) { 
     return Object.prototype;
   };
