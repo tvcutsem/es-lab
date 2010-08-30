@@ -335,7 +335,12 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
     global[SHOULD_BE_EVAL] = fakeEval;
 
     global.cajaVM = {
-      log: function(str) { console.log(str); },
+      log: function(str) {
+        if (typeof console !== 'undefined' &&
+            typeof console.log === 'function') {
+          console.log(str);
+        }
+      },
 
       compile: compile,
 
@@ -372,7 +377,7 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
         value: result, writable: false, configurable: false
       });
     } catch (ex) {
-      console.log("Can't neuter " + name);
+      cajaVM.log("Can't neuter " + name);
     }
     return result;
   }
@@ -482,13 +487,13 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
   }
   if (FREEZE_EARLY) { Object.freeze(FREEZE_EARLY); }
   clean(root, "");
-  // console.log("Skipped " + skipped.join(' '));
-  console.log("Deleted " + goodDeletions.join(' '));
+  // cajaVM.log("Skipped " + skipped.join(' '));
+  cajaVM.log("Deleted " + goodDeletions.join(' '));
 
   if (badDeletions.length === 0) {
     // We succeeded. Enable safe Function, eval, and compile to work.
     dirty = false;
   } else {
-    console.log("Can't delete " + badDeletions.join(' '));
+    cajaVM.log("Can't delete " + badDeletions.join(' '));
   }
 }
