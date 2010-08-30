@@ -26,7 +26,7 @@
  * <tt>Function</tt> bindings) takes care to uphold object-capability
  * rules, then untrusted code loaded via <tt>eval</tt> and
  * <tt>Function</tt> will be constrained by those rules.
- * 
+ *
  * <p>On a pre-ES5 browser, this script will fail cleanly, leaving the
  * frame intact. Otherwise, if this script fails, it may leave this
  * frame in an unusable state. All following description assumes this
@@ -37,8 +37,8 @@
  * these invariants while subverting the intent of the spec. In other
  * words, even on an ES5 conformant browser, we do not presume to
  * defend ourselves from a browser that is out to get us.
- * 
- * @param global :Record(any) Assumed to be the real global object for
+ *
+ * @param global ::Record(any) Assumed to be the real global object for
  *        this frame. Since initSES will allow global variable
  *        references that appear at the top level of the whitelist,
  *        our safety depends on these variables being frozen as a side
@@ -47,8 +47,8 @@
  *        <i>root accessible primordial</i>, which is provided as the
  *        <tt>this</tt> binding for hermetic eval calls -- emulating
  *        the safe subset of the normal global object.
- * @param whitelist :Record(Permit) 
- *            where Permit = true | "*" | Record(Permit).
+ * @param whitelist ::Record(Permit)
+ *            where Permit = true | "*" | "skip" | Record(Permit).
  *        Describes the subset of naming paths starting from the root
  *        that should be accessible. The <i>accessible primordials</i>
  *        are this root plus all values found by navigating these paths
@@ -56,85 +56,324 @@
  *        accessible primordials are deleted, and then all accessible
  *        primordials are frozen with the whitelisted properties
  *        frozen as data properties.
- * @param verify :F([srcString, startNameString, whitelist], srcString)
- *        An ES5 source verification procedure that returns the
- *        srcString if successful and otherwise throws an error. A
- *        source string verifies iff it is statically valid ES5-strict
- *        program text when parsed starting with the startNameString
- *        start production, and if it contains no free variables other
- *        than those listed at the top level of the whitelist.
- * @param ObjTable :F([],Record({get: F([Object], any), set: F([Object, any])}))
+ * @param atLeastFreeVarNames ::F([string], Record(true))
+ *        Given the sourceText for a strict Program,
+ *        atLeastFreeVarNames(sourceText) returns a Record whose
+ *        enumerable property names must include the names of all the
+ *        free variables occuring in sourceText. It can include as
+ *        many other strings as is convenient so long as it includes
+ *        these. The value of each of these properties should be
+ *        {@code true}.
+ * @param ObjMap ::F([],Record({get: F([Object], any),
+ *                              set: F([Object, any])}))
  *        A constructor of object tables, where an object table maps
- *        from objects-as-keys to values. The proposed EphemeronTable,
+ *        from objects-as-keys to values. The ES-Harmony WeakMap,
  *        if available, would be an excellent choice; but leakier
  *        tables are fine since these tables become unreachable after
- *        initialization anyway. 
+ *        initialization anyway.
  */
-function initSES(global, whitelist, verify, ObjTable) {
+function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
+
+
+  /////////////// KLUDGE SWITCHES ///////////////
+
+  //var ENUMERABILITY_SHOULD_BE_FALSE = false;
+  var ENUMERABILITY_SHOULD_BE_FALSE = true;
+
+
+  /////////////////////////////////
+  // The following are only the minimal kludges needed for the current
+  // Mozilla Minefield (Firefox Beta) or Chromium Beta. At the time of
+  // this writing, these are Mozilla 4.0b5pre and Chromium 6.0.490.0
+  // (3135). As these move forward, kludges can be removed until we
+  // simply rely on ES5.
+
+  //var SHOULD_BE_EVAL = "eval";
+  var SHOULD_BE_EVAL = "eval2";
+
+
+  //var SHOULD_BE_NULL = null;
+  var SHOULD_BE_NULL = Object.prototype;
+
+  //var REQUIRE_STRICT = true;
+  var REQUIRE_STRICT = false;
+
+  //var FREEZE_EARLY = undefined;
+  var FREEZE_EARLY = Array.prototype.forEach;
+
+  //////////////// END KLUDGE SWITCHES ///////////
 
   var dirty = true;
 
   function fail(str) { throw new EvalError(str); }
-  
-  if (function(){return this;}()) { fail('Requires at least ES5 support'); }
+
+  if (REQUIRE_STRICT && function(){return this;}()) {
+    fail('Requires at least ES5 support');
+  }
+
+  delete whitelist.eval;
+  whitelist[SHOULD_BE_EVAL] = true;
 
   /**
    * Code being eval'ed sees <tt>root</tt> as its <tt>this</tt>, as if
-   * <tt>root</tt> were the global object. 
-   * 
+   * <tt>root</tt> were the global object.
+   *
    * <p>Root's properties are exactly the whitelistes global variable
    * references. These properties, both as they appear on the global
    * object and on this root object, are frozen and so cannot
    * diverge. This preserves the illusion.
    */
-  var root = {};
+  var root = Object.create(SHOULD_BE_NULL);
 
   // Repair phase -- monkey patch safe replacements
   (function() {
-    
+
+    // The unsafe* variables hold precious values that must not escape
+    // to untrusted code. When {@code eval} is invoked via {@code
+    // unsafeEval}, this is a call to the indirect eval function, not
+    // the direct eval operator.
     var unsafeEval = eval;
     var UnsafeFunction = Function;
-    var unsafeRegExpExec = RegExp.prototype.exec;
-    var unsafeRegExpTest = RegExp.prototype.test;
-    
-    Function = function(var_args) {
+
+    /**
+     * Fails if {@code programSrc} does not parse as a strict Program
+     * production.
+     *
+     * <p>Uses Ankur Taly's trick to cheaply check that a program
+     * parses using the platform's parser, as implicitly accessed by
+     * the original eval function, while nevertheless ensuring that no
+     * code from {@code programSrc} executes in the process.
+     */
+    function verifyStrictProgram(programSrc) {
+      try {
+        unsafeEval('"use strict";\n' +
+                   'throw "NotASyntaxError";\n' +
+                   programSrc);
+      } catch (ex) {
+        if (ex !== "NotASyntaxError") {
+          throw ex;
+        }
+      }
+    }
+
+    /**
+     * Fails if {@code exprSource} does not parse as a strict
+     * Expression production.
+     */
+    function verifyStrictExpression(exprSrc) {
+      verifyStrictProgram(exprSrc + ';');
+      verifyStrictProgram('(\n' + exprSrc + '\n);');
+    }
+
+    /**
+     * For all the enumerable own properties of {@code from}, copy
+     * their descriptors to {@code virtualGlobal}, except that the
+     * property added to {@code virtualGlobal} is unconditionally
+     * non-enumerable and (for the moment) configurable.
+     *
+     * <p>By copying descriptors rather than values, any accessor
+     * properties of {@code env} becomes an accessors of {code
+     * virtualGlobal} with the same getter and setter. If these do not
+     * use their {@code this} value, then the original any copied
+     * properties are effectively joined.
+     *
+     * <p>We make these configurable so that {@code virtualGlobal} can
+     * be further configured before being frozen. We make these
+     * non-enumerable in order to emulate the normal behavior of
+     * built-in properties of typical global objects, such as the
+     * browser's {@code window} object.
+     */
+    function initGlobalProperties(from, virtualGlobal) {
+      for (var name in from) {
+        var desc = Object.getOwnPropertyDescriptor(from, name);
+        if (desc) {
+          desc.enumerable = ENUMERABILITY_SHOULD_BE_FALSE;
+          desc.configurable = true;
+          Object.defineProperty(virtualGlobal, name, desc);
+        }
+      }
+    }
+
+    /**
+     * Make a frozen virtual global object whose properties are the
+     * union of the whitelisted globals and the enumerable own
+     * properties of {@code env}.
+     *
+     * <p>If there is a collision, the property from {@code env}
+     * shadows the whitelisted global. We shadow by overwriting rather
+     * than inheritance so that shadowing makes the original binding
+     * inaccessible.
+     */
+    function makeVirtualGlobal(env) {
+      var virtualGlobal = Object.create(SHOULD_BE_NULL);
+      initGlobalProperties(root, virtualGlobal);
+      initGlobalProperties(env, virtualGlobal);
+      return Object.freeze(virtualGlobal);
+    }
+
+    /**
+     * Make a frozen scope object which inherits from
+     * {@code virtualGlobal}, for use by {@code with} to prevent
+     * access to any {@code freeNames} other than those found on the.
+     * {@code virtualGlobal}.
+     */
+    function makeScopeObject(virtualGlobal, freeNames) {
+      var scopeObject = Object.create(virtualGlobal);
+      for (var name in freeNames) {
+        if (!(name in virtualGlobal)) {
+          (function(name) {
+            Object.defineProperty(scopeObject, name, {
+              get: function() {
+                throw new ReferenceError('"' + name + '" not in scope');
+              },
+              set: function(ignored) {
+                throw new TypeError('Can\'t set "' + name + '"');
+              },
+              enumerable: true
+            });
+          })(name);
+        }
+      }
+      return Object.freeze(scopeObject);
+    }
+
+    /**
+     * Compile {@code exprSrc} as a strict expression into a function
+     * of an environment {@code env}, that when called evaluates
+     * {@code exprSrc} in a virtual global environment consisting only
+     * of the whitelisted globals and a snapshot of the enumerable own
+     * properties of {@code env}.
+     *
+     * <p>When SES {@code compile} is provided primitively, it should
+     * accept a Program and return a function that evaluates it to the
+     * Program's completion value. Unfortunately, this is not
+     * practical as a library without some non-standard support from
+     * the platform such as an parser API that provides an AST.
+     */
+    function compile(exprSrc) {
       if (dirty) { fail('Initial cleaning failed'); }
-      var params = ([]).slice.call(arguments, 0);
+      verifyStrictExpression(exprSrc);
+      var freeNames = atLeastFreeVarNames(exprSrc);
+      var wrapperSrc =
+        '(function() {\n' +
+        // non-strict code, where this === scopeObject
+        '  with(this) {\n' +
+        '    return function() {\n' +
+        '      "use strict";\n' +
+        '      return (\n' +
+        // strict code, where this === virtualGlobal
+        '        ' + exprSrc + '\n' +
+        '      );\n' +
+        '    };\n' +
+        '  }\n' +
+        '})';
+      var wrapper = unsafeEval(wrapperSrc);
+      return function(env) {
+        var virtualGlobal = makeVirtualGlobal(env);
+        var scopeObject = makeScopeObject(virtualGlobal, freeNames);
+        return wrapper.call(scopeObject).call(virtualGlobal);
+      };
+    }
+
+    /**
+     * A safe form of the {@code Function} constructor, which
+     * constructs strict functions that can only refer freely to the
+     * whitelisted globals.
+     *
+     * <p>The returned function is strict whether or not it declares
+     * itself to be.
+     */
+    function FakeFunction(var_args) {
+      var params = [].slice.call(arguments, 0);
       var body = params.pop();
-      body = body || ''; // Worry about NaN
+      body = String(body || '');
       params = params.join(',');
-      var expr = 'function(' + params + '\n){' + body + '}';
-      expr = verify(expr, 'FunctionExpr', whitelist);
-      return unsafeEval('"use strict";(' + expr +');');
+      var exprSrc = '(function(' + params + '\n){' + body + '})';
+      return compile(exprSrc)({});
+    }
+    FakeFunction.prototype = UnsafeFunction.prototype;
+    FakeFunction.prototype.constructor = FakeFunction;
+    global.Function = FakeFunction;
+
+    /**
+     * A safe form of the indirect {@code eval} function, which
+     * evaluates {@code src} as strict code that can only refer freely
+     * to the whitelisted globals.
+     *
+     * <p>Given our parserless methods of verifying untrusted sources,
+     * we unfortunately have no practical way to obtain the completion
+     * value of a safely evaluated Program. Instead, we adopt a
+     * compromise based on the following observation. All Expressions
+     * are valid Programs, and all Programs are valid
+     * FunctionBodys. If {@code src} parses as a strict expression,
+     * then we evaluate it as an expression it and correctly return its
+     * completion value, since that is simply the value of the
+     * expression.
+     *
+     * <p>Otherwise, we evaluate {@code src} as a FunctionBody and
+     * return what that would return from its implicit enclosing
+     * function. If {@code src} is simply a Program, then it would not
+     * have an explicit {@code return} statement, and so we fail to
+     * return its completion value. This is sufficient for using
+     * {@code eval} to emulate script tags, since script tags also
+     * lose the completion value.
+     *
+     * <p>When SES {@code eval} is provided primitively, it should
+     * accept a Program and evaluate it to the Program's completion
+     * value. Unfortunately, this is not practical as a library
+     * without some non-standard support from the platform such as an
+     * parser API that provides an AST.
+     */
+    function fakeEval(src) {
+      try {
+        verifyStrictExpression(src);
+      } catch (x) {
+        src = '(function() {' + src + '}).call(this)';
+      }
+      return compile(src)({});
+    }
+    global[SHOULD_BE_EVAL] = fakeEval;
+
+    global.cajaVM = {
+      log: function(str) { console.log(str); },
+
+      compile: compile,
+
+      protect: function(root) {
+        var protecting = ObjMap();
+        function recur(val) {
+          if (val !== Object(val)) { return; }
+          if (protecting.get(val)) { return; }
+          protecting.set(val, true);
+          Object.freeze(val);
+          recur(Object.getPrototypeOf(val));
+          Object.getOwnPropertyNames(val).forEach(function(name) {
+            recur(Object.getOwnPropertyDescriptor(val));
+          });
+        }
+        recur(root);
+      }
     };
-    Function.prototype = UnsafeFunction.prototype;
-    Function.prototype.constructor = Function;
-    
-    eval = function(src) {
-      return Function(src).call(root);
-    };
-    
-    RegExp.prototype.exec = function(specimen) {
-      return unsafeRegExpExec.call(this, String(specimen));
-    };
-    RegExp.prototype.test = function(specimen) {
-      return unsafeRegExpTest.call(this, String(specimen));
-    };
+
   })();
 
   /**
    * Read the current value of base[name], and freeze that property as
    * a data property to ensure that all further reads of that same
    * property from that base produce the same value.
-   * 
+   *
    * <p>The frozen property should preserve the enumerability of the
    * original property.
    */
   function read(base, name) {
     var result = base[name];
-    Object.defineProperty(base, name, {
-      value: result, writable: false, configurable: false
-    });
+    try {
+      Object.defineProperty(base, name, {
+        value: result, writable: false, configurable: false
+      });
+    } catch (ex) {
+      console.log("Can't neuter " + name);
+    }
     return result;
   }
 
@@ -145,70 +384,111 @@ function initSES(global, whitelist, verify, ObjTable) {
       var permit = whitelist[name];
       if (permit) {
         var value = read(global, name);
-        Object.defineProperty(root, name, { 
-          value: value, 
+        Object.defineProperty(root, name, {
+          value: value,
           writable: false,
           configurable: false,
-	  enumerable: desc.enumerable
+          enumerable: true //desc.enumerable
         });
       }
     }
   });
 
-  function isPrimitive(value) {
-    return value !== Object(value);
-  }
-
   // the whiteTable should map from each path-accessible
   // primordial object to the permit that describes how it should be
   // cleaned. To ensure that each subsequent traverse obtains the
   // same values, these paths become paths of frozen data
-  // properties. 
-  var whiteTable = ObjTable();
+  // properties.
+  var whiteTable = ObjMap();
   function register(value, permit) {
-    if (isPrimitive(value)) { return; }
+    if (value !== Object(value)) { return; }
+    var oldPermit = whiteTable.get(value);
+    if (typeof permit !== 'object' && typeof oldPermit === 'object') {
+      return;
+    }
     whiteTable.set(value, permit);
     if (typeof permit === 'object') {
       Object.keys(permit).forEach(function(name) {
-	var sub = read(value, name);
-	register(sub, permit[name]);
+        if (permit[name] !== "skip") {
+          var sub = read(value, name);
+          register(sub, permit[name]);
+        }
       });
     }
   }
   register(root, whitelist);
 
-  // We initialize the whiteTable only so that we can process "*"
-  // inheritance in the whitelist, by walking actual superclass chains.
+  // We initialize the whiteTable only so that we can process "*" and
+  // "skip" inheritance in the whitelist, by walking actual superclass
+  // chains.
   function isPermitted(base, name) {
     var permit = whiteTable.get(base);
-    if (permit[name]) { return true; }
+    if (permit && permit[name]) { return permit[name]; }
     while (true) {
       base = Object.getPrototypeOf(base);
       if (base === null) { return false; }
       permit = whiteTable.get(base);
       if (typeof permit === 'object' && name in permit) {
-	return permit[name] === '*';
+        var result = permit[name];
+        if (result === '*' || result === 'skip') {
+          return result;
+        } else {
+          return false;
+        }
       }
     }
   }
-  
+
+  var cleaning = ObjMap();
+
+  var skipped = [];
+  var goodDeletions = [];
+  var badDeletions = [];
+
   // Assumes all super objects are otherwise accessible and so will
   // be independently cleaned.
-  function clean(value) {
-    if (isPrimitive(value)) { return; }
+  function clean(value, n) {
+    if (value !== Object(value)) { return; }
+    if (cleaning.get(value)) { return; }
+    cleaning.set(value, true);
     Object.getOwnPropertyNames(value).forEach(function(name) {
-      if (isPermitted(value, name)) {
-	var sub = read(value, name);
-        clean(sub);
+      var path = n + (n ? "." : "") + name;
+      var p = isPermitted(value, name);
+      if (p) {
+        if (p === "skip") {
+          skipped.push(path);
+        } else {
+          var sub = read(value, name);
+          clean(sub, path);
+        }
       } else {
-	// Strict delete throws on failure
-        delete value[name];
+        // Strict delete throws on failure, which we can't count on yet
+        var success;
+        try {
+          success = delete value[name];
+        } catch (x) {
+          success = false;
+        }
+        if (success) {
+          goodDeletions.push(path);
+        } else {
+          badDeletions.push(path);
+        }
       }
     });
-    Object.freeze(value);
+    if (value !== FREEZE_EARLY) {
+      Object.freeze(value);
+    }
   }
-  clean(root);
+  if (FREEZE_EARLY) { Object.freeze(FREEZE_EARLY); }
+  clean(root, "");
+  // console.log("Skipped " + skipped.join(' '));
+  console.log("Deleted " + goodDeletions.join(' '));
 
-  // We succeeded. Enable safe Function and eval to work.
-  dirty = false;
+  if (badDeletions.length === 0) {
+    // We succeeded. Enable safe Function, eval, and compile to work.
+    dirty = false;
+  } else {
+    console.log("Can't delete " + badDeletions.join(' '));
+  }
 }

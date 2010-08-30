@@ -1,0 +1,21 @@
+<html>
+<head>
+<title>Testing SES/5</title>
+</head>
+<body>
+<div id="show">testing...</div>
+<script src="whitelist.js"></script>
+<script src="atLeastFreeVarNames.js"></script>
+<script src="WeakMap.js"></script>
+<script src="initSES.js"></script>
+<script>
+  initSES(window, whitelist, atLeastFreeVarNames, WeakMap);
+  (function(){
+    var show = document.getElementById("show");
+    var output = eval2('3+4') * cajaVM.compile('window')({window: 6});
+    var textNode = document.createTextNode(output);
+    show.appendChild(textNode);
+  })();
+</script>
+</body>
+</html>
