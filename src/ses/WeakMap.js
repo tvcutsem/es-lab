@@ -15,11 +15,16 @@
 // limitations under the License.
 
 /**
- *
  * If this is an ES5 platform and the ES-Harmony {@code WeakMap} is
  * absent, install an approximate emulation.
  *
- * <p>
+ * <p>See {@code WeakMap} for documentation of the garbage collection
+ * properties of this emulation.
+ *
+ * <p>Will also install some other elements of ES5 as needed to bring
+ * an almost ES5 platform (such as Firefox Minefield 4.0b5pre or
+ * Chromium beta 6.0.490.0 (3135)) to be a more complete emulation of
+ * ES5. Some elements of these emulations lose SES safety.
  */
 (function(global) {
   var hop = Object.prototype.hasOwnProperty;
@@ -318,6 +323,23 @@
     return Object.freeze(func);
   }
 
+  /**
+   * This {@code WeakMap} emulation is observably equivalent to the
+   * ES-Harmony WeakMap, but with leakier garbage collection properties.
+   *
+   * <p>As with true WeakMaps, in this emulation, a key does not
+   * retain maps indexed by that key and (crucially) a map does not
+   * retain the keys it indexes. A key by itself also does not retain
+   * the values associated with that key.
+   *
+   * <p>However, the values placed in an emulated WeakMap are retained
+   * so long as that map is retained and those associations are not
+   * overridden. For example, when used to support membranes, all
+   * values exported from a given membrane will live for the lifetime
+   * of the membrane. But when the membrane is revoked, all objects
+   * encapsulated within that membrane will still be collected. This
+   * is the best we can do without VM support.
+   */
   defMissingProp(global, 'WeakMap', constFunc(function() {
     var identities = {};
     var values = {};
