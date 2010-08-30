@@ -9,6 +9,12 @@
 <script src="WeakMap.js"></script>
 <script src="initSES.js"></script>
 <script>
+  if (navigator.userAgent.indexOf('Chrome') >= 0) {
+    alert('If this crashes your page, turn debugging on and try again');
+  } else if (!('console' in window) || typeof console.log !== 'function') {
+    alert('No console.\n' +
+          'If this crashes your page, turn debugging on and try again');
+  }
   initSES(window, whitelist, atLeastFreeVarNames, WeakMap);
   (function(){
     var show = document.getElementById("show");
