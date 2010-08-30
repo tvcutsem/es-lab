@@ -249,6 +249,10 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
      * Program's completion value. Unfortunately, this is not
      * practical as a library without some non-standard support from
      * the platform such as an parser API that provides an AST.
+     *
+     * <p>Thanks to Mike Samuel and Ankur Taly for this trick of using
+     * {@code with} together with RegExp matching to intercept free
+     * variable access without parsing.
      */
     function compile(exprSrc) {
       if (dirty) { fail('Initial cleaning failed'); }
@@ -257,7 +261,7 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
       var wrapperSrc =
         '(function() {\n' +
         // non-strict code, where this === scopeObject
-        '  with(this) {\n' +
+        '  with (this) {\n' +
         '    return function() {\n' +
         '      "use strict";\n' +
         '      return (\n' +
