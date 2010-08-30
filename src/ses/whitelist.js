@@ -1,3 +1,27 @@
+"use strict";
+
+// Copyright (C) 2009 Google Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * The comment "Harmless whatwg" refers to extensions documented at
+ * http://wiki.whatwg.org/wiki/Web_ECMAScript that do seem to be
+ * harmless. Note that the RegExp constructor extensions on that page
+ * are <b>not harmless</b> and so must not be whitelisted.
+ */
+
+
 var whitelist = {
   "cajaVM": {                        // Caja support
     "log": true,
@@ -16,6 +40,8 @@ var whitelist = {
     "create": true,
     "createFunction": true
   },
+  "escape": true,                    // ES5 Appendix B
+  "unescape": true,                  // ES5 Appendix B
   "Object": {
     "getPropertyDescriptor": true,   // ES-Harmony proposal
     "getPropertyNames": true,        // ES-Harmony proposal
@@ -95,6 +121,22 @@ var whitelist = {
   },
   "String": {
     "prototype": {
+      "substr": true,                // ES5 Appendix B
+      "anchor": true,                // Harmless whatwg
+      "big": true,                   // Harmless whatwg
+      "blink": true,                 // Harmless whatwg
+      "bold": true,                  // Harmless whatwg
+      "fixed": true,                 // Harmless whatwg
+      "fontcolor": true,             // Harmless whatwg
+      "fontsize": true,              // Harmless whatwg
+      "italics": true,               // Harmless whatwg
+      "link": true,                  // Harmless whatwg
+      "small": true,                 // Harmless whatwg
+      "strike": true,                // Harmless whatwg
+      "sub": true,                   // Harmless whatwg
+      "sup": true,                   // Harmless whatwg
+      "trimLeft": true,              // non-standard
+      "trimRight": true,             // non-standard
       "valueOf": true,
       "charAt": true,
       "charCodeAt": true,
@@ -166,6 +208,9 @@ var whitelist = {
   },
   "Date": {        // no-arg Date constructor is questionable
     "prototype": {
+      "getYear": true,               // ES5 Appendix B
+      "setYear": true,               // ES5 Appendix B
+      "toGMTString": true,           // ES5 Appendix B
       "toDateString": true,
       "toTimeString": true,
       "toLocaleString": true,

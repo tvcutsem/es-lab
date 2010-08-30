@@ -495,7 +495,7 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
   if (FREEZE_EARLY) { Object.freeze(FREEZE_EARLY); }
   clean(root, '');
   // cajaVM.log('Skipped ' + skipped.join(' '));
-  cajaVM.log('Deleted ' + goodDeletions.join(' '));
+  cajaVM.log('Deleted ' + goodDeletions.sort().join(' '));
 
   if (cantNeuter.length >= 1) {
     var complaint = cantNeuter.map(function(p) {
@@ -511,11 +511,11 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
         }).join(', ');
 
     });
-    cajaVM.log("Can't neuter:" + complaint.join('\n'));
+    cajaVM.log("Can't neuter:" + complaint.sort().join('\n'));
   }
 
   if (badDeletions.length >= 1) {
-    cajaVM.log("Can't delete " + badDeletions.join(' '));
+    cajaVM.log("Can't delete " + badDeletions.sort().join(' '));
   } else {
     // We succeeded. Enable safe Function, eval, and compile to work.
     dirty = false;
