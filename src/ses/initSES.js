@@ -88,8 +88,8 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
   // (3135). As these move forward, kludges can be removed until we
   // simply rely on ES5.
 
-  //var SHOULD_BE_EVAL = "eval";
-  var SHOULD_BE_EVAL = "eval2";
+  //var SHOULD_BE_EVAL = 'eval';
+  var SHOULD_BE_EVAL = 'eval2';
 
 
   //var SHOULD_BE_NULL = null;
@@ -150,7 +150,7 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
                    'throw "NotASyntaxError";\n' +
                    programSrc);
       } catch (ex) {
-        if (ex !== "NotASyntaxError") {
+        if (ex !== 'NotASyntaxError') {
           throw ex;
         }
       }
@@ -362,6 +362,8 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
 
   })();
 
+  var cantNeuter = [];
+
   /**
    * Read the current value of base[name], and freeze that property as
    * a data property to ensure that all further reads of that same
@@ -371,13 +373,18 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
    * original property.
    */
   function read(base, name) {
+    var desc = Object.getOwnPropertyDescriptor(base, name);
+    if (desc && 'value' in desc && !desc.writable && !desc.configurable) {
+      return desc.value;
+    }
+
     var result = base[name];
     try {
       Object.defineProperty(base, name, {
         value: result, writable: false, configurable: false
       });
     } catch (ex) {
-      cajaVM.log("Can't neuter " + name);
+      cantNeuter.push({base: base, name: name, err: ex});
     }
     return result;
   }
@@ -414,7 +421,7 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
     whiteTable.set(value, permit);
     if (typeof permit === 'object') {
       Object.keys(permit).forEach(function(name) {
-        if (permit[name] !== "skip") {
+        if (permit[name] !== 'skip') {
           var sub = read(value, name);
           register(sub, permit[name]);
         }
@@ -457,10 +464,10 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
     if (cleaning.get(value)) { return; }
     cleaning.set(value, true);
     Object.getOwnPropertyNames(value).forEach(function(name) {
-      var path = n + (n ? "." : "") + name;
+      var path = n + (n ? '.' : '') + name;
       var p = isPermitted(value, name);
       if (p) {
-        if (p === "skip") {
+        if (p === 'skip') {
           skipped.push(path);
         } else {
           var sub = read(value, name);
@@ -486,14 +493,31 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
     }
   }
   if (FREEZE_EARLY) { Object.freeze(FREEZE_EARLY); }
-  clean(root, "");
-  // cajaVM.log("Skipped " + skipped.join(' '));
-  cajaVM.log("Deleted " + goodDeletions.join(' '));
+  clean(root, '');
+  // cajaVM.log('Skipped ' + skipped.join(' '));
+  cajaVM.log('Deleted ' + goodDeletions.join(' '));
 
-  if (badDeletions.length === 0) {
+  if (cantNeuter.length >= 1) {
+    var complaint = cantNeuter.map(function(p) {
+      var desc = Object.getPropertyDescriptor(p.base, p.name);
+      if (!desc) {
+        return '  Missing ' + p.name;
+      }
+      return p.name + '(' + p.err + '): ' +
+        Object.getOwnPropertyNames(desc).map(function(attrName) {
+          var v = desc[attrName];
+          if (v === Object(v)) { v = 'a ' + typeof v; }
+          return attrName + ': ' + v;
+        }).join(', ');
+
+    });
+    cajaVM.log("Can't neuter:" + complaint.join('\n'));
+  }
+
+  if (badDeletions.length >= 1) {
+    cajaVM.log("Can't delete " + badDeletions.join(' '));
+  } else {
     // We succeeded. Enable safe Function, eval, and compile to work.
     dirty = false;
-  } else {
-    cajaVM.log("Can't delete " + badDeletions.join(' '));
   }
 }
