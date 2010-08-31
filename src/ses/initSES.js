@@ -312,7 +312,7 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
      * function resulting from module compilation has an additional
      * {@code "requirements"} property whose value is a list of the
      * module names being required by that prelude. These requirements
-     * are the module's "immediate synchonous dependencies".
+     * are the module's "immediate synchronous dependencies".
      *
      * <p>This {@code "requirements"} property is adequate to
      * bootstrap support for a CommonJS module system, since a loader

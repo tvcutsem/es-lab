@@ -227,7 +227,7 @@
    * <li>The property can still be overridden by assignment. This
    *     could be repaired by installing the property as an accessor
    *     and pre-installing it on {@code Object.prototype}. However,
-   *     the benefit seems small compared to the code. OTOH, since
+   *     the benefit seems small compared to the cost. OTOH, since
    *     {@code identity}'s invariant can be destroyed by such
    *     assignment, this may lead to an exploitable vulnerability,
    *     which would justify the expense.
