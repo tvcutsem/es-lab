@@ -32,7 +32,8 @@
     // Test ability to bootstrap support for a limited form of
     // CommonJS modules. 
     var show2 = document.getElementById('show2');
-    var modSrc = '"use noise"; exports.x = require("foo.bar/baz"); return 77;';
+    var modSrc = '"use noise"; exports.x = \n' +
+                 'require("foo.bar/baz"); return 77;';
     var modMaker = cajaVM.compileModule(modSrc);
     var required = modMaker.requirements;
     var exported = {};
