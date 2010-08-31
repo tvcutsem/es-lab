@@ -12,12 +12,16 @@
 <script>
   (function(){
     var show1 = document.getElementById('show1');
+    var show2 = document.getElementById('show2');
     if (!('getOwnPropertyNames' in Object)) {
       alert('Please upgrade to a browser implementing ' +
             'Object.getOwnPropertyNames.');
       show1.appendChild(document.createTextNode('cancelled'));
+      show2.appendChild(document.createTextNode('cancelled'));
       return;
-    } else if (navigator.userAgent.indexOf('Chrome') >= 0) {
+    }
+
+    if (navigator.userAgent.indexOf('Chrome') >= 0) {
       alert('Possibly Chromium.\n' +
             'If this crashes your page, turn debugging on and try again');
     } else if (!('console' in window) || typeof console.log !== 'function') {
@@ -31,7 +35,6 @@
 
     // Test ability to bootstrap support for a limited form of
     // CommonJS modules. 
-    var show2 = document.getElementById('show2');
     var modSrc = '"use noise"; exports.x = \n' +
                  'require("foo.bar/baz"); return 77;';
     var modMaker = cajaVM.compileModule(modSrc);
