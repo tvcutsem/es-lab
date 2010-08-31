@@ -280,9 +280,9 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
       };
     }
 
-    var directivePattern = (/^\s*['"](?:\w|\s)*['"]\s*$/);
+    var directivePattern = (/^\s*['"](?:\w|\s)*['"]\s*$/m);
 
-    var requirePattern = (/^\s*(?:\w*\s*(?:\w|\$|\.)*\s*=\s*)?\s*require\s*\(\s*['"]((?:\w|\$|\.|\/)+)['"]\s*\)\s*$/);
+    var requirePattern = (/^\s*(?:\w*\s*(?:\w|\$|\.)*\s*=\s*)?\s*require\s*\(\s*['"]((?:\w|\$|\.|\/)+)['"]\s*\)\s*$/m);
 
     /**
      * As an experiment, recognize a stereotyped prelude of the
