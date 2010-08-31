@@ -26,7 +26,7 @@
       alert('No console.\n' +
             'If this crashes your page, turn debugging on and try again');
     }
-    initSES(window, whitelist, atLeastFreeVarNames, WeakMap);
+    initSES(window, whitelist, atLeastFreeVarNames);
 
     var output = eval2('3+4') * cajaVM.compile('window')({window: 6});
     show1.appendChild(document.createTextNode(output));
@@ -42,11 +42,11 @@
       require: function(id) { return { foo: 88, id: id}; }, 
       exports: exported
     });
-    var txt = JSON.stringify({
+    var txt = JSON.stringify(cajaVM.protect({
       required: required,
       exported: exported, 
       returned: returned
-    }, undefined, ' ');
+    }), undefined, ' ');
     show2.appendChild(document.createTextNode(txt));
   })();
 </script>

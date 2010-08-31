@@ -64,15 +64,8 @@
  *        many other strings as is convenient so long as it includes
  *        these. The value of each of these properties should be
  *        {@code true}.
- * @param ObjMap ::F([],Record({get: F([Object], any),
- *                              set: F([Object, any])}))
- *        A constructor of object tables, where an object table maps
- *        from objects-as-keys to values. The ES-Harmony WeakMap,
- *        if available, would be an excellent choice; but leakier
- *        tables are fine since these tables become unreachable after
- *        initialization anyway.
  */
-function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
+function initSES(global, whitelist, atLeastFreeVarNames) {
 
 
   /////////////// KLUDGE SWITCHES ///////////////
@@ -394,6 +387,8 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
     }
     global[SHOULD_BE_EVAL] = fakeEval;
 
+    var immutables = WeakMap();
+
     global.cajaVM = {
       log: function(str) {
         if (typeof console !== 'undefined' &&
@@ -406,11 +401,14 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
       compileModule: compileModule,
 
       protect: function(root) {
-        var protecting = ObjMap();
+        var protecting = WeakMap();
+        var memo = [];
         function recur(val) {
           if (val !== Object(val)) { return; }
+          if (immutables.get(val)) { return; }
           if (protecting.get(val)) { return; }
           protecting.set(val, true);
+          memo.push(val);
           Object.freeze(val);
           recur(Object.getPrototypeOf(val));
           Object.getOwnPropertyNames(val).forEach(function(name) {
@@ -418,6 +416,8 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
           });
         }
         recur(root);
+        memo.forEach(function(obj) { immutables.set(obj, true); });
+        return root;
       }
     };
 
@@ -472,7 +472,7 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
   // cleaned. To ensure that each subsequent traverse obtains the
   // same values, these paths become paths of frozen data
   // properties.
-  var whiteTable = ObjMap();
+  var whiteTable = WeakMap();
   function register(value, permit) {
     if (value !== Object(value)) { return; }
     var oldPermit = whiteTable.get(value);
@@ -512,7 +512,7 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
     }
   }
 
-  var cleaning = ObjMap();
+  var cleaning = WeakMap();
 
   var skipped = [];
   var goodDeletions = [];
