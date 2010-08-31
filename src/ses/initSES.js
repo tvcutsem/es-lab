@@ -237,6 +237,7 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
       return Object.freeze(scopeObject);
     }
 
+
     /**
      * Compile {@code exprSrc} as a strict expression into a function
      * of an environment {@code env}, that when called evaluates
@@ -277,6 +278,61 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
         var scopeObject = makeScopeObject(virtualGlobal, freeNames);
         return wrapper.call(scopeObject).call(virtualGlobal);
       };
+    }
+
+    var directivePattern = (/^\s*['"](?:\w|\s)*['"]\s*$/);
+
+    var requirePattern = (/^\s*(?:\w*\s*(?:\w|\$|\.)*\s*=\s*)?\s*require\s*\(\s*['"]((?:\w|\$|\.|\/)+)['"]\s*\)\s*$/);
+
+    /**
+     * As an experiment, recognize a stereotyped prelude of the
+     * CommonJS module system.
+     */
+    function getRequirements(modSrc) {
+      var result = [];
+      var stmts = modSrc.split(';');
+      var i = 0, ilen = stmts.length;
+      for (; i < ilen; i++) {
+        if (!directivePattern.test(stmts[i])) { break; }
+      }
+      for (; i < ilen; i++) {
+      var m = requirePattern.exec(stmts[i]);
+        if (!m) { break; }
+        result.push(m[1]);
+      }
+      return Object.freeze(result);
+    }
+
+    /**
+     * A module source is actually any valid FunctionBody, and thus any valid
+     * Program.
+     *
+     * <p>In addition, in case the module source happens to begin with
+     * a streotyped prelude of the CommonJS module system, the
+     * function resulting from module compilation has an additional
+     * {@code "requirements"} property whose value is a list of the
+     * module names being required by that prelude. These requirements
+     * are the module's "immediate synchonous dependencies".
+     *
+     * <p>This {@code "requirements"} property is adequate to
+     * bootstrap support for a CommonJS module system, since a loader
+     * can first load and compile the transitive closure of an initial
+     * module's synchronous depencies before actually executing any of
+     * these module functions.
+     *
+     * <p>With a similarly lightweight RegExp, we should be able to
+     * similarly recognize the {@code "load"} syntax of <a href=
+     * "http://wiki.ecmascript.org/doku.php?id=strawman:simple_modules#syntax"
+     * >Sam and Dave's module proposal for ES-Harmony</a>. However,
+     * since browsers do not currently accept this syntax,
+     * {@code getRequirements} above would also have to extract these
+     * from the text to be compiled.
+     */
+    function compileModule(modSrc) {
+      var moduleMaker = compile('(function() {' + modSrc + '}).call(this)');
+      moduleMaker.requirements = getRequirements(modSrc);
+      Object.freeze(moduleMaker.prototype);
+      return Object.freeze(moduleMaker);
     }
 
     /**
@@ -347,6 +403,7 @@ function initSES(global, whitelist, atLeastFreeVarNames, ObjMap) {
       },
 
       compile: compile,
+      compileModule: compileModule,
 
       protect: function(root) {
         var protecting = ObjMap();

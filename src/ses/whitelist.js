@@ -26,6 +26,7 @@ var whitelist = {
   "cajaVM": {                        // Caja support
     "log": true,
     "compile": true,
+    "compileModule": true,           // experimental
     "protect": true
   },
   "Q": {                             // Dr. SES support
