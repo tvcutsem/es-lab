@@ -39,7 +39,7 @@
     var required = modMaker.requirements;
     var exported = {};
     var returned = modMaker({
-      require: function(x) { return { foo: 88, bar: 99}; }, 
+      require: function(id) { return { foo: 88, id: id}; }, 
       exports: exported
     });
     var txt = JSON.stringify({
