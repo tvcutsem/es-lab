@@ -19,9 +19,7 @@
       show1.appendChild(document.createTextNode('cancelled'));
       show2.appendChild(document.createTextNode('cancelled'));
       return;
-    }
-
-    if (navigator.userAgent.indexOf('Chrome') >= 0) {
+    } else if (navigator.userAgent.indexOf('Chrome') >= 0) {
       alert('Possibly Chromium.\n' +
             'If this crashes your page, turn debugging on and try again');
     } else if (!('console' in window) || typeof console.log !== 'function') {
