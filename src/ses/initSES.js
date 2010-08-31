@@ -387,7 +387,7 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
     }
     global[SHOULD_BE_EVAL] = fakeEval;
 
-    var immutables = WeakMap();
+    var solids = WeakMap();
 
     global.cajaVM = {
       log: function(str) {
@@ -405,7 +405,7 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
         var memo = [];
         function recur(val) {
           if (val !== Object(val)) { return; }
-          if (immutables.get(val)) { return; }
+          if (solids.get(val)) { return; }
           if (protecting.get(val)) { return; }
           protecting.set(val, true);
           memo.push(val);
@@ -416,7 +416,7 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
           });
         }
         recur(root);
-        memo.forEach(function(obj) { immutables.set(obj, true); });
+        memo.forEach(function(obj) { solids.set(obj, true); });
         return root;
       }
     };
