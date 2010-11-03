@@ -590,8 +590,7 @@ var Trait = (function(){
           get: pd.get ? freezeAndBind(pd.get, self) : undefined,
           set: pd.set ? freezeAndBind(pd.set, self) : undefined,
           enumerable: pd.enumerable,
-          configurable: pd.configurable,
-          writable: pd.writable            
+          configurable: pd.configurable
         };
       }
     });
