@@ -1,0 +1,3 @@
+Array.prototype.concat(document);
+
+

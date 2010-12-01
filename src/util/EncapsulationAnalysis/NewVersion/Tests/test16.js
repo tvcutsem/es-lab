@@ -1,0 +1,2 @@
+Object.prototype.hasOwnProperty(document);
+
