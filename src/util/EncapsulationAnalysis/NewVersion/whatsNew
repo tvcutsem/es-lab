@@ -1,1 +1,0 @@
-Main different with the analyzer in TempNew is that this one is fully 1 CFA for the native objects. No cloning is needed, instead the summaries for the native onjects make use of the call site contextNum to make context sensistive decisions.
