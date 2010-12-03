@@ -24,7 +24,7 @@
  - assumes an annotation $A$AdsafeRejectNot
 - Requires - genConstraintsScopeNumber;
  */
- this.genAttackerConstraints = function genAttackerConstraints(genConstraintsScopeNumber, toBeCloned, encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint,  functionClones, nClones, maxArity) {
+ this.genAttackerConstraints = function genAttackerConstraints(genConstraintsScopeNumber, annotationsObj,toBeCloned, encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint,  functionClones, nClones, maxArity) {
      
      function copyVariableMap(obj){
 	 var retAttr = {};
@@ -124,7 +124,7 @@
 	 for(p in  toBeCloned){
              for (i = 0 ; i <  functionClones[p].length; i++){
 		 constraint = constraint + '#begin clone function ' + p + '_' + i + '\n';
-		 constraint = constraint + genConstraintsScopeNumber(functionClones[p][i], i+1, encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity);
+		 constraint = constraint + genConstraintsScopeNumber(functionClones[p][i], i+1,annotationsObj, encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity);
 		 constraint = constraint + '#end clone function ' + p + '_' + i + '\n\n';
 	     }
 	 }

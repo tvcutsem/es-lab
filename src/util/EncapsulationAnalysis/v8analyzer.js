@@ -890,10 +890,10 @@ Object.prototype.toString =
        var datalogRules = MdRules.genDatalogRules( encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity );
        var nativeConstraints = MdNative.genNativeConstraints(cloneNativeFlag,freezeProtoFlag, encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity);			 
        var domConstraints = MdDOM.genDOMConstraints(cloneDOMFlag,encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity);
-       var suConstraints = MdSu.genSUConstraints( encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity); 
+      // var suConstraints = MdSu.genSUConstraints( encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity); 
        var codeConstraints = MdAnalysis.genConstraintsScopeNumber(renameCloneAst,0,annotationsObj,encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity);	
        var annotationConstraints = MdAnnotations.genAnnotationConstraints(renameCloneAst,0,annotationsObj,encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity);	
-       var attackerConstraints = MdAttacker.genAttackerConstraints(MdAnalysis.genConstraintsScopeNumber, toBeCloned, encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity); 
+       var attackerConstraints = MdAttacker.genAttackerConstraints(MdAnalysis.genConstraintsScopeNumber,annotationsObj, toBeCloned, encodeVar, encodeField, encodeLoc, getNextTempVar, getNextAstNumber, astNumberMap, relName, makeConstraint, functionClones, nClones, maxArity); 
        var datalogFieldNames = MdField.genDatalogFieldNames(getEncoderVarCount, getEncoderLocCount, getEncoderFieldCount);			 
        
        
@@ -901,7 +901,7 @@ Object.prototype.toString =
        result = result + datalogRules + '\n';
        result = result + nativeConstraints +'\n';
        result = result + domConstraints+ '\n';
-       result = result + suConstraints + '\n';
+     //result = result + suConstraints + '\n';
        result = result + annotationConstraints + '\n';
        result = result + codeConstraints+ '\n';
        result = result + attackerConstraints;
@@ -992,7 +992,7 @@ Object.prototype.toString =
    var outputFileName;
    var freezeProtoFlag = 1; // Do not turn this flag off as it might lead to bugs.
    var cloneNativeFlag;
-   var cloenDOMFlag;
+   var cloneDOMFlag;
    
    inputFileName = processArgs[2];
    outputFileName = processArgs[3];

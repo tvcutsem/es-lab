@@ -107,6 +107,10 @@
 		     attr.annotation = operand2[2][1].name;
 		     expr = [lhsExpr[0],attr];
 		 }
+		 else{
+		 expr = [lhsExpr[0],copyAttributes(lhsExpr[1])];
+
+		 }
 	     }
 	     else{
 		 expr = [lhsExpr[0],copyAttributes(lhsExpr[1])];
@@ -233,6 +237,10 @@ function handleRhsExpr(basicLhsExpr, rhsExpr){
 	      attr = copyAttributes(rhsExpr[1]);
 	      attr.annotation = operand2[2][1].name;
 	      expr = [rhsExpr[0],attr];
+	  }
+	  else{
+	  expr = [rhsExpr[0],copyAttributes(rhsExpr[1])];
+
 	  }
       }
       else{
@@ -693,13 +701,24 @@ function threeOp(ast) {
          retAst.push(stmt);
        
          break;
-     case 'DoWhileStmt':
-         var tempVar;
-         var expr = ast[3];
-         var loopStmt = ast[2];
-         var newLoopStmt = ["BlockStmt", {}];
+ case 'DoWhileStmt':
+     var tempVar;
+     var expr = ast[3];
+     var loopStmt = ast[2];
+     var newLoopStmt = ["BlockStmt", {}];
+     
+     retAst = ['BlockStmt', {}];
 
-         newStmts = [];
+     var whileStmt = ['WhileStmt',{}];
+     whileStmt.push(expr);
+     whileStmt.push(loopStmt);
+     
+     retAst.push(loopStmt);
+     retAst.push(whileStmt);
+
+     retAst = threeOp(retAst);
+
+     /*    newStmts = [];
          retAst = [ast[0], copyAttributes(ast[1])];
         
          tempVar = getNextTempVar();
@@ -708,7 +727,7 @@ function threeOp(ast) {
          newLoopStmt.push(threeOp(loopStmt));
          newLoopStmt = newLoopStmt.concat(newStmts);
          retAst.push(newLoopStmt);
-         retAst.push(['IdExpr',{name:tempVar}]);
+         retAst.push(['IdExpr',{name:tempVar}]);*/
       
          break;
      case 'ForStmt':

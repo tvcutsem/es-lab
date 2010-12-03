@@ -25,7 +25,7 @@ BUILDING THE TOOL
 
 1) Download the bddbddb jar file from http://bddbddb.sourceforge.net/bddbddb-full.jar
 
-2) Create a folder names BddbddbAnalyzer in the current directory and mode the jar file to that folder.
+2) Create a folder names BddbddbAnalyzer in the current directory and move the jar file to that folder.
 
 3) Run the following commands:
 	- cd BddbddbAnalyzer

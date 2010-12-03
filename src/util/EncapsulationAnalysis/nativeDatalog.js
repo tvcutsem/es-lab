@@ -700,23 +700,23 @@
 	       methBody = [];
 
 	       if(!contextNum){
-		   methBody.push('HActualArg(n,0,m) :- HActualEverything('+em+',0,l,'+dumpNum+',G),  HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('toString')+',n)');
-		   methBody.push('HCaller('+em+',n) :- HActualEverything('+em+',0,l,'+dumpNum+',G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('toString')+',n)');
-		   methBody.push('HActualArg(n,0,m) :- HActualEverything('+em+',0,l,'+dumpNum+',G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('valueOf')+',n)');
-		   methBody.push('HCaller('+em+',n) :- HActualEverything('+em+',0,l,'+dumpNum+',G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('valueOf')+',n)');
+		   methBody.push('HActualArg(n,0,m) :- HActualEverything('+em+',0,l,x,G),  HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('toString')+',n)');
+		   methBody.push('HCaller('+em+',n) :- HActualEverything('+em+',0,l,x,G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('toString')+',n)');
+		   methBody.push('HActualArg(n,0,m) :- HActualEverything('+em+',0,l,x,G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('valueOf')+',n)');
+		   methBody.push('HCaller('+em+',n) :- HActualEverything('+em+',0,l,x,G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('valueOf')+',n)');
 		   
 		   for (i = 1; i <= maxArity;i++){
-		       methBody.push('HStoreDot(l,'+eAnnNum+',m) :- HActualEverything('+em+',0,l,'+dumpNum+',G), HActualEverything('+em+','+i+',m,'+dumpNum+',G)');
+		       methBody.push('HStoreDot(l,'+eAnnNum+',m) :- HActualEverything('+em+',0,l,x,G), HActualEverything('+em+','+i+',m,x,G)');
 		   }
 	       }
 	       else{
-		   methBody.push('HActualArgCon(n,0,m,'+cn+') :- HActualEverything('+em+',0,l,'+dumpNum+',G),  HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('toString')+',n)');
-		   methBody.push('HCallerCon('+em+',n,'+cn+') :- HActualEverything('+em+',0,l,'+dumpNum+',G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('toString')+',n)');
-		   methBody.push('HActualArgCon(n,0,m,'+cn+') :- HActualEverything('+em+',0,l,'+dumpNum+',G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('valueOf')+',n)');
-		   methBody.push('HCallerCon('+em+',n,'+cn+') :- HActualEverything('+em+',0,l,'+dumpNum+',G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('valueOf')+',n)');
+		   methBody.push('HActualArgCon(n,0,m,'+cn+') :- HActualEverything('+em+',0,l,x,G),  HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('toString')+',n)');
+		   methBody.push('HCallerCon('+em+',n,'+cn+') :- HActualEverything('+em+',0,l,x,G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('toString')+',n)');
+		   methBody.push('HActualArgCon(n,0,m,'+cn+') :- HActualEverything('+em+',0,l,x,G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('valueOf')+',n)');
+		   methBody.push('HCallerCon('+em+',n,'+cn+') :- HActualEverything('+em+',0,l,x,G), HPtsTo(l,'+encodeField('length')+',m), HPtsTo(m,'+encodeField('valueOf')+',n)');
 		   
 		   for (i = 1; i <= maxArity;i++){
-		       methBody.push('HStoreDot(l,'+eAnnNum+',m) :- HActualEverything('+em+',0,l,'+dumpNum+',G), HActualEverything('+em+','+i+',m,'+dumpNum+',G)');
+		       methBody.push('HStoreDot(l,'+eAnnNum+',m) :- HActualEverything('+em+',0,l,x,G), HActualEverything('+em+','+i+',m,x,G)');
 		   }
 		  
 	       }

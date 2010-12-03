@@ -1,31 +1,9 @@
-// Copyright (C) 2010 Google Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
-* Adsafe.js file with appropriate annotations on the [] operator. All annotations have
-been inserted manualy. 
-*/
-
-
-
 
 attacker  = (function () {   	
     var adsafe_id,      // The id of the current widget
         adsafe_lib,     // The script libraries loaded by the current widget
 
-// These member names are banned from guest scripts. The ADSAFE.g
-et and
+// These member names are banned from guest scripts. The ADSAFE.get and
 // ADSAFE.put methods will not allow access to these properties.
 
         banned = {
@@ -1455,7 +1433,7 @@ et and
                 }
                 var b = array[0].___nodes___, i;
                 for (i = i; i < array.length; i += 1) {
-             //       b = b.concat(array[$A$Num(i)].___nodes___);
+                  //  b = b.concat(array[$A$Num(i)].___nodes___);
                 }
                 return new Bunch(b);
             },
