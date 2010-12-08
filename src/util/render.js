@@ -4,13 +4,13 @@
  * @provides renderEcmascript
  * @requires JSON
  */
-function renderEcmascript(ast) {
+this.renderEcmascript = function renderEcmascript(ast) {
   var STMT_END = new String('}');
   var FN_EXPR_START = new String('function ');
   var OBJ_LIT_START = new String('{');
   var PRECEDENCE_1 = { IdExpr: true, ThisExpr: true, LiteralExpr: true,
                        MemberExpr: true, ObjectExpr: true };
-  var OP_BY_TYPE = { TypeofExpr: 'typeof', DeleteExpr: 'delete' };
+  var OP_BY_TYPE = { TypeofExpr: 'typeof', DeleteExpr: 'delete', LogicalAndExpr: '&&', LogicalOrExpr: '||' };
   var out = [];
   function parenthesize(ast, parens) {
     if (parens) { out.push('('); }
@@ -45,7 +45,7 @@ function renderEcmascript(ast) {
           if (i > 2) { endStatement(); }
           var part = ast[i];
           if (couldBePrologue) {
-            console.log('part=' + JSON.stringify(part));
+           // console.log('part=' + JSON.stringify(part));
             if (part[0] === 'LiteralExpr' && 'string' === part[1].type) {
               parenthesize(part, true);
               continue;
@@ -204,8 +204,8 @@ function renderEcmascript(ast) {
         if (/\w$/.test(op)) { out.push(' '); }
         parenthesize(ast[2], PRECEDENCE_1[ast[2][0]] !== true);
         break;
-      case 'AssignExpr': case 'BinaryExpr': case 'MemberExpr':
-        var symbol = type === 'MemberExpr' ? '[' : ast[1].op;
+      case 'AssignExpr': case 'BinaryExpr': case 'MemberExpr': case 'LogicalOrExpr': case 'LogicalAndExpr':
+        var symbol = type === 'MemberExpr' ? '[' : ast[1].op || OP_BY_TYPE[type];
         // Always parenthesize comma ops since it's used in many other contexts.
         if (symbol === ',') { out.push('('); }
         var leftType = ast[2][0], rightType = ast[3][0];
@@ -321,6 +321,14 @@ function renderEcmascript(ast) {
         out.push(')');
         renderStmt(ast[3]);
         break;
+    case 'ConditionalExpr':
+	out.push(render(ast[2]));
+	out.push('?');
+	out.push(render(ast[3]));
+	out.push(':');
+	out.push(render(ast[4]));
+	break;
+
       default: throw 'rendering not implemented ' + type;
     }
   }
