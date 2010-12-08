@@ -1092,7 +1092,7 @@ Object.prototype.toString =
 			}
 			else{
 			  if(state === 1){
-			      var callClonedOutSource =  fs.readFileSync('./BddbddbAnalyzer/Results/callClonedOut.tuples','ascii');
+			      var callClonedOutSource =  fs.readFileSync('./BddbddbAnalyzer/Results/CallClonedOut.tuples','ascii');
 			      var callSiteConstraintsNew = genCallSiteConstraints(callClonedOutSource);
 			      console.log('Basic Analyzer: Phase 1 completed');
 			      return basicAnalyzer(inputFileName, outputFileName, cloneNativeFlag, cloneDOMFlag,0, callSiteConstraintsNew,2);
