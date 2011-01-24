@@ -44,8 +44,8 @@ function ForwardingHandler(target) {
 ForwardingHandler.prototype = {
   // Object.getOwnPropertyDescriptor(proxy, name) -> pd | undefined
   getOwnPropertyDescriptor: function(name) {
-    var desc = Object.getOwnPropertyDescriptor(this.target);
-    desc.configurable = true;
+    var desc = Object.getOwnPropertyDescriptor(this.target, name);
+    if (desc !== undefined) { desc.configurable = true; }
     return desc;
   },
 
