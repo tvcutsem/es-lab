@@ -37,6 +37,9 @@
  */
 
 // A no-op forwarding Proxy Handler
+// based on the draft version for standardization:
+// http://wiki.ecmascript.org/doku.php?id=harmony:proxy_defaulthandler
+
 function ForwardingHandler(target) {
   this.target = target;
 }
@@ -48,10 +51,24 @@ ForwardingHandler.prototype = {
     if (desc !== undefined) { desc.configurable = true; }
     return desc;
   },
+  
+  // Object.getPropertyDescriptor(proxy, name) -> pd | undefined
+  getPropertyDescriptor: function(name) {
+    // Note: this function does not exist in ES5
+    var desc = Object.getPropertyDescriptor(this.target, name);
+    if (desc !== undefined) { desc.configurable = true; }
+    return desc;
+  },
 
   // Object.getOwnPropertyNames(proxy) -> [ string ]
   getOwnPropertyNames: function() {
     return Object.getOwnPropertyNames(this.target);
+  },
+  
+  // Object.getPropertyNames(proxy) -> [ string ]
+  getPropertyNames: function() {
+    // Note: this function does not exist in ES5
+    return Object.getPropertyNames(this.target);
   },
   
   // Object.defineProperty(proxy, name, pd) -> undefined
@@ -98,6 +115,7 @@ ForwardingHandler.prototype = {
   },
   
   // for (var name in proxy) { ... }
+  // Note: non-standard trap
   iterate: function() {
     var props = this.enumerate();
     var i = 0;
@@ -110,17 +128,10 @@ ForwardingHandler.prototype = {
   },
 
   // Object.keys(proxy) -> [ string ]
-  enumerateOwn: function() { return Object.keys(this.target); },
   keys: function() { return Object.keys(this.target); }
 };
 
-Proxy.wrap = function(obj) {
-  var handler = new ForwardingHandler(obj);
-  if (typeof obj === "object") {
-    return Proxy.create(handler, Object.getPrototypeOf(obj));
-  } else if (typeof obj === "function") {
-    return Proxy.createFunction(handler, obj);
-  } else {
-    return obj;
-  }
+// monkey-patch Proxy.Handler if it's not defined yet
+if (typeof Proxy === "object" && !Proxy.Handler) {
+  Proxy.Handler = ForwardingHandler;
 }
