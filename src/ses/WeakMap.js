@@ -112,14 +112,14 @@
    * Work around https://bugzilla.mozilla.org/show_bug.cgi?id=591838
    */
   function goodDefProp(base, name, desc) {
+    function test(attrName) {
+      if (!attrName in desc) { return true; }
+      return eq(oldDesc.attrName, desc.attrName);
+    }
     if (base === global &&
         (name === 'NaN' || name === 'Infinity' || name === 'undefined')) {
       var oldDesc = real.getOwnPropertyDescriptor(base, name);
       if (oldDesc) {
-        function test(attrName) {
-          if (!attrName in desc) { return true; }
-          return eq(oldDesc.attrName, desc.attrName);
-        }
         if ('value' in desc && 'value' in oldDesc &&
             test('value') && test('writable') &&
             test('enumerable') && test('configurable')) {
