@@ -412,7 +412,7 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
           Object.freeze(val);
           recur(Object.getPrototypeOf(val));
           Object.getOwnPropertyNames(val).forEach(function(name) {
-            recur(Object.getOwnPropertyDescriptor(val));
+            recur(Object.getOwnPropertyDescriptor(val, name));
           });
         }
         recur(root);
