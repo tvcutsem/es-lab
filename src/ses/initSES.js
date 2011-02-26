@@ -84,6 +84,8 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
   //var SHOULD_BE_EVAL = 'eval';
   var SHOULD_BE_EVAL = 'eval2';
 
+  //var SHOULD_BE_FUNCTION = "Function";
+  var SHOULD_BE_FUNCTION = "Function2";
 
   //var SHOULD_BE_NULL = null;
   var SHOULD_BE_NULL = Object.prototype;
@@ -94,18 +96,21 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
   //var FREEZE_EARLY = undefined;
   var FREEZE_EARLY = Array.prototype.forEach;
 
+  //var SHOULD_START_DIRTY = true;
+  var SHOULD_START_DIRTY = false;
+
   //////////////// END KLUDGE SWITCHES ///////////
 
-  var dirty = true;
+  var dirty = SHOULD_START_DIRTY;
 
-  function fail(str) { throw new EvalError(str); }
+  function fail(str) {
+    debugger;
+    throw new EvalError(str);
+  }
 
   if (REQUIRE_STRICT && function(){return this;}()) {
     fail('Requires at least ES5 support');
   }
-
-  delete whitelist.eval;
-  whitelist[SHOULD_BE_EVAL] = true;
 
   /**
    * Code being eval'ed sees <tt>root</tt> as its <tt>this</tt>, as if
@@ -118,13 +123,15 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
    */
   var root = Object.create(SHOULD_BE_NULL);
 
-  // Repair phase -- monkey patch safe replacements
+  /** Repair phase -- monkey patch safe replacements */
   (function() {
 
-    // The unsafe* variables hold precious values that must not escape
-    // to untrusted code. When {@code eval} is invoked via {@code
-    // unsafeEval}, this is a call to the indirect eval function, not
-    // the direct eval operator.
+    /**
+     * The unsafe* variables hold precious values that must not escape
+     * to untrusted code. When {@code eval} is invoked via {@code
+     * unsafeEval}, this is a call to the indirect eval function, not
+     * the direct eval operator.
+     */
     var unsafeEval = eval;
     var UnsafeFunction = Function;
 
@@ -139,8 +146,8 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
      */
     function verifyStrictProgram(programSrc) {
       try {
-        unsafeEval('"use strict";\n' +
-                   'throw "NotASyntaxError";\n' +
+        unsafeEval('"use strict"; ' +
+                   'throw "NotASyntaxError"; ' +
                    programSrc);
       } catch (ex) {
         if (ex !== 'NotASyntaxError') {
@@ -155,7 +162,7 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
      */
     function verifyStrictExpression(exprSrc) {
       verifyStrictProgram(exprSrc + ';');
-      verifyStrictProgram('(\n' + exprSrc + '\n);');
+      verifyStrictProgram('( ' + exprSrc + '\n);');
     }
 
     /**
@@ -253,12 +260,12 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
       verifyStrictExpression(exprSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
       var wrapperSrc =
-        '(function() {\n' +
+        '(function() { ' +
         // non-strict code, where this === scopeObject
-        '  with (this) {\n' +
-        '    return function() {\n' +
-        '      "use strict";\n' +
-        '      return (\n' +
+        '  with (this) { ' +
+        '    return function() { ' +
+        '      "use strict"; ' +
+        '      return ( ' +
         // strict code, where this === virtualGlobal
         '        ' + exprSrc + '\n' +
         '      );\n' +
@@ -346,7 +353,7 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
     }
     FakeFunction.prototype = UnsafeFunction.prototype;
     FakeFunction.prototype.constructor = FakeFunction;
-    global.Function = FakeFunction;
+    global[SHOULD_BE_FUNCTION] = FakeFunction;
 
     /**
      * A safe form of the indirect {@code eval} function, which
@@ -381,13 +388,42 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
       try {
         verifyStrictExpression(src);
       } catch (x) {
-        src = '(function() {' + src + '}).call(this)';
+        src = '(function() {' + src + '\n}).call(this)';
       }
       return compile(src)({});
     }
     global[SHOULD_BE_EVAL] = fakeEval;
 
-    var solids = WeakMap();
+    var defended = WeakMap();
+    /**
+     * To define a defended object is to freeze it and all objects
+     * transitively reachable from it via transitive reflective
+     * property traversal.
+     */
+    function def(root) {
+      var defending = WeakMap();
+      var defendingList = [];
+      function recur(val) {
+        if (val !== Object(val) || defended.get(val) || defending.get(val)) {
+          return;
+        }
+        defending.set(val, true);
+        defendingList.push(val);
+        Object.freeze(val);
+        recur(Object.getPrototypeOf(val));
+        Object.getOwnPropertyNames(val).forEach(function(p) {
+          var desc = Object.getOwnPropertyDescriptor(val, p);
+          recur(desc.value);
+          recur(desc.get);
+          recur(desc.set);
+        });
+      }
+      recur(root);
+      defendingList.forEach(function(obj) {
+        defended.set(obj, true);
+      });
+      return root;
+    }
 
     global.cajaVM = {
       log: function(str) {
@@ -396,29 +432,9 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
           console.log(str);
         }
       },
-
       compile: compile,
       compileModule: compileModule,
-
-      protect: function(root) {
-        var protecting = WeakMap();
-        var memo = [];
-        function recur(val) {
-          if (val !== Object(val)) { return; }
-          if (solids.get(val)) { return; }
-          if (protecting.get(val)) { return; }
-          protecting.set(val, true);
-          memo.push(val);
-          Object.freeze(val);
-          recur(Object.getPrototypeOf(val));
-          Object.getOwnPropertyNames(val).forEach(function(name) {
-            recur(Object.getOwnPropertyDescriptor(val, name));
-          });
-        }
-        recur(root);
-        memo.forEach(function(obj) { solids.set(obj, true); });
-        return root;
-      }
+      def: def
     };
 
   })();
@@ -450,28 +466,38 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
     return result;
   }
 
-  // initialize accessible global variables and root
+  /** Initialize accessible global variables and root */
   Object.keys(whitelist).forEach(function(name) {
     var desc = Object.getOwnPropertyDescriptor(global, name);
     if (desc) {
       var permit = whitelist[name];
       if (permit) {
-        var value = read(global, name);
+        var name2;
+        if (name === 'eval') {
+          name2 = SHOULD_BE_EVAL;
+        } else if (name === 'Function') {
+          name2 = SHOULD_BE_FUNCTION;
+        } else {
+          name2 = name;
+        }
+        var value = read(global, name2);
         Object.defineProperty(root, name, {
           value: value,
           writable: false,
           configurable: false,
-          enumerable: true //desc.enumerable
+          enumerable: desc.enumerable
         });
       }
     }
   });
 
-  // the whiteTable should map from each path-accessible
-  // primordial object to the permit that describes how it should be
-  // cleaned. To ensure that each subsequent traverse obtains the
-  // same values, these paths become paths of frozen data
-  // properties.
+  /**
+   * The whiteTable should map from each path-accessible primordial
+   * object to the permit that describes how it should be cleaned.
+   *
+   * <p>To ensure that each subsequent traverse obtains the same
+   * values, these paths become paths of frozen data properties.
+   */
   var whiteTable = WeakMap();
   function register(value, permit) {
     if (value !== Object(value)) { return; }
@@ -491,9 +517,11 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
   }
   register(root, whitelist);
 
-  // We initialize the whiteTable only so that we can process "*" and
-  // "skip" inheritance in the whitelist, by walking actual superclass
-  // chains.
+  /**
+   * We initialize the whiteTable only so that we can process "*" and
+   * "skip" inheritance in the whitelist, by walking actual superclass
+   * chains.
+   */
   function isPermitted(base, name) {
     var permit = whiteTable.get(base);
     if (permit && permit[name]) { return permit[name]; }
@@ -518,8 +546,10 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
   var goodDeletions = [];
   var badDeletions = [];
 
-  // Assumes all super objects are otherwise accessible and so will
-  // be independently cleaned.
+  /**
+   * Assumes all super objects are otherwise accessible and so will be
+   * independently cleaned.
+   */
   function clean(value, n) {
     if (value !== Object(value)) { return; }
     if (cleaning.get(value)) { return; }
@@ -540,11 +570,13 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
         try {
           success = delete value[name];
         } catch (x) {
+          debugger;
           success = false;
         }
         if (success) {
           goodDeletions.push(path);
         } else {
+          debugger;
           badDeletions.push(path);
         }
       }

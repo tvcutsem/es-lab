@@ -27,13 +27,22 @@ var whitelist = {
     "log": true,
     "compile": true,
     "compileModule": true,           // experimental
-    "protect": true
+    "def": true
   },
   "Q": {                             // Dr. SES support
     "get": true,
     "post": true,
+    "put": true,
+    "delete": true,
     "when": true,
+    "defer": true,
+    "reject": true,
+    "ref": true,
     "near": true,
+    "defined": true,
+    "run": true,
+    "Promise": true,
+    "isPromise": true,
     "def": true
   },
   "WeakMap": true,                   // ES-Harmony proposal
@@ -46,7 +55,7 @@ var whitelist = {
   "Object": {
     "getPropertyDescriptor": true,   // ES-Harmony proposal
     "getPropertyNames": true,        // ES-Harmony proposal
-    "eq": true,                      // ES-Harmony strawman
+    "identical": true,               // ES-Harmony strawman
     "prototype": {
       "constructor": "*",
       "toString": "*",

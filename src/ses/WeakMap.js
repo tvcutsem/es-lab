@@ -52,7 +52,7 @@
     }
   }
 
-  function eq(x, y) {
+  function identical(x, y) {
     if (x === y) {
       // 0 === -0, but they are not identical
       return x !== 0 || 1/x === 1/y;
@@ -114,7 +114,7 @@
   function goodDefProp(base, name, desc) {
     function test(attrName) {
       if (!attrName in desc) { return true; }
-      return eq(oldDesc.attrName, desc.attrName);
+      return identical(oldDesc.attrName, desc.attrName);
     }
     if (base === global &&
         (name === 'NaN' || name === 'Infinity' || name === 'undefined')) {
@@ -150,6 +150,17 @@
     return funcBound;
   });
 
+  //var SHOULD_BE_UNDEFINED = undefined;
+  var SHOULD_BE_UNDEFINED = (function() {
+    var callCount = 0;
+    return function sillySetter(newVal) {
+      if (callCount === 0) {
+        console.warn('ident___ setter should never be called');
+      }
+      callCount++;
+    };
+  })();
+
   //////////////// END KLUDGE SWITCHES ///////////
 
   //////////////// New ES-Harmony methods ///////////
@@ -175,7 +186,7 @@
   /**
    * Still strawman rather than official proposal.
    */
-  defMissingProp(Object, 'eq', eq);
+  defMissingProp(Object, 'identical', identical);
 
   //////////////// END New ES-Harmony methods ///////////
 
@@ -188,69 +199,82 @@
    * Gets a value which is either NO_IDENT or uniquely identifies the
    * key object, for use in making maps keyed by this key object.
    *
-   * Two keys that are {@code eq} MUST have the same {@code
-   * identity}. Two keys that are not {@code eq} MUST either have
-   * different identities, or one of their identities MUST be
-   * {@code NO_IDENT}. An identity is either a string or a frozen
-   * one-element array containing a mostly-unique string. The identity
-   * of an object is always either NO_IDENT or such an array. The
-   * identity of the array itself is used to resolve collisions on the
-   * name in the array.
+   * <p>Two keys that are {@code identical} MUST have the same {@code
+   * identity}. Two keys that are not {@code identical} MUST either
+   * have different identities, or one of their identities MUST be
+   * {@code NO_IDENT}. An identity is either a string or a const
+   * function returning a mostly-unique string. The identity of an
+   * object is always either NO_IDENT or such a function. The identity
+   * of the function itself is used to resolve collisions on the name
+   * in the array.
    *
-   * When a map stores a key's identity rather than the key itself,
+   * <p>When a map stores a key's identity rather than the key itself,
    * the map does not cause the key to be retained. See the emulated
    * {@code WeakMap} below for the resulting gc properties.
    *
    * <p>To identify objects with reasonable efficiency on ES5 by
    * itself (i.e., without any object-keyed collections), we need to
    * add a reasonably hidden property to such key objects when we
-   * can. This raises two issues:
+   * can. This raises three issues:
    * <ul>
    * <li>arranging to add this property to objects before we lose the
    *     chance, and
    * <li>reasonably hiding the existence of this new property from
    *     most JavaScript code.
+   * <li>preventing <i>identity theft</i>, where one object is created
+   *     falsely claiming to have the identity of another object.
    * </ul>
    * We do so by
    * <ul>
    * <li>Making the hidden property non-enumerable, so we need not
    *     worry about for-in loops or {@code Object.keys},
-   * <li>monkey patching those standard methods that would
+   * <li>Making the hidden property an accessor property, where the
+   *     hidden property's getter is the identity, and the value the
+   *     getter returns is the mostly unique string.
+   * <li>monkey patching those reflective methods that would
    *     prevent extensions, to add this hidden property first,
    * <li>monkey patching those methods that would reveal this
    *     hidden property, and
    * <li>monkey patching those methods that would overwrite this
    *     hidden property.
    * </ul>
-   * Remaining non-transparencies which are not easily fixed
+   * Given our parser-less verification strategy, the remaining
+   * non-transparencies which are not easily fixed are
    * <ul>
-   * <li>The property can still be overridden by assignment. This
-   *     could be repaired by installing the property as an accessor
-   *     and pre-installing it on {@code Object.prototype}. However,
-   *     the benefit seems small compared to the cost. OTOH, since
-   *     {@code identity}'s invariant can be destroyed by such
-   *     assignment, this may lead to an exploitable vulnerability,
-   *     which would justify the expense.
-   * <li>The {@code delete}, {@code in}, and property access
-   *     ({@code []}, and {@code .}) operations would each reveal the
+   * <li>The {@code delete}, {@code in}, property access
+   *     ({@code []}, and {@code .}), and property assignment
+   *     operations each reveal the
    *     presence of the hidden property. The property access
    *     operations also reveal the randomness provided by
    *     {@code Math.random}. This not currently an issue but may
    *     become one if SES otherwise seeks to hide Math.random.
    * </ul>
+   * These are not easily fixed because they are primitive operations
+   * which cannot be monkey patched. However, because we're
+   * representing the precious identity by the identity of the
+   * property's getter rather than the value gotten, this identity
+   * itself cannot leak or be installed by the above non-transparent
+   * operations.
    */
   function identity(key) {
+    var name;
+    function identGetter() { return name; }
     if (key === Object(key)) {
-      if (hop.call(key, 'ident___')) { return key.ident___; }
+      var desc = real.getOwnPropertyDescriptor(key, 'ident___');
+      if (desc) { return desc.get; }
       if (!real.isExtensible(key)) { return NO_IDENT; }
-      var result = real.freeze(['hash:' + Math.random()]);
+      name = 'hash:' + Math.random();
+
+      real.freeze(identGetter);
+      real.freeze(identGetter.prototype);
+
       defProp(key, 'ident___', {
-        value: result,
-        writable: false,
+        get: identGetter,
+        set: SHOULD_BE_UNDEFINED,
         enumerable: false,
         configurable: false
       });
-      return result;
+      return identGetter;
     }
     if (typeof key === 'string') { return 'str:' + key; }
     return 'lit:' + key;
@@ -343,7 +367,7 @@
   defMissingProp(global, 'WeakMap', constFunc(function() {
     var identities = {};
     var values = {};
-     return Object.freeze({
+    return Object.freeze({
       get: constFunc(function(key) {
         var id = identity(key);
         var name;
@@ -351,7 +375,7 @@
           name = id;
           id = key;
         } else {
-          name = id[0];
+          name = id();
         }
         var ids = identities[name] || [];
         var i = ids.indexOf(id);
@@ -367,7 +391,7 @@
           name = id;
           id = key;
         } else {
-          name = id[0];
+          name = id();
         }
         var ids = identities[name] || (identities[name] = []);
         var vals = values[name] || (values[name] = []);

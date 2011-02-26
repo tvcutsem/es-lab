@@ -10,7 +10,8 @@
 <script src="WeakMap.js"></script>
 <script src="initSES.js"></script>
 <script>
-  (function(){
+  (function() {
+    debugger;
     var show1 = document.getElementById('show1');
     var show2 = document.getElementById('show2');
     if (!('getOwnPropertyNames' in Object)) {
@@ -19,12 +20,6 @@
       show1.appendChild(document.createTextNode('cancelled'));
       show2.appendChild(document.createTextNode('cancelled'));
       return;
-    } else if (navigator.userAgent.indexOf('Chrome') >= 0) {
-      alert('Possibly Chromium.\n' +
-            'If this crashes your page, turn debugging on and try again');
-    } else if (!('console' in window) || typeof console.log !== 'function') {
-      alert('No console.\n' +
-            'If this crashes your page, turn debugging on and try again');
     }
     initSES(window, whitelist, atLeastFreeVarNames);
 
@@ -42,7 +37,7 @@
       require: function(id) { return { foo: 88, id: id}; }, 
       exports: exported
     });
-    var txt = JSON.stringify(cajaVM.protect({
+    var txt = JSON.stringify(cajaVM.def({
       required: required,
       exported: exported, 
       returned: returned

@@ -31,6 +31,9 @@ var atLeastFreeVarNames = (function()
   // http://es-lab.googlecode.com/svn/trunk/src/parser/es5parser.ojs
   // which depends on
   // http://es-lab.googlecode.com/svn/trunk/src/parser/unicode.js
+  //
+  // SECURITY_BUG: TODO: This must still identify possible identifier
+  // that contain {@code \u} encoded characters.
   var SHOULD_MATCH_IDENTIFIER = (/(\w|\$)+/gm);
 
 
@@ -61,11 +64,15 @@ var atLeastFreeVarNames = (function()
     programSrc = String(programSrc);
     LIMIT_SRC(programSrc);
     // Now that we've temporarily limited our attention to ascii...
-    var ident = SHOULD_MATCH_IDENTIFIER;
     var result = Object.create(SHOULD_BE_NULL);
     var a;
-    while ((a = ident.exec(programSrc))) {
-      result[a[0]] = true;
+    while ((a = SHOULD_MATCH_IDENTIFIER.exec(programSrc))) {
+      var name = a[0];
+      if (name === 'ident___') {
+        // See WeakMap.js
+        throw new EvalError('Apparent identifier "ident___" not permitted');
+      }
+      result[name] = true;
     }
     return result;
   }
