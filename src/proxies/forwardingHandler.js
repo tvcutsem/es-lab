@@ -55,7 +55,14 @@ ForwardingHandler.prototype = {
   // Object.getPropertyDescriptor(proxy, name) -> pd | undefined
   getPropertyDescriptor: function(name) {
     // Note: this function does not exist in ES5
-    var desc = Object.getPropertyDescriptor(this.target, name);
+    // var desc = Object.getPropertyDescriptor(this.target, name);
+    // fall back on manual prototype-chain-walk:
+    var desc = Object.getOwnPropertyDescriptor(this.target, name);
+    var parent = Object.getPrototypeOf(this.target);
+    while (desc === undefined && parent !== null) {
+      desc = Object.getOwnPropertyDescriptor(parent, name);
+      parent = Object.getPrototypeOf(parent);
+    }
     if (desc !== undefined) { desc.configurable = true; }
     return desc;
   },
@@ -68,7 +75,16 @@ ForwardingHandler.prototype = {
   // Object.getPropertyNames(proxy) -> [ string ]
   getPropertyNames: function() {
     // Note: this function does not exist in ES5
-    return Object.getPropertyNames(this.target);
+    // return Object.getPropertyNames(this.target);
+    // fall back on manual prototype-chain-walk:
+    var props = Object.getOwnPropertyNames(this.target);
+    var parent = Object.getPrototypeOf(this.target);
+    while (parent !== null) {
+      props = props.concat(Object.getOwnPropertyNames(parent));
+      parent = Object.getPrototypeOf(parent);
+    }
+    // FIXME: remove duplicates from props
+    return props;
   },
   
   // Object.defineProperty(proxy, name, pd) -> undefined
