@@ -14,8 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-var atLeastFreeVarNames = (function()
-{
+/**
+ * 
+ */
+var atLeastFreeVarNames = (function() {
 
   /////////////// KLUDGE SWITCHES ///////////////
 
@@ -32,7 +34,7 @@ var atLeastFreeVarNames = (function()
   // which depends on
   // http://es-lab.googlecode.com/svn/trunk/src/parser/unicode.js
   //
-  // SECURITY_BUG: TODO: This must still identify possible identifier
+  // SECURITY_BUG: TODO: This must still identify possible identifiers
   // that contain {@code \u} encoded characters.
   var SHOULD_MATCH_IDENTIFIER = (/(\w|\$)+/gm);
 

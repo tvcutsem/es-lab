@@ -150,17 +150,6 @@
     return funcBound;
   });
 
-  //var SHOULD_BE_UNDEFINED = undefined;
-  var SHOULD_BE_UNDEFINED = (function() {
-    var callCount = 0;
-    return function sillySetter(newVal) {
-      if (callCount === 0) {
-        console.warn('ident___ setter should never be called');
-      }
-      callCount++;
-    };
-  })();
-
   //////////////// END KLUDGE SWITCHES ///////////
 
   //////////////// New ES-Harmony methods ///////////
@@ -255,26 +244,29 @@
    * property's getter rather than the value gotten, this identity
    * itself cannot leak or be installed by the above non-transparent
    * operations.
+   *
+   * <p>Due to <a href=
+   * "https://bugzilla.mozilla.org/show_bug.cgi?id=637994"
+   * >Bug: Inherited accessor properties (sometimes?) reported as own
+   * properties</a> we're reverting the logic of <a href=
+   * "http://code.google.com/p/es-lab/source/browse/trunk/src/ses/WeakMap.js"
+   * >WeakMap.js</a> from getter based as in r493 to array-based as in r491
    */
   function identity(key) {
     var name;
-    function identGetter() { return name; }
     if (key === Object(key)) {
-      var desc = real.getOwnPropertyDescriptor(key, 'ident___');
-      if (desc) { return desc.get; }
+      if (hop.call(key, 'ident___')) { return key.ident___; }
       if (!real.isExtensible(key)) { return NO_IDENT; }
       name = 'hash:' + Math.random();
-
-      real.freeze(identGetter);
-      real.freeze(identGetter.prototype);
+      var result = real.freeze([name]);
 
       defProp(key, 'ident___', {
-        get: identGetter,
-        set: SHOULD_BE_UNDEFINED,
+        value: result,
+        writable: false,
         enumerable: false,
         configurable: false
       });
-      return identGetter;
+      return result;
     }
     if (typeof key === 'string') { return 'str:' + key; }
     return 'lit:' + key;
@@ -375,7 +367,7 @@
           name = id;
           id = key;
         } else {
-          name = id();
+          name = id[0];
         }
         var ids = identities[name] || [];
         var i = ids.indexOf(id);
@@ -391,7 +383,7 @@
           name = id;
           id = key;
         } else {
-          name = id();
+          name = id[0];
         }
         var ids = identities[name] || (identities[name] = []);
         var vals = values[name] || (values[name] = []);

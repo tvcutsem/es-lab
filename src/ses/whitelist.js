@@ -1,5 +1,3 @@
-"use strict";
-
 // Copyright (C) 2009 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,296 +13,330 @@
 // limitations under the License.
 
 /**
- * The comment "Harmless whatwg" refers to extensions documented at
+ * Exports "whitelist", a recursively defined JSON record enumerating
+ * all the naming paths in the ES5.1 spec, those de-facto
+ * extensions that we judge to be safe, and SES extensions provided by
+ * the SES runtime.
+ *
+ * <p>Each JSON record enumerates the disposition of the properties on
+ * some corresponding primordial object, with the root record
+ * representing the global object. For each such record, the values
+ * associated with its property names can be
+ * <ul>
+ * <li>Another record, in which case this property is simply
+ *     whitelisted and that next record represents the disposition of
+ *     the object which is its value.
+ * <li>true, in which case this property is simply whitelisted. The
+ *     value associated with that property is still traversed and
+ *     tamed, but only according to the taming of the objects that
+ *     object inherits from.
+ * <li>"*", in which case this property on this object is whitelisted,
+ *     as is this property as inherited by all objects that inherit
+ *     from this object. The value associated with all such properties
+ *     is still traversed.
+ * <li>"skip", in which case this property is simply whitelisted, but
+ *     we avoid taming the value associated with that property.
+ * </ul>
+ *
+ * <p>The comment "Harmless whatwg" refers to extensions documented at
  * http://wiki.whatwg.org/wiki/Web_ECMAScript that do seem to be
  * harmless. Note that the RegExp constructor extensions on that page
  * are <b>not harmless</b> and so must not be whitelisted.
+ *
+ * <p>We factor out true and "skip" into the variables t and s just to
+ * get a bit better compression from simple minifiers.
  */
+var whitelist;
 
+(function() {
+  "use strict";
 
-var whitelist = {
-  "cajaVM": {                        // Caja support
-    "log": true,
-    "compile": true,
-    "compileModule": true,           // experimental
-    "def": true
-  },
-  "Q": {                             // Dr. SES support
-    "get": true,
-    "post": true,
-    "put": true,
-    "delete": true,
-    "when": true,
-    "defer": true,
-    "reject": true,
-    "ref": true,
-    "near": true,
-    "defined": true,
-    "run": true,
-    "Promise": true,
-    "isPromise": true,
-    "def": true
-  },
-  "WeakMap": true,                   // ES-Harmony proposal
-  "Proxy": {                         // ES-Harmony proposal
-    "create": true,
-    "createFunction": true
-  },
-  "escape": true,                    // ES5 Appendix B
-  "unescape": true,                  // ES5 Appendix B
-  "Object": {
-    "getPropertyDescriptor": true,   // ES-Harmony proposal
-    "getPropertyNames": true,        // ES-Harmony proposal
-    "identical": true,               // ES-Harmony strawman
-    "prototype": {
-      "constructor": "*",
-      "toString": "*",
-      "toLocaleString": "*",
-      "valueOf": true,
-      "hasOwnProperty": true,
-      "isPrototypeOf": true,
-      "propertyIsEnumerable": true
+  var t = true;
+  var s = "skip";
+  whitelist = {
+    cajaVM: {                        // Caja support
+      log: t,
+      compile: t,
+      compileModule: t,              // experimental
+      def: t
     },
-    "getPrototypeOf": true,
-    "getOwnPropertyDescriptor": true,
-    "getOwnPropertyNames": true,
-    "create": true,
-    "defineProperty": true,
-    "defineProperties": true,
-    "seal": true,
-    "freeze": true,
-    "preventExtensions": true,
-    "isSealed": true,
-    "isFrozen": true,
-    "isExtensible": true,
-    "keys": true
-  },
-  "NaN": true,
-  "Infinity": true,
-  "undefined": true,
-  "eval": true,
-  "parseInt": true,
-  "parseFloat": true,
-  "isNaN": true,
-  "isFinite": true,
-  "decodeURI": true,
-  "decodeURIComponent": true,
-  "encodeURI": true,
-  "encodeURIComponent": true,
-  "Function": {
-    "prototype": {
-      "apply": true,
-      "call": true,
-      "bind": true,
-      "prototype": "*",
-      "length": "*",
-      "caller": "skip",    // when not poison, could be fatal
-      "arguments": "skip", // when not poison, could be fatal
-      "arity": "skip",     // non-std, deprecated in favor of length
-      "name": "skip"       // non-std
-    }
-  },
-  "Array": {
-    "prototype": {
-      "concat": true,
-      "join": true,
-      "pop": true,
-      "push": true,
-      "reverse": true,
-      "shift": true,
-      "slice": true,
-      "sort": true,
-      "splice": true,
-      "unshift": true,
-      "indexOf": true,
-      "lastIndexOf": true,
-      "every": true,
-      "some": true,
-      "forEach": true,
-      "map": true,
-      "filter": true,
-      "reduce": true,
-      "reduceRight": true,
-      "length": "skip"       // can't be redefined on Mozilla
+    Q: {                             // Dr. SES support
+      get: t,
+      post: t,
+      put: t,
+      "delete": t,
+      when: t,
+      defer: t,
+      reject: t,
+      ref: t,
+      near: t,
+      defined: t,
+      run: t,
+      Promise: t,
+      isPromise: t,
+      def: t
     },
-    "isArray": true
-  },
-  "String": {
-    "prototype": {
-      "substr": true,                // ES5 Appendix B
-      "anchor": true,                // Harmless whatwg
-      "big": true,                   // Harmless whatwg
-      "blink": true,                 // Harmless whatwg
-      "bold": true,                  // Harmless whatwg
-      "fixed": true,                 // Harmless whatwg
-      "fontcolor": true,             // Harmless whatwg
-      "fontsize": true,              // Harmless whatwg
-      "italics": true,               // Harmless whatwg
-      "link": true,                  // Harmless whatwg
-      "small": true,                 // Harmless whatwg
-      "strike": true,                // Harmless whatwg
-      "sub": true,                   // Harmless whatwg
-      "sup": true,                   // Harmless whatwg
-      "trimLeft": true,              // non-standard
-      "trimRight": true,             // non-standard
-      "valueOf": true,
-      "charAt": true,
-      "charCodeAt": true,
-      "concat": true,
-      "indexOf": true,
-      "lastIndexOf": true,
-      "localeCompare": true,
-      "match": true,
-      "replace": true,
-      "search": true,
-      "slice": true,
-      "split": true,
-      "substring": true,
-      "toLowerCase": true,
-      "toLocaleLowerCase": true,
-      "toUpperCase": true,
-      "toLocaleUpperCase": true,
-      "trim": true,
-      "length": "skip"           // can't be redefined on Mozilla
+    WeakMap: t,                      // ES-Harmony proposal
+    Proxy: {                         // ES-Harmony proposal
+      create: t,
+      createFunction: t
     },
-    "fromCharCode": true
-  },
-  "Boolean": {
-    "prototype": {
-      "valueOf": true
-    }
-  },
-  "Number": {
-    "prototype": {
-      "valueOf": true,
-      "toFixed": true,
-      "toExponential": true,
-      "toPrecision": true
+    escape: t,                       // ES5 Appendix B
+    unescape: t,                     // ES5 Appendix B
+    Object: {
+      getPropertyDescriptor: t,      // ES-Harmony proposal
+      getPropertyNames: t,           // ES-Harmony proposal
+      identical: t,                  // ES-Harmony strawman
+      prototype: {
+        constructor: "*",
+        toString: "*",
+        toLocaleString: "*",
+        valueOf: t,
+        hasOwnProperty: t,
+        isPrototypeOf: t,
+        propertyIsEnumerable: t
+      },
+      getPrototypeOf: t,
+      getOwnPropertyDescriptor: t,
+      getOwnPropertyNames: t,
+      create: t,
+      defineProperty: t,
+      defineProperties: t,
+      seal: t,
+      freeze: t,
+      preventExtensions: t,
+      isSealed: t,
+      isFrozen: t,
+      isExtensible: t,
+      keys: t
     },
-    "MAX_VALUE": true,
-    "MIN_VALUE": true,
-    "NaN": true,
-    "NEGATIVE_INFINITY": true,
-    "POSITIVE_INFINITY": true
-  },
-  "Math": {
-    "E": true,
-    "LN10": true,
-    "LN2": true,
-    "LOG2E": true,
-    "LOG10E": true,
-    "PI": true,
-    "SQRT1_2": true,
-    "SQRT2": true,
+    NaN: t,
+    Infinity: t,
+    undefined: t,
+    eval: t,
+    parseInt: t,
+    parseFloat: t,
+    isNaN: t,
+    isFinite: t,
+    decodeURI: t,
+    decodeURIComponent: t,
+    encodeURI: t,
+    encodeURIComponent: t,
+    Function: {
+      prototype: {
+        apply: t,
+        call: t,
+        bind: t,
+        prototype: "*",
+        length: "*",
+        caller: s,                 // when not poison, could be fatal
+        arguments: s,              // when not poison, could be fatal
+        arity: s,                  // non-std, deprecated in favor of length
+        name: s                    // non-std
+      }
+    },
+    Array: {
+      prototype: {
+        concat: t,
+        join: t,
+        pop: t,
+        push: t,
+        reverse: t,
+        shift: t,
+        slice: t,
+        sort: t,
+        splice: t,
+        unshift: t,
+        indexOf: t,
+        lastIndexOf: t,
+        every: t,
+        some: t,
+        forEach: t,
+        map: t,
+        filter: t,
+        reduce: t,
+        reduceRight: t,
+        length: s                  // can't be redefined on Mozilla
+      },
+      isArray: t
+    },
+    String: {
+      prototype: {
+        substr: t,                   // ES5 Appendix B
+        anchor: t,                   // Harmless whatwg
+        big: t,                      // Harmless whatwg
+        blink: t,                    // Harmless whatwg
+        bold: t,                     // Harmless whatwg
+        fixed: t,                    // Harmless whatwg
+        fontcolor: t,                // Harmless whatwg
+        fontsize: t,                 // Harmless whatwg
+        italics: t,                  // Harmless whatwg
+        link: t,                     // Harmless whatwg
+        small: t,                    // Harmless whatwg
+        strike: t,                   // Harmless whatwg
+        sub: t,                      // Harmless whatwg
+        sup: t,                      // Harmless whatwg
+        trimLeft: t,                 // non-standard
+        trimRight: t,                // non-standard
+        valueOf: t,
+        charAt: t,
+        charCodeAt: t,
+        concat: t,
+        indexOf: t,
+        lastIndexOf: t,
+        localeCompare: t,
+        match: t,
+        replace: t,
+        search: t,
+        slice: t,
+        split: t,
+        substring: t,
+        toLowerCase: t,
+        toLocaleLowerCase: t,
+        toUpperCase: t,
+        toLocaleUpperCase: t,
+        trim: t,
+        length: s                  // can't be redefined on Mozilla
+      },
+      fromCharCode: t
+    },
+    Boolean: {
+      prototype: {
+        valueOf: t
+      }
+    },
+    Number: {
+      prototype: {
+        valueOf: t,
+        toFixed: t,
+        toExponential: t,
+        toPrecision: t
+      },
+      MAX_VALUE: t,
+      MIN_VALUE: t,
+      NaN: t,
+      NEGATIVE_INFINITY: t,
+      POSITIVE_INFINITY: t
+    },
+    Math: {
+      E: t,
+      LN10: t,
+      LN2: t,
+      LOG2E: t,
+      LOG10E: t,
+      PI: t,
+      SQRT1_2: t,
+      SQRT2: t,
 
-    "abs": true,
-    "acos": true,
-    "asin": true,
-    "atan": true,
-    "atan2": true,
-    "ceil": true,
-    "cos": true,
-    "exp": true,
-    "floor": true,
-    "log": true,
-    "max": true,
-    "min": true,
-    "pow": true,
-    "random": true, // questionable
-    "round": true,
-    "sin": true,
-    "sqrt": true,
-    "tan": true
-  },
-  "Date": {        // no-arg Date constructor is questionable
-    "prototype": {
-      "getYear": true,               // ES5 Appendix B
-      "setYear": true,               // ES5 Appendix B
-      "toGMTString": true,           // ES5 Appendix B
-      "toDateString": true,
-      "toTimeString": true,
-      "toLocaleString": true,
-      "toLocaleDateString": true,
-      "toLocaleTimeString": true,
-      "getTime": true,
-      "getFullYear": true,
-      "getUTCFullYear": true,
-      "getMonth": true,
-      "getUTCMonth": true,
-      "getDate": true,
-      "getUTCDate": true,
-      "getDay": true,
-      "getUTCDay": true,
-      "getHours": true,
-      "getUTCHours": true,
-      "getMinutes": true,
-      "getUTCMinutes": true,
-      "getSeconds": true,
-      "getUTCSeconds": true,
-      "getMilliseconds": true,
-      "getUTCMilliseconds": true,
-      "getTimezoneOffset": true,
-      "setTime": true,
-      "setFullYear": true,
-      "setUTCFullYear": true,
-      "setMonth": true,
-      "setUTCMonth": true,
-      "setDate": true,
-      "setUTCDate": true,
-      "setHours": true,
-      "setUTCHours": true,
-      "setMinutes": true,
-      "setUTCMinutes": true,
-      "setSeconds": true,
-      "setUTCSeconds": true,
-      "setMilliseconds": true,
-      "setUTCMilliseconds": true,
-      "toUTCString": true,
-      "toISOString": true,
-      "toJSON": true
+      abs: t,
+      acos: t,
+      asin: t,
+      atan: t,
+      atan2: t,
+      ceil: t,
+      cos: t,
+      exp: t,
+      floor: t,
+      log: t,
+      max: t,
+      min: t,
+      pow: t,
+      random: t,                     // questionable
+      round: t,
+      sin: t,
+      sqrt: t,
+      tan: t
     },
-    "parse": true,
-    "UTC": true,
-    "now": true    // questionable
-  },
-  "RegExp": {
-    "prototype": {
-      "exec": true,
-      "test": true,
-      "source": "skip",
-      "global": "skip",
-      "ignoreCase": "skip",
-      "multiline": "skip",
-      "lastIndex": "skip",
-      "sticky": "skip"       // non-std
+    Date: {                          // no-arg Date constructor is questionable
+      prototype: {
+        getYear: t,                  // ES5 Appendix B
+        setYear: t,                  // ES5 Appendix B
+        toGMTString: t,              // ES5 Appendix B
+        toDateString: t,
+        toTimeString: t,
+        toLocaleString: t,
+        toLocaleDateString: t,
+        toLocaleTimeString: t,
+        getTime: t,
+        getFullYear: t,
+        getUTCFullYear: t,
+        getMonth: t,
+        getUTCMonth: t,
+        getDate: t,
+        getUTCDate: t,
+        getDay: t,
+        getUTCDay: t,
+        getHours: t,
+        getUTCHours: t,
+        getMinutes: t,
+        getUTCMinutes: t,
+        getSeconds: t,
+        getUTCSeconds: t,
+        getMilliseconds: t,
+        getUTCMilliseconds: t,
+        getTimezoneOffset: t,
+        setTime: t,
+        setFullYear: t,
+        setUTCFullYear: t,
+        setMonth: t,
+        setUTCMonth: t,
+        setDate: t,
+        setUTCDate: t,
+        setHours: t,
+        setUTCHours: t,
+        setMinutes: t,
+        setUTCMinutes: t,
+        setSeconds: t,
+        setUTCSeconds: t,
+        setMilliseconds: t,
+        setUTCMilliseconds: t,
+        toUTCString: t,
+        toISOString: t,
+        toJSON: t
+      },
+      parse: t,
+      UTC: t,
+      now: t                         // questionable
+    },
+    RegExp: {
+      prototype: {
+        exec: t,
+        test: t,
+        source: s,
+        global: s,
+        ignoreCase: s,
+        multiline: s,
+        lastIndex: s,
+        sticky: s                  // non-std
+      }
+    },
+    Error: {
+      prototype: {
+        name: "*",
+        message: "*"
+      }
+    },
+    EvalError: {
+      prototype: t
+    },
+    RangeError: {
+      prototype: t
+    },
+    ReferenceError: {
+      prototype: t
+    },
+    SyntaxError: {
+      prototype: t
+    },
+    TypeError: {
+      prototype: t
+    },
+    URIError: {
+      prototype: t
+    },
+    JSON: {
+      parse: t,
+      stringify: t
     }
-  },
-  "Error": {
-    "prototype": {
-      "name": "*",
-      "message": "*"
-    }
-  },
-  "EvalError": {
-    "prototype": true
-  },
-  "RangeError": {
-    "prototype": true
-  },
-  "ReferenceError": {
-    "prototype": true
-  },
-  "SyntaxError": {
-    "prototype": true
-  },
-  "TypeError": {
-    "prototype": true
-  },
-  "URIError": {
-    "prototype": true
-  },
-  "JSON": {
-    "parse": true,
-    "stringify": true
-  }
-};
+  };
+})();

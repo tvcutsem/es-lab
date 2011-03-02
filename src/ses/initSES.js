@@ -412,10 +412,27 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
         Object.freeze(val);
         recur(Object.getPrototypeOf(val));
         Object.getOwnPropertyNames(val).forEach(function(p) {
+          if (typeof val === 'function' &&
+              (p === 'caller' || p === 'arguments')) {
+            return;
+          }
           var desc = Object.getOwnPropertyDescriptor(val, p);
-          recur(desc.value);
-          recur(desc.get);
-          recur(desc.set);
+          if (!desc) {
+            // See https://bugs.webkit.org/show_bug.cgi?id=55537
+            // for why we need this test.
+            return;
+          }
+          try {
+            recur(desc.value);
+            recur(desc.get);
+            recur(desc.set);
+          } catch (err) {
+            if (err instanceof TypeError) {
+              cajaVM.log('still diagnosing(' + p + '): ' + err);
+            } else {
+              throw err;
+            }
+          }
         });
       }
       recur(root);
@@ -493,7 +510,8 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
 
   /**
    * The whiteTable should map from each path-accessible primordial
-   * object to the permit that describes how it should be cleaned.
+   * object to the permit object that describes how it should be
+   * cleaned.
    *
    * <p>To ensure that each subsequent traverse obtains the same
    * values, these paths become paths of frozen data properties.
@@ -501,19 +519,21 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
   var whiteTable = WeakMap();
   function register(value, permit) {
     if (value !== Object(value)) { return; }
+    if (typeof permit !== 'object') {
+      return;
+    }
     var oldPermit = whiteTable.get(value);
-    if (typeof permit !== 'object' && typeof oldPermit === 'object') {
+    if (oldPermit) {
+      debugger;
       return;
     }
     whiteTable.set(value, permit);
-    if (typeof permit === 'object') {
-      Object.keys(permit).forEach(function(name) {
-        if (permit[name] !== 'skip') {
-          var sub = read(value, name);
-          register(sub, permit[name]);
-        }
-      });
-    }
+    Object.keys(permit).forEach(function(name) {
+      if (permit[name] !== 'skip') {
+        var sub = read(value, name);
+        register(sub, permit[name]);
+      }
+    });
   }
   register(root, whitelist);
 
@@ -524,12 +544,14 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
    */
   function isPermitted(base, name) {
     var permit = whiteTable.get(base);
-    if (permit && permit[name]) { return permit[name]; }
+    if (permit) {
+      if (permit[name]) { return permit[name]; }
+    }
     while (true) {
       base = Object.getPrototypeOf(base);
       if (base === null) { return false; }
       permit = whiteTable.get(base);
-      if (typeof permit === 'object' && name in permit) {
+      if (permit && name in permit) {
         var result = permit[name];
         if (result === '*' || result === 'skip') {
           return result;
@@ -587,8 +609,15 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
   }
   if (FREEZE_EARLY) { Object.freeze(FREEZE_EARLY); }
   clean(root, '');
-  // cajaVM.log('Skipped ' + skipped.join(' '));
-  cajaVM.log('Deleted ' + goodDeletions.sort().join(' '));
+
+  function reportDiagnosis(desc, problemList) {
+    if (problemList.length === 0) { return false; }
+    cajaVM.log(desc + ': ' + problemList.sort().join(' '));
+    return true;
+  }
+
+  //reportDiagnosis('Skipped', skipped);
+  reportDiagnosis('Deleted', goodDeletions);
 
   if (cantNeuter.length >= 1) {
     var complaint = cantNeuter.map(function(p) {
@@ -604,13 +633,12 @@ function initSES(global, whitelist, atLeastFreeVarNames) {
         }).join(', ');
 
     });
-    cajaVM.log("Can't neuter:" + complaint.sort().join('\n'));
+    reportDiagnosis("Can't neuter", complaint);
   }
 
-  if (badDeletions.length >= 1) {
-    cajaVM.log("Can't delete " + badDeletions.sort().join(' '));
-  } else {
+  if (!reportDiagnosis("Can't delete", badDeletions)) {
     // We succeeded. Enable safe Function, eval, and compile to work.
+    cajaVM.log("success");
     dirty = false;
   }
 }
