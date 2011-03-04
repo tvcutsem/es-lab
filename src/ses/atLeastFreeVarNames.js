@@ -1,5 +1,3 @@
-"use strict";
-
 // Copyright (C) 2010 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,58 +13,62 @@
 // limitations under the License.
 
 /**
- * 
+ * @fileoverview export an "atLeastFreeVarNames" function for internal
+ * use by the SES-on-ES5 implementation, which enumerates at least the
+ * identifiers which occur freely in a source text string.
  */
-var atLeastFreeVarNames = (function() {
+
+
+/**
+ * Calling atLeastFreeVarNames on a {@code programSrc} string
+ * argument, the result should include at least all the free variable
+ * names of {@code programSrc}.
+ *
+ * <p>Assuming that programSrc that parses as a strict Program,
+ * atLeastFreeVarNames(programSrc) returns a Record whose enumerable
+ * own property names must include the names of all the free variables
+ * occuring in programSrc. It can include as many other strings as is
+ * convenient so long as it includes these. The value of each of these
+ * properties should be {@code true}.
+ */
+var atLeastFreeVarNames;
+(function() {
+//  "use strict"; // not here because of an unreported Caja bug
 
   /////////////// KLUDGE SWITCHES ///////////////
 
+  /**
+   * Currently we use this to limit the input text to ascii only, in
+   * order to simply our identifier gathering. This is only a
+   * temporary development hack.
+   */
   function LIMIT_SRC(programSrc) {
     if (!((/^[\u0000-\u007f]*$/m).test(programSrc))) {
       throw new Error('Non-ascii texts not yet supported');
     }
   }
 
-  // This is safe only because of the above LIMIT_SRC
-  // To do this right takes quite a lot of unicode machinery. See
-  // the "Identifier" production at
-  // http://es-lab.googlecode.com/svn/trunk/src/parser/es5parser.ojs
-  // which depends on
-  // http://es-lab.googlecode.com/svn/trunk/src/parser/unicode.js
-  //
-  // SECURITY_BUG: TODO: This must still identify possible identifiers
-  // that contain {@code \u} encoded characters.
+  /**
+   * This is safe only because of the above LIMIT_SRC
+   * To do this right takes quite a lot of unicode machinery. See
+   * the "Identifier" production at
+   * http://es-lab.googlecode.com/svn/trunk/src/parser/es5parser.ojs
+   * which depends on
+   * http://es-lab.googlecode.com/svn/trunk/src/parser/unicode.js
+   *
+   * SECURITY_BUG: TODO: This must still identify possible identifiers
+   * that contain {@code \u} encoded characters.
+   */
   var SHOULD_MATCH_IDENTIFIER = (/(\w|\$)+/gm);
 
 
-  /////////////////////////////////
-  // The following are only the minimal kludges needed for the current
-  // Mozilla Minefield (Firefox Beta) or Chromium Beta. At the time of
-  // this writing, these are Mozilla 4.0b5pre and Chromium 6.0.490.0
-  // (3135). As these move forward, kludges can be removed until we
-  // simply rely on ES5.
-
-  //var SHOULD_BE_NULL = null;
-  var SHOULD_BE_NULL = Object.prototype;
-
   //////////////// END KLUDGE SWITCHES ///////////
 
-  /**
-   * The result should include at least all the free variable names of
-   * {@code programSrc}.
-   *
-   * Assuming that programSrc that parses as a strict Program,
-   * atLeastFreeVarNames(programSrc) returns a Record whose enumerable
-   * property names must include the names of all the free variables
-   * occuring in programSrc. It can include as many other strings as is
-   * convenient so long as it includes these. The value of each of these
-   * properties should be {@code true}.
-   */
-  function atLeastFreeVarNames(programSrc) {
+  atLeastFreeVarNames = function atLeastFreeVarNames(programSrc) {
     programSrc = String(programSrc);
     LIMIT_SRC(programSrc);
     // Now that we've temporarily limited our attention to ascii...
-    var result = Object.create(SHOULD_BE_NULL);
+    var result = Object.create(null);
     var a;
     while ((a = SHOULD_MATCH_IDENTIFIER.exec(programSrc))) {
       var name = a[0];
@@ -77,7 +79,6 @@ var atLeastFreeVarNames = (function() {
       result[name] = true;
     }
     return result;
-  }
-  return atLeastFreeVarNames;
+  };
 
 })();

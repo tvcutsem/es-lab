@@ -13,10 +13,10 @@
 // limitations under the License.
 
 /**
- * Exports "whitelist", a recursively defined JSON record enumerating
- * all the naming paths in the ES5.1 spec, those de-facto
- * extensions that we judge to be safe, and SES extensions provided by
- * the SES runtime.
+ * @fileoverview Exports "whitelist", a recursively defined JSON
+ * record enumerating all the naming paths in the ES5.1 spec, those
+ * de-facto extensions that we judge to be safe, and SES extensions
+ * provided by the SES runtime.
  *
  * <p>Each JSON record enumerates the disposition of the properties on
  * some corresponding primordial object, with the root record
@@ -32,16 +32,37 @@
  *     object inherits from.
  * <li>"*", in which case this property on this object is whitelisted,
  *     as is this property as inherited by all objects that inherit
- *     from this object. The value associated with all such properties
- *     is still traversed.
- * <li>"skip", in which case this property is simply whitelisted, but
- *     we avoid taming the value associated with that property.
+ *     from this object. The values associated with all such properties
+ *     are still traversed and tamed, but only according to the taming
+ *     of the objects that object inherits from.
+ * <li>"skip", in which case this property on this object is simply
+ *     whitelisted, as is this property as inherited by all objects
+ *     that inherit from this object, but we avoid taming the value
+ *     associated with that property.
  * </ul>
  *
- * <p>The comment "Harmless whatwg" refers to extensions documented at
- * http://wiki.whatwg.org/wiki/Web_ECMAScript that do seem to be
- * harmless. Note that the RegExp constructor extensions on that page
- * are <b>not harmless</b> and so must not be whitelisted.
+ * The members of the whitelist are either
+ * <ul>
+ * <li>(uncommented) defined by the ES5.1 normative standard text,
+ * <li>(questionable) providing sources of non-determinism, in
+ *     violation of pure object-capability rules.
+ * <li>(ES5 Appendix B) common elements of de facto JavaScript
+ *     described by the non-normative Appendix B.
+ * <li>(Harmless whatwg) extensions documented at
+ *     <a href="http://wiki.whatwg.org/wiki/Web_ECMAScript"
+ *     >http://wiki.whatwg.org/wiki/Web_ECMAScript</a> that seem to be
+ *     harmless. Note that the RegExp constructor extensions on that
+ *     page are <b>not harmless</b> and so must not be whitelisted.
+ * <li>(ES-Harmony proposal) accepted as "proposal" status for
+ *     EcmaScript-Harmony.
+ * <li>(Marked as "skip") in which case there should be an explanatory
+ *     comment explaining why (TODO(erights)). These are generally
+ *     workarounds for browser bugs, which should be cited
+ *     (TODO(erights)). Any of these whose comments say "fatal" need
+ *     to be fixed before we might be considered safe. Ideally, we can
+ *     retire all "skip" entries by the time SES is ready for secure
+ *     production use.
+ * </ul>
  *
  * <p>We factor out true and "skip" into the variables t and s just to
  * get a bit better compression from simple minifiers.
@@ -49,7 +70,7 @@
 var whitelist;
 
 (function() {
-  "use strict";
+//  "use strict"; // not here because of an unreported Caja bug
 
   var t = true;
   var s = "skip";
@@ -86,7 +107,7 @@ var whitelist;
     Object: {
       getPropertyDescriptor: t,      // ES-Harmony proposal
       getPropertyNames: t,           // ES-Harmony proposal
-      identical: t,                  // ES-Harmony strawman
+      identical: t,                  // ES-Harmony proposal
       prototype: {
         constructor: "*",
         toString: "*",
@@ -156,7 +177,7 @@ var whitelist;
         filter: t,
         reduce: t,
         reduceRight: t,
-        length: s                  // can't be redefined on Mozilla
+        length: s                    // can't be redefined on Mozilla
       },
       isArray: t
     },
@@ -307,7 +328,7 @@ var whitelist;
         ignoreCase: s,
         multiline: s,
         lastIndex: s,
-        sticky: s                  // non-std
+        sticky: s                    // non-std
       }
     },
     Error: {

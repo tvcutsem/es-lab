@@ -1,5 +1,3 @@
-"use strict";
-
 // Copyright (C) 2010 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +13,30 @@
 // limitations under the License.
 
 /**
+ * @fileoverview Install a leaky WeakMap emulation on platforms that
+ * don't provide a built-in one.
+ */
+
+/**
+ * This {@code WeakMap} emulation is observably equivalent to the
+ * ES-Harmony WeakMap, but with leakier garbage collection properties.
+ *
+ * <p>As with true WeakMaps, in this emulation, a key does not
+ * retain maps indexed by that key and (crucially) a map does not
+ * retain the keys it indexes. A key by itself also does not retain
+ * the values associated with that key.
+ *
+ * <p>However, the values placed in an emulated WeakMap are retained
+ * so long as that map is retained and those associations are not
+ * overridden. For example, when used to support membranes, all
+ * values exported from a given membrane will live for the lifetime
+ * of the membrane. But when the membrane is revoked, all objects
+ * encapsulated within that membrane will still be collected. This
+ * is the best we can do without VM support.
+ */
+var WeakMap;
+
+/**
  * If this is an ES5 platform and the ES-Harmony {@code WeakMap} is
  * absent, install an approximate emulation.
  *
@@ -22,11 +44,22 @@
  * properties of this emulation.
  *
  * <p>Will also install some other elements of ES5 as needed to bring
- * an almost ES5 platform (such as Firefox Minefield 4.0b5pre or
- * Chromium beta 6.0.490.0 (3135)) to be a more complete emulation of
- * ES5. Some elements of these emulations lose SES safety.
+ * an almost ES5 platform to be a more complete emulation of
+ * ES5. On not-quite-ES5 platforms, some elements of these emulations
+ * on lose SES safety. The platform must at least provide
+ * Object.getOwnPropertyNames, because it cannot reasonably be
+ * emulated.
  */
 (function(global) {
+//  "use strict"; // not here because of an unreported Caja bug
+
+  var gopn = Object.getOwnPropertyNames;
+  if (!gopn) {
+    debugger;
+    throw new EvalError('Please upgrade to a JavaScript platform ' +
+                        'which implements Object.getOwnPropertyName');
+  }
+
   var hop = Object.prototype.hasOwnProperty;
   var slice = Array.prototype.slice;
   var push = Array.prototype.push;
@@ -34,7 +67,7 @@
   var classProp = Object.prototype.toString;
 
   var real = {};
-  Object.getOwnPropertyNames(Object).forEach(function(name) {
+  gopn(Object).forEach(function(name) {
     real[name] = Object[name];
   });
 
@@ -77,6 +110,11 @@
   /**
    * Work around for https://bugzilla.mozilla.org/show_bug.cgi?id=591846
    * as applied to the RegExp constructor.
+   *
+   * <p>Note that Mozilla lists this bug as closed. But reading that
+   * bug thread clarifies that is partially because the following code
+   * allows us to work around the non-configurability of the RegExp
+   * statics.
    */
   var UnsafeRegExp = RegExp;
   function FakeRegExp(pattern, flags) {
@@ -108,38 +146,17 @@
     return unsafeRegExpTest.call(this, String(specimen));
   };
 
-  /**
-   * Work around https://bugzilla.mozilla.org/show_bug.cgi?id=591838
-   */
-  function goodDefProp(base, name, desc) {
-    function test(attrName) {
-      if (!attrName in desc) { return true; }
-      return identical(oldDesc.attrName, desc.attrName);
-    }
-    if (base === global &&
-        (name === 'NaN' || name === 'Infinity' || name === 'undefined')) {
-      var oldDesc = real.getOwnPropertyDescriptor(base, name);
-      if (oldDesc) {
-        if ('value' in desc && 'value' in oldDesc &&
-            test('value') && test('writable') &&
-            test('enumerable') && test('configurable')) {
-          return;
-        }
-      }
-    }
-    defProp(base, name, desc);
-  }
-  real.defineProperty = goodDefProp;
-  defProp(Object, 'defineProperty', { value: goodDefProp });
-
-
-  defMissingProp(Object, 'freeze', function(obj) { return obj; });
-  defMissingProp(Object, 'seal', function(obj) { return obj; });
+  // As of this writing, the only major browser that does implement
+  // Object.getOwnPropertyNames but not Object.freeze etc is Safari 5
+  // (JavaScriptCode). When Safari implements these, the following
+  // calls to defMissingProp can simply be removed.
+  defMissingProp(Object, 'freeze',            function(obj) { return obj; });
+  defMissingProp(Object, 'seal',              function(obj) { return obj; });
   defMissingProp(Object, 'preventExtensions', function(obj) { return obj; });
-  defMissingProp(Object, 'isFrozen', function(obj) { return false; });
-  defMissingProp(Object, 'isSealed', function(obj) { return false; });
-  defMissingProp(Object, 'isExtensible', function(obj) { return true; });
-  defMissingProp(Function.prototype, 'bind', function(self, var_args) {
+  defMissingProp(Object, 'isFrozen',          function(obj) { return false; });
+  defMissingProp(Object, 'isSealed',          function(obj) { return false; });
+  defMissingProp(Object, 'isExtensible',      function(obj) { return true; });
+  defMissingProp(Function.prototype, 'bind',  function(self, var_args) {
     var thisFunc = this;
     var leftArgs = slice.call(arguments, 1);
     function funcBound(var_args) {
@@ -166,7 +183,7 @@
   defMissingProp(Object, 'getPropertyNames', function(obj) {
     var result = [];
     while (obj !== null) {
-      push.apply(result, real.getOwnPropertyNames(obj));
+      push.apply(result, gopn(obj));
       obj = real.getPrototypeOf(obj);
     }
     return result;
@@ -293,7 +310,7 @@
 
   defProp(Object, 'getOwnPropertyNames', {
     value: function(obj) {
-      var result = real.getOwnPropertyNames(obj);
+      var result = gopn(obj);
       var i = result.indexOf('ident___');
       if (i >= 0) { result.splice(i, 1); }
       return result;
@@ -339,60 +356,45 @@
     return Object.freeze(func);
   }
 
-  /**
-   * This {@code WeakMap} emulation is observably equivalent to the
-   * ES-Harmony WeakMap, but with leakier garbage collection properties.
-   *
-   * <p>As with true WeakMaps, in this emulation, a key does not
-   * retain maps indexed by that key and (crucially) a map does not
-   * retain the keys it indexes. A key by itself also does not retain
-   * the values associated with that key.
-   *
-   * <p>However, the values placed in an emulated WeakMap are retained
-   * so long as that map is retained and those associations are not
-   * overridden. For example, when used to support membranes, all
-   * values exported from a given membrane will live for the lifetime
-   * of the membrane. But when the membrane is revoked, all objects
-   * encapsulated within that membrane will still be collected. This
-   * is the best we can do without VM support.
-   */
-  defMissingProp(global, 'WeakMap', constFunc(function() {
-    var identities = {};
-    var values = {};
-    return Object.freeze({
-      get: constFunc(function(key) {
-        var id = identity(key);
-        var name;
-        if (typeof id === 'string') {
-          name = id;
-          id = key;
-        } else {
-          name = id[0];
-        }
-        var ids = identities[name] || [];
-        var i = ids.indexOf(id);
-        return (i < 0) ? undefined : values[name][i];
-      }),
-      set: constFunc(function(key, value) {
-        if (key !== Object(key)) {
-          throw new TypeError('Key must not be a value type: ' + key);
-        }
-        var id = identity(key);
-        var name;
-        if (typeof id === 'string') {
-          name = id;
-          id = key;
-        } else {
-          name = id[0];
-        }
-        var ids = identities[name] || (identities[name] = []);
-        var vals = values[name] || (values[name] = []);
-        var i = ids.indexOf(id);
-        if (i < 0) { i = ids.length; }
-        ids[i] = id;
-        vals[i] = value;
-      })
+  if (WeakMap === undefined) {
+    WeakMap = constFunc(function() {
+      var identities = {};
+      var values = {};
+      return Object.freeze({
+        get: constFunc(function(key) {
+          var id = identity(key);
+          var name;
+          if (typeof id === 'string') {
+            name = id;
+            id = key;
+          } else {
+            name = id[0];
+          }
+          var ids = identities[name] || [];
+          var i = ids.indexOf(id);
+          return (i < 0) ? undefined : values[name][i];
+        }),
+        set: constFunc(function(key, value) {
+          if (key !== Object(key)) {
+            throw new TypeError('Key must not be a value type: ' + key);
+          }
+          var id = identity(key);
+          var name;
+          if (typeof id === 'string') {
+            name = id;
+            id = key;
+          } else {
+            name = id[0];
+          }
+          var ids = identities[name] || (identities[name] = []);
+          var vals = values[name] || (values[name] = []);
+          var i = ids.indexOf(id);
+          if (i < 0) { i = ids.length; }
+          ids[i] = id;
+          vals[i] = value;
+        })
+      });
     });
-  }));
+  }
 
 })(this);

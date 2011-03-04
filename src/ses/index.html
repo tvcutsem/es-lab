@@ -7,12 +7,10 @@
 <body>
 <div id="show1">test1...</div>
 <div id="show2">test2...</div>
-<script src="whitelist.js"></script>
-<script src="atLeastFreeVarNames.js"></script>
-<script src="WeakMap.js"></script>
 <script src="initSES.js"></script>
 <script>
   (function() {
+    "use strict";
     debugger;
     var show1 = document.getElementById('show1');
     var show2 = document.getElementById('show2');
@@ -23,9 +21,8 @@
       show2.appendChild(document.createTextNode('cancelled'));
       return;
     }
-    initSES(window, whitelist, atLeastFreeVarNames);
 
-    var output = eval2('3+4') * cajaVM.compile('window')({window: 6});
+    var output = eval('3+4') * cajaVM.compile('window')({window: 6});
     show1.appendChild(document.createTextNode(output));
 
     // Test ability to bootstrap support for a limited form of
