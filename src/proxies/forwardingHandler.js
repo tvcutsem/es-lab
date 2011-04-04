@@ -101,9 +101,17 @@ ForwardingHandler.prototype = {
     if (!Object.isFrozen(this.target))
       return undefined;
     var props = {};
-    for (var name in this.target) {
-	    props[x] = Object.getOwnPropertyDescriptor(this.target, name);
-    }
+    var handler = this;
+    Object.getOwnPropertyNames(this.target).forEach(function (name) {
+      var desc = Object.getOwnPropertyDescriptor(this.target, name);
+      // turn descriptor into a trapping accessor property
+      props[name] = {
+                get: function( ) { return handler.get(this, name); },
+                set: function(v) { return handler.set(this, name, v); },
+         enumerable: desc.enumerable,
+       configurable: desc.configurable
+      };
+    });
     return props;
   },
 
