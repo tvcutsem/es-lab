@@ -1,4 +1,4 @@
-// Copyright (C) 2009 Google Inc.
+// Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
 /**
  * @fileoverview Exports "whitelist", a recursively defined JSON
  * record enumerating all the naming paths in the ES5.1 spec, those
- * de-facto extensions that we judge to be safe, and SES extensions
- * provided by the SES runtime.
+ * de-facto extensions that we judge to be safe, and SES and Dr. SES
+ * extensions provided by the SES runtime.
  *
  * <p>Each JSON record enumerates the disposition of the properties on
  * some corresponding primordial object, with the root record
@@ -25,27 +25,55 @@
  * <ul>
  * <li>Another record, in which case this property is simply
  *     whitelisted and that next record represents the disposition of
- *     the object which is its value.
+ *     the object which is its value. For example, {@code "Object"}
+ *     leads to another record explaining what properties {@code
+ *     "Object"} may have and how each such property, if present,
+ *     and its value should be tamed.
  * <li>true, in which case this property is simply whitelisted. The
  *     value associated with that property is still traversed and
  *     tamed, but only according to the taming of the objects that
- *     object inherits from.
+ *     object inherits from. For example, {@code "Object.freeze"} leads
+ *     to true, meaning that the {@code "freeze"} property of {@code
+ *     Object} should be whitelisted and the value of the property (a
+ *     function) should be further tamed only according to the
+ *     markings of the other objects it inherits from, like {@code
+ *     "Function.prototype"} and {@code "Object.prototype").
  * <li>"*", in which case this property on this object is whitelisted,
  *     as is this property as inherited by all objects that inherit
  *     from this object. The values associated with all such properties
  *     are still traversed and tamed, but only according to the taming
- *     of the objects that object inherits from.
+ *     of the objects that object inherits from. For example, {@code
+ *     "Object.prototype.constructor"} leads to "*", meaning that we
+ *     whitelist the {@code "constructor"} property on {@code
+ *     Object.prototype} and on every object that inherits from {@code
+ *     Object.prototype} that does not have a conflicting mark. Each
+ *     of these is tamed as if with true, so that the value of the
+ *     property is further tamed according to what other objects it
+ *     inherits from.
  * <li>"skip", in which case this property on this object is simply
  *     whitelisted, as is this property as inherited by all objects
  *     that inherit from this object, but we avoid taming the value
- *     associated with that property.
+ *     associated with that property. For example, as of this writing
+ *     {@code "Function.prototype.caller"} leads to "skip" because
+ *     some current browser bugs prevent us from removing or even
+ *     traversing this property on some platforms of interest.
  * </ul>
+ *
+ * The "skip" markings are workarounds for browser bugs or other
+ * temporary problems. For each of these, there should be an
+ * explanatory comment explaining why or a bug citation
+ * (TODO(erights)). Any of these whose comments say "fatal" need to be
+ * fixed before SES might be considered safe. Ideally, we can retire
+ * all "skip" entries by the time SES is ready for secure production
+ * use.
  *
  * The members of the whitelist are either
  * <ul>
  * <li>(uncommented) defined by the ES5.1 normative standard text,
- * <li>(questionable) providing sources of non-determinism, in
- *     violation of pure object-capability rules.
+ * <li>(questionable) provides a source of non-determinism, in
+ *     violation of pure object-capability rules, but allowed anyway
+ *     since we've given up on restricting JavaScript to a
+ *     deterministic subset.
  * <li>(ES5 Appendix B) common elements of de facto JavaScript
  *     described by the non-normative Appendix B.
  * <li>(Harmless whatwg) extensions documented at
@@ -55,37 +83,40 @@
  *     page are <b>not harmless</b> and so must not be whitelisted.
  * <li>(ES-Harmony proposal) accepted as "proposal" status for
  *     EcmaScript-Harmony.
- * <li>(Marked as "skip") in which case there should be an explanatory
- *     comment explaining why (TODO(erights)). These are generally
- *     workarounds for browser bugs, which should be cited
- *     (TODO(erights)). Any of these whose comments say "fatal" need
- *     to be fixed before we might be considered safe. Ideally, we can
- *     retire all "skip" entries by the time SES is ready for secure
- *     production use.
+ * <li>(Marked as "skip") See above.
  * </ul>
  *
- * <p>We factor out true and "skip" into the variables t and s just to
- * get a bit better compression from simple minifiers.
+ * <p>With the above encoding, there are some sensible whitelists we
+ * cannot express, such as marking a property both with "*" and a JSON
+ * record. This is an expedient decision based only on not having
+ * encountered such a need. Should we need this extra expressiveness,
+ * we'll need to refactor to enable a different encoding.
+ *
+ * <p>We factor out {@code true} and {@code "skip"} into the variables
+ * {@code t} and {@code s} just to get a bit better compression from
+ * simple minifiers.
  */
 var whitelist;
 
 (function() {
-//  "use strict"; // not here because of an unreported Caja bug
+  "use strict";
 
   var t = true;
-  var s = "skip";
+  var s = 'skip';
   whitelist = {
     cajaVM: {                        // Caja support
       log: t,
+      def: t,
       compile: t,
       compileModule: t,              // experimental
-      def: t
+      eval: t,
+      Function: t
     },
     Q: {                             // Dr. SES support
       get: t,
       post: t,
       put: t,
-      "delete": t,
+      'delete': t,
       when: t,
       defer: t,
       reject: t,
@@ -97,7 +128,15 @@ var whitelist;
       isPromise: t,
       def: t
     },
-    WeakMap: t,                      // ES-Harmony proposal
+    WeakMap: {       // ES-Harmony proposal as currently implemented by FF6.0a1
+      prototype: {
+        // Note: coordinate this list with maintenance of es5shim.js
+        get: t,
+        set: t,
+        has: t,
+        'delete': t
+      }
+    },
     Proxy: {                         // ES-Harmony proposal
       create: t,
       createFunction: t
@@ -109,9 +148,9 @@ var whitelist;
       getPropertyNames: t,           // ES-Harmony proposal
       identical: t,                  // ES-Harmony proposal
       prototype: {
-        constructor: "*",
-        toString: "*",
-        toLocaleString: "*",
+        constructor: '*',
+        toString: '*',
+        toLocaleString: '*',
         valueOf: t,
         hasOwnProperty: t,
         isPrototypeOf: t,
@@ -134,7 +173,8 @@ var whitelist;
     NaN: t,
     Infinity: t,
     undefined: t,
-    eval: t,
+    // eval: t,                      // Whitelisting under separate control
+                                     // by TAME_GLOBAL_EVAL in startSES.js
     parseInt: t,
     parseFloat: t,
     isNaN: t,
@@ -148,8 +188,8 @@ var whitelist;
         apply: t,
         call: t,
         bind: t,
-        prototype: "*",
-        length: "*",
+        prototype: '*',
+        length: '*',
         caller: s,                 // when not poison, could be fatal
         arguments: s,              // when not poison, could be fatal
         arity: s,                  // non-std, deprecated in favor of length
@@ -270,6 +310,7 @@ var whitelist;
     },
     Date: {                          // no-arg Date constructor is questionable
       prototype: {
+        // Note: coordinate this list with maintanence of es5shim.js
         getYear: t,                  // ES5 Appendix B
         setYear: t,                  // ES5 Appendix B
         toGMTString: t,              // ES5 Appendix B
@@ -333,8 +374,8 @@ var whitelist;
     },
     Error: {
       prototype: {
-        name: "*",
-        message: "*"
+        name: '*',
+        message: '*'
       }
     },
     EvalError: {

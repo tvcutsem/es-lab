@@ -1,4 +1,4 @@
-// Copyright (C) 2010 Google Inc.
+// Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,44 +22,56 @@
 /**
  * Calling atLeastFreeVarNames on a {@code programSrc} string
  * argument, the result should include at least all the free variable
- * names of {@code programSrc}.
+ * names of {@code programSrc} as own properties.
  *
- * <p>Assuming that programSrc that parses as a strict Program,
+ * <p>Assuming a programSrc that parses as a strict Program,
  * atLeastFreeVarNames(programSrc) returns a Record whose enumerable
  * own property names must include the names of all the free variables
  * occuring in programSrc. It can include as many other strings as is
  * convenient so long as it includes these. The value of each of these
  * properties should be {@code true}.
+ *
+ * <p>TODO(erights): On platforms that support Proxies (currently only
+ * FF4 and later), we should stop using atLeastFreeVarNames, since a
+ * {@code with(aProxy) {...}} should reliably intercept all free
+ * variable accesses without needing any prior scan.
  */
 var atLeastFreeVarNames;
 (function() {
-//  "use strict"; // not here because of an unreported Caja bug
+  "use strict";
 
   /////////////// KLUDGE SWITCHES ///////////////
 
   /**
-   * Currently we use this to limit the input text to ascii only, in
-   * order to simply our identifier gathering. This is only a
-   * temporary development hack.
+   * Currently we use this to limit the input text to ascii only
+   * without backslash-u escapes, in order to simply our identifier
+   * gathering.
+   *
+   * <p>This is only a temporary development hack. TODO(erights): fix.
    */
   function LIMIT_SRC(programSrc) {
-    if (!((/^[\u0000-\u007f]*$/m).test(programSrc))) {
-      throw new Error('Non-ascii texts not yet supported');
+    if ((/[^\u0000-\u007f]/).test(programSrc)) {
+      throw new EvalError('Non-ascii text not yet supported');
+    }
+    if ((/\\u/).test(programSrc)) {
+      throw new EvalError('Backslash-u escape encoded text not yet supported');
     }
   }
 
   /**
-   * This is safe only because of the above LIMIT_SRC
-   * To do this right takes quite a lot of unicode machinery. See
-   * the "Identifier" production at
+   * Return a regexp that can be used repeatedly to scan for the next
+   * identifier.
+   *
+   * <p>The current implementation is safe only because of the above
+   * LIMIT_SRC. To do this right takes quite a lot of unicode
+   * machinery. See the "Identifier" production at
    * http://es-lab.googlecode.com/svn/trunk/src/parser/es5parser.ojs
    * which depends on
    * http://es-lab.googlecode.com/svn/trunk/src/parser/unicode.js
    *
-   * SECURITY_BUG: TODO: This must still identify possible identifiers
-   * that contain {@code \u} encoded characters.
+   * <p>This is only a temporary development hack. TODO(erights): fix.
    */
-  var SHOULD_MATCH_IDENTIFIER = (/(\w|\$)+/gm);
+  function SHOULD_MATCH_IDENTIFIER() { return (/(\w|\$)+/g); }
 
 
   //////////////// END KLUDGE SWITCHES ///////////
@@ -68,14 +80,16 @@ var atLeastFreeVarNames;
     programSrc = String(programSrc);
     LIMIT_SRC(programSrc);
     // Now that we've temporarily limited our attention to ascii...
+    var regexp = SHOULD_MATCH_IDENTIFIER();
     var result = Object.create(null);
     var a;
-    while ((a = SHOULD_MATCH_IDENTIFIER.exec(programSrc))) {
+    while ((a = regexp.exec(programSrc))) {
+      // Note that we could have avoided the while loop by doing
+      // programSrc.match(regexp), except that then we'd need
+      // temporary storage proportional to the total number of
+      // apparent identifiers, rather than the total number of
+      // apparent unique identifiers.
       var name = a[0];
-      if (name === 'ident___') {
-        // See WeakMap.js
-        throw new EvalError('Apparent identifier "ident___" not permitted');
-      }
       result[name] = true;
     }
     return result;

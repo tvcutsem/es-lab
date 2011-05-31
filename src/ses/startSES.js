@@ -1,4 +1,4 @@
-// Copyright (C) 2009 Google Inc.
+// Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,46 +14,147 @@
 
 /**
  * @fileoverview Make this frame SES-safe or die trying.
+ */
+
+/**
+ * The global {@code eval} function available to script code, which
+ * may or not be made safe.
  *
- * <p>Should be called before any other potentially dangerous script
- * is executed in this frame. If it succeeds, the new global bindings
- * for <tt>eval</tt> and <tt>Function</tt> in this frame will only
- * load code according to the <i>loader isolation</i> rules of the
- * object-capability model. If all other code executed directly in
- * this frame (i.e., other than through these <tt>eval</tt> and
- * <tt>Function</tt> bindings) takes care to uphold object-capability
- * rules, then untrusted code loaded via <tt>eval</tt> and
- * <tt>Function</tt> will be constrained by those rules.
+ * <p>The original global binding of {@code eval} is not
+ * SES-safe. {@code cajaVM.eval} is a safe wrapper around this
+ * original eval, enforcing SES language restrictions.
  *
- * <p>On a pre-ES5 browser, this script will fail cleanly, leaving the
- * frame intact. Otherwise, if this script fails, it may leave this
- * frame in an unusable state. All following description assumes this
- * script succeeds and that the browser conforms to the ES5 spec. The
- * ES5 spec allows browsers to implement more than is specified as
- * long as certain invariants are maintained. We further assume that
- * these extensions are not maliciously designed to obey the letter of
- * these invariants while subverting the intent of the spec. In other
- * words, even on an ES5 conformant browser, we do not presume to
- * defend ourselves from a browser that is out to get us.
+ * <p>If TAME_GLOBAL_EVAL is true, both the global {@code eval}
+ * variable, and the pseudo-global {@code "eval"} property of root,
+ * are set to the safe wrapper. If TAME_GLOBAL_EVAL is false, in order
+ * to work around a bug in the Chrome debugger, then the global {@code
+ * eval} is unaltered and no {@code "eval"} property is available on
+ * root. In either case, SES-evaled-code and SES-script-code can both
+ * access the safe eval wrapper as {@code cajaVM.eval}.
  *
- * @param global ::Record(any) Assumed to be the real global object for
- *        this frame. Since startSES will allow global variable
+ * <p>By making the safe eval available on root only when we also make
+ * it be the genuine global eval, we preserve the property that
+ * SES-evaled-code differs from SES-script-code only by having a
+ * subset of the same variables in globalish scope. This is a
+ * nice-to-have that makes explanation easier rather than a hard
+ * requirement. With this property, any SES-evaled-code that does not
+ * fail to access a global variable (or to test whether it could)
+ * should operate the same way when run as SES-script-code.
+ *
+ * <p>See doc-comment on cajaVM for the restriction on this API needed
+ * to operate under Caja translation on old browsers.
+ */
+var eval;
+
+/**
+ * The global {@code Function} constructor is always replaced with a
+ * safe wrapper, which is also made available as the {@code
+ * "Function"} pseudo-global on root.
+ *
+ * <p>Both the original Function constructor and this safe wrapper
+ * point at the original {@code Function.prototype}, so {@code
+ * instanceof} works fine with the wrapper. {@code
+ * Function.prototype.constructor} is set to point at the safe
+ * wrapper, so that only it, and not the unsafe original, is
+ * accessible.
+ *
+ * <p>See doc-comment on cajaVM for the restriction on this API needed
+ * to operate under Caja translation on old browsers.
+ */
+var Function;
+
+/**
+ * A new global exported by SES, intended to become a mostly
+ * compatible API between server-side Caja translation for older
+ * browsers and client-side SES verification for newer browsers.
+ *
+ * <p>Under server-side Caja translation for old pre-ES5 browsers, the
+ * synchronous interface of the evaluation APIs (currently {@code
+ * eval, Function, cajaVM.{compile, compileModule, eval, Function}})
+ * cannot reasonably be provided. Instead, under translation we expect
+ * <ul>
+ * <li>Not to have a binding for the pseudo-global {@code "eval"} on root,
+ *     just as we would not if TAME_GLOBAL_EVAL is false.
+ * <li>The global {@code eval} seen by scripts is either unaltered (to
+ *     work around the Chrome debugger bug if TAME_GLOBAL_EVAL is
+ *     false), or is replaced by a function that throws an appropriate
+ *     EvalError diagnostic (if TAME_GLOBAL_EVAL is true).
+ * <li>The global {@code Function} constructor, both as seen by script
+ *     code and evaled code, to throw an appropriate diagnostic.
+ * <li>The {@code Q} API to always be available, to handle
+ *     asyncronous, promise, and remote requests.
+ * <li>The evaluating methods on {@code cajaVM} -- currently {@code
+ *     compile, compileModule, eval, and Function} -- to be remote
+ *     promises for their normal interfaces, which therefore must be
+ *     invoked with {@code Q.post}.
+ * <li>Since {@code Q.post} can be used for asynchronously invoking
+ *     non-promises, invocations like
+ *     {@code Q.post(cajaVM, 'eval', ['2+3'])}, for example,
+ *     will return a promise for a 5. This will work both under Caja
+ *     translation and (TODO(erights)) under SES verification when
+ *     {@code Q} is also installed, and so is the only portable
+ *     evaluating API that SES code should use during this transition
+ *     period.
+ * <li>TODO(erights): {code Q.post(cajaVM, 'compileModule',
+ *     [moduleSrc]} should eventually pre-load the transitive
+ *     synchronous dependencies of moduleSrc before resolving the
+ *     promise for its result. It currently does not, instead
+ *     requiring its client to do so manually.
+ * </ul>
+ */
+var cajaVM;
+
+/**
+ * <p>{@code startSES} should be called before any other potentially
+ * dangerous script is executed in this frame.
+ *
+ * <p>If {@code startSES} succeeds, the evaluation operations on
+ * {@code cajaVM}, the global {@code Function} contructor, and perhaps
+ * the {@code eval} function (see doc-comment on {@code eval} and
+ * {@code cajaVM}) will only load code according to the <i>loader
+ * isolation</i> rules of the object-capability model, suitable for
+ * loading untrusted code. If all other (trusted) code executed
+ * directly in this frame (i.e., other than through these safe
+ * evaluation operations) takes care to uphold object-capability
+ * rules, then untrusted code loaded via these safe evaluation
+ * operations will be constrained by those rules. TODO(erights):
+ * explain concretely what the trusted code must do or avoid doing to
+ * uphold object-capability rules.
+ *
+ * <p>On a pre-ES5 platform, this script will fail cleanly, leaving
+ * the frame intact. Otherwise, if this script fails, it may leave
+ * this frame in an unusable state. All following description assumes
+ * this script succeeds and that the browser conforms to the ES5
+ * spec. The ES5 spec allows browsers to implement more than is
+ * specified as long as certain invariants are maintained. We further
+ * assume that these extensions are not maliciously designed to obey
+ * the letter of these invariants while subverting the intent of the
+ * spec. In other words, even on an ES5 conformant browser, we do not
+ * presume to defend ourselves from a browser that is out to get us.
+ *
+ * @param global ::Record(any) Assumed to be the real global object
+ *        for this frame. Since startSES will allow global variable
  *        references that appear at the top level of the whitelist,
  *        our safety depends on these variables being frozen as a side
  *        effect of freezing the corresponding properties of
- *        <tt>global</tt>. These properties are also duplicated onto a
- *        <i>root accessible primordial</i>, which is provided as the
- *        <tt>this</tt> binding for hermetic eval calls -- emulating
- *        the safe subset of the normal global object.
- * @param whitelist ::Record(Permit)
- *            where Permit = true | "*" | "skip" | Record(Permit).
- *        Describes the subset of naming paths starting from the root
- *        that should be accessible. The <i>accessible primordials</i>
- *        are this root plus all values found by navigating these paths
- *        starting from this root. All non-whitelisted properties of
- *        accessible primordials are deleted, and then all accessible
- *        primordials are frozen with the whitelisted properties
- *        frozen as data properties.
+ *        <tt>global</tt>. These properties are also duplicated onto
+ *        the virtual global objects which are provided as the
+ *        <tt>this</tt> binding for the safe evaluation calls --
+ *        emulating the safe subset of the normal global object.
+ * @param whitelist ::Record(Permit) where Permit = true | "*" |
+ *        "skip" | Record(Permit).  Describes the subset of naming
+ *        paths starting from the root that should be accessible. The
+ *        <i>accessible primordials</i> are all values found by
+ *        navigating these paths starting from this root. All
+ *        non-whitelisted properties of accessible primordials are
+ *        deleted, and then the root and all accessible primordials
+ *        are frozen with the whitelisted properties frozen as data
+ *        properties. TODO(erights): fix the code and documentation to
+ *        also support confined-ES5, suitable for confining
+ *        potentially offensive code but not supporting defensive
+ *        code, where we skip this last freezing step. With
+ *        confined-ES5, each frame is considered a separate protection
+ *        domain rather that each individual object.
  * @param atLeastFreeVarNames ::F([string], Record(true))
  *        Given the sourceText for a strict Program,
  *        atLeastFreeVarNames(sourceText) returns a Record whose
@@ -61,57 +162,65 @@
  *        free variables occuring in sourceText. It can include as
  *        many other strings as is convenient so long as it includes
  *        these. The value of each of these properties should be
- *        {@code true}.
+ *        {@code true}. TODO(erights): On platforms with Proxies
+ *        (currently only Firefox 4 and after), use {@code
+ *        with(aProxy) {...}} to intercept free variables rather than
+ *        atLeastFreeVarNames.
  */
 function startSES(global, whitelist, atLeastFreeVarNames) {
-//  "use strict"; // not here because of an unreported Caja bug
+  "use strict";
+
 
   /////////////// KLUDGE SWITCHES ///////////////
 
   /////////////////////////////////
   // The following are only the minimal kludges needed for the current
-  // Mozilla Minefield (Firefox Beta) or Chrome Beta. At the time of
-  // this writing, these are Mozilla 4.0b13pre (2011-03-02) and Chrome
-  // 11.0.686.1 dev. As these move forward, kludges can be removed
-  // until we simply rely on ES5.
+  // Firefox or the current Chrome Beta. At the time of
+  // this writing, these are Firefox 4.0 and Chrome 12.0.742.5 dev
+  // As these move forward, kludges can be removed until we simply
+  // rely on ES5.
 
   /**
-   * This switch simply reflects that not all almost-ES5 browsers yet
-   * implement strict mode.
+   * Workaround for http://code.google.com/p/v8/issues/detail?id=1321
+   * and https://bugs.webkit.org/show_bug.cgi?id=58338
+   *
+   * <p>This switch simply reflects that not all almost-ES5 browsers
+   * yet implement strict mode.
+   *
+   * <p>This kludge is <b>not</b> safety preserving. By proceeding
+   * without a full strict mode implementation, many of the security
+   * properties SES relies on, like non-leakage of the global object,
+   * are lost.
+   *
+   * <p>See also https://bugzilla.mozilla.org/show_bug.cgi?id=482298
+   * TODO(erights): verify that all the open bugs this one depends do
+   * not matter for SES security.
    */
   //var REQUIRE_STRICT = true;
   var REQUIRE_STRICT = false;
 
   /**
-   * This switch represents some non-isolated, and thus, not yet
-   * reported bug on Chrome/v8 only, that results in
-   * "Uncaught TypeError: Cannot redefine property: defineProperty"
-   * TODO(erights): isolate and report this.
+   * <p>TODO(erights): isolate and report this.
+   *
+   * <p>Workaround for Chrome debugger's own use of 'eval'
+   *
+   * <p>This kludge is safety preserving but not semantics
+   * preserving. When TAME_GLOBAL_EVAL is false, no synchronous 'eval'
+   * is available as a pseudo-global to untrusted (eval) code, and the
+   * 'eval' available as a global to trusted (script) code is the
+   * original 'eval', and so is not safe.
    */
-  //var FREEZE_EARLY = undefined;
-  var FREEZE_EARLY = Array.prototype.forEach;
+  //var TAME_GLOBAL_EVAL = true;
+  var TAME_GLOBAL_EVAL = false;
 
-  /**
-   * This switch represents what looks like another manifestation of
-   * the same undiagnosed bug as that motivating FREEZE_EARLY. The
-   * symptom is again
-   * "TypeError: Cannot redefine property: defineProperty"
-   * with a similar stack.
-   */
-  //var TOLERATE_FAILED_FREEZE = false;
-  var TOLERATE_FAILED_FREEZE = true;
-
-  /**
-   * Workaround for <a href=
-   * "https://bugs.webkit.org/show_bug.cgi?id=55537"
-   * >https://bugs.webkit.org/show_bug.cgi?id=55537</a>.
-   */
-  //var TOLERATE_MISSING_DESCRIPTOR = false;
-  var TOLERATE_MISSING_DESCRIPTOR = true;
 
   //////////////// END KLUDGE SWITCHES ///////////
 
+
   var dirty = true;
+
+  var hop = Object.prototype.hasOwnProperty;
+  var ipo = Object.prototype.isPrototypeOf;
 
   function fail(str) {
     debugger;
@@ -119,10 +228,10 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
   }
 
   if (typeof WeakMap === 'undefined') {
-    fail('No built-on WeakMaps, so WeakMap.js must be loaded first');
+    fail('No built-in WeakMaps, so WeakMap.js must be loaded first');
   }
 
-  if (REQUIRE_STRICT && function(){return this;}()) {
+  if (REQUIRE_STRICT && (function() { return this; })()) {
     fail('Requires at least ES5 support');
   }
 
@@ -130,14 +239,13 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
    * Code being eval'ed sees <tt>root</tt> as its <tt>this</tt>, as if
    * <tt>root</tt> were the global object.
    *
-   * <p>Root's properties are exactly the whitelistes global variable
+   * <p>Root's properties are exactly the whitelisted global variable
    * references. These properties, both as they appear on the global
    * object and on this root object, are frozen and so cannot
    * diverge. This preserves the illusion.
    */
   var root = Object.create(null);
 
-  /** Repair phase -- monkey patch safe replacements */
   (function() {
 
     /**
@@ -151,32 +259,34 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
 
     /**
      * Fails if {@code programSrc} does not parse as a strict Program
+     * production, or, almost equivalently, as a FunctionBody
      * production.
      *
-     * <p>Uses Ankur Taly's trick to cheaply check that a program
-     * parses using the platform's parser, as implicitly accessed by
-     * the original eval function, while nevertheless ensuring that no
-     * code from {@code programSrc} executes in the process.
-     *
-     * <p>TODO(erights): Switch to Crock's alternate suggestion of
-     * calling UnsafeFunction instead, since it will report early
-     * errors but will not execute regardless.
+     * <p>We use Crock's trick of simply passing {@code programSrc} to
+     * the original {@code Function} constructor, which will throw a
+     * SyntaxError if it does not parse as a FunctionBody. We used to
+     * use <a href=
+ * "http://code.google.com/p/es-lab/source/browse/trunk/src/ses/startSES.js#152"
+     * >Ankur's trick</a> which is more correct, in that it will throw
+     * if {@code programSrc} does not parse as a Program production,
+     * which is the relevant question. However, the difference --
+     * whether return statements are accepted -- does not matter for
+     * our purposes. And testing reveals that Crock's trick executes
+     * over 100x faster on V8.
      */
     function verifyStrictProgram(programSrc) {
-      try {
-        unsafeEval('"use strict"; ' +
-                   'throw "NotASyntaxError"; ' +
-                   programSrc);
-      } catch (ex) {
-        if (ex !== 'NotASyntaxError') {
-          throw ex;
-        }
-      }
+      UnsafeFunction('"use strict";' + programSrc);
     }
 
     /**
      * Fails if {@code exprSource} does not parse as a strict
      * Expression production.
+     *
+     * <p>To verify that exprSrc parses as a strict Expression, we
+     * verify that (when followed by ";") it parses as a strict
+     * Program, and that when surrounded with parens it still parses
+     * as a strict Program. We place a newline before the terminal
+     * token so that a "//" comment cannot suppress the close paren.
      */
     function verifyStrictExpression(exprSrc) {
       verifyStrictProgram(exprSrc + ';');
@@ -184,16 +294,20 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
     }
 
     /**
-     * For all the enumerable own properties of {@code from}, copy
-     * their descriptors to {@code virtualGlobal}, except that the
-     * property added to {@code virtualGlobal} is unconditionally
+     * For all the own properties of {@code from}, copy their
+     * descriptors to {@code virtualGlobal}, except that the property
+     * added to {@code virtualGlobal} is unconditionally
      * non-enumerable and (for the moment) configurable.
      *
      * <p>By copying descriptors rather than values, any accessor
-     * properties of {@code env} becomes an accessors of {code
+     * properties of {@code env} become accessors of {@code
      * virtualGlobal} with the same getter and setter. If these do not
-     * use their {@code this} value, then the original any copied
-     * properties are effectively joined.
+     * use their {@code this} value, then the original and any copied
+     * properties are effectively joined. (If the getter/setter do use
+     * their {@code this}, when compiled (verified untrusted) code
+     * accesses these with virtualGlobal as the base, their {@code
+     * this} will be bound to the virtualGlobal rather than {@code
+     * env}.)
      *
      * <p>We make these configurable so that {@code virtualGlobal} can
      * be further configured before being frozen. We make these
@@ -202,30 +316,23 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
      * browser's {@code window} object.
      */
     function initGlobalProperties(from, virtualGlobal) {
-      for (var name in from) {
+      Object.getOwnPropertyNames(from).forEach(function(name) {
         var desc = Object.getOwnPropertyDescriptor(from, name);
-        if (desc) {
-          desc.enumerable = false;
-          desc.configurable = true;
-          Object.defineProperty(virtualGlobal, name, desc);
-        }
-      }
+        desc.enumerable = false;
+        desc.configurable = true;
+        Object.defineProperty(virtualGlobal, name, desc);
+      });
     }
 
     /**
      * Make a frozen virtual global object whose properties are the
-     * union of the whitelisted globals and the enumerable own
-     * properties of {@code env}.
+     * union of the whitelisted globals and the own properties of
+     * {@code env}.
      *
      * <p>If there is a collision, the property from {@code env}
      * shadows the whitelisted global. We shadow by overwriting rather
      * than inheritance so that shadowing makes the original binding
      * inaccessible.
-     *
-     * <p>TODO(erights): Revisit whether the elements of {@code env}
-     * should be made to appear as properties on the virtual global
-     * binding of "this", rather than simply being in virtual global
-     * scope. Each decision violates some assumptions.
      */
     function makeVirtualGlobal(env) {
       var virtualGlobal = Object.create(null);
@@ -242,21 +349,18 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
      */
     function makeScopeObject(virtualGlobal, freeNames) {
       var scopeObject = Object.create(virtualGlobal);
-      for (var name in freeNames) {
+      Object.keys(freeNames).forEach(function(name) {
         if (!(name in virtualGlobal)) {
-          (function(name) {
-            Object.defineProperty(scopeObject, name, {
-              get: function() {
-                throw new ReferenceError('"' + name + '" not in scope');
-              },
-              set: function(ignored) {
-                throw new TypeError('Can\'t set "' + name + '"');
-              },
-              enumerable: true
-            });
-          })(name);
+          Object.defineProperty(scopeObject, name, {
+            get: function() {
+              throw new ReferenceError('"' + name + '" not in scope');
+            },
+            set: function(ignored) {
+              throw new TypeError('Cannot set "' + name + '"');
+            }
+          });
         }
-      }
+      });
       return Object.freeze(scopeObject);
     }
 
@@ -265,14 +369,14 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
      * Compile {@code exprSrc} as a strict expression into a function
      * of an environment {@code env}, that when called evaluates
      * {@code exprSrc} in a virtual global environment consisting only
-     * of the whitelisted globals and a snapshot of the enumerable own
-     * properties of {@code env}.
+     * of the whitelisted globals and a snapshot of the own properties
+     * of {@code env}.
      *
      * <p>When SES {@code compile} is provided primitively, it should
      * accept a Program and return a function that evaluates it to the
      * Program's completion value. Unfortunately, this is not
      * practical as a library without some non-standard support from
-     * the platform such as an parser API that provides an AST.
+     * the platform such as a parser API that provides an AST.
      *
      * <p>Thanks to Mike Samuel and Ankur Taly for this trick of using
      * {@code with} together with RegExp matching to intercept free
@@ -291,6 +395,17 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
       if (dirty) { fail('Initial cleaning failed'); }
       verifyStrictExpression(exprSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
+
+      /**
+       * Notice that the source text placed around exprSrc
+       * <ul>
+       * <li>brings no variable names into scope, avoiding any
+       *     non-hygienic name capture issues, and
+       * <li>does not introduce any newlines preceding exprSrc, so
+       *     that all line number which a debugger might report are
+       *     accurate wrt the original source text. And except for the
+       *     first line, all the column numbers are accurate too.
+       */
       var wrapperSrc =
         '(function() { ' +
         // non-strict code, where this === scopeObject
@@ -314,6 +429,10 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
 
     var directivePattern = (/^['"](?:\w|\s)*['"]$/m);
 
+    /**
+     * TODO(erights): Examine Ihab's question at
+     * http://codereview.appspot.com/4249052/diff/37002/src/com/google/caja/ses/startSES.js#newcode467
+     */
     var requirePattern = (/^(?:\w*\s*(?:\w|\$|\.)*\s*=\s*)?\s*require\s*\(\s*['"]((?:\w|\$|\.|\/)+)['"]\s*\)$/m);
 
     /**
@@ -431,7 +550,11 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
       }
       return compile(src)({});
     }
-    global.eval = fakeEval;
+
+    if (TAME_GLOBAL_EVAL) {
+      //
+      global.eval = fakeEval;
+    }
 
     var defended = WeakMap();
     /**
@@ -439,7 +562,7 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
      * transitively reachable from it via transitive reflective
      * property and prototype traversal.
      */
-    function def(root) {
+    function def(node) {
       var defending = WeakMap();
       var defendingList = [];
       function recur(val) {
@@ -456,43 +579,54 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
             return;
           }
           var desc = Object.getOwnPropertyDescriptor(val, p);
-          if (!desc) {
-            if (TOLERATE_MISSING_DESCRIPTOR) { return; }
-            fail('missing descriptor: ' + p);
-          }
-          try {
-            recur(desc.value);
-            recur(desc.get);
-            recur(desc.set);
-          } catch (err) {
-            if (TOLERATE_FAILED_FREEZE && err instanceof TypeError) {
-              cajaVM.log('still diagnosing(' + p + '): ' + err);
-            } else {
-              throw err;
-            }
-          }
+          recur(desc.value);
+          recur(desc.get);
+          recur(desc.set);
         });
       }
-      recur(root);
+      recur(node);
       defendingList.forEach(function(obj) {
         defended.set(obj, true);
       });
-      return root;
+      return node;
     }
 
     global.cajaVM = {
       log: function(str) {
-        if (typeof console !== 'undefined' &&
-            typeof console.log === 'function') {
+        if (typeof console !== 'undefined' && 'log' in console) {
+          // We no longer test (typeof console.log === 'function') since,
+          // on IE9 and IE10preview, in violation of the ES5 spec, it
+          // is callable but has typeof "object". TODO(erights):
+          // report to MS.
           console.log(str);
         }
       },
+      def: def,
       compile: compile,
       compileModule: compileModule,
-      def: def
+      eval: fakeEval,
+      Function: FakeFunction
     };
 
   })();
+
+  /**
+   * Return the object from which {@code base} inherits {@code name},
+   * if any.
+   *
+   * <p>Starting from {@code base} and looking up the prototype chain,
+   * return the first object having {@code name} as an own property,
+   * of {@code undefined} if none.
+   */
+  function inheritsFrom(base, name) {
+    for (var result = base;
+         result !== null;
+         result = Object.getPrototypeOf(result)) {
+
+      if (hop.call(result, name)) { return result; }
+    }
+    return undefined;
+  }
 
   var cantNeuter = [];
 
@@ -500,6 +634,12 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
    * Read the current value of base[name], and freeze that property as
    * a data property to ensure that all further reads of that same
    * property from that base produce the same value.
+   *
+   * <p>The algorithms in startSES traverse the graph of primordials
+   * multiple times. These algorithms rely on all these traversals
+   * seeing the same graph. By freezing these as data properties the
+   * first time they are read, we ensure that all traversals see the
+   * same graph.
    *
    * <p>The frozen property should preserve the enumerability of the
    * original property.
@@ -511,6 +651,34 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
     }
 
     var result = base[name];
+
+    function getter() { return result; }
+    function setter(newValue) {
+      if (base === this) {
+        if (Object.isFrozen(base)) {
+          throw new TypeError('Cannot assign to ".' + name +
+                              '" of frozen object');
+        } else {
+          // This case should only be useful on confined-es5, not ses.
+          debugger;
+          result = newValue;
+        }
+      } else if (inheritsFrom(this, name) === base) {
+        // simulate assignment to this[name], as if this accessor
+        // property was not here.
+        Object.defineProperty(this, name, {
+          value: newValue,
+          writable: true,
+          enumerable: true,
+          configurable: true
+        });
+      } else {
+        // This case should not occur in practice
+        debugger;
+        this[name] = newValue;
+      }
+    }
+
     try {
       Object.defineProperty(base, name, {
         value: result, writable: false, configurable: false
@@ -521,7 +689,16 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
     return result;
   }
 
-  /** Initialize accessible global variables and root */
+  /**
+   * Initialize accessible global variables and {@code root}.
+   *
+   * For each of the whitelisted globals, we {@code read} its value,
+   * freeze that global property as a data property, and mirror that
+   * property with a frozen data property of the same name and value
+   * on {@code root}, but always non-enumerable. We make these
+   * non-enumerable since ES5.1 specifies that all these properties
+   * are non-enumerable on the global object.
+   */
   Object.keys(whitelist).forEach(function(name) {
     var desc = Object.getOwnPropertyDescriptor(global, name);
     if (desc) {
@@ -530,21 +707,34 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
         var value = read(global, name);
         Object.defineProperty(root, name, {
           value: value,
-          writable: false,
-          enumerable: desc.enumerable,
+          writable: true,
+          enumerable: false,
           configurable: false
         });
       }
     }
   });
+  if (TAME_GLOBAL_EVAL) {
+    Object.defineProperty(root, 'eval', {
+      value: cajaVM.eval,
+      writable: true,
+      enumerable: false,
+      configurable: false
+    });
+  }
 
   /**
    * The whiteTable should map from each path-accessible primordial
    * object to the permit object that describes how it should be
    * cleaned.
    *
-   * <p>To ensure that each subsequent traverse obtains the same
-   * values, these paths become paths of frozen data properties.
+   * <p>To ensure that each subsequent traversal obtains the same
+   * values, these paths become paths of frozen data properties. See
+   * the doc-comment on {@code read}.
+   *
+   * We initialize the whiteTable only so that {@code getPermit} can
+   * process "*" and "skip" inheritance using the whitelist, by
+   * walking actual superclass chains.
    */
   var whiteTable = WeakMap();
   function register(value, permit) {
@@ -554,8 +744,7 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
     }
     var oldPermit = whiteTable.get(value);
     if (oldPermit) {
-      debugger;
-      return;
+      fail('primordial reachable through multiple paths');
     }
     whiteTable.set(value, permit);
     Object.keys(permit).forEach(function(name) {
@@ -568,11 +757,14 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
   register(root, whitelist);
 
   /**
-   * We initialize the whiteTable only so that we can process "*" and
-   * "skip" inheritance in the whitelist, by walking actual superclass
-   * chains.
+   * Should the property named {@code name} be whitelisted on the
+   * {@code base} object, and if so, with what Permit?
+   *
+   * <p>If it should be permitted, return the Permit (where Permit =
+   * true | "*" | "skip" | Record(Permit)), all of which are
+   * truthy. If it should not be permitted, return false.
    */
-  function isPermitted(base, name) {
+  function getPermit(base, name) {
     var permit = whiteTable.get(base);
     if (permit) {
       if (permit[name]) { return permit[name]; }
@@ -581,7 +773,7 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
       base = Object.getPrototypeOf(base);
       if (base === null) { return false; }
       permit = whiteTable.get(base);
-      if (permit && name in permit) {
+      if (permit && hop.call(permit, name)) {
         var result = permit[name];
         if (result === '*' || result === 'skip') {
           return result;
@@ -602,13 +794,13 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
    * Assumes all super objects are otherwise accessible and so will be
    * independently cleaned.
    */
-  function clean(value, n) {
+  function clean(value, prefix) {
     if (value !== Object(value)) { return; }
     if (cleaning.get(value)) { return; }
     cleaning.set(value, true);
     Object.getOwnPropertyNames(value).forEach(function(name) {
-      var path = n + (n ? '.' : '') + name;
-      var p = isPermitted(value, name);
+      var path = prefix + (prefix ? '.' : '') + name;
+      var p = getPermit(value, name);
       if (p) {
         if (p === 'skip') {
           skipped.push(path);
@@ -622,22 +814,17 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
         try {
           success = delete value[name];
         } catch (x) {
-          debugger;
           success = false;
         }
         if (success) {
           goodDeletions.push(path);
         } else {
-          debugger;
           badDeletions.push(path);
         }
       }
     });
-    if (value !== FREEZE_EARLY) {
-      Object.freeze(value);
-    }
+    Object.freeze(value);
   }
-  if (FREEZE_EARLY) { Object.freeze(FREEZE_EARLY); }
   clean(root, '');
 
   function reportDiagnosis(desc, problemList) {
@@ -663,12 +850,14 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
         }).join(', ');
 
     });
-    reportDiagnosis("Can't neuter", complaint);
+    reportDiagnosis('Cannot neuter', complaint);
   }
 
-  if (!reportDiagnosis("Can't delete", badDeletions)) {
-    // We succeeded. Enable safe Function, eval, and compile to work.
-    cajaVM.log("success");
-    dirty = false;
+  if (reportDiagnosis('Cannot delete', badDeletions)) {
+    throw new Error('Consult JS console log for deletion failures');
   }
+
+  // We succeeded. Enable safe Function, eval, and compile to work.
+  cajaVM.log('success');
+  dirty = false;
 }
