@@ -17,14 +17,46 @@ var RegExp;
 /**
  * @fileoverview Monkey patch almost ES5 platforms into a closer
  * emulation of full <a href=
- * "http://code.google.com/p/es-lab/wiki/SecureableES5"
- * >secureable ES5</a>.
+ * "http://code.google.com/p/es-lab/wiki/SecureableES5" >secureable
+ * ES5</a>.
  *
- * <p>On not-quite-ES5 platforms, some elements of these emulations
- * may lose SES safety, as enumerated in the comment on each
- * kludge-switch variable below. The platform must at least provide
- * Object.getOwnPropertyNames, because it cannot reasonably be
+ * <p>Qualifying platforms generally include all JavaScript platforms
+ * shown on <a href="http://kangax.github.com/es5-compat-table/"
+ * >ECMAScript 5 compatibility table</a> that implement {@code
+ * Object.getOwnPropertyNames}. At the time of this writing,
+ * qualifying browsers already include the latest released versions of
+ * Internet Explorer (9), Firefox (4), Chrome (11), and Safari
+ * (5.0.5), their corresponding standalone (e.g., server-side) JavaScript
+ * engines, and Rhino 1.73 and BESEN.
+ *
+ * <p>On such not-quite-ES5 platforms, some elements of these
+ * emulations may lose SES safety, as enumerated in the comment on
+ * each kludge-switch variable below. The platform must at least
+ * provide Object.getOwnPropertyNames, because it cannot reasonably be
  * emulated.
+ *
+ * <p>This file is useful by itself, as it has no dependencies on the
+ * rest of SES. It creates no new global bindings, but merely repairs
+ * standard globals or standard elements reachable from standard
+ * globals. If the future-standard {@code WeakMap} global is present,
+ * as it is currently on FF7.0a1, then it will repair it in place. The
+ * one non-standard element that this file uses is {@code console.log}
+ * if present, in order to report the repairs it found necessary. If
+ * {@code console.log} is absent, then this file performs its repairs
+ * silently.
+ *
+ * <p>Generally, this file should be run as the first script in a
+ * JavaScript context (i.e. a browser frame), as it replies on other
+ * primordial objects and methods not yet being perturbed.
+ *
+ * TODO(erights): This file tries to protects itself from most
+ * post-initialization perturbation, by stashing the primordials it
+ * needs for later use, but this attempt is currently incomplete. For
+ * example, the method wrappers installed if {@code
+ * test_NEED_TO_WRAP_METHODS()} use the current binding of {@code
+ * Function.prototype.apply} to access the wrapped method. We need to
+ * revisit this when we support Confined-ES5, as a variant of SES in
+ * which the primordials are not frozen.
  */
 (function() {
   "use strict";
@@ -33,8 +65,8 @@ var RegExp;
     if (typeof console !== 'undefined' && 'log' in console) {
       // We no longer test (typeof console.log === 'function') since,
       // on IE9 and IE10preview, in violation of the ES5 spec, it
-      // is callable but has typeof "object". TODO(erights):
-      // report to MS.
+      // is callable but has typeof "object".
+      // TODO(erights): report to MS.
       console.log(str);
     }
   }
@@ -61,10 +93,6 @@ var RegExp;
    * Workaround for https://bugs.webkit.org/show_bug.cgi?id=55537
    *
    * <p>This kludge is safety preserving.
-   *
-   * <p>TODO(erights): Turning on this kludge is expensive, so we
-   * should auto-detect at initialization time whether we need to on
-   * this platform.
    */
   function test_MISSING_CALLEE_DESCRIPTOR() {
     function foo(){}
@@ -77,7 +105,6 @@ var RegExp;
     }
     return true;
   }
-  //var TOLERATE_MISSING_CALLEE_DESCRIPTOR = false;
   var TOLERATE_MISSING_CALLEE_DESCRIPTOR = test_MISSING_CALLEE_DESCRIPTOR();
 
 
@@ -114,7 +141,6 @@ var RegExp;
     }
     return true;
   }
-  //var TOLERATE_REGEXP_CANT_BE_NEUTERED = false;
   var TOLERATE_REGEXP_CANT_BE_NEUTERED = test_REGEXP_CANT_BE_NEUTERED();
 
 
@@ -135,7 +161,6 @@ var RegExp;
     }
     return true;
   }
-  //var TOLERATE_REGEXP_TEST_EXEC_UNSAFE = false;
   var TOLERATE_REGEXP_TEST_EXEC_UNSAFE = test_REGEXP_TEST_EXEC_UNSAFE();
 
 
@@ -159,7 +184,6 @@ var RegExp;
         'See https://bugs.webkit.org/show_bug.cgi?id=55736');
     return true;
   }
-  //var TOLERATE_MISSING_FREEZE_ETC = false;
   var TOLERATE_MISSING_FREEZE_ETC = test_MISSING_FREEZE_ETC();
 
 
@@ -183,7 +207,6 @@ var RegExp;
         'See https://bugs.webkit.org/show_bug.cgi?id=26382');
     return true;
   }
-  //var TOLERATE_MISSING_BIND = false;
   var TOLERATE_MISSING_BIND = test_MISSING_BIND();
 
 
@@ -207,6 +230,10 @@ var RegExp;
       return true;
     }
     var v = Date.prototype.getFullYear();
+    if (v !== v && typeof v === 'number') {
+      // NaN indicates we're probably ok.
+      return false;
+    }
     if (v === 1957) {
       log('Date.prototype is a global communication channel. ' +
           'See http://code.google.com/p/google-caja/issues/detail?id=1362');
@@ -215,7 +242,6 @@ var RegExp;
     }
     return true;
   }
-  //var TOLERATE_MUTABLE_DATE_PROTO = false;
   var TOLERATE_MUTABLE_DATE_PROTO = test_MUTABLE_DATE_PROTO();
 
 
@@ -252,7 +278,6 @@ var RegExp;
     }
     return true;
   }
-  //var TOLERATE_MUTABLE_WEAKMAP_PROTO = false;
   var TOLERATE_MUTABLE_WEAKMAP_PROTO = test_MUTABLE_WEAKMAP_PROTO();
 
 
@@ -274,9 +299,7 @@ var RegExp;
    * absence of a [[Construct]] behavior, as specified for the Chapter
    * 15 built-in methods. The installed wrapper relies on {@code
    * Function.prototype.apply}, as inherited by original, obeying its
-   * contract. TODO(erights): We need to revisit this when we support
-   * Confined-ES5, as a variant of SES in which the primordials are
-   * not frozen.
+   * contract.
    *
    * <p>Although we have not yet diagnosed the motivating bug, as far
    * as we can tell, this kludge is safety preserving.
@@ -293,17 +316,27 @@ var RegExp;
 
   /**
    * TODO(erights): isolate and report the V8 bug mentioned below.
+   *
+   * <p>Sometimes, when trying to freeze an object containing an
+   * accessor property with a getter but no setter, Chrome fails with
+   * <blockquote>Uncaught TypeError: Cannot set property ident___ of
+   * #<Object> which has only a getter</blockquote>. So if necessary,
+   * this kludge overrides {@code Object.defineProperty} to always
+   * install a dummy setter in lieu of the absent one.
+   *
+   * <p>TODO(erights): We should also override {@code
+   * Object.getOwnPropertyDescriptor} to hide the presence of the
+   * dummy setter, and instead report an absent setter.
    */
   function test_NEEDS_DUMMY_SETTER() {
     if (!(/Chrome/).test(navigator.userAgent)) { return false; }
     log('Workaround undiagnosed need for dummy setter.');
     return true;
   }
-  //var TOLERATE_NEEDS_DUMMY_SETTER = false;
   var TOLERATE_NEEDS_DUMMY_SETTER = test_NEEDS_DUMMY_SETTER();
 
   /**
-   * Work arond for https://bugzilla.mozilla.org/show_bug.cgi?id=637994
+   * Work around for https://bugzilla.mozilla.org/show_bug.cgi?id=637994
    *
    * <p>On Firefoxes at least 4 through 7.0a1, an inherited
    * non-configurable accessor property appears to be an own property
@@ -321,8 +354,8 @@ var RegExp;
    * of <i>enumerable</i> non-configurable accessor properties on
    * those platforms with this bug.
    *
-   * <p>A little known fast about JavaScript is that
-   * Object.prototype.propertyIsEnumerable actually tests whether a
+   * <p>A little known fact about JavaScript is that {@code
+   * Object.prototype.propertyIsEnumerable} actually tests whether a
    * property is both own and enumerable. Assuming that our wrapping
    * of defineProperty, freeze, and seal prevents the occurrence of an
    * enumerable non-configurable accessor property, it should also
@@ -361,7 +394,6 @@ var RegExp;
         'Accessor properties inherit as own even if configurable.');
     return true;
   }
-  //var TOLERATE_ACCESSORS_INHERIT_AS_OWN = false;
   var TOLERATE_ACCESSORS_INHERIT_AS_OWN = test_ACCESSORS_INHERIT_AS_OWN();
 
 
@@ -876,8 +908,8 @@ var WeakMap;
 
     name = 'hash:' + Math.random();
     // If the following two lines a swapped, Safari WebKit Nightly
-    // Version 5.0.5 (5533.21.1, r87697) crashes. TODO(erights):
-    // isolate and report.
+    // Version 5.0.5 (5533.21.1, r87697) crashes.
+    // See https://bugs.webkit.org/show_bug.cgi?id=61758
     originalProps.freeze(identGetter.prototype);
     originalProps.freeze(identGetter);
 

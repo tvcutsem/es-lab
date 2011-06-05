@@ -220,7 +220,6 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
   var dirty = true;
 
   var hop = Object.prototype.hasOwnProperty;
-  var ipo = Object.prototype.isPrototypeOf;
 
   function fail(str) {
     debugger;
@@ -610,24 +609,6 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
 
   })();
 
-  /**
-   * Return the object from which {@code base} inherits {@code name},
-   * if any.
-   *
-   * <p>Starting from {@code base} and looking up the prototype chain,
-   * return the first object having {@code name} as an own property,
-   * of {@code undefined} if none.
-   */
-  function inheritsFrom(base, name) {
-    for (var result = base;
-         result !== null;
-         result = Object.getPrototypeOf(result)) {
-
-      if (hop.call(result, name)) { return result; }
-    }
-    return undefined;
-  }
-
   var cantNeuter = [];
 
   /**
@@ -651,34 +632,6 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
     }
 
     var result = base[name];
-
-    function getter() { return result; }
-    function setter(newValue) {
-      if (base === this) {
-        if (Object.isFrozen(base)) {
-          throw new TypeError('Cannot assign to ".' + name +
-                              '" of frozen object');
-        } else {
-          // This case should only be useful on confined-es5, not ses.
-          debugger;
-          result = newValue;
-        }
-      } else if (inheritsFrom(this, name) === base) {
-        // simulate assignment to this[name], as if this accessor
-        // property was not here.
-        Object.defineProperty(this, name, {
-          value: newValue,
-          writable: true,
-          enumerable: true,
-          configurable: true
-        });
-      } else {
-        // This case should not occur in practice
-        debugger;
-        this[name] = newValue;
-      }
-    }
-
     try {
       Object.defineProperty(base, name, {
         value: result, writable: false, configurable: false
