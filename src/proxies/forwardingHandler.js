@@ -84,6 +84,10 @@ ForwardingHandler.prototype = {
       parent = Object.getPrototypeOf(parent);
     }
     // FIXME: remove duplicates from props
+    // sketch:
+    //   var aggregate = Object.create(null);
+    //   for (var p in props) { aggregate[p] = true; }
+    //   return Object.getOwnPropertyNames(aggregate);
     return props;
   },
   
@@ -103,7 +107,7 @@ ForwardingHandler.prototype = {
     var props = {};
     var handler = this;
     Object.getOwnPropertyNames(this.target).forEach(function (name) {
-      var desc = Object.getOwnPropertyDescriptor(this.target, name);
+      var desc = Object.getOwnPropertyDescriptor(handler.target, name);
       // turn descriptor into a trapping accessor property
       props[name] = {
                 get: function( ) { return handler.get(this, name); },
