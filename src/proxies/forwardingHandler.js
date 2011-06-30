@@ -138,7 +138,7 @@ ForwardingHandler.prototype = {
   // for (var name in Object.create(proxy)) { ... }
   enumerate: function() {
     var result = [];
-    for (name in this.target) { result.push(name); };
+    for (var name in this.target) { result.push(name); };
     return result;
   },
   
