@@ -51,14 +51,11 @@ var RegExp;
  *
  * TODO(erights): This file tries to protects itself from most
  * post-initialization perturbation, by stashing the primordials it
- * needs for later use, but this attempt is currently incomplete. For
- * example, the method wrappers installed if {@code
- * test_NEED_TO_WRAP_METHODS()} use the current binding of {@code
- * Function.prototype.apply} to access the wrapped method. We need to
- * revisit this when we support Confined-ES5, as a variant of SES in
- * which the primordials are not frozen.
+ * needs for later use, but this attempt is currently incomplete. We
+ * need to revisit this when we support Confined-ES5, as a variant of
+ * SES in which the primordials are not frozen.
  */
-(function() {
+(function(global) {
   "use strict";
 
   function log(str) {
@@ -90,7 +87,54 @@ var RegExp;
 
 
   /**
+   * Tests for
+   * https://bugs.webkit.org/show_bug.cgi?id=51097
+   * https://bugs.webkit.org/show_bug.cgi?id=58338
+   * http://code.google.com/p/v8/issues/detail?id=1437
+   *
+   * <p>No workaround attempted. Just reporting that this platform is
+   * not SES-safe.
+   */
+  function test_GLOBAL_LEAKS() {
+    var v = {}.valueOf;
+    var that = 'dummy';
+    try {
+      that = v();
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      log('New symptom: ' +
+          'valueOf() threw ' + err);
+      return true;
+    }
+    return true;
+  }
+
+
+  /**
+   * Workaround for https://bugs.webkit.org/show_bug.cgi?id=55736
+   *
+   * <p>As of this writing, the only major browser that does implement
+   * Object.getOwnPropertyNames but not Object.freeze etc is the
+   * released Safari 5 (JavaScriptCore). The Safari beta 5.0.4
+   * (5533.20.27, r84622) already does implement freeze, which is why
+   * this WebKit bug is listed as closed. When the released Safari has
+   * this fix, we can retire this kludge.
+   *
+   * <p>This kludge is <b>not</b> safety preserving. The emulations it
+   * installs if needed do not actually provide the safety that the
+   * rest of SES relies on.
+   */
+  function test_MISSING_FREEZE_ETC() {
+    return !('freeze' in Object);
+  }
+
+
+  /**
    * Workaround for https://bugs.webkit.org/show_bug.cgi?id=55537
+   *
+   * This bug is fixed on the latest Safari beta 5.0.5 (5533.21.1,
+   * r88603). When the released Safari has this fix, we can retire
+   * this kludge.
    *
    * <p>This kludge is safety preserving.
    */
@@ -99,13 +143,9 @@ var RegExp;
     if (Object.getOwnPropertyNames(foo).indexOf('callee') < 0) { return false; }
     if (foo.hasOwnProperty('callee')) {
       log('New symptom: empty strict function has own callee');
-    } else {
-      log('Phantom callee on strict functions. ' +
-          'See https://bugs.webkit.org/show_bug.cgi?id=55537');
     }
     return true;
   }
-  var TOLERATE_MISSING_CALLEE_DESCRIPTOR = test_MISSING_CALLEE_DESCRIPTOR();
 
 
   /**
@@ -125,27 +165,21 @@ var RegExp;
     try {
       deletion = delete RegExp.leftContext;
     } catch (err) {
-      log('Cannot delete ambient mutable RegExp.leftContext. ' +
-          'See https://bugzilla.mozilla.org/show_bug.cgi?id=591846');
+      if (!(err instanceof TypeError)) {
+        log('New symptom: deletion failed with ' + err);
+      }
       return true;
     }
     if (!RegExp.hasOwnProperty('leftContext')) { return false; }
     if (deletion) {
-      log('New symptom: Deletion of RegExp.leftContext failed. ' +
-          'See https://bugzilla.mozilla.org/show_bug.cgi?id=591846');
-    } else {
-      // strict delete should never return false, so if this happens
-      // it indicates an additional bug in strict delete.
-      log('A strict "delete RegExp.leftContext" returned false. ' +
-          'See https://bugzilla.mozilla.org/show_bug.cgi?id=591846');
+      log('New symptom: Deletion of RegExp.leftContext failed.');
     }
     return true;
   }
-  var TOLERATE_REGEXP_CANT_BE_NEUTERED = test_REGEXP_CANT_BE_NEUTERED();
 
 
   /**
-   * Work around for http://code.google.com/p/google-caja/issues/detail?id=528
+   * Work around for http://code.google.com/p/v8/issues/detail?id=1393
    *
    * <p>This kludge is safety preserving.
    */
@@ -153,38 +187,11 @@ var RegExp;
     (/foo/).test('xfoox');
     var match = new RegExp('(.|\r|\n)*','').exec()[0];
     if (match === 'undefined') { return false; }
-    if (match === 'xfoox') {
-      log('RegExp.exec leaks match globally. ' +
-          'See http://code.google.com/p/google-caja/issues/detail?id=528');
-    } else {
+    if (match !== 'xfoox') {
       log('New symptom: regExp.exec() does not match against "undefined".');
     }
     return true;
   }
-  var TOLERATE_REGEXP_TEST_EXEC_UNSAFE = test_REGEXP_TEST_EXEC_UNSAFE();
-
-
-  /**
-   * Workaround for https://bugs.webkit.org/show_bug.cgi?id=55736
-   *
-   * <p>As of this writing, the only major browser that does implement
-   * Object.getOwnPropertyNames but not Object.freeze etc is the
-   * released Safari 5 (JavaScriptCore). The Safari beta 5.0.4
-   * (5533.20.27, r84622) already does, which is why this WebKit bug
-   * is listed as closed. When the released Safari has this fix, we
-   * can retire this kludge.
-   *
-   * <p>This kludge is <b>not</b> safety preserving. The emulations it
-   * installs if needed do not actually provide the safety that the
-   * rest of SES relies on.
-   */
-  function test_MISSING_FREEZE_ETC() {
-    if ('freeze' in Object) { return false; }
-    log('Object.freeze is missing. ' +
-        'See https://bugs.webkit.org/show_bug.cgi?id=55736');
-    return true;
-  }
-  var TOLERATE_MISSING_FREEZE_ETC = test_MISSING_FREEZE_ETC();
 
 
   /**
@@ -202,12 +209,8 @@ var RegExp;
    * <p>See also https://bugs.webkit.org/show_bug.cgi?id=42371
    */
   function test_MISSING_BIND() {
-    if ('bind' in Function.prototype) { return false; }
-    log('Function.prototype.bind is missing. ' +
-        'See https://bugs.webkit.org/show_bug.cgi?id=26382');
-    return true;
+    return !('bind' in Function.prototype);
   }
-  var TOLERATE_MISSING_BIND = test_MISSING_BIND();
 
 
   /**
@@ -234,15 +237,11 @@ var RegExp;
       // NaN indicates we're probably ok.
       return false;
     }
-    if (v === 1957) {
-      log('Date.prototype is a global communication channel. ' +
-          'See http://code.google.com/p/google-caja/issues/detail?id=1362');
-    } else {
+    if (v !== 1957) {
       log('New symptom: Mutating Date.prototype did not throw');
     }
     return true;
   }
-  var TOLERATE_MUTABLE_DATE_PROTO = test_MUTABLE_DATE_PROTO();
 
 
   /**
@@ -270,30 +269,18 @@ var RegExp;
       return true;
     }
     var v = WeakMap.prototype.get(x);
-    if (v === 86) {
-      log('WeakMap.prototype is a global communication channel. ' +
-          'See https://bugzilla.mozilla.org/show_bug.cgi?id=656828');
-    } else {
+    if (v !== 86) {
       log('New symptom: Mutating WeakMap.prototype did not throw');
     }
     return true;
   }
-  var TOLERATE_MUTABLE_WEAKMAP_PROTO = test_MUTABLE_WEAKMAP_PROTO();
 
 
   /**
-   * TODO(erights): isolate and report the V8 bug mentioned below.
+   * Workaround for http://code.google.com/p/v8/issues/detail?id=1447
    *
-   * <p>This list of records represents the known occurrences of some
-   * non-isolated, and thus, not yet reported bug on Chrome/v8 only,
-   * that results in "Uncaught TypeError: Cannot redefine property:
-   * defineProperty".
-   *
-   * <p>Each record consists of a base object and the name of a
-   * built in method found on that base object. This method is
-   * replaced with a strict wrapping function that preserves the
-   * [[Call]] behavior of the original method but does not provoke the
-   * undiagnosed Uncaught TypeError bug above.
+   * <p>This bug is fixed as of V8 r8258 bleeding-edge, but is not yet
+   * available in the latest dev-channel Chrome (13.0.782.15 dev).
    *
    * <p>Unfortunately, an ES5 strict method wrapper cannot emulate
    * absence of a [[Construct]] behavior, as specified for the Chapter
@@ -301,18 +288,25 @@ var RegExp;
    * Function.prototype.apply}, as inherited by original, obeying its
    * contract.
    *
-   * <p>Although we have not yet diagnosed the motivating bug, as far
-   * as we can tell, this kludge is safety preserving.
+   * <p>This kludge is safety preserving.
    */
-  function test_NEED_TO_WRAP_METHODS() {
-    if (!(/Chrome/).test(navigator.userAgent)) { return false; }
-    log('Workaround undiagnosed need to wrap some methods.');
-    return true;
+  function test_NEED_TO_WRAP_FOREACH() {
+    if (!('freeze' in Object)) {
+      // Object.freeze is still absent on released Safari and would
+      // cause a bogus bug detection in the following try/catch code.
+      return false;
+    }
+    try {
+      ['z'].forEach(function(){ Object.freeze(Array.prototype.forEach); });
+      return false;
+    } catch (err) {
+      if (!(err instanceof TypeError)) {
+        log('New Symptom: freezing forEach failed with ' + err);
+      }
+      return true;
+    }
   }
-  var METHODS_TO_WRAP = [];
-  if (test_NEED_TO_WRAP_METHODS()) {
-    METHODS_TO_WRAP = [{base: Array.prototype, name: 'forEach'}];
-  }
+
 
   /**
    * TODO(erights): isolate and report the V8 bug mentioned below.
@@ -329,18 +323,18 @@ var RegExp;
    * dummy setter, and instead report an absent setter.
    */
   function test_NEEDS_DUMMY_SETTER() {
-    if (!(/Chrome/).test(navigator.userAgent)) { return false; }
-    log('Workaround undiagnosed need for dummy setter.');
-    return true;
+    return (typeof navigator !== 'undefined' &&
+            (/Chrome/).test(navigator.userAgent));
   }
-  var TOLERATE_NEEDS_DUMMY_SETTER = test_NEEDS_DUMMY_SETTER();
+
 
   /**
    * Work around for https://bugzilla.mozilla.org/show_bug.cgi?id=637994
    *
-   * <p>On Firefoxes at least 4 through 7.0a1, an inherited
-   * non-configurable accessor property appears to be an own property
-   * of all objects which inherit this accessor property.
+   * <p>On Firefox 4 an inherited non-configurable accessor property
+   * appears to be an own property of all objects which inherit this
+   * accessor property. This is fixed as of Forefox Nightly 7.0a1
+   * (2011-06-21).
    *
    * <p>Our workaround wraps hasOwnProperty, getOwnPropertyNames, and
    * getOwnPropertyDescriptor to heuristically decide when an accessor
@@ -371,22 +365,19 @@ var RegExp;
     function getter() { return 'gotten'; }
     Object.defineProperty(base, 'foo', {get: getter});
     if (!derived.hasOwnProperty('foo') &&
-        Object.getOwnPropertyDescriptor(derived, 'foo') === undefined &&
+        Object.getOwnPropertyDescriptor(derived, 'foo') === void 0 &&
         Object.getOwnPropertyNames(derived).indexOf('foo') < 0) {
       return false;
     }
-    if (derived.hasOwnProperty('foo') &&
-        Object.getOwnPropertyDescriptor(derived, 'foo').get === getter &&
-        Object.getOwnPropertyNames(derived).indexOf('foo') >= 0) {
-      log('Accessor properties inherit as own properties. ' +
-          'See https://bugzilla.mozilla.org/show_bug.cgi?id=637994');
-    } else {
+    if (!derived.hasOwnProperty('foo') ||
+        Object.getOwnPropertyDescriptor(derived, 'foo').get !== getter ||
+        Object.getOwnPropertyNames(derived).indexOf('foo') < 0) {
       log('New symptom: ' +
           'Accessor properties partially inherit as own properties.');
     }
     Object.defineProperty(base, 'bar', {get: getter, configurable: true});
     if (!derived.hasOwnProperty('bar') &&
-        Object.getOwnPropertyDescriptor(derived, 'bar') === undefined &&
+        Object.getOwnPropertyDescriptor(derived, 'bar') === void 0 &&
         Object.getOwnPropertyNames(derived).indexOf('bar') < 0) {
       return true;
     }
@@ -394,35 +385,261 @@ var RegExp;
         'Accessor properties inherit as own even if configurable.');
     return true;
   }
-  var TOLERATE_ACCESSORS_INHERIT_AS_OWN = test_ACCESSORS_INHERIT_AS_OWN();
 
+
+  /**
+   * Workaround for http://code.google.com/p/v8/issues/detail?id=1360
+   *
+   * Our workaround wraps {@code sort} to wrap the comparefn.
+   */
+  function test_SORT_LEAKS_GLOBAL() {
+    var that = 'dummy';
+    [2,3].sort(function(x,y) { that = this; return x - y; });
+    if (that === void 0) { return false; }
+    if (that !== global) {
+      log('New symptom: ' +
+          'sort called comparefn with "this" === ' + that);
+    }
+    return true;
+  }
+
+
+  /**
+   * Workaround for http://code.google.com/p/v8/issues/detail?id=1360
+   *
+   * <p>Our workaround wraps {@code replace} to wrap the replaceValue
+   * if it's a function.
+   */
+  function test_REPLACE_LEAKS_GLOBAL() {
+    var that = 'dummy';
+    'x'.replace(/x/, function() { that = this; return 'y';});
+    if (that === void 0) { return false; }
+    if (that !== global) {
+      log('New symptom: ' +
+          'replace called replaceValue function with "this" === ' + that);
+    }
+    return true;
+  }
+
+
+  /**
+   * Protect an 'in' with a try/catch to workaround a bug in Safari
+   * WebKit Nightly Version 5.0.5 (5533.21.1, r89741).
+   *
+   * <p>See https://bugs.webkit.org/show_bug.cgi?id=63398
+   *
+   * <p>Notes: We're seeing exactly
+   * <blockquote>
+   *   New symptom (c): ('caller' in &lt;a bound function&gt;) threw:
+   *   TypeError: Cannot access caller property of a strict mode
+   *   function<br>
+   *   New symptom (c): ('arguments' in &lt;a bound function&gt;)
+   *   threw: TypeError: Can't access arguments object of a strict
+   *   mode function
+   * </blockquote>
+   * which means we're skipping both the catch and the finally in
+   * {@code has} while hitting the catch in {@code has2}. Further, if
+   * we remove one of these finally clauses (forget which) and rerun
+   * the example, if we're under the debugger the browser crashes. If
+   * we're not, then the TypeError escapes both catches.
+   */
+  function has(base, name, baseDesc) {
+    var result = void 0;
+    try {
+      result = name in base;
+    } catch (err) {
+      log('New symptom (a): (\'' +
+          name + '\' in <' + baseDesc + '>) threw: ' + err);
+      // treat this as a safe absence
+      result = false;
+      return false;
+    } finally {
+      if (result === void 0) {
+        log('New symptom (b): (\'' +
+            name + '\' in <' + baseDesc + '>) failed');
+      }
+    }
+    return !!result;
+  }
+
+  function has2(base, name, baseDesc) {
+    var result;
+    try {
+      result = has(base, name, baseDesc);
+    } catch (err) {
+      log('New symptom (c): (\'' +
+          name + '\' in <' + baseDesc + '>) threw: ' + err);
+      // treat this as a safe absence
+      result = false;
+      return false;
+    } finally {
+      if (result === void 0) {
+        log('New symptom (d): (\'' +
+            name + '\' in <' + baseDesc + '>) failed');
+      }
+    }
+    return !!result;
+  }
+
+  /**
+   * No workaround (yet?) for
+   * https://bugzilla.mozilla.org/show_bug.cgi?id=591846 as applied to
+   * "caller"
+   */
+  function test_BUILTIN_LEAKS_CALLER() {
+    var map = Array.prototype.map;
+    if (!has(map, 'caller', 'a builtin')) { return false; }
+    try {
+      delete map.caller;
+    } catch (err) { }
+    if (!has(map, 'caller', 'a builtin')) { return false; }
+    function foo() { return map.caller; }
+    // using Function so it'll be non-strict
+    var testfn = Function('f', 'return [1].map(f)[0];');
+    var caller;
+    try {
+      caller = testfn(foo);
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      log('New symptom: builtin "caller" failed with: ' + err);
+      return true;
+    }
+    if ([testfn, void 0, null].indexOf(caller) >= 0) { return false; }
+    log('New symptom: Unexpected "caller": ' + caller);
+    return true;
+  }
+
+  /**
+   * No workaround (yet?) for
+   * https://bugzilla.mozilla.org/show_bug.cgi?id=591846 as applied to
+   * "arguments"
+   */
+  function test_BUILTIN_LEAKS_ARGUMENTS() {
+    var map = Array.prototype.map;
+    if (!has(map, 'arguments', 'a builtin')) { return false; }
+    try {
+      delete map.arguments;
+    } catch (err) { }
+    if (!has(map, 'arguments', 'a builtin')) { return false; }
+    function foo() { return map.arguments; }
+    // using Function so it'll be non-strict
+    var testfn = Function('f', 'return [1].map(f)[0];');
+    var args;
+    try {
+      args = testfn(foo);
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      log('New symptom: builtin "arguments" failed with: ' + err);
+      return true;
+    }
+    if (args === void 0 || args === null) { return false; }
+    return true;
+  }
+
+  /**
+   * Workaround for http://code.google.com/p/v8/issues/detail?id=893
+   */
+  function test_BOUND_FUNCTION_LEAKS_CALLER() {
+    if (!('bind' in Function.prototype)) { return false; }
+    function foo() { return bar.caller; }
+    var bar = foo.bind({});
+    if (!has2(bar, 'caller', 'a bound function')) { return false; }
+    try {
+      delete bar.caller;
+    } catch (err) { }
+    if (!has2(bar, 'caller', 'a bound function')) {
+      log('New symptom: "caller" on bound functions can be deleted.');
+      return true;
+    }
+    // using Function so it'll be non-strict
+    var testfn = Function('f', 'return f();');
+    var caller;
+    try {
+      caller = testfn(bar);
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      log('New symptom: bound function "caller" failed with: ' + err);
+      return true;
+    }
+    if ([testfn, void 0, null].indexOf(caller) >= 0) { return false; }
+    log('New symptom: Unexpected "caller": ' + caller);
+    return true;
+  }
+
+  /**
+   * Workaround for http://code.google.com/p/v8/issues/detail?id=893
+   */
+  function test_BOUND_FUNCTION_LEAKS_ARGUMENTS() {
+    if (!('bind' in Function.prototype)) { return false; }
+    function foo() { return bar.arguments; }
+    var bar = foo.bind({});
+    if (!has2(bar, 'arguments', 'a bound function')) { return false; }
+    try {
+      delete bar.arguments;
+    } catch (err) { }
+    if (!has2(bar, 'arguments', 'a bound function')) {
+      log('New symptom: "arguments" on bound functions can be deleted.');
+      return true;
+    }
+    // using Function so it'll be non-strict
+    var testfn = Function('f', 'return f();');
+    var args;
+    try {
+      args = testfn(bar);
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      log('New symptom: bound function "arguments" failed with: ' + err);
+      return true;
+    }
+    if (args === void 0 || args === null) { return false; }
+    return true;
+  }
+
+  /**
+   * Workaround for http://code.google.com/p/v8/issues/detail?id=621
+   *
+   */
+  function test_JSON_PARSE_PROTO_CONFUSION() {
+    var x = JSON.parse('{"__proto__":[]}');
+    if (Object.getPrototypeOf(x) !== Object.prototype) {
+      return true;
+    }
+    if (!Array.isArray(x.__proto__)) {
+      log('New symptom: JSON.parse did not set "__proto__" as ' +
+          'a regular property');
+      return true;
+    }
+    return false;
+  }
 
 
   //////////////// END KLUDGE SWITCHES ///////////
 
+  var call = Function.prototype.call;
+  var apply = Function.prototype.apply;
+
   var hop = Object.prototype.hasOwnProperty;
-  var slice = Array.prototype.slice;
   var objToString = Object.prototype.toString;
+  var slice = Array.prototype.slice;
+  var concat = Array.prototype.concat;
   var defProp = Object.defineProperty;
   var getPrototypeOf = Object.getPrototypeOf;
 
-
-  if (TOLERATE_MISSING_CALLEE_DESCRIPTOR) {
-    (function(realGOPN) {
-      Object.getOwnPropertyNames = function calleeFix(base) {
-        var result = realGOPN(base);
-        if (typeof base === 'function') {
-          var i = result.indexOf('callee');
-          if (i >= 0 && !hop.call(base, 'callee')) {
-            result.splice(i, 1);
-          }
+  function repair_MISSING_CALLEE_DESCRIPTOR() {
+    var realGOPN = Object.getOwnPropertyNames;
+    Object.getOwnPropertyNames = function calleeFix(base) {
+      var result = realGOPN(base);
+      if (typeof base === 'function') {
+        var i = result.indexOf('callee');
+        if (i >= 0 && !hop.call(base, 'callee')) {
+          result.splice(i, 1);
         }
-        return result;
-      };
-    })(Object.getOwnPropertyNames);
+      }
+      return result;
+    };
   }
 
-  if (TOLERATE_REGEXP_CANT_BE_NEUTERED) {
+  function repair_REGEXP_CANT_BE_NEUTERED() {
     var UnsafeRegExp = RegExp;
     var FakeRegExp = function FakeRegExp(pattern, flags) {
       switch (arguments.length) {
@@ -442,9 +659,12 @@ var RegExp;
     RegExp = FakeRegExp;
   }
 
-  if (TOLERATE_REGEXP_TEST_EXEC_UNSAFE) {
+  function repair_REGEXP_TEST_EXEC_UNSAFE() {
     var unsafeRegExpExec = RegExp.prototype.exec;
+    unsafeRegExpExec.call = call;
     var unsafeRegExpTest = RegExp.prototype.test;
+    unsafeRegExpTest.call = call;
+
     RegExp.prototype.exec = function fakeExec(specimen) {
       return unsafeRegExpExec.call(this, String(specimen));
     };
@@ -465,7 +685,7 @@ var RegExp;
     }
   }
 
-  if (TOLERATE_MISSING_FREEZE_ETC) {
+  function repair_MISSING_FREEZE_ETC() {
     patchMissingProp(Object, 'freeze',
                      function fakeFreeze(obj) { return obj; });
     patchMissingProp(Object, 'seal',
@@ -480,14 +700,14 @@ var RegExp;
                      function fakeIsExtensible(obj) { return true; });
   }
 
-  if (TOLERATE_MISSING_BIND) {
+  function repair_MISSING_BIND() {
     patchMissingProp(Function.prototype, 'bind',
                      function fakeBind(self, var_args) {
       var thisFunc = this;
       var leftArgs = slice.call(arguments, 1);
       function funcBound(var_args) {
-        var args = leftArgs.concat(slice.call(arguments, 0));
-        return thisFunc.apply(self, args);
+        var args = concat.call(leftArgs, slice.call(arguments, 0));
+        return apply.call(thisFunc, self, args);
       }
       delete funcBound.prototype;
       return funcBound;
@@ -519,6 +739,7 @@ var RegExp;
     function mutableProtoPatcher(name) {
       if (!hop.call(proto, name)) { return; }
       var originalMethod = proto[name];
+      originalMethod.apply = apply;
       function replacement(var_args) {
         var parent = getPrototypeOf(this);
         if (objToString.call(parent) !== baseToString) {
@@ -532,13 +753,13 @@ var RegExp;
         }
         return originalMethod.apply(this, arguments);
       }
-      proto[name] = replacement;
+      defProp(proto, name, {value: replacement});
     }
     return mutableProtoPatcher;
   }
 
 
-  if (TOLERATE_MUTABLE_DATE_PROTO) {
+  function repair_MUTABLE_DATE_PROTO() {
     // Note: coordinate this list with maintenance of whitelist.js
     ['setYear',
      'setTime',
@@ -558,29 +779,27 @@ var RegExp;
      'setUTCMilliseconds'].forEach(makeMutableProtoPatcher(Date, 'Date'));
   }
 
-  if (TOLERATE_MUTABLE_WEAKMAP_PROTO) {
+  function repair_MUTABLE_WEAKMAP_PROTO() {
     // Note: coordinate this list with maintanence of whitelist.js
     ['set',
      'delete'].forEach(makeMutableProtoPatcher(WeakMap, 'WeakMap'));
   }
 
 
-  // Since the METHODS_TO_WRAP list may (and currently does)
-  // contain {base: Array.prototype, name:'forEach'}, we loop
-  // through these with a for loop rather than using the forEach
-  // method itself.
-  for (var i = 0, len = METHODS_TO_WRAP.length; i < len; i++) {
-    var r = METHODS_TO_WRAP[i];
-    (function(original) {
-      r.base[r.name] = function wrapper(var_args) {
-        return original.apply(this, arguments);
-      };
-    })(r.base[r.name]);
+  function repair_NEED_TO_WRAP_FOREACH() {
+    (function() {
+      var forEach = Array.prototype.forEach;
+      defProp(Array.prototype, 'forEach', {
+        value: function forEachWrapper(callbackfn, opt_thisArg) {
+          return apply.call(forEach, this, arguments);
+        }
+      });
+    })();
   }
 
 
-  if (TOLERATE_NEEDS_DUMMY_SETTER) {
-   (function() {
+  function repair_NEEDS_DUMMY_SETTER() {
+    (function() {
       var defProp = Object.defineProperty;
       var gopd = Object.getOwnPropertyDescriptor;
       var freeze = Object.freeze;
@@ -620,7 +839,7 @@ var RegExp;
           defProp(testBase, name, desc);
           var fullDesc = gopd(testBase, name);
 
-          if ('get' in fullDesc && fullDesc.set === undefined) {
+          if ('get' in fullDesc && fullDesc.set === void 0) {
             fullDesc.set = dummySetter;
           }
           return defProp(base, name, fullDesc);
@@ -630,7 +849,7 @@ var RegExp;
   }
 
 
-  if (TOLERATE_ACCESSORS_INHERIT_AS_OWN) {
+  function repair_ACCESSORS_INHERIT_AS_OWN() {
     (function(){
       // restrict these
       var defProp = Object.defineProperty;
@@ -638,7 +857,6 @@ var RegExp;
       var seal = Object.seal;
 
       // preserve illusion
-      var hop = Object.prototype.hasOwnProperty;
       var gopn = Object.getOwnPropertyNames;
       var gopd = Object.getOwnPropertyDescriptor;
 
@@ -715,7 +933,7 @@ var RegExp;
 
       defProp(Object, 'getOwnPropertyDescriptor', {
         value: function getOwnPropertyDescriptorWrapper(base, name) {
-          if (isBadAccessor(base, name)) { return undefined; }
+          if (isBadAccessor(base, name)) { return void 0; }
           return gopd(base, name);
         }
       });
@@ -731,7 +949,283 @@ var RegExp;
     })();
   }
 
-})();
+  function repair_SORT_LEAKS_GLOBAL() {
+   (function(){
+      var unsafeSort = Array.prototype.sort;
+      unsafeSort.call = call;
+      function sortWrapper(opt_comparefn) {
+        function comparefnWrapper(x, y) {
+          return opt_comparefn(x, y);
+        }
+        if (arguments.length === 0) {
+          return unsafeSort.call(this);
+        } else {
+          return unsafeSort.call(this, comparefnWrapper);
+        }
+      }
+      defProp(Array.prototype, 'sort', { value: sortWrapper });
+    })();
+  }
+
+  function repair_REPLACE_LEAKS_GLOBAL() {
+    (function(){
+      var unsafeReplace = String.prototype.replace;
+      unsafeReplace.call = call;
+      function replaceWrapper(searchValue, replaceValue) {
+        var safeReplaceValue = replaceValue;
+        function replaceValueWrapper(m1, m2, m3) {
+          return replaceValue(m1, m2, m3);
+        }
+        if (typeof replaceValue === 'function') {
+          safeReplaceValue = replaceValueWrapper;
+        }
+        return unsafeReplace.call(this, searchValue, safeReplaceValue);
+      }
+      defProp(String.prototype, 'replace', { value: replaceWrapper });
+    })();
+  }
+
+
+  var kludges = [
+    {
+      description: 'Global object leaks through built-in methods',
+      test: test_GLOBAL_LEAKS,
+      repair: void 0,
+      canRepairSafely: false,
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=51097',
+             'https://bugs.webkit.org/show_bug.cgi?id=58338',
+             'http://code.google.com/p/v8/issues/detail?id=1437'],
+      sections: ['15.2.4.4'],
+      tests: ['S15.2.4.4_A14']
+    },
+    {
+      description: 'Object.freeze is missing',
+      test: test_MISSING_FREEZE_ETC,
+      repair: repair_MISSING_FREEZE_ETC,
+      canRepairSafely: false,
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=55736'],
+      sections: ['15.2.3.9'],
+      tests: []
+    },
+    {
+      description: 'Phantom callee on strict functions',
+      test: test_MISSING_CALLEE_DESCRIPTOR,
+      repair: repair_MISSING_CALLEE_DESCRIPTOR,
+      canRepairSafely: true,
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=55537'],
+      sections: ['15.2.3.4'],
+      tests: []
+    },
+    {
+      description: 'Cannot delete ambient mutable RegExp.leftContext',
+      test: test_REGEXP_CANT_BE_NEUTERED,
+      repair: repair_REGEXP_CANT_BE_NEUTERED,
+      canRepairSafely: true,
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
+             'http://wiki.ecmascript.org/doku.php?id=' +
+             'conventions:make_non-standard_properties_configurable'],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'RegExp.exec leaks match globally',
+      test: test_REGEXP_TEST_EXEC_UNSAFE,
+      repair: repair_REGEXP_TEST_EXEC_UNSAFE,
+      canRepairSafely: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1393',
+             'http://code.google.com/p/chromium/issues/detail?id=75740',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=635017',
+             'http://code.google.com/p/google-caja/issues/detail?id=528'],
+      sections: ['15.10.6.2'],
+      tests: ['S15.10.6.2_A12']
+    },
+    {
+      description: 'Function.prototype.bind is missing',
+      test: test_MISSING_BIND,
+      repair: repair_MISSING_BIND,
+      canRepairSafely: true,
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=26382'],
+      sections: ['15.3.4.5'],
+      tests: []
+    },
+    {
+      description: 'Date.prototype is a global communication channel',
+      test: test_MUTABLE_DATE_PROTO,
+      repair: repair_MUTABLE_DATE_PROTO,
+      canRepairSafely: true,
+      urls: ['http://code.google.com/p/google-caja/issues/detail?id=1362'],
+      sections: ['15.9.5'],
+      tests: []
+    },
+    {
+      description: 'WeakMap.prototype is a global communication channel',
+      test: test_MUTABLE_WEAKMAP_PROTO,
+      repair: repair_MUTABLE_WEAKMAP_PROTO,
+      canRepairSafely: true,
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=656828'],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'Array forEach cannot be frozen while in progress',
+      test: test_NEED_TO_WRAP_FOREACH,
+      repair: repair_NEED_TO_WRAP_FOREACH,
+      canRepairSafely: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1447'],
+      sections: ['15.4.4.18'],
+      tests: ['S15.4.4.18_A1', 'S15.4.4.18_A2']
+    },
+    {
+      description: 'Workaround undiagnosed need for dummy setter',
+      test: test_NEEDS_DUMMY_SETTER,
+      repair: repair_NEEDS_DUMMY_SETTER,
+      canRepairSafely: true,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'Accessor properties inherit as own properties',
+      test: test_ACCESSORS_INHERIT_AS_OWN,
+      repair: repair_ACCESSORS_INHERIT_AS_OWN,
+      canRepairSafely: true,
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=637994'],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'Array sort leaks global',
+      test: test_SORT_LEAKS_GLOBAL,
+      repair: repair_SORT_LEAKS_GLOBAL,
+      canRepairSafely: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1360'],
+      sections: ['15.4.4.11'],
+      tests: ['S15.4.4.11_A8']
+    },
+    {
+      description: 'String replace leaks global',
+      test: test_REPLACE_LEAKS_GLOBAL,
+      repair: repair_REPLACE_LEAKS_GLOBAL,
+      canRepairSafely: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1360'],
+      sections: ['15.5.4.11'],
+      tests: ['S15.5.4.11_A12']
+    },
+    {
+      description: 'Built in functions leak "caller"',
+      test: test_BUILTIN_LEAKS_CALLER,
+      repair: void 0,
+      canRepairSafely: false,
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
+             'http://wiki.ecmascript.org/doku.php?id=' +
+             'conventions:make_non-standard_properties_configurable'],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'Built in functions leak "arguments"',
+      test: test_BUILTIN_LEAKS_ARGUMENTS,
+      repair: void 0,
+      canRepairSafely: false,
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
+             'http://wiki.ecmascript.org/doku.php?id=' +
+             'conventions:make_non-standard_properties_configurable'],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'Bound functions leak "caller"',
+      test: test_BOUND_FUNCTION_LEAKS_CALLER,
+      repair: repair_MISSING_BIND,
+      canRepairSafely: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=893',
+             'https://bugs.webkit.org/show_bug.cgi?id=63398'],
+      sections: ['15.3.4.5'],
+      tests: ['S15.3.4.5_A1']
+    },
+    {
+      description: 'Bound functions leak "arguments"',
+      test: test_BOUND_FUNCTION_LEAKS_ARGUMENTS,
+      repair: repair_MISSING_BIND,
+      canRepairSafely: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=893',
+             'https://bugs.webkit.org/show_bug.cgi?id=63398'],
+      sections: ['15.3.4.5'],
+      tests: ['S15.3.4.5_A2']
+    },
+    {
+      description: 'JSON.parse confused by "__proto__"',
+      test: test_JSON_PARSE_PROTO_CONFUSION,
+      repair: void 0,
+      canRepairSafely: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=621',
+             'http://code.google.com/p/v8/issues/detail?id=1310'],
+      sections: ['15.12.2'],
+      tests: ['S15.12.2_A1']
+    }
+  ];
+
+
+  // first run all the tests before repairing anything
+  // then repair all repairable failed tests
+  // then run all the tests again, in case some repairs break other tests
+
+  var beforeFailures = kludges.map(function(kludge) {
+    return kludge.test();
+  });
+  var repairs = [];
+  kludges.forEach(function(kludge, i) {
+    if (beforeFailures[i]) {
+      var repair = kludge.repair;
+      if (repair && repairs.lastIndexOf(repair) === -1) {
+        repair();
+        // Same repair might fix multiple problems, but run at most once.
+        repairs.push(repair);
+      }
+    }
+  });
+  var afterFailures = kludges.map(function(kludge) {
+    return kludge.test();
+  });
+
+  kludges.forEach(function(kludge, i) {
+    var status = '';
+    if (beforeFailures[i]) { // failed before
+      if (afterFailures[i]) { // failed after
+        if (kludge.repair) {
+          status = 'Repair failed';
+        } else {
+          status = 'Not repaired';
+        }
+      } else {
+        if (kludge.repair) {
+          status = 'Repaired';
+        } else {
+          status = 'Accidentally repaired';
+        }
+      }
+    } else { // succeeded before
+      if (afterFailures[i]) { // failed after
+        status = 'Broken by other attempted repairs';
+      } else { // succeeded after
+        // nothing to see here, move along
+        return;
+      }
+    }
+    log(i + ': ' + kludge.description + '. ' +
+        status + '. ' +
+        (kludge.canRepairSafely ? '' : 'This platform is not SES-safe. ') +
+        // TODO(erights): select most relevant URL based on platform
+        (kludge.urls[0] ? 'See ' + kludge.urls[0] : ''));
+  });
+
+  // TODO(erights): If we arrive here with the platform still in a
+  // non-SES-safe state, we should indicate that somehow so that our
+  // client (such as SES) can decide to abort. We should *not* simply
+  // throw an exception, because that limits the utility of this
+  // module for non-SES uses.
+
+})(this);
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -2462,8 +2956,8 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
  * environment following object-capability rules.
  */
 
-(function() {
+(function(global) {
   "use strict";
 
-  startSES(window, whitelist, atLeastFreeVarNames);
-})();
+  startSES(global, whitelist, atLeastFreeVarNames);
+})(this);
