@@ -41,6 +41,8 @@
 // http://wiki.ecmascript.org/doku.php?id=harmony:proxy_defaulthandler
 // http://wiki.ecmascript.org/doku.php?id=strawman:derived_traps_forwarding_handler
 
+"use strict";
+
 // BaseHandler (implements fundamental traps by forwarding to target)
 //    ^
 //    |
@@ -57,7 +59,8 @@ function BaseHandler(target) {
 // Object.getOwnPropertyDescriptor(proxy, name) -> pd | undefined
 BaseHandler.prototype.getOwnPropertyDescriptor = function(name) {
   var desc = Object.getOwnPropertyDescriptor(this.target, name);
-  if (desc !== undefined) { desc.configurable = true; }
+  //TODO(tvcutsem): not required when using FixedHandler
+  //if (desc !== undefined) { desc.configurable = true; }
   return desc;
 }
 
@@ -110,7 +113,8 @@ BaseHandler.prototype.getPropertyDescriptor = function(name) {
     desc = Object.getOwnPropertyDescriptor(parent, name);
     parent = Object.getPrototypeOf(parent);
   }
-  if (desc !== undefined) { desc.configurable = true; }
+  //TODO(tvcutsem): not required when using FixedHandler
+  //if (desc !== undefined) { desc.configurable = true; }
   return desc;
 }
   

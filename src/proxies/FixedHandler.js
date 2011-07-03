@@ -37,6 +37,7 @@
  *
  */
 
+ "use strict";
 
 // this is a prototype implementation of
 // http://wiki.ecmascript.org/doku.php?id=strawman:fixed_properties
@@ -61,7 +62,7 @@ FixedHandler.prototype = {
         throw new TypeError("cannot report non-configurable property as non-existent: "+name);
       }
     }
-    if (fixedDesc !== undefined || desc.configurable === false) {
+    if (fixedDesc !== undefined || !desc.configurable) {
       // will throw if desc is not compatible with fixedDesc, if it exists
       Object.defineProperty(this.fixedProps, name, desc);
     }
@@ -81,7 +82,7 @@ FixedHandler.prototype = {
         throw new TypeError("cannot report non-configurable property as non-existent: "+name);
       }
     }
-    if (fixedDesc !== undefined || desc.configurable === false) {
+    if (fixedDesc !== undefined || !desc.configurable) {
       // will throw if desc is not compatible with fixedDesc, if it exists
       Object.defineProperty(this.fixedProps, name, desc);
     }
@@ -92,7 +93,7 @@ FixedHandler.prototype = {
     var newDesc = this.targetHandler.defineProperty(name, desc);
     var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
 
-    if (fixedDesc !== undefined || newDesc.configurable === false) {
+    if (fixedDesc !== undefined || !newDesc.configurable) {
       // will throw if newDesc is not compatible with fixedDesc, if it exists
       Object.defineProperty(this.fixedProps, name, newDesc);
     }
@@ -186,7 +187,7 @@ FixedHandler.prototype = {
       if ('writable' in desc) { // fixed data property
         if (desc.writable) {
           desc.value = val;
-          Object.defineProperty(this.fixedProps, name, desc);
+          this.defineProperty(name, desc);
           return true;
         } else {
           return false;

@@ -39,6 +39,7 @@
 // A no-op forwarding Proxy Handler
 // based on the draft version for standardization:
 // http://wiki.ecmascript.org/doku.php?id=harmony:proxy_defaulthandler
+"use strict";
 
 function ForwardingHandler(target) {
   this.target = target;
@@ -48,7 +49,8 @@ ForwardingHandler.prototype = {
   // Object.getOwnPropertyDescriptor(proxy, name) -> pd | undefined
   getOwnPropertyDescriptor: function(name) {
     var desc = Object.getOwnPropertyDescriptor(this.target, name);
-    if (desc !== undefined) { desc.configurable = true; }
+    //TODO(tvcutsem): not required when using FixedHandler
+    //if (desc !== undefined) { desc.configurable = true; }
     return desc;
   },
   
@@ -63,7 +65,8 @@ ForwardingHandler.prototype = {
       desc = Object.getOwnPropertyDescriptor(parent, name);
       parent = Object.getPrototypeOf(parent);
     }
-    if (desc !== undefined) { desc.configurable = true; }
+    //TODO(tvcutsem): not required when using FixedHandler
+    //if (desc !== undefined) { desc.configurable = true; }
     return desc;
   },
 
