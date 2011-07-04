@@ -37,10 +37,80 @@
  *
  */
 
- "use strict";
+"use strict";
 
+// ----------------------------------------------------------------------------
 // this is a prototype implementation of
 // http://wiki.ecmascript.org/doku.php?id=strawman:fixed_properties
+// (Note: the current strawman wiki page may still be outdated. When reading
+//  the page, focus on the goal rather than the exact proposed API)
+
+// A FixedHandler can be used to wrap an existing proxy handler H.
+// The FixedHandler forwards all operations to H, but additionally
+// performs a number of integrity checks on the results of some traps,
+// to make sure H does not violate the ES5 invariants w.r.t. non-configurable
+// properties.
+
+// For each own or inherited non-configurable property that H exposes
+// (e.g. by returning a descriptor from a call to getOwnPropertyDescriptor)
+// the FixedHandler keeps a record of that property's attributes
+// (it does so by defining these properties on a non-proxy "fixedProps"
+//  object)
+
+// We will name such previously exposed, non-configurable properties
+// "fixed properties"
+
+// The FixedHandler upholds the following invariants:
+// - getOwnPropertyDescriptor cannot report fixed properties as non-existent
+// - getOwnPropertyDescriptor cannot report incompatible changes to the
+//   attributes of a fixed property (e.g. reporting a non-configurable
+//   property as configurable, or reporting a non-configurable, non-writable
+//   property as writable)
+// - getPropertyDescriptor: same constraints as for getOwnPropertyDescriptor
+// - defineProperty cannot make incompatible changes to the attributes of
+//   fixed properties
+// - defineProperty cannot reject compatible changes made to the attributes of
+//   fixed properties
+// - properties returned by the fix() trap are merged with fixed properties,
+//   ensuring no incompatible changes can be made when calling freeze, seal,
+//   preventExtensions
+// - delete cannot report a successful deletion of a fixed property
+// - hasOwn cannot report a fixed property as non-existent
+// - has cannot report a fixed property as non-existent
+// - get cannot report inconsistent values for non-writable fixed data
+//   properties
+// - set cannot report a successful assignment for non-writable fixed data
+//   properties
+
+// Violation of any of these invariants by H will result in TypeError being
+// thrown.
+
+// The FixedHandler is compatible with the existing ForwardingHandler.
+// When a FixedHandler wraps a ForwardingHandler to an ES5-compliant object,
+// the FixedHandler will never throw a TypeError.
+// ----------------------------------------------------------------------------
+
+// From http://wiki.ecmascript.org/doku.php?id=harmony:egal
+if (!Object.is) {
+  Object.defineProperty(Object, 'is', {
+    value: function(x, y) {
+      if (x === y) {
+        // 0 === -0, but they are not identical
+        return x !== 0 || 1 / x === 1 / y;
+      }
+
+      // NaN !== NaN, but they are identical.
+      // NaNs are the only non-reflexive value, i.e., if x !== x,
+      // then x is a NaN.
+      // isNaN is broken: it converts its argument to number, so
+      // isNaN("foo") => true
+      return x !== x && y !== y;
+    },
+    configurable: true,
+    enumerable: false,
+    writable: true
+  }); 
+}
 
 function FixedHandler(targetHandler) {
   this.targetHandler = targetHandler;
@@ -51,7 +121,7 @@ FixedHandler.prototype = {
   
   // === fundamental traps ===
   
-  // if name denotes a fixed property, return the fixed descriptor
+  // if name denotes a fixed own property, check for incompatible changes
   getOwnPropertyDescriptor: function(name) {
     var desc = this.targetHandler.getOwnPropertyDescriptor(name);
     var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
@@ -59,7 +129,8 @@ FixedHandler.prototype = {
       if (fixedDesc === undefined) {
         return undefined;
       } else {
-        throw new TypeError("cannot report non-configurable property as non-existent: "+name);
+        throw new TypeError("cannot report non-configurable property "+name+
+                            " as non-existent");
       }
     }
     if (fixedDesc !== undefined || !desc.configurable) {
@@ -69,9 +140,7 @@ FixedHandler.prototype = {
     return desc;
   },
   
-  // if name denotes a fixed property, return the fixed descriptor
-  // TODO(tvcutsem): getPropertyDescriptor is broken for fixed properties,
-  // as it will fix inherited non-configurable properties in the proxy
+  // if name denotes a fixed own or inherited property, check for incompatible changes
   getPropertyDescriptor: function(name) {
     var desc = this.targetHandler.getPropertyDescriptor(name);
     var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
@@ -79,25 +148,31 @@ FixedHandler.prototype = {
       if (fixedDesc === undefined) {
         return undefined;
       } else {
-        throw new TypeError("cannot report non-configurable property as non-existent: "+name);
+        throw new TypeError("Cannot report non-configurable property "+name+
+                            "as non-existent");
       }
     }
     if (fixedDesc !== undefined || !desc.configurable) {
-      // will throw if desc is not compatible with fixedDesc, if it exists
+      // will throw if desc is not compatible with the fixed property, if it exists
       Object.defineProperty(this.fixedProps, name, desc);
     }
     return desc;
   },
   
   defineProperty: function(name, desc) {
-    var newDesc = this.targetHandler.defineProperty(name, desc);
+    var success = this.targetHandler.defineProperty(name, desc);
     var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
 
-    if (fixedDesc !== undefined || !newDesc.configurable) {
-      // will throw if newDesc is not compatible with fixedDesc, if it exists
-      Object.defineProperty(this.fixedProps, name, newDesc);
+    if (fixedDesc !== undefined || !desc.configurable) {
+      // will throw if desc is not compatible with fixedDesc, if it exists
+      Object.defineProperty(this.fixedProps, name, desc);
+      if (success !== true) {
+        // TODO(tvcutsem): not sure whether this check is actually necessary
+        throw new TypeError("Cannot reject a valid change to non-configurable property "+
+                            name);
+      }
     }
-    return newDesc;
+    return success;
   },
   
   // merges properties returned by fix() with the fixed properties
@@ -116,13 +191,14 @@ FixedHandler.prototype = {
     return fixed;
   },
   
-  // if name denotes a fixed property, rejects
+  // if name denotes a fixed property, check whether handler rejects
   'delete': function(name) { 
-    if (name in this.fixedProps) {
+    var res = this.targetHandler['delete'](name);
+    if (name in this.fixedProps && res !== false) {
       throw new TypeError(
         "property "+name+" is non-configurable and can't be deleted");
     }
-    return this.targetHandler['delete'](name);
+    return res;
   },
   
   // unmodified
@@ -137,74 +213,72 @@ FixedHandler.prototype = {
   
   // === derived traps ===
   
-  // if name denotes a fixed property, returns true
+  // if name denotes a fixed property, check whether answer is true
   hasOwn: function(name) {
-    if (name in this.fixedProps) {
-      return true;
-    }
     // simulate missing derived trap fall-back behavior
-    return this.targetHandler.hasOwn ?
-             this.targetHandler.hasOwn(name) :
-             TrapDefaults.hasOwn.call(this.targetHandler, name);
+    var res = this.targetHandler.hasOwn ?
+                this.targetHandler.hasOwn(name) :
+                TrapDefaults.hasOwn.call(this.targetHandler, name);
+    if (name in this.fixedProps && res !== true) {
+      throw new TypeError("Cannot report existing non-configurable property "+
+                          name + " as a non-existent own property");
+    }
+    return res;
   },
   
-  // if name denotes a fixed property, returns true
+  // if name denotes a fixed property, check whether answer is true
   has: function(name) {
-    if (name in this.fixedProps) {
-      return true;
-    }
     // simulate missing derived trap fall-back behavior
-    return this.targetHandler.has ?
-             this.targetHandler.has(name) :
-             TrapDefaults.has.call(this.targetHandler, name);
+    var res = this.targetHandler.has ?
+                this.targetHandler.has(name) :
+                TrapDefaults.has.call(this.targetHandler, name);
+    if (name in this.fixedProps && res !== true) {
+      throw new TypeError("Cannot report existing non-configurable property "+
+                          name + " as a non-existent property");
+    }
+    return res;
   },
   
-  // if name denotes a fixed property, access it directly
-  // as per the default 'get' trap behavior
-  // Note: this.fixedProps is not leaked as the |this| value of accessors
+  // if name denotes a fixed non-configurable, non-writable data property,
+  // check its return value against the previously asserted value of the fixed property
   get: function(rcvr, name) {
+    // simulate missing derived trap fall-back behavior
+    var res = this.targetHandler.get ?
+                this.targetHandler.get(rcvr, name) :
+                TrapDefaults.get.call(this.targetHandler, rcvr, name);
+    
     var desc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
+    var expectedRes;
     if (desc !== undefined) {
-      if ('value' in desc) {
-        return desc.value;
-      } else {
-        if (desc.get === undefined) { return undefined; }
-        return desc.get.call(rcvr);
+      if ('value' in desc && !desc.writable) {
+        if (!Object.is(desc.value, res)) {
+          throw new TypeError("Inconsistent value reported for non-configurable property "
+                              +name+", expected: "+desc.value + " but got: "+res);
+        }
       }
     }
-    // simulate missing derived trap fall-back behavior
-    return this.targetHandler.get ?
-             this.targetHandler.get(rcvr, name) :
-             TrapDefaults.get.call(this.targetHandler, rcvr, name);
+    return res;
   },
   
-  // if name denotes a fixed property, set it directly
-  // as per the default 'set' trap behavior
-  // Note: this.fixedProps is not leaked as the |this| value of accessors
+  // if name denotes a fixed, non-configurable, non-writable data property,
+  // check that 'set' reports the assignment as unsuccessful
   set: function(rcvr, name, val) {
+    // simulate missing derived trap fall-back behavior
+    var res = this.targetHandler.set ?
+                this.targetHandler.set(rcvr, name, val) :
+                TrapDefaults.set.call(this.targetHandler, rcvr, name, val);
+             
     var desc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
     if (desc !== undefined) {
-      if ('writable' in desc) { // fixed data property
-        if (desc.writable) {
-          desc.value = val;
-          this.defineProperty(name, desc);
-          return true;
-        } else {
-          return false;
-        }
-      } else { // fixed accessor property
-        if (desc.set) {
-          desc.set.call(rcvr, val);
-          return true;
-        } else {
-          return false;
+      if ('writable' in desc) {
+        if (!desc.writable && res !== false) {
+            throw new TypeError("Cannot report successful assignment for " +
+                                "non-configurable, non-writable data property " + name);
         }
       }
     }
-    // simulate missing derived trap fall-back behavior
-    return this.targetHandler.set ?
-             this.targetHandler.set(rcvr, name, val) :
-             TrapDefaults.set.call(this.targetHandler, rcvr, name, val);
+    
+    return res;
   },
   
   // unmodified
