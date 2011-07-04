@@ -94,9 +94,10 @@ ForwardingHandler.prototype = {
     return props;
   },
   
-  // Object.defineProperty(proxy, name, pd) -> undefined
+  // Object.defineProperty(proxy, name, pd) -> boolean
   defineProperty: function(name, desc) {
-    return Object.defineProperty(this.target, name, desc);
+    Object.defineProperty(this.target, name, desc);
+    return true;
   },
 
   // delete proxy[name] -> boolean

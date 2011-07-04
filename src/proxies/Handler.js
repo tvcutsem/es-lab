@@ -69,10 +69,10 @@ BaseHandler.prototype.getOwnPropertyNames = function() {
   return Object.getOwnPropertyNames(this.target);
 }
 
-// Object.defineProperty(proxy, name, pd) -> undefined
+// Object.defineProperty(proxy, name, pd) -> boolean
 BaseHandler.prototype.defineProperty = function(name, desc) {
   Object.defineProperty(this.target, name, desc);
-  return desc;
+  return true;
 }
 
 // delete proxy[name] -> boolean
