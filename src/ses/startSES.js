@@ -627,7 +627,8 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
    */
   function read(base, name) {
     var desc = Object.getOwnPropertyDescriptor(base, name);
-    if (desc && 'value' in desc && !desc.writable && !desc.configurable) {
+    if (!desc) { return undefined; }
+    if ('value' in desc && !desc.writable && !desc.configurable) {
       return desc.value;
     }
 
@@ -791,7 +792,7 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
 
   if (cantNeuter.length >= 1) {
     var complaint = cantNeuter.map(function(p) {
-      var desc = Object.getPropertyDescriptor(p.base, p.name);
+      var desc = Object.getOwnPropertyDescriptor(p.base, p.name);
       if (!desc) {
         return '  Missing ' + p.name;
       }

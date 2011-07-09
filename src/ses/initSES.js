@@ -504,7 +504,8 @@ var RegExp;
       log('New symptom: builtin "caller" failed with: ' + err);
       return true;
     }
-    if ([testfn, void 0, null].indexOf(caller) >= 0) { return false; }
+    if (null === caller || void 0 === caller) { return false; }
+    if (testfn === caller) { return true; }
     log('New symptom: Unexpected "caller": ' + caller);
     return true;
   }
@@ -1281,13 +1282,13 @@ var RegExp;
  * names.
  *
  * <p>Another difference is that our emulated {@code
- * WeakMap.prototype} is not itself a WeakMap. A
- * problem with the current FF6.0a1 API is that WeakMap.prototype is
- * itself a WeakMap providing ambient mutability and an ambient
- * communications channel. Thus, if a WeakMap is already present and
- * has this problem, es5shim.js wraps it in a safe wrappper in order
- * to prevent access to this channel. (See
- * PATCH_MUTABLE_FROZEN_WEAKMAP_PROTO in es5shim.js).
+ * WeakMap.prototype} is not itself a WeakMap. A problem with the
+ * current FF6.0a1 API is that WeakMap.prototype is itself a WeakMap
+ * providing ambient mutability and an ambient communications
+ * channel. Thus, if a WeakMap is already present and has this
+ * problem, repairES5.js wraps it in a safe wrappper in order to
+ * prevent access to this channel. (See
+ * PATCH_MUTABLE_FROZEN_WEAKMAP_PROTO in repairES5.js).
  */
 var WeakMap;
 
@@ -1298,7 +1299,7 @@ var WeakMap;
  * absent, install an approximate emulation.
  *
  * <p>If this is almost a secureable ES5 platform, then WeakMap.js
- * should be run after es5shim.js.
+ * should be run after repairES5.js.
  *
  * <p>See {@code WeakMap} for documentation of the garbage collection
  * properties of this WeakMap emulation.
@@ -1314,7 +1315,7 @@ var WeakMap;
 
   /**
    * Holds the orginal static properties of the Object constructor,
-   * after es5shim fixes these if necessary to be a more complete
+   * after repairES5 fixes these if necessary to be a more complete
    * secureable ES5 environment, but before installing the following
    * WeakMap emulation overrides and before any untrusted code runs.
    */
@@ -1733,25 +1734,9 @@ var whitelist;
       eval: t,
       Function: t
     },
-    Q: {                             // Dr. SES support
-      get: t,
-      post: t,
-      put: t,
-      'delete': t,
-      when: t,
-      defer: t,
-      reject: t,
-      ref: t,
-      near: t,
-      defined: t,
-      run: t,
-      Promise: t,
-      isPromise: t,
-      def: t
-    },
     WeakMap: {       // ES-Harmony proposal as currently implemented by FF6.0a1
       prototype: {
-        // Note: coordinate this list with maintenance of es5shim.js
+        // Note: coordinate this list with maintenance of repairES5.js
         get: t,
         set: t,
         has: t,
@@ -1767,7 +1752,7 @@ var whitelist;
     Object: {
       getPropertyDescriptor: t,      // ES-Harmony proposal
       getPropertyNames: t,           // ES-Harmony proposal
-      identical: t,                  // ES-Harmony proposal
+      is: t,                         // ES-Harmony proposal
       prototype: {
         constructor: '*',
         toString: '*',
@@ -1931,7 +1916,7 @@ var whitelist;
     },
     Date: {                          // no-arg Date constructor is questionable
       prototype: {
-        // Note: coordinate this list with maintanence of es5shim.js
+        // Note: coordinate this list with maintanence of repairES5.js
         getYear: t,                  // ES5 Appendix B
         setYear: t,                  // ES5 Appendix B
         toGMTString: t,              // ES5 Appendix B
@@ -2750,7 +2735,8 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
    */
   function read(base, name) {
     var desc = Object.getOwnPropertyDescriptor(base, name);
-    if (desc && 'value' in desc && !desc.writable && !desc.configurable) {
+    if (!desc) { return undefined; }
+    if ('value' in desc && !desc.writable && !desc.configurable) {
       return desc.value;
     }
 
@@ -2914,7 +2900,7 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
 
   if (cantNeuter.length >= 1) {
     var complaint = cantNeuter.map(function(p) {
-      var desc = Object.getPropertyDescriptor(p.base, p.name);
+      var desc = Object.getOwnPropertyDescriptor(p.base, p.name);
       if (!desc) {
         return '  Missing ' + p.name;
       }

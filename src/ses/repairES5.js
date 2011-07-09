@@ -504,7 +504,8 @@ var RegExp;
       log('New symptom: builtin "caller" failed with: ' + err);
       return true;
     }
-    if ([testfn, void 0, null].indexOf(caller) >= 0) { return false; }
+    if (null === caller || void 0 === caller) { return false; }
+    if (testfn === caller) { return true; }
     log('New symptom: Unexpected "caller": ' + caller);
     return true;
   }
