@@ -1117,7 +1117,8 @@ var RegExp;
       test: test_BUILTIN_LEAKS_CALLER,
       repair: void 0,
       canRepairSafely: false,
-      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
              'conventions:make_non-standard_properties_configurable'],
       sections: [],
@@ -1128,7 +1129,8 @@ var RegExp;
       test: test_BUILTIN_LEAKS_ARGUMENTS,
       repair: void 0,
       canRepairSafely: false,
-      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
              'conventions:make_non-standard_properties_configurable'],
       sections: [],

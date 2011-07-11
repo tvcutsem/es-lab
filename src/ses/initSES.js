@@ -27,13 +27,13 @@ var RegExp;
  * qualifying browsers already include the latest released versions of
  * Internet Explorer (9), Firefox (4), Chrome (11), and Safari
  * (5.0.5), their corresponding standalone (e.g., server-side) JavaScript
- * engines, and Rhino 1.73 and BESEN.
+ * engines, Rhino 1.73, BESEN.
  *
  * <p>On such not-quite-ES5 platforms, some elements of these
  * emulations may lose SES safety, as enumerated in the comment on
- * each kludge-switch variable below. The platform must at least
- * provide Object.getOwnPropertyNames, because it cannot reasonably be
- * emulated.
+ * each kludge record in the {@code kludges} array below. The platform
+ * must at least provide {@code Object.getOwnPropertyNames}, because
+ * it cannot reasonably be emulated.
  *
  * <p>This file is useful by itself, as it has no dependencies on the
  * rest of SES. It creates no new global bindings, but merely repairs
@@ -49,7 +49,7 @@ var RegExp;
  * JavaScript context (i.e. a browser frame), as it replies on other
  * primordial objects and methods not yet being perturbed.
  *
- * TODO(erights): This file tries to protects itself from most
+ * <p>TODO(erights): This file tries to protects itself from most
  * post-initialization perturbation, by stashing the primordials it
  * needs for later use, but this attempt is currently incomplete. We
  * need to revisit this when we support Confined-ES5, as a variant of
@@ -1117,7 +1117,8 @@ var RegExp;
       test: test_BUILTIN_LEAKS_CALLER,
       repair: void 0,
       canRepairSafely: false,
-      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
              'conventions:make_non-standard_properties_configurable'],
       sections: [],
@@ -1128,7 +1129,8 @@ var RegExp;
       test: test_BUILTIN_LEAKS_ARGUMENTS,
       repair: void 0,
       canRepairSafely: false,
-      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
              'conventions:make_non-standard_properties_configurable'],
       sections: [],
