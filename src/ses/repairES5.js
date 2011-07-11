@@ -75,16 +75,32 @@ var RegExp;
     throw new EvalError(complaint);
   }
 
-  /////////////// KLUDGE SWITCHES ///////////////
+  /**
+   * Tests for https://bugs.webkit.org/show_bug.cgi?id=64250
+   *
+   * <p>No workaround attempted. Just reporting that this platform is
+   * not SES-safe.
+   */
+  function test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS() {
+    global.___global_test_function___ = function() { return this; };
+    var that = ___global_test_function___();
+    delete global.___global_test_function___;
+    if (that === void 0) { return false; }
+    if (that === global) { return true; }
+    log('New symptom: this leaked as: ' + global);
+    return true;
+  }
 
-  /////////////////////////////////
-  // The following are only the minimal kludges needed for the current
-  // Firefox, Safari, or the current Chrome Beta. At the time of
-  // this writing, these are Firefox 4.0, Safari 5.0.4 (5533.20.27)
-  // and Chrome 12.0.742.12 dev
-  // As these move forward, kludges can be removed until we simply
-  // rely on ES5.
-
+  /**
+   *
+   */
+  function test_GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS() {
+    var that = (function(){ return this; })();
+    if (that === void 0) { return false; }
+    if (that === global) { return true; }
+    log('New symptom: this leaked as: ' + global);
+    return true;
+  }
 
   /**
    * Tests for
@@ -95,7 +111,7 @@ var RegExp;
    * <p>No workaround attempted. Just reporting that this platform is
    * not SES-safe.
    */
-  function test_GLOBAL_LEAKS() {
+  function test_GLOBAL_LEAKS_FROM_BUILTINS() {
     var v = {}.valueOf;
     var that = 'dummy';
     try {
@@ -989,8 +1005,26 @@ var RegExp;
 
   var kludges = [
     {
-      description: 'Global object leaks through built-in methods',
-      test: test_GLOBAL_LEAKS,
+      description: 'Global object leaks from global function calls',
+      test: test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS,
+      repair: void 0,
+      canRepairSafely: false,
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=64250'],
+      sections: ['10.2.1.2', '10.2.1.2.6'],
+      tests: []
+    },
+    {
+      description: 'Global object leaks from anonymous function calls',
+      test: test_GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS,
+      repair: void 0,
+      canRepairSafely: false,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'Global object leaks from built-in methods',
+      test: test_GLOBAL_LEAKS_FROM_BUILTINS,
       repair: void 0,
       canRepairSafely: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=51097',
@@ -1191,10 +1225,13 @@ var RegExp;
     return kludge.test();
   });
 
+  var seemsSafe = true;
+
   kludges.forEach(function(kludge, i) {
     var status = '';
     if (beforeFailures[i]) { // failed before
       if (afterFailures[i]) { // failed after
+        seemsSafe = false;
         if (kludge.repair) {
           status = 'Repair failed';
         } else {
@@ -1209,15 +1246,20 @@ var RegExp;
       }
     } else { // succeeded before
       if (afterFailures[i]) { // failed after
+        seemsSafe = false;
         status = 'Broken by other attempted repairs';
       } else { // succeeded after
         // nothing to see here, move along
         return;
       }
     }
+    var note = '';
+    if (!kludge.canRepairSafely) {
+      seemsSafe = false;
+      note = 'This platform is not SES-safe. ';
+    }
     log(i + ': ' + kludge.description + '. ' +
-        status + '. ' +
-        (kludge.canRepairSafely ? '' : 'This platform is not SES-safe. ') +
+        status + '. ' + note +
         // TODO(erights): select most relevant URL based on platform
         (kludge.urls[0] ? 'See ' + kludge.urls[0] : ''));
   });
@@ -1227,5 +1269,6 @@ var RegExp;
   // client (such as SES) can decide to abort. We should *not* simply
   // throw an exception, because that limits the utility of this
   // module for non-SES uses.
+  return seemsSafe;
 
 })(this);
