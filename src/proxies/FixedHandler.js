@@ -42,8 +42,6 @@
 // ----------------------------------------------------------------------------
 // this is a prototype implementation of
 // http://wiki.ecmascript.org/doku.php?id=strawman:fixed_properties
-// (Note: the current strawman wiki page may still be outdated. When reading
-//  the page, focus on the goal rather than the exact proposed API)
 
 // A FixedHandler can be used to wrap an existing proxy handler H.
 // The FixedHandler forwards all operations to H, but additionally
@@ -178,6 +176,8 @@ FixedHandler.prototype = {
   // merges properties returned by fix() with the fixed properties
   fix: function() {
     var props = this.targetHandler.fix();
+    if (props === undefined) { return undefined; }
+    
     // will throw if any of the props returned already exist in
     // fixedProps and are incompatible with existing attributes
     Object.defineProperties(this.fixedProps, props);
@@ -194,6 +194,7 @@ FixedHandler.prototype = {
   // if name denotes a fixed property, check whether handler rejects
   'delete': function(name) { 
     var res = this.targetHandler['delete'](name);
+    res = !!res; // coerce to Boolean
     if (name in this.fixedProps && res !== false) {
       throw new TypeError(
         "property "+name+" is non-configurable and can't be deleted");
@@ -219,6 +220,7 @@ FixedHandler.prototype = {
     var res = this.targetHandler.hasOwn ?
                 this.targetHandler.hasOwn(name) :
                 TrapDefaults.hasOwn.call(this.targetHandler, name);
+    res = !!res; // coerce to Boolean
     if (name in this.fixedProps && res !== true) {
       throw new TypeError("Cannot report existing non-configurable property "+
                           name + " as a non-existent own property");
@@ -232,6 +234,7 @@ FixedHandler.prototype = {
     var res = this.targetHandler.has ?
                 this.targetHandler.has(name) :
                 TrapDefaults.has.call(this.targetHandler, name);
+    res = !!res; // coerce to Boolean
     if (name in this.fixedProps && res !== true) {
       throw new TypeError("Cannot report existing non-configurable property "+
                           name + " as a non-existent property");
@@ -267,7 +270,7 @@ FixedHandler.prototype = {
     var res = this.targetHandler.set ?
                 this.targetHandler.set(rcvr, name, val) :
                 TrapDefaults.set.call(this.targetHandler, rcvr, name, val);
-             
+    res = !!res; // coerce to Boolean         
     var desc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
     if (desc !== undefined) {
       if ('writable' in desc) {
