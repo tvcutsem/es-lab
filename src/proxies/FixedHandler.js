@@ -321,8 +321,7 @@ var TrapDefaults = {
     if (desc) {
       if ('writable' in desc) {
         if (desc.writable) {
-          desc.value = val;
-          this.defineProperty(name, desc);
+          this.defineProperty(name, {value: val});
           return true;
         } else {
           return false;
