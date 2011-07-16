@@ -458,7 +458,6 @@ var RegExp;
     return true;
   }
 
-
   /**
    * Protect an 'in' with a try/catch to workaround a bug in Safari
    * WebKit Nightly Version 5.0.5 (5533.21.1, r89741).
@@ -482,6 +481,7 @@ var RegExp;
    */
   function has(base, name, baseDesc) {
     var result = void 0;
+    var finallySkipped = true;
     try {
       result = name in base;
     } catch (err) {
@@ -491,29 +491,95 @@ var RegExp;
       result = false;
       return false;
     } finally {
+      finallySkipped = false;
       if (result === void 0) {
         logger.error('New symptom (b): (\'' +
                      name + '\' in <' + baseDesc + '>) failed');
       }
     }
+    if (finallySkipped) {
+      logger.error('New symptom (e): (\'' +
+                   name + '\' in <' + baseDesc +
+                   '>) finally inner finally skipped');
+    }
     return !!result;
+  }
+
+  /**
+   * Test for https://bugs.webkit.org/show_bug.cgi?id=63398
+   *
+   * <p>If this reports a problem in the absence of "New symptom (a)",
+   * it means the error thrown by the "in" in {@code has} is skipping
+   * past the first layer of "catch" surrounding that "in". This is in
+   * fact what we're currently seeing on Safari WebKit Nightly Version
+   * 5.0.5 (5533.21.1, r91108).
+   */
+  function test_CANT_IN_CALLER() {
+    var answer;
+    try {
+      answer = has(function(){}, 'caller', 'strict_function');
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      logger.error('New symptom: ' +
+                   '("caller" in strict_func) failed with: ' + err);
+      return true;
+    } finally {}
+    if (answer) { return false; }
+    logger.error('New symptom: ' +
+                 '("caller" in strict_func) was false.');
+    return true;
+  }
+
+  /**
+   * Test for https://bugs.webkit.org/show_bug.cgi?id=63398
+   *
+   * <p>If this reports a problem in the absence of "New symptom (a)",
+   * it means the error thrown by the "in" in {@code has} is skipping
+   * past the first layer of "catch" surrounding that "in". This is in
+   * fact what we're currently seeing on Safari WebKit Nightly Version
+   * 5.0.5 (5533.21.1, r91108).
+   */
+  function test_CANT_IN_ARGUMENTS() {
+    var answer;
+    try {
+      answer = has(function(){}, 'arguments', 'strict_function');
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      logger.error('New symptom: ' +
+                   '("arguments" in strict_func) failed with: ' + err);
+      return true;
+    } finally {}
+    if (answer) { return false; }
+    logger.error('New symptom: ' +
+                 '("arguments" in strict_func) was false.');
+    return true;
   }
 
   function has2(base, name, baseDesc) {
     var result;
+    var finallySkipped = true;
     try {
       result = has(base, name, baseDesc);
     } catch (err) {
-      logger.error('New symptom (c): (\'' +
-                   name + '\' in <' + baseDesc + '>) threw: ' + err);
+      // This case should be already be reported as a failure of
+      // test_CANT_IN_CALLER or test_CANT_IN_ARGUMENTS, and so is no
+      // longer a new symptom.
+      //logger.error('New symptom (c): (\'' +
+      //             name + '\' in <' + baseDesc + '>) threw: ' + err);
       // treat this as a safe absence
       result = false;
       return false;
     } finally {
+      finallySkipped = false;
       if (result === void 0) {
         logger.error('New symptom (d): (\'' +
                      name + '\' in <' + baseDesc + '>) failed');
       }
+    }
+    if (finallySkipped) {
+      logger.error('New symptom (f): (\'' +
+                   name + '\' in <' + baseDesc +
+                   '>) finally outer finally skipped');
     }
     return !!result;
   }
@@ -1239,6 +1305,24 @@ var RegExp;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1360'],
       sections: ['15.5.4.11'],
       tests: ['S15.5.4.11_A12']
+    },
+    {
+      description: 'Cannot "in" caller on strict function',
+      test: test_CANT_IN_CALLER,
+      repair: void 0,
+      canRepairSafely: true, // no repair, but not really a safety issue
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398'],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'Cannot "in" arguments on strict function',
+      test: test_CANT_IN_ARGUMENTS,
+      repair: void 0,
+      canRepairSafely: true, // no repair, but not really a safety issue
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398'],
+      sections: [],
+      tests: []
     },
     {
       description: 'Built in functions leak "caller"',
