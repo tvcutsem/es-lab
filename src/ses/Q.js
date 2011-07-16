@@ -119,7 +119,7 @@ var Q;
      put: function(name, newVal) {
        return this.invoke('PUT', [name, newVal]);
      },
-     delete: function(name) {
+     "delete": function(name) {
        return this.invoke('DELETE', [name]);
      },
      end: function() {

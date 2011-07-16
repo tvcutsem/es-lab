@@ -357,8 +357,12 @@ var RegExp;
    */
   function test_NEEDS_DUMMY_SETTER() {
     return (typeof navigator !== 'undefined' &&
-            (/Chrome/).test(navigator.userAgent));
+            (/Chrome/).test(navigator.userAgent) &&
+            !NEEDS_DUMMY_SETTER_repaired);
   }
+  /** we use this variable only because we haven't yet isolated a test
+   * for the problem. */
+  var NEEDS_DUMMY_SETTER_repaired = false;
 
 
   /**
@@ -636,7 +640,19 @@ var RegExp;
    *
    */
   function test_JSON_PARSE_PROTO_CONFUSION() {
-    var x = JSON.parse('{"__proto__":[]}');
+    var x;
+    try {
+      x = JSON.parse('{"__proto__":[]}');
+    } catch (err) {
+      if (err instanceof TypeError) {
+        // We consider it acceptable to fail this case with a
+        // TypeError, as our repair below will cause it to do.
+        return false;
+      }
+      logger.error('New symptom: ' +
+                   'JSON.parse failed with: ' + err);
+      return true;
+    }
     if (Object.getPrototypeOf(x) !== Object.prototype) {
       return true;
     }
@@ -737,16 +753,35 @@ var RegExp;
   }
 
   function repair_MISSING_BIND() {
-    patchMissingProp(Function.prototype, 'bind',
-                     function fakeBind(self, var_args) {
-      var thisFunc = this;
-      var leftArgs = slice.call(arguments, 1);
-      function funcBound(var_args) {
-        var args = concat.call(leftArgs, slice.call(arguments, 0));
-        return apply.call(thisFunc, self, args);
-      }
-      delete funcBound.prototype;
-      return funcBound;
+    defProp(Function.prototype, 'bind', {
+      value: function fakeBind(self, var_args) {
+        var thisFunc = this;
+        var leftArgs = slice.call(arguments, 1);
+        function funcBound(var_args) {
+          var args = concat.call(leftArgs, slice.call(arguments, 0));
+          return apply.call(thisFunc, self, args);
+        }
+        try {
+          delete funcBound.prototype;
+          // ES5.1 section 15.3.5.2 specifies that a function
+          // instance's 'prototype' is non-configurable, so if we get
+          // here, that indicates another bug. We try anyway, because
+          // bound functions should not have a 'prototype', and this
+          // deletion currently works on Safari, which is the only
+          // major browser that still does not provide a built-in
+          // Function.prototype.bind.
+
+          // The failed delete case happens on current Chrome though,
+          // even though it does have a built-in
+          // Function.prototype.bind, since Chrome's built-in bind
+          // results in bound functions which leak 'arguments'. See
+          // test_BOUND_FUNCTION_LEAKS_ARGUMENTS.
+        } catch (err) {}
+        return funcBound;
+      },
+      writable: true,
+      enumerable: false,
+      configurable: true
     });
   }
 
@@ -881,6 +916,7 @@ var RegExp;
           return defProp(base, name, fullDesc);
         }
       });
+      NEEDS_DUMMY_SETTER_repaired = true;
     })();
   }
 
@@ -1022,6 +1058,44 @@ var RegExp;
     })();
   }
 
+  function repair_JSON_PARSE_PROTO_CONFUSION() {
+    var unsafeParse = JSON.parse;
+    function validate(plainJSON) {
+      if (plainJSON !== Object(plainJSON)) {
+        // If we were trying to do a full validation, we would
+        // validate that it is not NaN, Infinity, -Infinity, or
+        // (if nested) undefined. However, we are currently only
+        // trying to repair
+        // http://code.google.com/p/v8/issues/detail?id=621
+        // That's why this special case validate function is private
+        // to this repair.
+        return;
+      }
+      var proto = Object.getPrototypeOf(plainJSON);
+      if (proto !== Object.prototype && proto !== Array.prototype) {
+        throw new TypeError(
+          'Parse resulted in invalid JSON. ' +
+            'See http://code.google.com/p/v8/issues/detail?id=621');
+      }
+      Object.keys(plainJSON).forEach(function(key) {
+        validate(plainJSON[key]);
+      });
+    }
+    defProp(JSON, 'parse', {
+      value: function(text, opt_reviver) {
+        var result = unsafeParse(text);
+        validate(result);
+        if (opt_reviver) {
+          return unsafeParse(text, opt_reviver);
+        } else {
+          return result;
+        }
+      },
+      writable: true,
+      enumerable: false,
+      configurable: true
+    });
+  }
 
   var kludges = [
     {
@@ -1213,7 +1287,7 @@ var RegExp;
     {
       description: 'JSON.parse confused by "__proto__"',
       test: test_JSON_PARSE_PROTO_CONFUSION,
-      repair: void 0,
+      repair: repair_JSON_PARSE_PROTO_CONFUSION,
       canRepairSafely: true,
       urls: ['http://code.google.com/p/v8/issues/detail?id=621',
              'http://code.google.com/p/v8/issues/detail?id=1310'],
