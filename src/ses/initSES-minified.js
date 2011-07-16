@@ -1,56 +1,56 @@
 {var Function,RegExp,WeakMap,atLeastFreeVarNames,cajaVM,eval,whitelist;(function(global){'use strict';var
-afterFailures,apply,beforeFailures,call,complaint,concat,defProp,getPrototypeOf,hop,kludges,objToString,repairs,seemsSafe,slice;function
-log(str){typeof console!=='undefined'&&'log'in console&&console.log(str)}if(!Object.getOwnPropertyNames)throw complaint='Please upgrade to a JavaScript platform which implements Object.getOwnPropertyNames',log(complaint),new
+afterFailures,apply,beforeFailures,call,complaint,concat,defProp,getPrototypeOf,hop,kludges,logger,objToString,repairs,seemsSafe,slice;function
+logNowhere(str){}typeof console!=='undefined'&&'log'in console?(logger=console):(logger={'log':logNowhere,'info':logNowhere,'warn':logNowhere,'error':logNowhere});if(!Object.getOwnPropertyNames)throw complaint='Please upgrade to a JavaScript platform which implements Object.getOwnPropertyNames',logger.error(complaint),new
 EvalError(complaint);function test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS(){var
 that;return global.___global_test_function___=function(){return this},that=___global_test_function___(),delete
-global.___global_test_function___,that===void 0?false:(that===global||log('New symptom: this leaked as: '+global),true)}function
+global.___global_test_function___,that===void 0?false:(that===global||logger.error('New symptom: this leaked as: '+that),true)}function
 test_GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS(){var that=(function(){return this})();return that===void
-0?false:(that===global||log('New symptom: this leaked as: '+global),true)}function
+0?false:(that===global||logger.error('New symptom: this leaked as: '+that),true)}function
 test_GLOBAL_LEAKS_FROM_BUILTINS(){var v=({}).valueOf,that='dummy';try{that=v()}catch(err){return err
-instanceof TypeError?false:(log('New symptom: valueOf() threw '+err),true)}return true}function
+instanceof TypeError?false:(logger.error('New symptom: valueOf() threw '+err),true)}return true}function
 test_MISSING_FREEZE_ETC(){return!('freeze'in Object)}function test_MISSING_CALLEE_DESCRIPTOR(){function
-foo(){}return Object.getOwnPropertyNames(foo).indexOf('callee')<0?false:(foo.hasOwnProperty('callee')&&log('New symptom: empty strict function has own callee'),true)}function
+foo(){}return Object.getOwnPropertyNames(foo).indexOf('callee')<0?false:(foo.hasOwnProperty('callee')&&logger.error('New symptom: empty strict function has own callee'),true)}function
 test_REGEXP_CANT_BE_NEUTERED(){var deletion;if(!RegExp.hasOwnProperty('leftContext'))return false;try{deletion=delete
-RegExp.leftContext}catch(err){return err instanceof TypeError||log('New symptom: deletion failed with '+err),true}return RegExp.hasOwnProperty('leftContext')?(deletion&&log('New symptom: Deletion of RegExp.leftContext failed.'),true):false}function
-test_REGEXP_TEST_EXEC_UNSAFE(){var match;return/foo/.test('xfoox'),match=(new RegExp('(.|\r|\n)*','').exec())[0],match==='undefined'?false:(match!=='xfoox'&&log('New symptom: regExp.exec() does not match against \"undefined\".'),true)}function
+RegExp.leftContext}catch(err){return err instanceof TypeError||logger.error('New symptom: deletion failed with '+err),true}return RegExp.hasOwnProperty('leftContext')?(deletion&&logger.error('New symptom: Deletion of RegExp.leftContext failed.'),true):false}function
+test_REGEXP_TEST_EXEC_UNSAFE(){var match;return/foo/.test('xfoox'),match=(new RegExp('(.|\r|\n)*','').exec())[0],match==='undefined'?false:(match!=='xfoox'&&logger.error('New symptom: regExp.exec() does not match against \"undefined\".'),true)}function
 test_MISSING_BIND(){return!('bind'in Function.prototype)}function test_MUTABLE_DATE_PROTO(){var
-v;try{Date.prototype.setFullYear(1957)}catch(err){return err instanceof TypeError?false:(log('New symptom: Mutating Date.prototype failed with '+err),true)}return v=Date.prototype.getFullYear(),v!==v&&typeof
-v==='number'?false:(v!==1957&&log('New symptom: Mutating Date.prototype did not throw'),true)}function
+v;try{Date.prototype.setFullYear(1957)}catch(err){return err instanceof TypeError?false:(logger.error('New symptom: Mutating Date.prototype failed with '+err),true)}return v=Date.prototype.getFullYear(),v!==v&&typeof
+v==='number'?false:(v!==1957&&logger.error('New symptom: Mutating Date.prototype did not throw'),true)}function
 test_MUTABLE_WEAKMAP_PROTO(){var v,x;if(typeof WeakMap!=='function')return false;x={};try{WeakMap.prototype.set(x,86)}catch(err){return err
-instanceof TypeError?false:(log('New symptom: Mutating WeakMap.prototype failed with '+err),true)}return v=WeakMap.prototype.get(x),v!==86&&log('New symptom: Mutating WeakMap.prototype did not throw'),true}function
+instanceof TypeError?false:(logger.error('New symptom: Mutating WeakMap.prototype failed with '+err),true)}return v=WeakMap.prototype.get(x),v!==86&&logger.error('New symptom: Mutating WeakMap.prototype did not throw'),true}function
 test_NEED_TO_WRAP_FOREACH(){if(!('freeze'in Object))return false;try{return['z'].forEach(function(){Object.freeze(Array.prototype.forEach)}),false}catch(err){return err
-instanceof TypeError||log('New Symptom: freezing forEach failed with '+err),true}}function
+instanceof TypeError||logger.error('New Symptom: freezing forEach failed with '+err),true}}function
 test_NEEDS_DUMMY_SETTER(){return typeof navigator!=='undefined'&&/Chrome/.test(navigator.userAgent)}function
 test_ACCESSORS_INHERIT_AS_OWN(){var base={},derived=Object.create(base);function
 getter(){return'gotten'}return Object.defineProperty(base,'foo',{'get':getter}),!derived.hasOwnProperty('foo')&&Object.getOwnPropertyDescriptor(derived,'foo')===void
-0&&Object.getOwnPropertyNames(derived).indexOf('foo')<0?false:((!derived.hasOwnProperty('foo')||Object.getOwnPropertyDescriptor(derived,'foo').get!==getter||Object.getOwnPropertyNames(derived).indexOf('foo')<0)&&log('New symptom: Accessor properties partially inherit as own properties.'),Object.defineProperty(base,'bar',{'get':getter,'configurable':true}),!derived.hasOwnProperty('bar')&&Object.getOwnPropertyDescriptor(derived,'bar')===void
-0&&Object.getOwnPropertyNames(derived).indexOf('bar')<0||log('New symptom: Accessor properties inherit as own even if configurable.'),true)}function
+0&&Object.getOwnPropertyNames(derived).indexOf('foo')<0?false:((!derived.hasOwnProperty('foo')||Object.getOwnPropertyDescriptor(derived,'foo').get!==getter||Object.getOwnPropertyNames(derived).indexOf('foo')<0)&&logger.error('New symptom: Accessor properties partially inherit as own properties.'),Object.defineProperty(base,'bar',{'get':getter,'configurable':true}),!derived.hasOwnProperty('bar')&&Object.getOwnPropertyDescriptor(derived,'bar')===void
+0&&Object.getOwnPropertyNames(derived).indexOf('bar')<0||logger.error('New symptom: Accessor properties inherit as own even if configurable.'),true)}function
 test_SORT_LEAKS_GLOBAL(){var that='dummy';return[2,3].sort(function(x,y){return that=this,x-y}),that===void
-0?false:(that!==global&&log('New symptom: sort called comparefn with \"this\" === '+that),true)}function
+0?false:(that!==global&&logger.error('New symptom: sort called comparefn with \"this\" === '+that),true)}function
 test_REPLACE_LEAKS_GLOBAL(){var that='dummy';return'x'.replace(/x/,function(){return that=this,'y'}),that===void
-0?false:(that!==global&&log('New symptom: replace called replaceValue function with \"this\" === '+that),true)}function
-has(base,name,baseDesc){var result=void 0;try{result=name in base}catch(err){return log('New symptom (a): (\''+name+'\' in <'+baseDesc+'>) threw: '+err),result=false,false}finally{result===void
-0&&log('New symptom (b): (\''+name+'\' in <'+baseDesc+'>) failed')}return!!result}function
-has2(base,name,baseDesc){var result;try{result=has(base,name,baseDesc)}catch(err){return log('New symptom (c): (\''+name+'\' in <'+baseDesc+'>) threw: '+err),result=false,false}finally{result===void
-0&&log('New symptom (d): (\''+name+'\' in <'+baseDesc+'>) failed')}return!!result}function
+0?false:(that!==global&&logger.error('New symptom: replace called replaceValue function with \"this\" === '+that),true)}function
+has(base,name,baseDesc){var result=void 0;try{result=name in base}catch(err){return logger.error('New symptom (a): (\''+name+'\' in <'+baseDesc+'>) threw: '+err),result=false,false}finally{result===void
+0&&logger.error('New symptom (b): (\''+name+'\' in <'+baseDesc+'>) failed')}return!!result}function
+has2(base,name,baseDesc){var result;try{result=has(base,name,baseDesc)}catch(err){return logger.error('New symptom (c): (\''+name+'\' in <'+baseDesc+'>) threw: '+err),result=false,false}finally{result===void
+0&&logger.error('New symptom (d): (\''+name+'\' in <'+baseDesc+'>) failed')}return!!result}function
 test_BUILTIN_LEAKS_CALLER(){var map=Array.prototype.map,caller,testfn;if(!has(map,'caller','a builtin'))return false;try{delete
 map.caller}catch(err){}if(!has(map,'caller','a builtin'))return false;function foo(){return map.caller}testfn=Function('f','return [1].map(f)[0];');try{caller=testfn(foo)}catch(err){return err
-instanceof TypeError?false:(log('New symptom: builtin \"caller\" failed with: '+err),true)}return null===caller||void
-0===caller?false:(testfn===caller||log('New symptom: Unexpected \"caller\": '+caller),true)}function
+instanceof TypeError?false:(logger.error('New symptom: builtin \"caller\" failed with: '+err),true)}return null===caller||void
+0===caller?false:(testfn===caller||logger.error('New symptom: Unexpected \"caller\": '+caller),true)}function
 test_BUILTIN_LEAKS_ARGUMENTS(){var map=Array.prototype.map,args,testfn;if(!has(map,'arguments','a builtin'))return false;try{delete
 map.arguments}catch(err){}if(!has(map,'arguments','a builtin'))return false;function
 foo(){return map.arguments}testfn=Function('f','return [1].map(f)[0];');try{args=testfn(foo)}catch(err){return err
-instanceof TypeError?false:(log('New symptom: builtin \"arguments\" failed with: '+err),true)}return!(args===void
+instanceof TypeError?false:(logger.error('New symptom: builtin \"arguments\" failed with: '+err),true)}return!(args===void
 0||args===null)}function test_BOUND_FUNCTION_LEAKS_CALLER(){var bar,caller,testfn;if(!('bind'in
 Function.prototype))return false;function foo(){return bar.caller}bar=foo.bind({});if(!has2(bar,'caller','a bound function'))return false;try{delete
-bar.caller}catch(err){}if(!has2(bar,'caller','a bound function'))return log('New symptom: \"caller\" on bound functions can be deleted.'),true;testfn=Function('f','return f();');try{caller=testfn(bar)}catch(err){return err
-instanceof TypeError?false:(log('New symptom: bound function \"caller\" failed with: '+err),true)}return[testfn,void
-0,null].indexOf(caller)>=0?false:(log('New symptom: Unexpected \"caller\": '+caller),true)}function
+bar.caller}catch(err){}if(!has2(bar,'caller','a bound function'))return logger.error('New symptom: \"caller\" on bound functions can be deleted.'),true;testfn=Function('f','return f();');try{caller=testfn(bar)}catch(err){return err
+instanceof TypeError?false:(logger.error('New symptom: bound function \"caller\" failed with: '+err),true)}return[testfn,void
+0,null].indexOf(caller)>=0?false:(logger.error('New symptom: Unexpected \"caller\": '+caller),true)}function
 test_BOUND_FUNCTION_LEAKS_ARGUMENTS(){var args,bar,testfn;if(!('bind'in Function.prototype))return false;function
 foo(){return bar.arguments}bar=foo.bind({});if(!has2(bar,'arguments','a bound function'))return false;try{delete
-bar.arguments}catch(err){}if(!has2(bar,'arguments','a bound function'))return log('New symptom: \"arguments\" on bound functions can be deleted.'),true;testfn=Function('f','return f();');try{args=testfn(bar)}catch(err){return err
-instanceof TypeError?false:(log('New symptom: bound function \"arguments\" failed with: '+err),true)}return!(args===void
-0||args===null)}function test_JSON_PARSE_PROTO_CONFUSION(){var x=JSON.parse('{\"__proto__\":[]}');return Object.getPrototypeOf(x)!==Object.prototype?true:Array.isArray(x.__proto__)?false:(log('New symptom: JSON.parse did not set \"__proto__\" as a regular property'),true)}call=Function.prototype.call,apply=Function.prototype.apply,hop=Object.prototype.hasOwnProperty,objToString=Object.prototype.toString,slice=Array.prototype.slice,concat=Array.prototype.concat,defProp=Object.defineProperty,getPrototypeOf=Object.getPrototypeOf;function
+bar.arguments}catch(err){}if(!has2(bar,'arguments','a bound function'))return logger.error('New symptom: \"arguments\" on bound functions can be deleted.'),true;testfn=Function('f','return f();');try{args=testfn(bar)}catch(err){return err
+instanceof TypeError?false:(logger.error('New symptom: bound function \"arguments\" failed with: '+err),true)}return!(args===void
+0||args===null)}function test_JSON_PARSE_PROTO_CONFUSION(){var x=JSON.parse('{\"__proto__\":[]}');return Object.getPrototypeOf(x)!==Object.prototype?true:Array.isArray(x.__proto__)?false:(logger.error('New symptom: JSON.parse did not set \"__proto__\" as a regular property'),true)}call=Function.prototype.call,apply=Function.prototype.apply,hop=Object.prototype.hasOwnProperty,objToString=Object.prototype.toString,slice=Array.prototype.slice,concat=Array.prototype.concat,defProp=Object.defineProperty,getPrototypeOf=Object.getPrototypeOf;function
 repair_MISSING_CALLEE_DESCRIPTOR(){var realGOPN=Object.getOwnPropertyNames;Object.getOwnPropertyNames=function
 calleeFix(base){var result=realGOPN(base),i;return typeof base==='function'&&(i=result.indexOf('callee'),i>=0&&!hop.call(base,'callee')&&result.splice(i,1)),result}}function
 repair_REGEXP_CANT_BE_NEUTERED(){var UnsafeRegExp=RegExp,FakeRegExp=function FakeRegExp(pattern,flags){switch(arguments.length){case
@@ -78,7 +78,7 @@ repair_MUTABLE_WEAKMAP_PROTO(){['set','delete'].forEach(makeMutableProtoPatcher(
 repair_NEED_TO_WRAP_FOREACH(){(function(){var forEach=Array.prototype.forEach;defProp(Array.prototype,'forEach',{'value':function
 forEachWrapper(callbackfn,opt_thisArg){return apply.call(forEach,this,arguments)}})})()}function
 repair_NEEDS_DUMMY_SETTER(){(function(){var defProp=Object.defineProperty,gopd=Object.getOwnPropertyDescriptor,freeze=Object.freeze,complained=false;defProp(Object,'defineProperty',{'value':function(base,name,desc){var
-fullDesc,oldDesc,testBase;function dummySetter(newValue){if(name==='ident___')complained||(log('Undiagnosed call to setter for ident___'),complained=true);else
+fullDesc,oldDesc,testBase;function dummySetter(newValue){if(name==='ident___')complained||(logger.warn('Undiagnosed call to setter for ident___'),complained=true);else
 throw new TypeError('Cannot set \".'+name+'\"')}return freeze(dummySetter.prototype),freeze(dummySetter),oldDesc=gopd(base,name),testBase={},oldDesc&&defProp(testBase,name,oldDesc),defProp(testBase,name,desc),fullDesc=gopd(testBase,name),'get'in
 fullDesc&&fullDesc.set===void 0&&(fullDesc.set=dummySetter),defProp(base,name,fullDesc)}})})()}function
 repair_ACCESSORS_INHERIT_AS_OWN(){(function(){var defProp=Object.defineProperty,freeze=Object.freeze,seal=Object.seal,gopn=Object.getOwnPropertyNames,gopd=Object.getOwnPropertyDescriptor,complaint='Workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=637994  prohibits enumerable non-configurable accessor properties.';function
@@ -86,9 +86,9 @@ isBadAccessor(derived,name){var desc=gopd(derived,name),base,superDesc;return!de
 desc)?false:(base=getPrototypeOf(derived),base?(superDesc=gopd(base,name),!superDesc||!('get'in
 superDesc)?false:desc.get&&!desc.configurable&&!superDesc.configurable&&desc.get===superDesc.get&&desc.set===superDesc.set&&desc.enumerable===superDesc.enumerable):false)}defProp(Object,'defineProperty',{'value':function
 definePropertyWrapper(base,name,desc){var oldDesc=gopd(base,name),testBase={},fullDesc;oldDesc&&!isBadAccessor(base,name)&&defProp(testBase,name,oldDesc),defProp(testBase,name,desc),fullDesc=gopd(testBase,name);if('get'in
-fullDesc&&fullDesc.enumerable&&!fullDesc.configurable)throw log(complaint),new TypeError(complaint);return defProp(base,name,fullDesc)}});function
-ensureSealable(base){gopn(base).forEach(function(name){var desc=gopd(base,name);if('get'in
-desc&&desc.enumerable)throw desc.configurable||log('New symptom: \"'+name+'\" already non-configurable'),log(complaint),new
+fullDesc&&fullDesc.enumerable&&!fullDesc.configurable)throw logger.warn(complaint),new
+TypeError(complaint);return defProp(base,name,fullDesc)}});function ensureSealable(base){gopn(base).forEach(function(name){var
+desc=gopd(base,name);if('get'in desc&&desc.enumerable)throw desc.configurable||logger.error('New symptom: \"'+name+'\" already non-configurable'),logger.warn(complaint),new
 TypeError(complaint)})}defProp(Object,'freeze',{'value':function freezeWrapper(base){return ensureSealable(base),freeze(base)}}),defProp(Object,'seal',{'value':function
 sealWrapper(base){return ensureSealable(base),seal(base)}}),defProp(Object.prototype,'hasOwnProperty',{'value':function
 hasOwnPropertyWrapper(name){return hop.call(this,name)&&!isBadAccessor(this,name)}}),defProp(Object,'getOwnPropertyDescriptor',{'value':function
@@ -106,9 +106,9 @@ replaceValueWrapper(m1,m2,m3){return replaceValue(m1,m2,m3)}return typeof replac
 0,'canRepairSafely':false,'urls':['http://code.google.com/p/v8/issues/detail?id=1548','https://bugzilla.mozilla.org/show_bug.cgi?id=591846','http://wiki.ecmascript.org/doku.php?id=conventions:make_non-standard_properties_configurable'],'sections':[],'tests':[]},{'description':'Bound functions leak \"caller\"','test':test_BOUND_FUNCTION_LEAKS_CALLER,'repair':repair_MISSING_BIND,'canRepairSafely':true,'urls':['http://code.google.com/p/v8/issues/detail?id=893','https://bugs.webkit.org/show_bug.cgi?id=63398'],'sections':['15.3.4.5'],'tests':['S15.3.4.5_A1']},{'description':'Bound functions leak \"arguments\"','test':test_BOUND_FUNCTION_LEAKS_ARGUMENTS,'repair':repair_MISSING_BIND,'canRepairSafely':true,'urls':['http://code.google.com/p/v8/issues/detail?id=893','https://bugs.webkit.org/show_bug.cgi?id=63398'],'sections':['15.3.4.5'],'tests':['S15.3.4.5_A2']},{'description':'JSON.parse confused by \"__proto__\"','test':test_JSON_PARSE_PROTO_CONFUSION,'repair':void
 0,'canRepairSafely':true,'urls':['http://code.google.com/p/v8/issues/detail?id=621','http://code.google.com/p/v8/issues/detail?id=1310'],'sections':['15.12.2'],'tests':['S15.12.2_A1']}],beforeFailures=kludges.map(function(kludge){return kludge.test()}),repairs=[],kludges.forEach(function(kludge,i){var
 repair;beforeFailures[i]&&(repair=kludge.repair,repair&&repairs.lastIndexOf(repair)===-1&&(repair(),repairs.push(repair)))}),afterFailures=kludges.map(function(kludge){return kludge.test()}),seemsSafe=true,kludges.forEach(function(kludge,i){var
-status='',note;if(beforeFailures[i])afterFailures[i]?(seemsSafe=false,kludge.repair?(status='Repair failed'):(status='Not repaired')):kludge.repair?(status='Repaired'):(status='Accidentally repaired');else
-if(afterFailures[i])seemsSafe=false,status='Broken by other attempted repairs';else
-return;note='',kludge.canRepairSafely||(seemsSafe=false,note='This platform is not SES-safe. '),log(i+': '+kludge.description+'. '+status+'. '+note+(kludge.urls[0]?'See '+kludge.urls[0]:''))}),seemsSafe})(this),(function(){'use strict';var
+status='',level='warn',note;if(beforeFailures[i])afterFailures[i]?(seemsSafe=false,level='error',kludge.repair?(status='Repair failed'):(status='Not repaired')):kludge.repair?(status='Repaired'):(status='Accidentally repaired');else
+if(afterFailures[i])seemsSafe=false,level='error',status='Broken by other attempted repairs';else
+return;note='',kludge.canRepairSafely||(seemsSafe=false,note='This platform is not SES-safe. '),logger[level](i+' '+status+': '+kludge.description+'. '+note+(kludge.urls[0]?'See '+kludge.urls[0]:''))}),seemsSafe})(this),(function(){'use strict';var
 NO_IDENT,defProp,gopn,hop,originalProps;if(typeof WeakMap==='function')return;hop=Object.prototype.hasOwnProperty,gopn=Object.getOwnPropertyNames,defProp=Object.defineProperty,originalProps={},gopn(Object).forEach(function(name){originalProps[name]=Object[name]}),NO_IDENT='noident:0';function
 identity(key){var desc,name;function identGetter(){return name}if(key!==Object(key))throw new
 TypeError('Not an object: '+key);return desc=originalProps.getOwnPropertyDescriptor(key,'ident___'),desc?desc.get:originalProps.isExtensible(key)?(name='hash:'+Math.random(),originalProps.freeze(identGetter.prototype),originalProps.freeze(identGetter),defProp(key,'ident___',{'get':identGetter,'set':undefined,'enumerable':false,'configurable':false}),identGetter):NO_IDENT}function

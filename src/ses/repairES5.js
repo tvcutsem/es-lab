@@ -40,10 +40,11 @@ var RegExp;
  * standard globals or standard elements reachable from standard
  * globals. If the future-standard {@code WeakMap} global is present,
  * as it is currently on FF7.0a1, then it will repair it in place. The
- * one non-standard element that this file uses is {@code console.log}
- * if present, in order to report the repairs it found necessary. If
- * {@code console.log} is absent, then this file performs its repairs
- * silently.
+ * one non-standard element that this file uses is {@code console} if
+ * present, in order to report the repairs it found necessary, in
+ * which case we use its {@code log, info, warn, and error}
+ * methods. If {@code console.log} is absent, then this file performs
+ * its repairs silently.
  *
  * <p>Generally, this file should be run as the first script in a
  * JavaScript context (i.e. a browser frame), as it replies on other
@@ -58,20 +59,34 @@ var RegExp;
 (function(global) {
   "use strict";
 
-  function log(str) {
-    if (typeof console !== 'undefined' && 'log' in console) {
-      // We no longer test (typeof console.log === 'function') since,
-      // on IE9 and IE10preview, in violation of the ES5 spec, it
-      // is callable but has typeof "object".
-      // TODO(erights): report to MS.
-      console.log(str);
-    }
+  var logger;
+  function logNowhere(str) {}
+
+  if (typeof console !== 'undefined' && 'log' in console) {
+    // We no longer test (typeof console.log === 'function') since,
+    // on IE9 and IE10preview, in violation of the ES5 spec, it
+    // is callable but has typeof "object".
+    // TODO(erights): report to MS.
+
+    // TODO(erights): This assumes without checking that if
+    // console.log is present, then console has working log, info,
+    // warn, and error methods. Check that this is actually the case
+    // on all platforms we care about, or, if not, do something
+    // fancier here.
+    logger = console;
+  } else {
+    logger = {
+      log: logNowhere,
+      info: logNowhere,
+      warn: logNowhere,
+      error: logNowhere
+    };
   }
 
   if (!Object.getOwnPropertyNames) {
     var complaint = 'Please upgrade to a JavaScript platform ' +
       'which implements Object.getOwnPropertyNames';
-    log(complaint);
+    logger.error(complaint);
     throw new EvalError(complaint);
   }
 
@@ -87,7 +102,7 @@ var RegExp;
     delete global.___global_test_function___;
     if (that === void 0) { return false; }
     if (that === global) { return true; }
-    log('New symptom: this leaked as: ' + global);
+    logger.error('New symptom: this leaked as: ' + that);
     return true;
   }
 
@@ -98,7 +113,7 @@ var RegExp;
     var that = (function(){ return this; })();
     if (that === void 0) { return false; }
     if (that === global) { return true; }
-    log('New symptom: this leaked as: ' + global);
+    logger.error('New symptom: this leaked as: ' + that);
     return true;
   }
 
@@ -118,8 +133,8 @@ var RegExp;
       that = v();
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      log('New symptom: ' +
-          'valueOf() threw ' + err);
+      logger.error('New symptom: ' +
+                   'valueOf() threw ' + err);
       return true;
     }
     return true;
@@ -158,7 +173,7 @@ var RegExp;
     function foo(){}
     if (Object.getOwnPropertyNames(foo).indexOf('callee') < 0) { return false; }
     if (foo.hasOwnProperty('callee')) {
-      log('New symptom: empty strict function has own callee');
+      logger.error('New symptom: empty strict function has own callee');
     }
     return true;
   }
@@ -182,13 +197,13 @@ var RegExp;
       deletion = delete RegExp.leftContext;
     } catch (err) {
       if (!(err instanceof TypeError)) {
-        log('New symptom: deletion failed with ' + err);
+        logger.error('New symptom: deletion failed with ' + err);
       }
       return true;
     }
     if (!RegExp.hasOwnProperty('leftContext')) { return false; }
     if (deletion) {
-      log('New symptom: Deletion of RegExp.leftContext failed.');
+      logger.error('New symptom: Deletion of RegExp.leftContext failed.');
     }
     return true;
   }
@@ -204,7 +219,8 @@ var RegExp;
     var match = new RegExp('(.|\r|\n)*','').exec()[0];
     if (match === 'undefined') { return false; }
     if (match !== 'xfoox') {
-      log('New symptom: regExp.exec() does not match against "undefined".');
+      logger.error('New symptom: ' +
+                   'regExp.exec() does not match against "undefined".');
     }
     return true;
   }
@@ -245,7 +261,7 @@ var RegExp;
       Date.prototype.setFullYear(1957);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      log('New symptom: Mutating Date.prototype failed with ' + err);
+      logger.error('New symptom: Mutating Date.prototype failed with ' + err);
       return true;
     }
     var v = Date.prototype.getFullYear();
@@ -254,7 +270,7 @@ var RegExp;
       return false;
     }
     if (v !== 1957) {
-      log('New symptom: Mutating Date.prototype did not throw');
+      logger.error('New symptom: Mutating Date.prototype did not throw');
     }
     return true;
   }
@@ -281,12 +297,13 @@ var RegExp;
       WeakMap.prototype.set(x, 86);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      log('New symptom: Mutating WeakMap.prototype failed with ' + err);
+      logger.error('New symptom: ' +
+                   'Mutating WeakMap.prototype failed with ' + err);
       return true;
     }
     var v = WeakMap.prototype.get(x);
     if (v !== 86) {
-      log('New symptom: Mutating WeakMap.prototype did not throw');
+      logger.error('New symptom: Mutating WeakMap.prototype did not throw');
     }
     return true;
   }
@@ -317,7 +334,7 @@ var RegExp;
       return false;
     } catch (err) {
       if (!(err instanceof TypeError)) {
-        log('New Symptom: freezing forEach failed with ' + err);
+        logger.error('New Symptom: freezing forEach failed with ' + err);
       }
       return true;
     }
@@ -388,8 +405,8 @@ var RegExp;
     if (!derived.hasOwnProperty('foo') ||
         Object.getOwnPropertyDescriptor(derived, 'foo').get !== getter ||
         Object.getOwnPropertyNames(derived).indexOf('foo') < 0) {
-      log('New symptom: ' +
-          'Accessor properties partially inherit as own properties.');
+      logger.error('New symptom: ' +
+                   'Accessor properties partially inherit as own properties.');
     }
     Object.defineProperty(base, 'bar', {get: getter, configurable: true});
     if (!derived.hasOwnProperty('bar') &&
@@ -397,8 +414,8 @@ var RegExp;
         Object.getOwnPropertyNames(derived).indexOf('bar') < 0) {
       return true;
     }
-    log('New symptom: ' +
-        'Accessor properties inherit as own even if configurable.');
+    logger.error('New symptom: ' +
+                 'Accessor properties inherit as own even if configurable.');
     return true;
   }
 
@@ -413,8 +430,8 @@ var RegExp;
     [2,3].sort(function(x,y) { that = this; return x - y; });
     if (that === void 0) { return false; }
     if (that !== global) {
-      log('New symptom: ' +
-          'sort called comparefn with "this" === ' + that);
+      logger.error('New symptom: ' +
+                   'sort called comparefn with "this" === ' + that);
     }
     return true;
   }
@@ -431,8 +448,8 @@ var RegExp;
     'x'.replace(/x/, function() { that = this; return 'y';});
     if (that === void 0) { return false; }
     if (that !== global) {
-      log('New symptom: ' +
-          'replace called replaceValue function with "this" === ' + that);
+      logger.error('New symptom: replace called replaceValue function ' +
+                   'with "this" === ' + that);
     }
     return true;
   }
@@ -464,15 +481,15 @@ var RegExp;
     try {
       result = name in base;
     } catch (err) {
-      log('New symptom (a): (\'' +
-          name + '\' in <' + baseDesc + '>) threw: ' + err);
+      logger.error('New symptom (a): (\'' +
+                   name + '\' in <' + baseDesc + '>) threw: ' + err);
       // treat this as a safe absence
       result = false;
       return false;
     } finally {
       if (result === void 0) {
-        log('New symptom (b): (\'' +
-            name + '\' in <' + baseDesc + '>) failed');
+        logger.error('New symptom (b): (\'' +
+                     name + '\' in <' + baseDesc + '>) failed');
       }
     }
     return !!result;
@@ -483,15 +500,15 @@ var RegExp;
     try {
       result = has(base, name, baseDesc);
     } catch (err) {
-      log('New symptom (c): (\'' +
-          name + '\' in <' + baseDesc + '>) threw: ' + err);
+      logger.error('New symptom (c): (\'' +
+                   name + '\' in <' + baseDesc + '>) threw: ' + err);
       // treat this as a safe absence
       result = false;
       return false;
     } finally {
       if (result === void 0) {
-        log('New symptom (d): (\'' +
-            name + '\' in <' + baseDesc + '>) failed');
+        logger.error('New symptom (d): (\'' +
+                     name + '\' in <' + baseDesc + '>) failed');
       }
     }
     return !!result;
@@ -517,12 +534,12 @@ var RegExp;
       caller = testfn(foo);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      log('New symptom: builtin "caller" failed with: ' + err);
+      logger.error('New symptom: builtin "caller" failed with: ' + err);
       return true;
     }
     if (null === caller || void 0 === caller) { return false; }
     if (testfn === caller) { return true; }
-    log('New symptom: Unexpected "caller": ' + caller);
+    logger.error('New symptom: Unexpected "caller": ' + caller);
     return true;
   }
 
@@ -546,7 +563,7 @@ var RegExp;
       args = testfn(foo);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      log('New symptom: builtin "arguments" failed with: ' + err);
+      logger.error('New symptom: builtin "arguments" failed with: ' + err);
       return true;
     }
     if (args === void 0 || args === null) { return false; }
@@ -565,7 +582,7 @@ var RegExp;
       delete bar.caller;
     } catch (err) { }
     if (!has2(bar, 'caller', 'a bound function')) {
-      log('New symptom: "caller" on bound functions can be deleted.');
+      logger.error('New symptom: "caller" on bound functions can be deleted.');
       return true;
     }
     // using Function so it'll be non-strict
@@ -575,11 +592,11 @@ var RegExp;
       caller = testfn(bar);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      log('New symptom: bound function "caller" failed with: ' + err);
+      logger.error('New symptom: bound function "caller" failed with: ' + err);
       return true;
     }
     if ([testfn, void 0, null].indexOf(caller) >= 0) { return false; }
-    log('New symptom: Unexpected "caller": ' + caller);
+    logger.error('New symptom: Unexpected "caller": ' + caller);
     return true;
   }
 
@@ -595,7 +612,8 @@ var RegExp;
       delete bar.arguments;
     } catch (err) { }
     if (!has2(bar, 'arguments', 'a bound function')) {
-      log('New symptom: "arguments" on bound functions can be deleted.');
+      logger.error('New symptom: ' +
+                   '"arguments" on bound functions can be deleted.');
       return true;
     }
     // using Function so it'll be non-strict
@@ -605,7 +623,8 @@ var RegExp;
       args = testfn(bar);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      log('New symptom: bound function "arguments" failed with: ' + err);
+      logger.error('New symptom: ' +
+                   'bound function "arguments" failed with: ' + err);
       return true;
     }
     if (args === void 0 || args === null) { return false; }
@@ -622,8 +641,8 @@ var RegExp;
       return true;
     }
     if (!Array.isArray(x.__proto__)) {
-      log('New symptom: JSON.parse did not set "__proto__" as ' +
-          'a regular property');
+      logger.error('New symptom: JSON.parse did not set "__proto__" as ' +
+                   'a regular property');
       return true;
     }
     return false;
@@ -832,7 +851,7 @@ var RegExp;
               // be impossible to call the ident___ setter.
               // TODO(erights): isolate and report this.
               if (!complained) {
-                log('Undiagnosed call to setter for ident___');
+                logger.warn('Undiagnosed call to setter for ident___');
                 complained = true;
               }
               //
@@ -908,7 +927,7 @@ var RegExp;
           if ('get' in fullDesc &&
               fullDesc.enumerable &&
               !fullDesc.configurable) {
-            log(complaint);
+            logger.warn(complaint);
             throw new TypeError(complaint);
           }
           return defProp(base, name, fullDesc);
@@ -920,9 +939,10 @@ var RegExp;
           var desc = gopd(base, name);
           if ('get' in desc && desc.enumerable) {
             if (!desc.configurable) {
-              log('New symptom: "' + name + '" already non-configurable');
+              logger.error('New symptom: ' +
+                           '"' + name + '" already non-configurable');
             }
-            log(complaint);
+            logger.warn(complaint);
             throw new TypeError(complaint);
           }
         });
@@ -1229,9 +1249,11 @@ var RegExp;
 
   kludges.forEach(function(kludge, i) {
     var status = '';
+    var level = 'warn';
     if (beforeFailures[i]) { // failed before
       if (afterFailures[i]) { // failed after
         seemsSafe = false;
+        level = 'error';
         if (kludge.repair) {
           status = 'Repair failed';
         } else {
@@ -1247,6 +1269,7 @@ var RegExp;
     } else { // succeeded before
       if (afterFailures[i]) { // failed after
         seemsSafe = false;
+        level = 'error';
         status = 'Broken by other attempted repairs';
       } else { // succeeded after
         // nothing to see here, move along
@@ -1258,10 +1281,10 @@ var RegExp;
       seemsSafe = false;
       note = 'This platform is not SES-safe. ';
     }
-    log(i + ': ' + kludge.description + '. ' +
-        status + '. ' + note +
-        // TODO(erights): select most relevant URL based on platform
-        (kludge.urls[0] ? 'See ' + kludge.urls[0] : ''));
+    logger[level](i + ' ' + status + ': ' +
+                  kludge.description + '. ' + note +
+                  // TODO(erights): select most relevant URL based on platform
+                  (kludge.urls[0] ? 'See ' + kludge.urls[0] : ''));
   });
 
   // TODO(erights): If we arrive here with the platform still in a
