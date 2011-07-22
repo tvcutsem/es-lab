@@ -1197,7 +1197,7 @@ var RegExp;
       description: 'Object.freeze is missing',
       test: test_MISSING_FREEZE_ETC,
       repair: repair_MISSING_FREEZE_ETC,
-      canRepairSafely: false,
+      canRepairSafely: false,           // repair for development, not safety
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=55736'],
       sections: ['15.2.3.9'],
       tests: []
@@ -1407,18 +1407,24 @@ var RegExp;
 
   kludges.forEach(function(kludge, i) {
     var status = '';
-    var level = 'warn';
+    var thisSeemsSafe = true;
     if (beforeFailures[i]) { // failed before
       if (afterFailures[i]) { // failed after
-        seemsSafe = false;
-        level = 'error';
         if (kludge.repair) {
+          thisSeemsSafe = false;
           status = 'Repair failed';
         } else {
+          if (!kludge.canRepairSafely) {
+            thisSeemsSafe = false;
+          } // else no repair + canRepairSafely -> problem isn't safety issue
           status = 'Not repaired';
         }
-      } else {
+      } else { // succeeded after
         if (kludge.repair) {
+          if (!kludge.canRepairSafely) {
+            // repair for development, not safety
+            thisSeemsSafe = false;
+          }
           status = 'Repaired';
         } else {
           status = 'Accidentally repaired';
@@ -1426,8 +1432,7 @@ var RegExp;
       }
     } else { // succeeded before
       if (afterFailures[i]) { // failed after
-        seemsSafe = false;
-        level = 'error';
+        thisSeemsSafe = false;
         status = 'Broken by other attempted repairs';
       } else { // succeeded after
         // nothing to see here, move along
@@ -1435,8 +1440,10 @@ var RegExp;
       }
     }
     var note = '';
-    if (!kludge.canRepairSafely) {
+    var level = 'warn';
+    if (!thisSeemsSafe) {
       seemsSafe = false;
+      level = 'error';
       note = 'This platform is not SES-safe. ';
     }
     logger[level](i + ' ' + status + ': ' +
