@@ -90,6 +90,24 @@ var RegExp;
     throw new EvalError(complaint);
   }
 
+  ////////////////////// Tests /////////////////////
+  //
+  // Each test is a function of no arguments that should not leave any
+  // significant side effects, which tests for the presence of a
+  // problem. It returns either
+  // <ul>
+  // <li>false, meaning that the problem does not seem to be present.
+  // <li>true, meaning that the problem is present in a form that we expect.
+  // <li>a non-empty string, meaning that there seems to be a related
+  //     problem, but we're seeing a symptom different than what we
+  //     expect. The string should describe the new symptom. It must
+  //     be non-empty so that it is truthy.
+  // </ul>
+  // All the tests are run first to determine which corresponding
+  // repairs to attempt. Then these repairs are run. Then all the
+  // tests are rerun to see how they were effected by these repair
+  // attempts. Finally, we report what happened.
+
   /**
    * Tests for https://bugs.webkit.org/show_bug.cgi?id=64250
    *
@@ -102,8 +120,7 @@ var RegExp;
     delete global.___global_test_function___;
     if (that === void 0) { return false; }
     if (that === global) { return true; }
-    logger.error('New symptom: this leaked as: ' + that);
-    return true;
+    return 'This leaked as: ' + that;
   }
 
   /**
@@ -113,8 +130,7 @@ var RegExp;
     var that = (function(){ return this; })();
     if (that === void 0) { return false; }
     if (that === global) { return true; }
-    logger.error('New symptom: this leaked as: ' + that);
-    return true;
+    return 'This leaked as: ' + that;
   }
 
   /**
@@ -133,9 +149,7 @@ var RegExp;
       that = v();
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      logger.error('New symptom: ' +
-                   'valueOf() threw ' + err);
-      return true;
+      return 'valueOf() threw: ' + err;
     }
     return true;
   }
@@ -173,7 +187,7 @@ var RegExp;
     function foo(){}
     if (Object.getOwnPropertyNames(foo).indexOf('callee') < 0) { return false; }
     if (foo.hasOwnProperty('callee')) {
-      logger.error('New symptom: empty strict function has own callee');
+      return 'Empty strict function has own callee';
     }
     return true;
   }
@@ -196,16 +210,15 @@ var RegExp;
     try {
       deletion = delete RegExp.leftContext;
     } catch (err) {
-      if (!(err instanceof TypeError)) {
-        logger.error('New symptom: deletion failed with ' + err);
-      }
-      return true;
+      if (err instanceof TypeError) { return true; }
+      return 'Deletion failed with: ' + err;
     }
     if (!RegExp.hasOwnProperty('leftContext')) { return false; }
     if (deletion) {
-      logger.error('New symptom: Deletion of RegExp.leftContext failed.');
+      return 'Deletion of RegExp.leftContext did not succeed.';
+    } else {
+      return 'Deletion of RegExp.leftContext failed.';
     }
-    return true;
   }
 
 
@@ -218,11 +231,21 @@ var RegExp;
     (/foo/).test('xfoox');
     var match = new RegExp('(.|\r|\n)*','').exec()[0];
     if (match === 'undefined') { return false; }
-    if (match !== 'xfoox') {
-      logger.error('New symptom: ' +
-                   'regExp.exec() does not match against "undefined".');
-    }
-    return true;
+    if (match === 'xfoox') { return true; }
+    return 'regExp.exec() does not match against "undefined".';
+  }
+
+
+  /**
+   * Detects http://code.google.com/p/v8/issues/detail?id=1530
+   *
+   *
+   */
+  function test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
+    function foo() {}
+    Object.defineProperty(foo, 'prototype', { value: {} });
+    return foo.prototype !==
+      Object.getOwnPropertyDescriptor(foo, 'prototype').value;
   }
 
 
@@ -244,6 +267,59 @@ var RegExp;
     return !('bind' in Function.prototype);
   }
 
+  /**
+   * Workaround for http://code.google.com/p/v8/issues/detail?id=892
+   *
+   * <p>This tests whether the built-in bind method violates the spec
+   * by calling the original using its current .apply method rather
+   * than the internal [[Call]] method. The workaround is the same as
+   * for test_MISSING_BIND -- to replace the built-in bind with one
+   * written in JavaScript. This introduces a different bug though: As
+   * https://bugs.webkit.org/show_bug.cgi?id=26382#c29 explains, a
+   * bind written in JavaScript cannot emulate the specified currying
+   * over the construct behavior, and so fails to enable a var-args
+   * {@code new} operation.
+   */
+  function test_BIND_CALLS_APPLY() {
+    if (!('bind' in Function.prototype)) { return false; }
+    var applyCalled = false;
+    function foo() { return [].slice.call(arguments,0).join(','); }
+    foo.apply = function(self, args) {
+      applyCalled = true;
+      return Function.prototype.apply.call(this, self, args);
+    };
+    var b = foo.bind(33,44);
+    var answer = b(55,66);
+    if (applyCalled) { return true; }
+    if (answer === '44,55,66') { return false; }
+    return 'Bind test returned "' + answer + '" instead of "44,55,66".';
+  }
+
+  /**
+   * Demonstrates the point made by comment 29
+   * https://bugs.webkit.org/show_bug.cgi?id=26382#c29
+   *
+   * <p>Tests whether Function.prototype.bind curries over
+   * construction ({@code new}) behavior. A built-in bind should. A
+   * bind emulation written in ES5 can't.
+   */
+  function test_BIND_CANT_CURRY_NEW() {
+    function construct(f, args) {
+      var bound = Function.prototype.bind.apply(f, [null].concat(args));
+      return new bound();
+    }
+    var d;
+    try {
+      d = construct(Date, [1957, 5, 27]);
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return 'Curries construction failed with: ' + err;
+    }
+    var str = objToString.call(d);
+    if (str === '[object Date]') { return false; }
+    return 'Unexpected: ' + str;
+  }
+
 
   /**
    * Workaround for http://code.google.com/p/google-caja/issues/detail?id=1362
@@ -261,18 +337,18 @@ var RegExp;
       Date.prototype.setFullYear(1957);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      logger.error('New symptom: Mutating Date.prototype failed with ' + err);
-      return true;
+      return 'Mutating Date.prototype failed with: ' + err;
     }
     var v = Date.prototype.getFullYear();
+    Date.prototype.setFullYear(NaN); // hopefully undoes the damage
     if (v !== v && typeof v === 'number') {
       // NaN indicates we're probably ok.
+      // TODO(erights) Should we report this as a symptom anyway, so
+      // that we get the repair which gives us a reliable TypeError?
       return false;
     }
-    if (v !== 1957) {
-      logger.error('New symptom: Mutating Date.prototype did not throw');
-    }
-    return true;
+    if (v === 1957) { return true; }
+    return 'Mutating Date.prototype did not throw';
   }
 
 
@@ -297,15 +373,12 @@ var RegExp;
       WeakMap.prototype.set(x, 86);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      logger.error('New symptom: ' +
-                   'Mutating WeakMap.prototype failed with ' + err);
-      return true;
+      return 'Mutating WeakMap.prototype failed with: ' + err;
     }
     var v = WeakMap.prototype.get(x);
-    if (v !== 86) {
-      logger.error('New symptom: Mutating WeakMap.prototype did not throw');
-    }
-    return true;
+    // Since x cannot escape, there's no observable damage to undo.
+    if (v === 86) { return true; }
+    return 'Mutating WeakMap.prototype did not throw';
   }
 
 
@@ -333,10 +406,8 @@ var RegExp;
       ['z'].forEach(function(){ Object.freeze(Array.prototype.forEach); });
       return false;
     } catch (err) {
-      if (!(err instanceof TypeError)) {
-        logger.error('New Symptom: freezing forEach failed with ' + err);
-      }
-      return true;
+      if (err instanceof TypeError) { return true; }
+      return 'freezing forEach failed with ' + err;
     }
   }
 
@@ -409,8 +480,7 @@ var RegExp;
     if (!derived.hasOwnProperty('foo') ||
         Object.getOwnPropertyDescriptor(derived, 'foo').get !== getter ||
         Object.getOwnPropertyNames(derived).indexOf('foo') < 0) {
-      logger.error('New symptom: ' +
-                   'Accessor properties partially inherit as own properties.');
+      return 'Accessor properties partially inherit as own properties.';
     }
     Object.defineProperty(base, 'bar', {get: getter, configurable: true});
     if (!derived.hasOwnProperty('bar') &&
@@ -418,9 +488,7 @@ var RegExp;
         Object.getOwnPropertyNames(derived).indexOf('bar') < 0) {
       return true;
     }
-    logger.error('New symptom: ' +
-                 'Accessor properties inherit as own even if configurable.');
-    return true;
+    return 'Accessor properties inherit as own even if configurable.';
   }
 
 
@@ -434,8 +502,7 @@ var RegExp;
     [2,3].sort(function(x,y) { that = this; return x - y; });
     if (that === void 0) { return false; }
     if (that !== global) {
-      logger.error('New symptom: ' +
-                   'sort called comparefn with "this" === ' + that);
+      return 'sort called comparefn with "this" === ' + that;
     }
     return true;
   }
@@ -452,8 +519,7 @@ var RegExp;
     'x'.replace(/x/, function() { that = this; return 'y';});
     if (that === void 0) { return false; }
     if (that !== global) {
-      logger.error('New symptom: replace called replaceValue function ' +
-                   'with "this" === ' + that);
+      return 'Replace called replaceValue function with "this" === ' + that;
     }
     return true;
   }
@@ -520,14 +586,10 @@ var RegExp;
       answer = has(function(){}, 'caller', 'strict_function');
     } catch (err) {
       if (err instanceof TypeError) { return true; }
-      logger.error('New symptom: ' +
-                   '("caller" in strict_func) failed with: ' + err);
-      return true;
+      return '("caller" in strict_func) failed with: ' + err;
     } finally {}
     if (answer) { return false; }
-    logger.error('New symptom: ' +
-                 '("caller" in strict_func) was false.');
-    return true;
+    return '("caller" in strict_func) was false.';
   }
 
   /**
@@ -545,14 +607,10 @@ var RegExp;
       answer = has(function(){}, 'arguments', 'strict_function');
     } catch (err) {
       if (err instanceof TypeError) { return true; }
-      logger.error('New symptom: ' +
-                   '("arguments" in strict_func) failed with: ' + err);
-      return true;
+      return '("arguments" in strict_func) failed with: ' + err;
     } finally {}
     if (answer) { return false; }
-    logger.error('New symptom: ' +
-                 '("arguments" in strict_func) was false.');
-    return true;
+    return '("arguments" in strict_func) was false.';
   }
 
   function has2(base, name, baseDesc) {
@@ -604,13 +662,11 @@ var RegExp;
       caller = testfn(foo);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      logger.error('New symptom: builtin "caller" failed with: ' + err);
-      return true;
+      return 'Built-in "caller" failed with: ' + err;
     }
     if (null === caller || void 0 === caller) { return false; }
     if (testfn === caller) { return true; }
-    logger.error('New symptom: Unexpected "caller": ' + caller);
-    return true;
+    return 'Unexpected "caller": ' + caller;
   }
 
   /**
@@ -633,8 +689,7 @@ var RegExp;
       args = testfn(foo);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      logger.error('New symptom: builtin "arguments" failed with: ' + err);
-      return true;
+      return 'Built-in "arguments" failed with: ' + err;
     }
     if (args === void 0 || args === null) { return false; }
     return true;
@@ -652,8 +707,7 @@ var RegExp;
       delete bar.caller;
     } catch (err) { }
     if (!has2(bar, 'caller', 'a bound function')) {
-      logger.error('New symptom: "caller" on bound functions can be deleted.');
-      return true;
+      return '"caller" on bound functions can be deleted.';
     }
     // using Function so it'll be non-strict
     var testfn = Function('f', 'return f();');
@@ -662,12 +716,10 @@ var RegExp;
       caller = testfn(bar);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      logger.error('New symptom: bound function "caller" failed with: ' + err);
-      return true;
+      return 'Bound function "caller" failed with: ' + err;
     }
     if ([testfn, void 0, null].indexOf(caller) >= 0) { return false; }
-    logger.error('New symptom: Unexpected "caller": ' + caller);
-    return true;
+    return 'Unexpected "caller": ' + caller;
   }
 
   /**
@@ -682,9 +734,7 @@ var RegExp;
       delete bar.arguments;
     } catch (err) { }
     if (!has2(bar, 'arguments', 'a bound function')) {
-      logger.error('New symptom: ' +
-                   '"arguments" on bound functions can be deleted.');
-      return true;
+      return '"arguments" on bound functions can be deleted.';
     }
     // using Function so it'll be non-strict
     var testfn = Function('f', 'return f();');
@@ -693,9 +743,7 @@ var RegExp;
       args = testfn(bar);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
-      logger.error('New symptom: ' +
-                   'bound function "arguments" failed with: ' + err);
-      return true;
+      return 'Bound function "arguments" failed with: ' + err;
     }
     if (args === void 0 || args === null) { return false; }
     return true;
@@ -715,23 +763,19 @@ var RegExp;
         // TypeError, as our repair below will cause it to do.
         return false;
       }
-      logger.error('New symptom: ' +
-                   'JSON.parse failed with: ' + err);
-      return true;
+      return 'JSON.parse failed with: ' + err;
     }
-    if (Object.getPrototypeOf(x) !== Object.prototype) {
-      return true;
-    }
-    if (!Array.isArray(x.__proto__)) {
-      logger.error('New symptom: JSON.parse did not set "__proto__" as ' +
-                   'a regular property');
-      return true;
-    }
-    return false;
+    if (Object.getPrototypeOf(x) !== Object.prototype) { return true; }
+    if (Array.isArray(x.__proto__)) { return false; }
+    return 'JSON.parse did not set "__proto__" as a regular property';
   }
 
+  ////////////////////// Repairs /////////////////////
+  //
+  // Each repair_NAME function exists primarily to repair the problem
+  // indicated by the corresponding test_NAME function. But other test
+  // failures can still trigger a given repair.
 
-  //////////////// END KLUDGE SWITCHES ///////////
 
   var call = Function.prototype.call;
   var apply = Function.prototype.apply;
@@ -818,31 +862,68 @@ var RegExp;
                      function fakeIsExtensible(obj) { return true; });
   }
 
+  /**
+   * Actual bound functions are not supposed to have a prototype, and
+   * are supposed to curry over both the [[Call]] and [[Construct]]
+   * behavior of their original function. However, in ES5,
+   * functions written in JavaScript cannot avoid having a 'prototype'
+   * property, and cannot reliably distinguish between being called as
+   * a function vs as a constructor, i.e., by {@code new}.
+   *
+   * <p>Since the repair_MISSING_BIND emulation below produces a bound
+   * function written in JavaScript, it cannot faithfully emulate
+   * either the lack of a 'prototype' property nor the currying of the
+   * [[Construct]] behavior. So instead, we use BOGUS_BOUND_PROTOTYPE
+   * to reliably give an error for attempts to {@code new} a bound
+   * function. Since we cannot avoid exposing BOGUS_BOUND_PROTOTYPE
+   * itself, it is possible to pass in a this-binding which inherits
+   * from it without using {@code new}, which will also trigger our
+   * error case. Whether this latter error is appropriate or not, it
+   * still fails safe.
+   *
+   * <p>By making the 'prototype' of the bound function be the same as
+   * the current {@code thisFunc.prototype}, we could have emulated
+   * the [[HasInstance]] property of bound functions. But even this
+   * would have been inaccurate, since we would be unable to track
+   * changes to the original {@code thisFunc.prototype}. (We cannot
+   * make 'prototype' into an accessor to do this tracking, since
+   * 'prototype' on a function written in JavaScript is
+   * non-configurable.) And this one partially faithful emulation
+   * would have come at the cost of no longer being able to reasonably
+   * detect construction, in order to safely reject it.
+   */
+  var BOGUS_BOUND_PROTOTYPE = {
+    toString: function() { return 'bogus bound prototype'; }
+  };
+  if (Object.freeze) {
+    Object.freeze(BOGUS_BOUND_PROTOTYPE);
+  }
+
   function repair_MISSING_BIND() {
     defProp(Function.prototype, 'bind', {
       value: function fakeBind(self, var_args) {
         var thisFunc = this;
         var leftArgs = slice.call(arguments, 1);
         function funcBound(var_args) {
+          if (this === Object(this) &&
+              Object.getPrototypeOf(this) === BOGUS_BOUND_PROTOTYPE) {
+            throw new TypeError(
+              'Cannot emulate "new" on pseudo-bound function.');
+          }
           var args = concat.call(leftArgs, slice.call(arguments, 0));
           return apply.call(thisFunc, self, args);
         }
-        try {
-          delete funcBound.prototype;
-          // ES5.1 section 15.3.5.2 specifies that a function
-          // instance's 'prototype' is non-configurable, so if we get
-          // here, that indicates another bug. We try anyway, because
-          // bound functions should not have a 'prototype', and this
-          // deletion currently works on Safari, which is the only
-          // major browser that still does not provide a built-in
-          // Function.prototype.bind.
-
-          // The failed delete case happens on current Chrome though,
-          // even though it does have a built-in
-          // Function.prototype.bind, since Chrome's built-in bind
-          // results in bound functions which leak 'arguments'. See
-          // test_BOUND_FUNCTION_LEAKS_ARGUMENTS.
-        } catch (err) {}
+        // We do this direct assignment first in case
+        // http://code.google.com/p/v8/issues/detail?id=1530
+        // See test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES above
+        // TODO(erights): investigate repairing this if needed by
+        // monkey patching Object.defineProperty.
+        funcBound.prototype = BOGUS_BOUND_PROTOTYPE;
+        defProp(funcBound, 'prototype', {
+          value: BOGUS_BOUND_PROTOTYPE,
+          writable: false,
+          configurable: false
+        });
         return funcBound;
       },
       writable: true,
@@ -1163,7 +1244,33 @@ var RegExp;
     });
   }
 
-  var kludges = [
+  ////////////////////// Kludge Records /////////////////////
+  //
+  // Each kludge record has a <ul>
+  // <li> description: a string describing the problem
+  // <li> test: a predicate testing for the presence of the problem
+  // <li> repair: a function which attempts repair, or undefined if no
+  //              repair is attempted for this problem
+  // <li> canRepairSafely: a boolean indicating "if the repair exists
+  //                       and the test subsequently does not detect a
+  //                       problem, are we SES-safe?" If there is no
+  //                       repair, then it indicates whether we are
+  //                       safe in the presence of the unrepaired
+  //                       problem.
+  // <li> urls: a list of URL strings, each of which points at a page
+  //            relevant for documenting or tracking the bug in
+  //            question. These are typically into bug-threads in
+  //            issue trackers for the various browsers.
+  // <li> sections: a list of strings, each of which is a relevant
+  //                ES5.1 section number.
+  // <li> tests: a list of strings, each of which is the name of a
+  //             relevant test262 or sputnik test case.
+  // </ul>
+  // These kludge records are the meta-data driving the testing and
+  // repairing.
+
+
+ var kludges = [
     {
       description: 'Global object leaks from global function calls',
       test: test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS,
@@ -1235,12 +1342,42 @@ var RegExp;
       tests: ['S15.10.6.2_A12']
     },
     {
+      description: 'A function.prototype\'s descriptor lies',
+      test: test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
+      repair: void 0,
+      canRepairSafely: false,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1530',
+             'http://code.google.com/p/v8/issues/detail?id=1570'],
+      sections: [],
+      tests: []
+    },
+    {
       description: 'Function.prototype.bind is missing',
       test: test_MISSING_BIND,
       repair: repair_MISSING_BIND,
       canRepairSafely: true,
-      urls: ['https://bugs.webkit.org/show_bug.cgi?id=26382'],
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=26382',
+             'https://bugs.webkit.org/show_bug.cgi?id=42371'],
       sections: ['15.3.4.5'],
+      tests: []
+    },
+    {
+      description: 'Function.prototype.bind calls .apply rather than [[Call]]',
+      test: test_BIND_CALLS_APPLY,
+      repair: repair_MISSING_BIND,
+      canRepairSafely: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=892',
+             'http://code.google.com/p/v8/issues/detail?id=828'],
+      sections: ['15.3.4.5.1'],
+      tests: []
+    },
+    {
+      description: 'Function.prototype.bind does not curry construction',
+      test: test_BIND_CANT_CURRY_NEW,
+      repair: void 0, // JS-based repair essentially impossible
+      canRepairSafely: true, // non-repair doesn't hurt safety
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=26382#c29'],
+      sections: ['15.3.4.5.2'],
       tests: []
     },
     {
@@ -1381,6 +1518,8 @@ var RegExp;
   ];
 
 
+  ////////////////////// Testing, Repairing, Reporting ///////////
+  //
   // first run all the tests before repairing anything
   // then repair all repairable failed tests
   // then run all the tests again, in case some repairs break other tests
@@ -1408,8 +1547,14 @@ var RegExp;
   kludges.forEach(function(kludge, i) {
     var status = '';
     var thisSeemsSafe = true;
-    if (beforeFailures[i]) { // failed before
-      if (afterFailures[i]) { // failed after
+    var beforeFailure = beforeFailures[i];
+    var beforeFailureStr = typeof beforeFailure === 'string' ?
+                    '\nNew pre symptom: ' + beforeFailure : '';
+    var afterFailure = afterFailures[i];
+    var afterFailureStr = typeof afterFailure === 'string' ?
+                      '\nNew post symptom: ' + afterFailure : '';;
+    if (beforeFailure) { // failed before
+      if (afterFailure) { // failed after
         if (kludge.repair) {
           thisSeemsSafe = false;
           status = 'Repair failed';
@@ -1424,15 +1569,19 @@ var RegExp;
           if (!kludge.canRepairSafely) {
             // repair for development, not safety
             thisSeemsSafe = false;
+            status = 'Repaired unsafely';
+          } else {
+            status = 'Repaired';
           }
-          status = 'Repaired';
         } else {
           status = 'Accidentally repaired';
         }
       }
     } else { // succeeded before
-      if (afterFailures[i]) { // failed after
-        thisSeemsSafe = false;
+      if (afterFailure) { // failed after
+        if (kludge.repair || !kludge.canRepairSafely) {
+          thisSeemsSafe = false;
+        } // else no repair + canRepairSafely -> problem isn't safety issue
         status = 'Broken by other attempted repairs';
       } else { // succeeded after
         // nothing to see here, move along
@@ -1449,7 +1598,8 @@ var RegExp;
     logger[level](i + ' ' + status + ': ' +
                   kludge.description + '. ' + note +
                   // TODO(erights): select most relevant URL based on platform
-                  (kludge.urls[0] ? 'See ' + kludge.urls[0] : ''));
+                  (kludge.urls[0] ? 'See ' + kludge.urls[0] : '') +
+                  beforeFailureStr + afterFailureStr);
   });
 
   // TODO(erights): If we arrive here with the platform still in a
