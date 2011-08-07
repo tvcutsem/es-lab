@@ -14,7 +14,16 @@
 
 /**
  * @fileoverview Make this frame SES-safe or die trying.
+ *
+ * <p>Assumes ES5 plus a WeakMap that conforms to the anticipated ES6
+ * WeakMap spec. Compatible with ES5-strict or anticipated ES6.
+ *
+ * @author Mark S. Miller,
+ * @requires ses, WeakMap
+ * @provides cajaVM
  */
+var ses;
+
 
 /**
  * The global {@code eval} function available to script code, which
@@ -105,10 +114,10 @@ var Function;
 var cajaVM;
 
 /**
- * <p>{@code startSES} should be called before any other potentially
+ * <p>{@code ses.startSES} should be called before any other potentially
  * dangerous script is executed in this frame.
  *
- * <p>If {@code startSES} succeeds, the evaluation operations on
+ * <p>If {@code ses.startSES} succeeds, the evaluation operations on
  * {@code cajaVM}, the global {@code Function} contructor, and perhaps
  * the {@code eval} function (see doc-comment on {@code eval} and
  * {@code cajaVM}) will only load code according to the <i>loader
@@ -133,14 +142,15 @@ var cajaVM;
  * presume to defend ourselves from a browser that is out to get us.
  *
  * @param global ::Record(any) Assumed to be the real global object
- *        for this frame. Since startSES will allow global variable
- *        references that appear at the top level of the whitelist,
- *        our safety depends on these variables being frozen as a side
- *        effect of freezing the corresponding properties of
- *        <tt>global</tt>. These properties are also duplicated onto
- *        the virtual global objects which are provided as the
- *        <tt>this</tt> binding for the safe evaluation calls --
- *        emulating the safe subset of the normal global object.
+ *        for this frame. Since {@code ses.startSES} will allow global
+ *        variable references that appear at the top level of the
+ *        whitelist, our safety depends on these variables being
+ *        frozen as a side effect of freezing the corresponding
+ *        properties of <tt>global</tt>. These properties are also
+ *        duplicated onto the virtual global objects which are
+ *        provided as the <tt>this</tt> binding for the safe
+ *        evaluation calls -- emulating the safe subset of the normal
+ *        global object.
  * @param whitelist ::Record(Permit) where Permit = true | "*" |
  *        "skip" | Record(Permit).  Describes the subset of naming
  *        paths starting from the root that should be accessible. The
@@ -166,8 +176,14 @@ var cajaVM;
  *        (currently only Firefox 4 and after), use {@code
  *        with(aProxy) {...}} to intercept free variables rather than
  *        atLeastFreeVarNames.
+ * @param extensions ::F([], Record(any)]) A function returning a
+ *        record whose own properties will be copied onto cajaVM. This
+ *        is used for the optional components which bring SES to
+ *        feature parity with the ES5/3 runtime at the price of larger
+ *        code size. This function is called when cajaVM exists but
+ *        before it is frozen, so that it can use cajaVM.def.
  */
-function startSES(global, whitelist, atLeastFreeVarNames) {
+ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   "use strict";
 
 
@@ -241,14 +257,12 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
      * <p>We use Crock's trick of simply passing {@code programSrc} to
      * the original {@code Function} constructor, which will throw a
      * SyntaxError if it does not parse as a FunctionBody. We used to
-     * use <a href=
- * "http://code.google.com/p/es-lab/source/browse/trunk/src/ses/startSES.js#152"
-     * >Ankur's trick</a> which is more correct, in that it will throw
-     * if {@code programSrc} does not parse as a Program production,
-     * which is the relevant question. However, the difference --
-     * whether return statements are accepted -- does not matter for
-     * our purposes. And testing reveals that Crock's trick executes
-     * over 100x faster on V8.
+     * use Ankur's trick (need link) which is more correct, in that it
+     * will throw if {@code programSrc} does not parse as a Program
+     * production, which is the relevant question. However, the
+     * difference -- whether return statements are accepted -- does
+     * not matter for our purposes. And testing reveals that Crock's
+     * trick executes over 100x faster on V8.
      */
     function verifyStrictProgram(programSrc) {
       UnsafeFunction('"use strict";' + programSrc);
@@ -406,10 +420,9 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
     var directivePattern = (/^['"](?:\w|\s)*['"]$/m);
 
     /**
-     * TODO(erights): Examine Ihab's question at
-     * http://codereview.appspot.com/4249052/diff/37002/src/com/google/caja/ses/startSES.js#newcode467
+     * A stereotyped form of the CommonJS require statement.
      */
-    var requirePattern = (/^(?:\w*\s*(?:\w|\$|\.)*\s*=\s*)?\s*require\s*\(\s*['"]((?:\w|\$|\.|\/)+)['"]\s*\)$/m);
+    var requirePattern = (/^(?:\w*\s*(?:\w|\$|\.)*\s*=)?\s*require\s*\(\s*['"]((?:\w|\$|\.|\/)+)['"]\s*\)$/m);
 
     /**
      * As an experiment, recognize a stereotyped prelude of the
@@ -583,6 +596,11 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
       eval: fakeEval,
       Function: FakeFunction
     };
+    var extensionsRecord = extensions();
+    Object.getOwnPropertyNames(extensionsRecord).forEach(function (p) {
+      Object.defineProperty(cajaVM, p,
+          Object.getOwnPropertyDescriptor(extensionsRecord, p));
+    });
 
   })();
 
@@ -593,11 +611,11 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
    * a data property to ensure that all further reads of that same
    * property from that base produce the same value.
    *
-   * <p>The algorithms in startSES traverse the graph of primordials
-   * multiple times. These algorithms rely on all these traversals
-   * seeing the same graph. By freezing these as data properties the
-   * first time they are read, we ensure that all traversals see the
-   * same graph.
+   * <p>The algorithms in {@code ses.startSES} traverse the graph of
+   * primordials multiple times. These algorithms rely on all these
+   * traversals seeing the same graph. By freezing these as data
+   * properties the first time they are read, we ensure that all
+   * traversals see the same graph.
    *
    * <p>The frozen property should preserve the enumerability of the
    * original property.
@@ -791,4 +809,4 @@ function startSES(global, whitelist, atLeastFreeVarNames) {
   // We succeeded. Enable safe Function, eval, and compile to work.
   cajaVM.log('success');
   dirty = false;
-}
+};

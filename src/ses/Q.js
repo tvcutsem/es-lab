@@ -16,17 +16,21 @@
  * Implementation of
  * http://wiki.ecmascript.org/doku.php?id=strawman:concurrency
  *
- * <p>Assumes ES5-strict. Compatible with both ES5-strict or SES. When
- * run on SES, has specified security properties.
+ * <p>Assumes ES5 plus WeakMap. Compatible with both ES5-strict or
+ * SES. When run on SES, has specified security properties.
  *
  * @author Mark S. Miller.
  *         Based on the Q API by Tyler Close with refinements by Kris Kowal.
  *         Implementation based on an idea of Marc Lentczner.
+ * @requires WeakMap, cajaVM?
+ * @provides Q
  */
 var Q;
 
 (function(){
    "use strict";
+
+   if (typeof WeakMap === 'undefined' || !WeakMap) { return; }
 
    var def = typeof cajaVM === 'undefined' ? Object.freeze : cajaVM.def;
    var apply = Function.prototype.apply;
@@ -348,7 +352,7 @@ var Q;
    /**
     * Meant to be curried with our local REPL's print function.
     *
-    * For example, <pre>
+    * <p>For example, <pre>
     *   var sh = Q.show.bind(void 0, console.log.bind(console));
     * </pre>
     */

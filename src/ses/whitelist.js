@@ -13,11 +13,21 @@
 // limitations under the License.
 
 /**
- * @fileoverview Exports "whitelist", a recursively defined JSON
- * record enumerating all the naming paths in the ES5.1 spec, those
- * de-facto extensions that we judge to be safe, and SES and Dr. SES
- * extensions provided by the SES runtime.
+ * @fileoverview Exports {@code ses.whitelist}, a recursively defined
+ * JSON record enumerating all the naming paths in the ES5.1 spec,
+ * those de-facto extensions that we judge to be safe, and SES and
+ * Dr. SES extensions provided by the SES runtime.
  *
+ * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
+ * anticipated ES6.
+ *
+ * @author Mark S. Miller,
+ * @requires ses?
+ * @provides ses.whitelist
+ */
+var ses;
+
+/**
  * <p>Each JSON record enumerates the disposition of the properties on
  * some corresponding primordial object, with the root record
  * representing the global object. For each such record, the values
@@ -96,21 +106,36 @@
  * {@code t} and {@code s} just to get a bit better compression from
  * simple minifiers.
  */
-var whitelist;
-
 (function() {
   "use strict";
 
+  if (!ses) { ses = {}; }
+
   var t = true;
   var s = 'skip';
-  whitelist = {
+  ses.whitelist = {
     cajaVM: {                        // Caja support
       log: t,
       def: t,
       compile: t,
       compileModule: t,              // experimental
       eval: t,
-      Function: t
+      Function: t,
+
+      callWithEjector: t,
+      eject: t,
+      GuardT: {
+        coerce: t
+      },
+      makeTableGuard: t,
+      Trademark: {
+        stamp: t
+      },
+      guard: t,
+      passesGuard: t,
+      stamp: t,
+      makeSealerUnsealerPair: t
+
     },
     WeakMap: {       // ES-Harmony proposal as currently implemented by FF6.0a1
       prototype: {

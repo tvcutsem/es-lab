@@ -20,7 +20,8 @@
  * anticipated ES6.
  *
  * @author Mark S. Miller
- * @requires ses.ok, ses.startSES, ses.whitelist, ses.atLeastFreeVarNames
+ * @requires ses.ok, ses.startSES, ses.whitelist, ses.atLeastFreeVarNames,
+ *           ses.ejectorsGuardsTrademarks
  * @provides cajaVM
  */
 var ses;
@@ -35,5 +36,5 @@ var ses;
   ses.startSES(global,
                ses.whitelist,
                ses.atLeastFreeVarNames,
-               function () { return {}; });
+               ses.ejectorsGuardsTrademarks);
 })(this);

@@ -196,4 +196,20 @@ value[name]}catch(x){success=false}success?goodDeletions.push(path):badDeletions
 reportDiagnosis(desc,problemList){return problemList.length===0?false:(cajaVM.log(desc+': '+problemList.sort().join(' ')),true)}reportDiagnosis('Deleted',goodDeletions),cantNeuter.length>=1&&(complaint=cantNeuter.map(function(p){var
 desc=Object.getOwnPropertyDescriptor(p.base,p.name);return desc?p.name+'('+p.err+'): '+Object.getOwnPropertyNames(desc).map(function(attrName){var
 v=desc[attrName];return v===Object(v)&&(v='a '+typeof v),attrName+': '+v}).join(', '):'  Missing '+p.name}),reportDiagnosis('Cannot neuter',complaint));if(reportDiagnosis('Cannot delete',badDeletions))throw new
-Error('Consult JS console log for deletion failures');cajaVM.log('success'),dirty=false},(function(global){'use strict';if(!ses.ok())return;ses.startSES(global,ses.whitelist,ses.atLeastFreeVarNames,function(){return{}})})(this)}
+Error('Consult JS console log for deletion failures');cajaVM.log('success'),dirty=false},(function(){'use strict';ses.ejectorsGuardsTrademarks=function
+ejectorsGuardsTrademarks(){var GuardMark,GuardStamp,GuardT,stampers;function Token(name){return name=''+name,cajaVM.def({'toString':function
+tokenToString(){return name}})}function callWithEjector(attemptFunc,opt_failFunc){var
+failFunc=opt_failFunc||function(x){return x},disabled=false,token=new Token('ejection'),stash=void
+0;function ejector(result){throw disabled?new Error('ejector disabled'):(stash=result,token)}cajaVM.def(ejector);try{try{return attemptFunc(ejector)}finally{disabled=true}}catch(e){if(e===token)return failFunc(stash);throw e}}function
+eject(opt_ejector,result){throw opt_ejector?(opt_ejector(result),new Error('Ejector did not exit: ',opt_ejector)):new
+Error(result)}function makeSealerUnsealerPair(){var boxValues=new WeakMap(true);function
+seal(value){var box={};return boxValues.set(box,value),box}function optUnseal(box){return boxValues.has(box)?[boxValues.get(box)]:null}function
+unseal(box){var result=optUnseal(box);if(result===null)throw new Error('That wasn\'t one of my sealed boxes!');return result[0]}return cajaVM.def({'seal':seal,'unseal':unseal,'optUnseal':optUnseal})}stampers=new
+WeakMap(true);function makeTrademark(typename,table){var stamp;return typename=''+typename,stamp={'toString':function(){return typename+'Stamp'}},stampers.set(stamp,cajaVM.def(function(obj){return table.set(obj,true),obj})),cajaVM.def({'toString':function(){return typename+'Mark'},'stamp':stamp,'guard':{'toString':function(){return typename+'T'},'coerce':function(specimen,opt_ejector){if(table.get(specimen))return specimen;eject(opt_ejector,'Specimen does not have the \"'+typename+'\" trademark')}}})}GuardMark=makeTrademark('Guard',new
+WeakMap),GuardT=GuardMark.guard,GuardStamp=GuardMark.stamp,stampers.get(GuardStamp)(GuardT);function
+Trademark(typename){var result=makeTrademark(typename,new WeakMap);return stampers.get(GuardStamp)(result.guard),cajaVM.def(result),result}function
+stamp(stamps,record){var i,numStamps;if(Object.isFrozen(record))throw new TypeError('Can\'t stamp frozen objects: '+record);stamps=Array.prototype.slice.call(stamps,0),numStamps=stamps.length;for(i=0;i<numStamps;++i)if(!stampers.has(stamps[i]))throw new
+TypeError('Can\'t stamp with a non-stamp: '+stamps[i]);for(i=0;i<numStamps;++i)stampers.get(stamps[i])(record);return Object.freeze(record)}function
+guard(g,specimen,opt_ejector){return g=GuardT.coerce(g),g.coerce(specimen,opt_ejector)}function
+passesGuard(g,specimen){return g=GuardT.coerce(g),callWithEjector(Object.freeze(function(opt_ejector){return g.coerce(specimen,opt_ejector),true}),Object.freeze(function(ignored){return false}))}function
+makeTableGuard(table,typename,errorMessage){var g={'toString':function(){return typename+'T'},'coerce':function(specimen,opt_ejector){if(table.get(specimen))return specimen;eject(opt_ejector,errorMessage)}};return stamp([GuardStamp],g),cajaVM.def(g)}return{'callWithEjector':callWithEjector,'eject':eject,'makeSealerUnsealerPair':makeSealerUnsealerPair,'GuardT':GuardT,'makeTableGuard':makeTableGuard,'Trademark':Trademark,'guard':guard,'passesGuard':passesGuard,'stamp':stamp}}})(),(function(global){'use strict';if(!ses.ok())return;ses.startSES(global,ses.whitelist,ses.atLeastFreeVarNames,ses.ejectorsGuardsTrademarks)})(this)}

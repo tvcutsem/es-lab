@@ -24,6 +24,8 @@
 <body>
 <div id="show1">test1...</div>
 <div id="show2">test2...</div>
+<script>var ses = {maxAcceptableSeverityName: 'NEW_SYMPTOM'};</script>
+<script src="logger.js"></script>
 <script src="repairES5.js"></script>
 <script src="WeakMap.js"></script>
 <script src="whitelist.js"></script>
@@ -36,9 +38,7 @@
     "use strict";
     var show1 = document.getElementById('show1');
     var show2 = document.getElementById('show2');
-    if (!('getOwnPropertyNames' in Object)) {
-      alert('Please upgrade to a browser implementing ' +
-            'Object.getOwnPropertyNames.');
+    if (!ses.ok()) {
       show1.appendChild(document.createTextNode('cancelled'));
       show2.appendChild(document.createTextNode('cancelled'));
       return;
