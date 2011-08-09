@@ -776,14 +776,17 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   }
   clean(root, '');
 
-  function reportDiagnosis(desc, problemList) {
-    if (problemList.length === 0) { return false; }
-    cajaVM.log(desc + ': ' + problemList.sort().join(' '));
-    return true;
+  function diagnose(severity, desc, problemList) {
+    if (problemList.length >= 1) {
+      ses.logger.reportDiagnosis(severity, desc, problemList);
+      if (severity.level > ses.maxSeverity.level) {
+        ses.maxSeverity = severity.level;
+      }
+    }
   }
 
-  //reportDiagnosis('Skipped', skipped);
-  reportDiagnosis('Deleted', goodDeletions);
+  //diagnose(ses.severities.SAFE, 'Skipped', skipped);
+  diagnose(ses.severities.SAFE, 'Deleted', goodDeletions);
 
   if (cantNeuter.length >= 1) {
     var complaint = cantNeuter.map(function(p) {
@@ -799,14 +802,16 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         }).join(', ');
 
     });
-    reportDiagnosis('Cannot neuter', complaint);
+    diagnose(ses.severities.NEW_SYMPTOM, 'Cannot neuter', complaint);
   }
 
-  if (reportDiagnosis('Cannot delete', badDeletions)) {
-    throw new Error('Consult JS console log for deletion failures');
-  }
+  diagnose(ses.severities.NEW_SYMPTOM, 'Cannot delete', badDeletions);
 
-  // We succeeded. Enable safe Function, eval, and compile to work.
-  cajaVM.log('success');
-  dirty = false;
+  if (ses.ok()) {
+    // We succeeded. Enable safe Function, eval, and compile to work.
+    dirty = false;
+    ses.logger.log('initSES succeeded.');
+  } else {
+    ses.logger.error('initSES failed.');
+  }
 };

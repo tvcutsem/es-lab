@@ -16,11 +16,14 @@
  * @fileoverview Exports a {@code ses.logger} which logs to the
  * console if one exists.
  *
+ * <p>For better diagnostics, consider loading and initializing
+ * <tt>htmlLogger.js</tt> first.
+ *
  * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
  * anticipated ES6.
  *
  * @author Mark S. Miller
- * @requires ses?, ses.logger?, ses.logger.reportRepairs?
+ * @requires ses?, ses.logger?
  *           ses.severities, ses.maxSeverity, ses.maxAcceptableSeverity,
  *           ses.statuses
  * @provides ses.logger
@@ -73,57 +76,68 @@ if (!ses) { ses = {}; }
   }
 
   /**
+   * Returns a record that's helpful for displaying a severity.
+   *
+   * <p>The record contains {@code consoleLevel} and {@code note}
+   * properties whose values are strings. The {@code consoleLevel} is
+   * {@code "log", "info", "warn", or "error"}, which can be used as
+   * method names for {@code logger}, or, in an html context, as a css
+   * class name. The {@code note} is a string stating the severity
+   * level and its consequences for SES.
+   */
+  function defaultClassify(postSeverity) {
+    var MAX_SES_SAFE = ses.severities.SAFE_SPEC_VIOLATION;
+
+    var consoleLevel = 'log';
+    var note = '';
+    if (postSeverity.level > ses.severities.SAFE.level) {
+      consoleLevel = 'info';
+      note = postSeverity.description + '(' + postSeverity.level + ')';
+      if (postSeverity.level > ses.maxAcceptableSeverity.level) {
+        consoleLevel = 'error';
+        note += ' is not suitable for SES';
+      } else if (postSeverity.level > MAX_SES_SAFE.level) {
+        consoleLevel = 'warn';
+        note += ' is not SES-safe';
+      }
+      note += '.';
+    }
+    return {
+      consoleLevel: consoleLevel,
+      note: note
+    };
+  }
+
+  if (!logger.classify) {
+    logger.classify = defaultClassify;
+  }
+
+  /**
    * By default, logs a report suitable for display on the console.
    */
   function defaultReportRepairs(reports) {
-    var MAX_SES_SAFE = ses.severities.SAFE_SPEC_VIOLATION;
-
-    reports.forEach(function(report, i) {
-      if (report.status === ses.statuses.ALL_FINE) { return; }
-
-      var beforeFailureStr = typeof report.beforeFailure === 'string' ?
-                        '\nNew pre symptom: ' + report.beforeFailure : '';
-
-      var afterFailureStr = typeof report.afterFailure === 'string' ?
-                        '\nNew post symptom: ' + report.afterFailure : '';
-      var note = '';
-      var level = 'info';
-      if (report.postSeverity.level > ses.maxAcceptableSeverity.level) {
-        level = 'error';
-        note = 'This platform is not suitable for SES. ';
-      } else if (report.postSeverity.level > MAX_SES_SAFE.level) {
-        level = 'warn';
-        note = 'This platform is not SES-safe. ';
-      }
-      logger[level](i + '(' + report.postSeverity.level + ') ' +
-                    report.status + ': ' +
-                    report.description + '. ' + note +
-                    // TODO(erights): select most relevant URL based
-                    // on platform
-                    (report.urls[0] ? 'See ' + report.urls[0] : '') +
-                    beforeFailureStr + afterFailureStr);
-    });
-
-    var maxLevel = 'info';
-    var maxNote = 'is SES-safe';
-    if (!ses.ok()) {
-      maxLevel = 'error';
-      maxNote = 'is not suitable for SES';
-    } else if (ses.maxSeverity.level > MAX_SES_SAFE.level) {
-      maxLevel = 'warn';
-      maxNote = 'is not SES-safe';
+    if (ses.maxSeverity.level > ses.severities.SAFE.level) {
+      var maxClassification = ses.logger.classify(ses.maxSeverity);
+      logger[maxClassification.consoleLevel](
+        'Max Severity: ' + maxClassification.note);
     }
-    logger[maxLevel]('Max Severity(' + ses.maxSeverity.level + '): "' +
-                     ses.maxSeverity.description + '" ' + maxNote + '.');
-
   };
 
   if (!logger.reportRepairs) {
     logger.reportRepairs = defaultReportRepairs;
   }
 
-  ses.logger = logger;
+  function defaultReportDiagnosis(severity, desc, problemList) {
+    var classification = ses.logger.classify(severity);
+    ses.logger[classification.consoleLevel](
+      desc + ' ' + problemList.length);
+  }
 
+  if (!logger.reportDiagnosis) {
+    logger.reportDiagnosis = defaultReportDiagnosis;
+  }
+
+  ses.logger = logger;
 })();
 // Copyright (C) 2011 Google Inc.
 //
@@ -195,7 +209,7 @@ var ses;
  * need to revisit this when we support Confined-ES5, as a variant of
  * SES in which the primordials are not frozen.
  */
-(function repairES5(global) {
+(function(global) {
   "use strict";
 
   /**
@@ -1802,8 +1816,8 @@ var ses;
       repair: void 0,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: false,
-      urls: [],
-      sections: [],
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832'],
+      sections: ['8.6.2'],
       tests: []
     }
   ];
@@ -1897,28 +1911,33 @@ var ses;
         }
       }
 
+      if (typeof beforeFailure === 'string' ||
+          typeof afterFailure === 'string') {
+        postSeverity = severities.NEW_SYMPTOM;
+      }
+
       if (postSeverity.level > ses.maxSeverity.level) {
         ses.maxSeverity = postSeverity;
       }
 
       return {
-        description:  kludge.description,
-        preSeverity:  kludge.preSeverity,
-        canRepair:    kludge.canRepair,
-        urls:         kludge.urls,
-        sections:     kludge.sections,
-        tests:        kludge.tests,
-        status:       status,
-        postSeverity: postSeverity,
-        beforeFailue: beforeFailure,
-        afterFailure: afterFailure
+        description:   kludge.description,
+        preSeverity:   kludge.preSeverity,
+        canRepair:     kludge.canRepair,
+        urls:          kludge.urls,
+        sections:      kludge.sections,
+        tests:         kludge.tests,
+        status:        status,
+        postSeverity:  postSeverity,
+        beforeFailure: beforeFailure,
+        afterFailure:  afterFailure
       };
     });
   }
 
   var reports = testRepairReport(baseKludges);
   if (ses.ok()) {
-    reports = testRepairReport(supportedKludges);
+    reports.push.apply(reports, testRepairReport(supportedKludges));
   }
   logger.reportRepairs(reports);
 
@@ -3632,14 +3651,17 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   }
   clean(root, '');
 
-  function reportDiagnosis(desc, problemList) {
-    if (problemList.length === 0) { return false; }
-    cajaVM.log(desc + ': ' + problemList.sort().join(' '));
-    return true;
+  function diagnose(severity, desc, problemList) {
+    if (problemList.length >= 1) {
+      ses.logger.reportDiagnosis(severity, desc, problemList);
+      if (severity.level > ses.maxSeverity.level) {
+        ses.maxSeverity = severity.level;
+      }
+    }
   }
 
-  //reportDiagnosis('Skipped', skipped);
-  reportDiagnosis('Deleted', goodDeletions);
+  //diagnose(ses.severities.SAFE, 'Skipped', skipped);
+  diagnose(ses.severities.SAFE, 'Deleted', goodDeletions);
 
   if (cantNeuter.length >= 1) {
     var complaint = cantNeuter.map(function(p) {
@@ -3655,16 +3677,18 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         }).join(', ');
 
     });
-    reportDiagnosis('Cannot neuter', complaint);
+    diagnose(ses.severities.NEW_SYMPTOM, 'Cannot neuter', complaint);
   }
 
-  if (reportDiagnosis('Cannot delete', badDeletions)) {
-    throw new Error('Consult JS console log for deletion failures');
-  }
+  diagnose(ses.severities.NEW_SYMPTOM, 'Cannot delete', badDeletions);
 
-  // We succeeded. Enable safe Function, eval, and compile to work.
-  cajaVM.log('success');
-  dirty = false;
+  if (ses.ok()) {
+    // We succeeded. Enable safe Function, eval, and compile to work.
+    dirty = false;
+    ses.logger.log('initSES succeeded.');
+  } else {
+    ses.logger.error('initSES failed.');
+  }
 };
 // Copyright (C) 2011 Google Inc.
 //

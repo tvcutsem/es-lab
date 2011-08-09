@@ -20,11 +20,38 @@
 <html>
 <head>
 <title>Testing SES/5</title>
+<style type="text/css">
+<!--
+.log { color: black }
+.info { color: navy }
+.warn { color: olive }
+.error { color: maroon }
+-->
+</style>
 </head>
 <body>
+<div id="reports"><b>Repair Reports</b></div>
+<div id="console"><hr></hr></div>
 <div id="show1">test1...</div>
 <div id="show2">test2...</div>
-<script>var ses = {maxAcceptableSeverityName: 'NEW_SYMPTOM'};</script>
+<script src="htmlLogger.js"></script>
+<script>
+  function gebi(id) { 
+    var result = document.getElementById(id); 
+    return result;
+  };
+  htmlLogger(gebi("reports"), gebi("console"));
+  ses.maxAcceptableSeverityName = 'NOT_OCAP_SAFE';
+</script>
+<!--
+The <script src=... tags below, from "logger.js" to "hookupSES.js", is 
+  equivalent to <script src="initSES.js"></script>, but is more 
+  pleasant to debug.
+
+The <script src="htmlLogger.js"> and the inline script above advises 
+  the scripts below, overriding the default logger, and overriding the
+  default maxAcceptableSeverityName.
+-->
 <script src="logger.js"></script>
 <script src="repairES5.js"></script>
 <script src="WeakMap.js"></script>
@@ -32,20 +59,20 @@
 <script src="atLeastFreeVarNames.js"></script>
 <script src="startSES.js"></script>
 <script src="hookupSES.js"></script>
-<script src="Q.js"></script>
 <script>
   (function() {
     "use strict";
-    var show1 = document.getElementById('show1');
-    var show2 = document.getElementById('show2');
+    var show1 = gebi('show1');
+    var show2 = gebi('show2');
     if (!ses.ok()) {
       show1.appendChild(document.createTextNode('cancelled'));
       show2.appendChild(document.createTextNode('cancelled'));
       return;
     }
 
-    var output = eval('3+4') * cajaVM.compile('window')({window: 6});
-    show1.appendChild(document.createTextNode(output));
+    var output = cajaVM.eval('3+4') * cajaVM.compile('window')({window: 6});
+    var text1 = output === 42 ? 'succeeded' : 'failed: ' + output;
+    show1.appendChild(document.createTextNode(text1));
 
     // Test ability to bootstrap support for a limited form of
     // CommonJS modules. 
@@ -58,12 +85,18 @@
       require: function(id) { return { foo: 88, id: id}; }, 
       exports: exported
     });
-    var txt = JSON.stringify(cajaVM.def({
+    var did = JSON.stringify(cajaVM.def({
       required: required,
       exported: exported, 
       returned: returned
-    }), undefined, ' ');
-    show2.appendChild(document.createTextNode(txt));
+    }), void 0, ' ');
+    var should = JSON.stringify({ 
+      "required": [ "foo.bar/baz" ], 
+      "exported": { "x": { "foo": 88, "id": "foo.bar/baz" } }, 
+      "returned": 77 
+    }, void 0, ' ');
+    var text2 = did === should ? 'succeeded' : 'failed: ' + did;
+    show2.appendChild(document.createTextNode(text2));
   })();
 </script>
 </body>

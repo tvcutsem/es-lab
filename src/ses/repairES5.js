@@ -68,7 +68,7 @@ var ses;
  * need to revisit this when we support Confined-ES5, as a variant of
  * SES in which the primordials are not frozen.
  */
-(function repairES5(global) {
+(function(global) {
   "use strict";
 
   /**
@@ -1675,8 +1675,8 @@ var ses;
       repair: void 0,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: false,
-      urls: [],
-      sections: [],
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832'],
+      sections: ['8.6.2'],
       tests: []
     }
   ];
@@ -1770,28 +1770,33 @@ var ses;
         }
       }
 
+      if (typeof beforeFailure === 'string' ||
+          typeof afterFailure === 'string') {
+        postSeverity = severities.NEW_SYMPTOM;
+      }
+
       if (postSeverity.level > ses.maxSeverity.level) {
         ses.maxSeverity = postSeverity;
       }
 
       return {
-        description:  kludge.description,
-        preSeverity:  kludge.preSeverity,
-        canRepair:    kludge.canRepair,
-        urls:         kludge.urls,
-        sections:     kludge.sections,
-        tests:        kludge.tests,
-        status:       status,
-        postSeverity: postSeverity,
-        beforeFailue: beforeFailure,
-        afterFailure: afterFailure
+        description:   kludge.description,
+        preSeverity:   kludge.preSeverity,
+        canRepair:     kludge.canRepair,
+        urls:          kludge.urls,
+        sections:      kludge.sections,
+        tests:         kludge.tests,
+        status:        status,
+        postSeverity:  postSeverity,
+        beforeFailure: beforeFailure,
+        afterFailure:  afterFailure
       };
     });
   }
 
   var reports = testRepairReport(baseKludges);
   if (ses.ok()) {
-    reports = testRepairReport(supportedKludges);
+    reports.push.apply(reports, testRepairReport(supportedKludges));
   }
   logger.reportRepairs(reports);
 
