@@ -41,7 +41,8 @@
     return result;
   };
   htmlLogger(gebi("reports"), gebi("console"));
-  ses.maxAcceptableSeverityName = 'NOT_OCAP_SAFE';
+  // This severity is too high for any use other than development.
+  ses.maxAcceptableSeverityName = 'NEW_SYMPTOM';
 </script>
 <!--
 The <script src=... tags below, from "logger.js" to "hookupSES.js", is 

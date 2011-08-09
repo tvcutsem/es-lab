@@ -132,6 +132,8 @@ var ses;
   };
 
 
+  var logger = ses.logger;
+
   /**
    * As we start to repair, this will track the worst post-repair
    * severity seen so far.
@@ -155,7 +157,18 @@ var ses;
    * <p>If {@code ses.maxAcceptableSeverityName} is set, it must be set
    * below {@code ses.NOT_SUPPORTED}.
    */
-  if (!ses.maxAcceptableSeverityName) {
+  if (ses.maxAcceptableSeverityName) {
+    var maxSev = ses.severities[ses.maxAcceptableSeverityName];
+    if (maxSev && typeof maxSev.level === 'number' &&
+        maxSev.level >= ses.severities.SAFE.level &&
+        maxSev.level < ses.severities.NOT_SUPPORTED.level) {
+      // do nothing
+    } else {
+      logger.error('Ignoring bad maxAcceptableSeverityName: ' +
+                   ses.maxAcceptableSeverityName + '.') ;
+      ses.maxAcceptableSeverityName = 'SAFE_SPEC_VIOLATION';
+    }
+  } else {
     ses.maxAcceptableSeverityName = 'SAFE_SPEC_VIOLATION';
   }
   ses.maxAcceptableSeverity = ses.severities[ses.maxAcceptableSeverityName];
@@ -167,9 +180,6 @@ var ses;
   ses.ok = function() {
     return ses.maxSeverity.level <= ses.maxAcceptableSeverity.level;
   };
-
-
-  var logger = ses.logger;
 
   ////////////////////// Tests /////////////////////
   //
@@ -305,7 +315,11 @@ var ses;
     if (deletion) {
       return 'Deletion of RegExp.leftContext did not succeed.';
     } else {
-      return 'Deletion of RegExp.leftContext failed.';
+      // This case happens on IE10preview2, indicating another bug: a
+      // strict delete should never return false. A failed strict
+      // delete should throw a TypeError. TODO(erights): check that
+      // this bug shows up in test262, or, if not, report it.
+      return true;
     }
   }
 
@@ -554,7 +568,15 @@ var ses;
    *
    * <p>This kludge seems to be safety preserving, but the issues are
    * delicate and not well understood.
-   */
+   *
+   * <p>As support for Domado, it is possible to override this
+   * restriction by adding the flag
+   * "ses_ignoreBug_propertyWillAppearAsOwn" to the property
+   * descriptor. We assume that applying JSON.stringify to DOM nodes
+   * is not interesting. TODO(kpreid): But does the general
+   * possibility of creating objects which if inherited from create
+   * apparent own properties on their children break any security
+    */
   function test_ACCESSORS_INHERIT_AS_OWN() {
     var base = {};
     var derived = Object.create(base);
@@ -604,8 +626,16 @@ var ses;
    */
   function test_REPLACE_LEAKS_GLOBAL() {
     var that = 'dummy';
-    'x'.replace(/x/, function() { that = this; return 'y';});
+    function capture() { that = this; return 'y';}
+    'x'.replace(/x/, capture);
     if (that === void 0) { return false; }
+    if (that === capture) {
+      // This case happens on IE10preview2, indicating another
+      // bug. TODO(erights): report it.
+      // TODO(erights): When this happens, the kludge description is
+      // wrong.
+      return true;
+    }
     if (that !== global) {
       return 'Replace called replaceValue function with "this" === ' + that;
     }
@@ -1215,7 +1245,8 @@ var ses;
 
           if ('get' in fullDesc &&
               fullDesc.enumerable &&
-              !fullDesc.configurable) {
+              !fullDesc.configurable &&
+              !desc.ses_ignoreBug_propertyWillAppearAsOwn) {
             logger.warn(complaint);
             throw new TypeError(complaint);
           }
