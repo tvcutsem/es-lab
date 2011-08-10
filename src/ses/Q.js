@@ -22,7 +22,7 @@
  * @author Mark S. Miller.
  *         Based on the Q API by Tyler Close with refinements by Kris Kowal.
  *         Implementation based on an idea of Marc Lentczner.
- * @requires WeakMap, cajaVM?
+ * @requires WeakMap, cajaVM
  * @provides Q
  */
 var Q;

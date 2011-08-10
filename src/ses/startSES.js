@@ -19,8 +19,8 @@
  * WeakMap spec. Compatible with ES5-strict or anticipated ES6.
  *
  * @author Mark S. Miller,
- * @requires ses, WeakMap
- * @provides cajaVM
+ * @requires WeakMap
+ * @overrides ses, console, eval, Function, cajaVM
  */
 var ses;
 
@@ -146,9 +146,9 @@ var cajaVM;
  *        variable references that appear at the top level of the
  *        whitelist, our safety depends on these variables being
  *        frozen as a side effect of freezing the corresponding
- *        properties of <tt>global</tt>. These properties are also
+ *        properties of {@code global}. These properties are also
  *        duplicated onto the virtual global objects which are
- *        provided as the <tt>this</tt> binding for the safe
+ *        provided as the {@code this} binding for the safe
  *        evaluation calls -- emulating the safe subset of the normal
  *        global object.
  * @param whitelist ::Record(Permit) where Permit = true | "*" |
@@ -180,8 +180,15 @@ var cajaVM;
  *        record whose own properties will be copied onto cajaVM. This
  *        is used for the optional components which bring SES to
  *        feature parity with the ES5/3 runtime at the price of larger
- *        code size. This function is called when cajaVM exists but
- *        before it is frozen, so that it can use cajaVM.def.
+ *        code size. At the time that {@code startSES} calls {@code
+ *        extensions}, {@code cajaVM} exists but should not yet be
+ *        used. In particular, {@code extensions} should not call
+ *        {@code cajaVM.def} when called, because def would then
+ *        freeze priordials before startSES cleans them (removes
+ *        non-whitelisted properties). The methods that
+ *        {@code extensions} contributes can, of course, use
+ *        {@code cajaVM}, since those methods will only be called once
+ *        {@code startSES} finishes.
  */
 ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   "use strict";
@@ -228,8 +235,8 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   }
 
   /**
-   * Code being eval'ed sees <tt>root</tt> as its top-level
-   * <tt>this</tt>, as if <tt>root</tt> were the global object.
+   * Code being eval'ed sees {@code root} as its top-level
+   * {@code this}, as if {@code root} were the global object.
    *
    * <p>Root's properties are exactly the whitelisted global variable
    * references. These properties, both as they appear on the global
@@ -785,7 +792,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
   }
 
-  //diagnose(ses.severities.SAFE, 'Skipped', skipped);
+  diagnose(ses.severities.SAFE, 'Skipped', skipped);
   diagnose(ses.severities.SAFE, 'Deleted', goodDeletions);
 
   if (cantNeuter.length >= 1) {

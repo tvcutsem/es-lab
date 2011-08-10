@@ -20,11 +20,11 @@
  * already present, then it conforms to the anticipated ES6
  * specification. To run this file on an ES5 or almost ES5
  * implementation where the {@code WeakMap} specification does not
- * quite conform, run <tt>repairES5.js</tt> first.
+ * quite conform, run <code>repairES5.js</code> first.
  *
  * @author Mark S. Miller
- * @requires ses.ok?, WeakMap?
- * @provides WeakMap
+ * @requires ses
+ * @overrides WeakMap
  */
 
 /**
@@ -284,7 +284,7 @@ var WeakMap;
     return Object.freeze(func);
   }
 
-  WeakMap = function WeakMap() {
+  WeakMap = function() {
     var identities = {};
     var values = {};
 

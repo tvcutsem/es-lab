@@ -44,11 +44,11 @@ test_REPLACE_LEAKS_GLOBAL(){var that='dummy';function capture(){return that=this
 has(base,name,baseDesc){var result=void 0,finallySkipped=true;try{result=name in
 base}catch(err){return logger.error('New symptom (a): (\''+name+'\' in <'+baseDesc+'>) threw: '+err),result=false,false}finally{finallySkipped=false,result===void
 0&&logger.error('New symptom (b): (\''+name+'\' in <'+baseDesc+'>) failed')}return finallySkipped&&logger.error('New symptom (e): (\''+name+'\' in <'+baseDesc+'>) finally inner finally skipped'),!!result}function
-test_CANT_IN_CALLER(){var answer;try{answer=has(function(){},'caller','strict_function')}catch(err){return err
+test_CANT_IN_CALLER(){var answer=void 0;try{answer=has(function(){},'caller','strict_function')}catch(err){return err
 instanceof TypeError?true:'(\"caller\" in strict_func) failed with: '+err}finally{}return answer?false:'(\"caller\" in strict_func) was false.'}function
-test_CANT_IN_ARGUMENTS(){var answer;try{answer=has(function(){},'arguments','strict_function')}catch(err){return err
+test_CANT_IN_ARGUMENTS(){var answer=void 0;try{answer=has(function(){},'arguments','strict_function')}catch(err){return err
 instanceof TypeError?true:'(\"arguments\" in strict_func) failed with: '+err}finally{}return answer?false:'(\"arguments\" in strict_func) was false.'}function
-has2(base,name,baseDesc){var finallySkipped=true,result;try{result=has(base,name,baseDesc)}catch(err){return result=false,false}finally{finallySkipped=false,result===void
+has2(base,name,baseDesc){var result=void 0,finallySkipped=true;try{result=has(base,name,baseDesc)}catch(err){return result=false,false}finally{finallySkipped=false,result===void
 0&&logger.error('New symptom (d): (\''+name+'\' in <'+baseDesc+'>) failed')}return finallySkipped&&logger.error('New symptom (f): (\''+name+'\' in <'+baseDesc+'>) finally outer finally skipped'),!!result}function
 test_BUILTIN_LEAKS_CALLER(){var map=Array.prototype.map,caller,testfn;if(!has(map,'caller','a builtin'))return false;try{delete
 map.caller}catch(err){}if(!has(map,'caller','a builtin'))return false;function foo(){return map.caller}testfn=Function('f','return [1].map(f)[0];');try{caller=testfn(foo)}catch(err){return err
@@ -73,7 +73,7 @@ test_PROTO_NOT_FROZEN(){var x=Object.preventExtensions({}),y;if(x.__proto__===vo
 instanceof TypeError?false:'Mutating __proto__ failed with: '+err}return y.isPrototypeOf(x)?true:'Mutating __proto__ neither failed nor succeeded'}call=Function.prototype.call,apply=Function.prototype.apply,hop=Object.prototype.hasOwnProperty,objToString=Object.prototype.toString,slice=Array.prototype.slice,concat=Array.prototype.concat,defProp=Object.defineProperty,getPrototypeOf=Object.getPrototypeOf;function
 repair_MISSING_CALLEE_DESCRIPTOR(){var realGOPN=Object.getOwnPropertyNames;Object.getOwnPropertyNames=function
 calleeFix(base){var result=realGOPN(base),i;return typeof base==='function'&&(i=result.indexOf('callee'),i>=0&&!hop.call(base,'callee')&&result.splice(i,1)),result}}function
-repair_REGEXP_CANT_BE_NEUTERED(){var UnsafeRegExp=RegExp,FakeRegExp=function FakeRegExp(pattern,flags){switch(arguments.length){case
+repair_REGEXP_CANT_BE_NEUTERED(){var UnsafeRegExp=RegExp,FakeRegExp=function(pattern,flags){switch(arguments.length){case
 0:return UnsafeRegExp();case 1:return UnsafeRegExp(pattern);default:return UnsafeRegExp(pattern,flags)}};FakeRegExp.prototype=UnsafeRegExp.prototype,FakeRegExp.prototype.constructor=FakeRegExp,RegExp=FakeRegExp}function
 repair_REGEXP_TEST_EXEC_UNSAFE(){var unsafeRegExpExec=RegExp.prototype.exec,unsafeRegExpTest;unsafeRegExpExec.call=call,unsafeRegExpTest=RegExp.prototype.test,unsafeRegExpTest.call=call,RegExp.prototype.exec=function
 fakeExec(specimen){return unsafeRegExpExec.call(this,String(specimen))},RegExp.prototype.test=function
@@ -152,8 +152,8 @@ Object&&defProp(Object,'getPropertyNames',{'value':function fakeGetPropertyNames
 result=originalProps.getPropertyNames(obj),i=result.indexOf('ident___');return i>=0&&result.splice(i,1),result}}),'getPropertyDescriptor'in
 Object&&defProp(Object,'getPropertyDescriptor',{'value':function fakeGetPropertyDescriptor(obj,name){return name==='ident___'?undefined:originalProps.getPropertyDescriptor(obj,name)}}),defProp(Object,'create',{'value':function
 fakeCreate(parent,pdmap){var result=originalProps.create(parent);return identity(result),pdmap&&originalProps.defineProperties(result,pdmap),result}});function
-constFunc(func){return Object.freeze(func.prototype),Object.freeze(func)}WeakMap=function
-WeakMap(){var identities={},values={};function find(key){var id=identity(key),i,name,opt_ids;return typeof
+constFunc(func){return Object.freeze(func.prototype),Object.freeze(func)}WeakMap=function(){var
+identities={},values={};function find(key){var id=identity(key),i,name,opt_ids;return typeof
 id==='string'?(name=id,id=key):(name=id()),opt_ids=identities[name],i=opt_ids?opt_ids.indexOf(id):-1,originalProps.freeze({'name':name,'id':id,'opt_ids':opt_ids,'i':i})}function
 get___(key,opt_default){var f=find(key);return f.i>=0?values[f.name][f.i]:opt_default}function
 has___(key){return find(key).i>=0}function set___(key,value){var f=find(key),ids=f.opt_ids||(identities[f.name]=[]),vals=values[f.name]||(values[f.name]=[]),i=f.i>=0?f.i:ids.length;ids[i]=f.id,vals[i]=value}function
@@ -196,6 +196,6 @@ getPermit(base,name){var permit=whiteTable.get(base),result;if(permit){if(permit
 clean(value,prefix){if(value!==Object(value))return;if(cleaning.get(value))return;cleaning.set(value,true),Object.getOwnPropertyNames(value).forEach(function(name){var
 path=prefix+(prefix?'.':'')+name,p=getPermit(value,name),sub,success;if(p)p==='skip'?skipped.push(path):(sub=read(value,name),clean(sub,path));else{try{success=delete
 value[name]}catch(x){success=false}success?goodDeletions.push(path):badDeletions.push(path)}}),Object.freeze(value)}clean(root,'');function
-diagnose(severity,desc,problemList){problemList.length>=1&&(ses.logger.reportDiagnosis(severity,desc,problemList),severity.level>ses.maxSeverity.level&&(ses.maxSeverity=severity.level))}diagnose(ses.severities.SAFE,'Deleted',goodDeletions),cantNeuter.length>=1&&(complaint=cantNeuter.map(function(p){var
+diagnose(severity,desc,problemList){problemList.length>=1&&(ses.logger.reportDiagnosis(severity,desc,problemList),severity.level>ses.maxSeverity.level&&(ses.maxSeverity=severity.level))}diagnose(ses.severities.SAFE,'Skipped',skipped),diagnose(ses.severities.SAFE,'Deleted',goodDeletions),cantNeuter.length>=1&&(complaint=cantNeuter.map(function(p){var
 desc=Object.getOwnPropertyDescriptor(p.base,p.name);return desc?p.name+'('+p.err+'): '+Object.getOwnPropertyNames(desc).map(function(attrName){var
 v=desc[attrName];return v===Object(v)&&(v='a '+typeof v),attrName+': '+v}).join(', '):'  Missing '+p.name}),diagnose(ses.severities.NEW_SYMPTOM,'Cannot neuter',complaint)),diagnose(ses.severities.NEW_SYMPTOM,'Cannot delete',badDeletions),ses.ok()?(dirty=false,ses.logger.log('initSES succeeded.')):ses.logger.error('initSES failed.')},(function(global){'use strict';if(!ses.ok())return;ses.startSES(global,ses.whitelist,ses.atLeastFreeVarNames,function(){return{}})})(this)}

@@ -21,8 +21,8 @@
  * <p>Assumes ES5. Compatible with ES5-strict.
  *
  * @author kpreid@switchb.org
- * @requires ses, WeakMap, cajaVM
- * @provides ses.ejectorsGuardsTrademarks
+ * @requires WeakMap, cajaVM
+ * @overrides ses
  */
 var ses;
 
@@ -348,6 +348,15 @@ var ses;
     ////////////////////////////////////////////////////////////////////////
     // Exporting
     ////////////////////////////////////////////////////////////////////////
+
+    // Note that extensions must not call cajaVM.def during the call
+    // to extensions, since startSES has not yet finished cleaning
+    // things. See the doc-comments on the extensions parameter of startSES.
+
+    // For the record returned below and its members, extensions also
+    // doesn't need to cajaVM.def them, since they will become
+    // reachable for the startSES root, which startSES will eventually
+    // def.
 
     return {
       callWithEjector: callWithEjector,

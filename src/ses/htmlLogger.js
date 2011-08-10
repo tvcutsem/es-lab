@@ -14,33 +14,30 @@
 
 /**
  * @fileoverview Exports a {@code ses.logger} which logs to a div on
- * an html page.
+ * an HTML page.
  *
- * <p>To use the file, before loading <tt>logger.js</tt> or
- * <tt>initSES*.js</tt> which includes <tt>logger.js</tt>, you must
- * load and initialize this file. <tt>logger.js</tt> will then detect
+ * <p>To use the file, before loading <code>logger.js</code> or
+ * <code>initSES*.js</code> which includes <code>logger.js</code>, you must
+ * load and initialize this file. <code>logger.js</code> will then detect
  * that there is already a logger in place and not overwrite it. For
  * example, the beginning of your html file might read
- * <pre>
- *   &lt;div id=&quot;reports&quot;&gt;&lt;/div&gt;
- *   &lt;div id=&quot;console&quot;&gt;&lt;/div&gt;
- *   &lt;script src=&quot;htmlLogger.js&quot;&gt;&lt;/script&gt;
+ * <pre>  &lt;div id="reports"&gt;&lt;/div&gt;
+ *   &lt;div id="console"&gt;&lt;/div&gt;
+ *   &lt;script src="htmlLogger.js"&gt;&lt;/script&gt;
  *   &lt;script&gt;
- *     var $ = function(id) { return document.getElementById(id); };
- *     htmlLogger($(&quot;reports&quot;), $(&quot;console&quot;));
+ *     function gebi(id) { return document.getElementById(id); };
+ *     htmlLogger(gebi("reports"), gebi("console"));
  *   &lt;/script&gt;
- *   &lt;script src=&quot;initSES.js&quot;&gt;&lt;/script&gt;
+ *   &lt;script src="initSES.js"&gt;&lt;/script&gt;
  * </pre>
  *
  * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
  * anticipated ES6.
  *
  * @author Mark S. Miller
- * @requires ses?,
- *           ses.severities, ses.maxSeverity, ses.maxAcceptableSeverity,
- *           ses.statuses
- * @requires css.log, css.info, css.warn, css.error
- * @provides ses.logger, ses.logger.reportRepairs
+ * @requires document
+ * @overrides ses
+ * @provides htmlLogger
  */
 var ses;
 if (!ses) { ses = {}; }
@@ -125,41 +122,35 @@ function htmlLogger(divReports, divConsole) {
       deflate(reportDiv, linksBlock);
 
       // TODO(erights): sort by URL relevance based on platform
-      if (report.urls.length >= 1) {
-        report.urls.forEach(function(url, i) {
-          var linkDiv = appendChild(linksBlock, 'div');
-          if (i === 0) { appendText(linkDiv, 'See '); }
-          var link = appendChild(linkDiv, 'a');
-          link.href = url;
-          link.target = '_blank';
-          appendText(link, url);
-          // TODO spawn a task to fetch the title of the bug and
-          // use it to replace the link text.
-        });
-      }
+      report.urls.forEach(function(url, i) {
+        var linkDiv = appendChild(linksBlock, 'div');
+        if (i === 0) { appendText(linkDiv, 'See '); }
+        var link = appendChild(linkDiv, 'a');
+        link.href = url;
+        link.target = '_blank';
+        appendText(link, url);
+        // TODO(erights): spawn a task to fetch the title of the bug
+        // and use it to replace the link text.
+      });
 
-      if (report.sections.length >= 1) {
-        report.sections.forEach(function(section, i) {
-          var linkDiv = appendChild(linksBlock, 'div');
-          if (i === 0) { appendText(linkDiv, 'See '); }
-          var link = appendChild(linkDiv, 'a');
-          link.href = 'http://es5.github.com/#x' + encodeURIComponent(section);
-          link.target = '_blank';
-          appendText(link, 'Section ' + section);
-        });
-      }
+      report.sections.forEach(function(section, i) {
+        var linkDiv = appendChild(linksBlock, 'div');
+        if (i === 0) { appendText(linkDiv, 'See '); }
+        var link = appendChild(linkDiv, 'a');
+        link.href = 'http://es5.github.com/#x' + encodeURIComponent(section);
+        link.target = '_blank';
+        appendText(link, 'Section ' + section);
+      });
 
-      if (report.tests.length >= 1) {
-        report.tests.forEach(function(test, i) {
-          var linkDiv = appendChild(linksBlock, 'div');
-          if (i === 0) { appendText(linkDiv, 'See '); }
-          var link = appendChild(linkDiv, 'a');
-          link.href = 'http://www.google.com/search?btnI=&q=' +
-                      encodeURIComponent(test) + '+site%3Acode.google.com';
-          link.target = '_blank';
-          appendText(link, 'Test ' + test);
-        });
-      }
+      report.tests.forEach(function(test, i) {
+        var linkDiv = appendChild(linksBlock, 'div');
+        if (i === 0) { appendText(linkDiv, 'See '); }
+        var link = appendChild(linkDiv, 'a');
+        link.href = 'http://www.google.com/search?btnI=&q=' +
+                    encodeURIComponent(test) + '+site%3Acode.google.com';
+        link.target = '_blank';
+        appendText(link, 'Test ' + test);
+      });
     });
 
     if (numFine >= 1) {

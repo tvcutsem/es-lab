@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /**
- * @fileoverview export a {@code ses.atLeastFreeVarNames} function for
+ * @fileoverview Export a {@code ses.atLeastFreeVarNames} function for
  * internal use by the SES-on-ES5 implementation, which enumerates at
  * least the identifiers which occur freely in a source text string.
  *
@@ -21,16 +21,15 @@
  * anticipated ES6.
  *
  * @author Mark S. Miller
- * @requires ses?
- * @provides ses.atLeastFreeVarNames
+ * @overrides ses
  */
 var ses;
 
 /**
  * Calling {@code ses.atLeastFreeVarNames} on a {@code programSrc}
- * string argument, the result should be a list including at least all
- * the free variable names of {@code programSrc} as own properties. It
- * is harmless for this list to include other strings as well.
+ * string argument, the result should include at least all the free
+ * variable names of {@code programSrc} as own properties. It is
+ * harmless to include other strings as well.
  *
  * <p>Assuming a programSrc that parses as a strict Program,
  * atLeastFreeVarNames(programSrc) returns a Record whose enumerable

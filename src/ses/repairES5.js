@@ -23,10 +23,14 @@
  * repairs. Compatible with almost-ES5, ES5, ES5-strict, and
  * anticipated ES6.
  *
+ * <p>Ignore the "...requires ___global_test_function___" below. We
+ * create it, use it, and delete it all within this module. But we
+ * need to lie to the linter since it can't tell.
+ *
  * @author Mark S. Miller
- * @requires ses.logger, ses.maxAcceptableSeverityName?
- * @provides ses.severities, ses.maxSeverity,
- *           ses.maxAcceptableSeverity, ses.ok, ses.statuses
+ * @requires ___global_test_function___
+ * @requires JSON, navigator, this
+ * @overrides ses, RegExp, WeakMap, Object
  */
 var RegExp;
 var ses;
@@ -74,21 +78,27 @@ var ses;
   /**
    * The severity levels.
    *
-   * <ol>
-   * <li> SAFE -- no problem.
-   * <li> SAFE_SPEC_VIOLATION -- safe (in an integrity sense) even if
-   *      unrepaired. May still lead to inappropriate failures.
-   * <li> UNSAFE_SPEC_VIOLATION -- a safety issue only indirectly, in that
-   *      this spec violation may lead to the corruption of
-   *      assumptions made by other security critical or defensive code.
-   * <li> NOT_OCAP_SAFE -- a violation of object-capability rules
-   *      among objects within a coarse-grained unit of isolation.
-   * <li> NOT_ISOLATED -- an inability to reliably sandbox even
-   *      coarse-grain units of isolation.
-   * <li> NEW_SYMPTOM -- some test failed in a way we did not expect.
-   * <li> NOT_SUPPORTED -- this platform cannot even support SES
-   *      development in an unsafe manner.
-   * </ol>
+   * <dl>
+   *   <dt>SAFE</dt><dd>no problem.
+   *   <dt>SAFE_SPEC_VIOLATION</dt>
+   *     <dd>safe (in an integrity sense) even if unrepaired. May
+   *         still lead to inappropriate failures.</dd>
+   *   <dt>UNSAFE_SPEC_VIOLATION</dt>
+   *     <dd>a safety issue only indirectly, in that this spec
+   *         violation may lead to the corruption of assumptions made
+   *         by other security critical or defensive code.</dd>
+   *   <dt>NOT_OCAP_SAFE</dt>
+   *     <dd>a violation of object-capability rules among objects
+   *         within a coarse-grained unit of isolation.</dd>
+   *   <dt>NOT_ISOLATED</dt>
+   *     <dd>an inability to reliably sandbox even coarse-grain units
+   *         of isolation.</dd>
+   *   <dt>NEW_SYMPTOM</dt>
+   *     <dd>some test failed in a way we did not expect.</dd>
+   *   <dt>NOT_SUPPORTED</dt>
+   *     <dd>this platform cannot even support SES development in an
+   *         unsafe manner.</dd>
+   * </dl>
    */
   ses.severities = {
     SAFE:                  { level: 0, description: 'Safe' },
@@ -104,21 +114,26 @@ var ses;
    * Statuses.
    *
    * <ul>
-   * <li> ALL_FINE -- test passed before and after.
-   * <li> REPAIR_FAILED -- test failed before and after repair attempt.
-   * <li> NOT_REPAIRED -- test failed before and after, with no repair
-   *                      to attempt.
-   * <li> REPAIRED_UNSAFELY -- test failed before and passed after
-   *      repair attempt, but canRepair was false, indicating that the
-   *      real problem remains.
-   * <li> REPAIRED -- test failed before and passed after repair
-   *      attempt, repairing the problem (canRepair was true).
-   * <li> ACCIDENTALLY_REPAIRED -- test failed before and passed
-   *      after, despite no repair to attempt. (Must have been fixed
-   *      by some other attempted repair.)
-   * <li> BROKEN_BY_OTHER_ATTEMPTED_REPAIRS -- test passed before and
-   *      failed after, indicating that some other attempted repair
-   *      created the problem.
+   *   <dt>ALL_FINE</dt>
+   *     <dd>test passed before and after.</dd>
+   *   <dt>REPAIR_FAILED</dt>
+   *     <dd>test failed before and after repair attempt.</dd>
+   *   <dt>NOT_REPAIRED</dt>
+   *     <dd>test failed before and after, with no repair to attempt.</dd>
+   *   <dt>REPAIRED_UNSAFELY</dt>
+   *     <dd>test failed before and passed after repair attempt, but
+   *         canRepair was false, indicating that the real problem
+   *         remains.</dd>
+   *   <dt>REPAIRED</dt>
+   *     <dd>test failed before and passed after repair attempt,
+   *         repairing the problem (canRepair was true).</dd>
+   *   <dt>ACCIDENTALLY_REPAIRED</dt>
+   *      <dd>test failed before and passed after, despite no repair
+   *          to attempt. (Must have been fixed by some other
+   *          attempted repair.)</dd>
+   *   <dt>BROKEN_BY_OTHER_ATTEMPTED_REPAIRS</dt>
+   *      <dd>test passed before and failed after, indicating that
+   *          some other attempted repair created the problem.</dd>
    * </ul>
    */
   ses.statuses = {
@@ -145,17 +160,34 @@ var ses;
    * that is considered acceptable for proceeding with the SES
    * verification-only strategy.
    *
-   * <p>If {@code ses.maxSeverity} exceeds {@code
-   * ses.maxAcceptableSeverity}, then we should give up on the SES
-   * verification-only strategy and fall back to the ES5/3 translation
-   * strategy. {@code ses.maxAcceptableSeverity} defaults to
-   * ses.severities.SAFE_SPEC_VIOLATION. If used for purposes which can
-   * tolerate a different level of safety, first set {@code
-   * ses.maxAcceptableSeverityName} to some other level before
-   * attempting repairs.
+   * <p>Although <code>repairES5.js</code> can be used standalone for
+   * partial ES5 repairs, its primary purpose is to repair as a first
+   * stage of <code>initSES.js</code> for purposes of supporting SES
+   * security. In support of that purpose, we initialize
+   * {@code ses.maxAcceptableSeverity} to the post-repair severity
+   * level at which we should report that we are unable to adequately
+   * support SES security. By default, this is set to
+   * {@code ses.severities.SAFE_SPEC_VIOLATION}, which is the maximum
+   * severity that we believe results in no loss of SES security.
    *
-   * <p>If {@code ses.maxAcceptableSeverityName} is set, it must be set
-   * below {@code ses.NOT_SUPPORTED}.
+   * <p>If {@code ses.maxAcceptableSeverityName} is already set (to a
+   * severity property name of a severity below {@code
+   * ses.NOT_SUPPORTED}), then we use that setting to initialize
+   * {@code ses.maxAcceptableSeverity} instead. For example, if we are
+   * using SES only for isolation, then we could set it to
+   * 'NOT_OCAP_SAFE', in which case repairs that are inadequate for
+   * object-capability (ocap) safety would still be judged safe for
+   * our purposes.
+   *
+   * <p>As repairs proceed, they update {@code ses.maxSeverity} to
+   * track the worst case post-repair severity seen so far. When
+   * {@code ses.ok()} is called, it return whether {@code
+   * ses.maxSeverity} is still less than or equal to
+   * {@code ses.maxAcceptableSeverity}, indicating that this platform
+   * still seems adequate for supporting SES. In the Caja context, we
+   * have the choice of using SES on those platforms which we judge to
+   * be adequately repairable, or otherwise falling back to Caja's
+   * ES5/3 translator.
    */
   if (ses.maxAcceptableSeverityName) {
     var maxSev = ses.severities[ses.maxAcceptableSeverityName];
@@ -699,7 +731,7 @@ var ses;
    * 5.0.5 (5533.21.1, r91108).
    */
   function test_CANT_IN_CALLER() {
-    var answer;
+    var answer = void 0;
     try {
       answer = has(function(){}, 'caller', 'strict_function');
     } catch (err) {
@@ -720,7 +752,7 @@ var ses;
    * 5.0.5 (5533.21.1, r91108).
    */
   function test_CANT_IN_ARGUMENTS() {
-    var answer;
+    var answer = void 0;
     try {
       answer = has(function(){}, 'arguments', 'strict_function');
     } catch (err) {
@@ -732,7 +764,7 @@ var ses;
   }
 
   function has2(base, name, baseDesc) {
-    var result;
+    var result = void 0;
     var finallySkipped = true;
     try {
       result = has(base, name, baseDesc);
@@ -939,7 +971,7 @@ var ses;
 
   function repair_REGEXP_CANT_BE_NEUTERED() {
     var UnsafeRegExp = RegExp;
-    var FakeRegExp = function FakeRegExp(pattern, flags) {
+    var FakeRegExp = function(pattern, flags) {
       switch (arguments.length) {
         case 0: {
           return UnsafeRegExp();
@@ -1383,27 +1415,33 @@ var ses;
 
   ////////////////////// Kludge Records /////////////////////
   //
-  // Each kludge record has a <ul>
-  // <li> description: a string describing the problem
-  // <li> test: a predicate testing for the presence of the problem
-  // <li> repair: a function which attempts repair, or undefined if no
-  //              repair is attempted for this problem
-  // <li> preSeverity: an enum (see below) indicating the level of
-  //                severity of this problem if unrepaired.
-  //                Or, if !canRepair, then whether or not
-  //                repaired.
-  // <li> canRepair: a boolean indicating "if the repair exists
-  //                       and the test subsequently does not detect a
-  //                       problem, are we now ok?"
-  // <li> urls: a list of URL strings, each of which points at a page
-  //            relevant for documenting or tracking the bug in
-  //            question. These are typically into bug-threads in
-  //            issue trackers for the various browsers.
-  // <li> sections: a list of strings, each of which is a relevant
-  //                ES5.1 section number.
-  // <li> tests: a list of strings, each of which is the name of a
-  //             relevant test262 or sputnik test case.
-  // </ul>
+  // Each kludge record has a <dl>
+  //   <dt>description:</dt>
+  //     <dd>a string describing the problem</dd>
+  //   <dt>test:</dt>
+  //     <dd>a predicate testing for the presence of the problem</dd>
+  //   <dt>repair:</dt>
+  //     <dd>a function which attempts repair, or undefined if no
+  //         repair is attempted for this problem</dd>
+  //   <dt>preSeverity:</dt>
+  //     <dd>an enum (see below) indicating the level of severity of
+  //         this problem if unrepaired. Or, if !canRepair, then
+  //         whether or not repaired.</dd>
+  //   <dt>canRepair:</dt>
+  //     <dd>a boolean indicating "if the repair exists and the test
+  //         subsequently does not detect a problem, are we now ok?"</dd>
+  //   <dt>urls:</dt>
+  //     <dd>a list of URL strings, each of which points at a page
+  //         relevant for documenting or tracking the bug in
+  //         question. These are typically into bug-threads in issue
+  //         trackers for the various browsers.</dd>
+  //   <dt>sections:</dt>
+  //     <dd>a list of strings, each of which is a relevant ES5.1
+  //         section number.</dd>
+  //   <dt>tests:</dt>
+  //     <dd>a list of strings, each of which is the name of a
+  //         relevant test262 or sputnik test case.</dd>
+  // </dl>
   // These kludge records are the meta-data driving the testing and
   // repairing.
 

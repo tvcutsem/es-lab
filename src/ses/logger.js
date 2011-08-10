@@ -17,16 +17,14 @@
  * console if one exists.
  *
  * <p>For better diagnostics, consider loading and initializing
- * <tt>htmlLogger.js</tt> first.
+ * <code>htmlLogger.js</code> first.
  *
  * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
  * anticipated ES6.
  *
  * @author Mark S. Miller
- * @requires ses?, ses.logger?
- *           ses.severities, ses.maxSeverity, ses.maxAcceptableSeverity,
- *           ses.statuses
- * @provides ses.logger
+ * @requires console
+ * @overrides ses
  */
 var ses;
 if (!ses) { ses = {}; }

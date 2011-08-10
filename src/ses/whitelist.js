@@ -22,8 +22,7 @@
  * anticipated ES6.
  *
  * @author Mark S. Miller,
- * @requires ses?
- * @provides ses.whitelist
+ * @overrides ses
  */
 var ses;
 

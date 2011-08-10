@@ -20,11 +20,8 @@
  * anticipated ES6.
  *
  * @author Mark S. Miller
- * @requires ses.ok, ses.startSES, ses.whitelist, ses.atLeastFreeVarNames,
- *           ses.ejectorsGuardsTrademarks
- * @provides cajaVM
+ * @requires ses, this
  */
-var ses;
 
 (function(global) {
   "use strict";
