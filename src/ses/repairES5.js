@@ -113,7 +113,7 @@ var ses;
   /**
    * Statuses.
    *
-   * <ul>
+   * <dl>
    *   <dt>ALL_FINE</dt>
    *     <dd>test passed before and after.</dd>
    *   <dt>REPAIR_FAILED</dt>
@@ -134,7 +134,7 @@ var ses;
    *   <dt>BROKEN_BY_OTHER_ATTEMPTED_REPAIRS</dt>
    *      <dd>test passed before and failed after, indicating that
    *          some other attempted repair created the problem.</dd>
-   * </ul>
+   * </dl>
    */
   ses.statuses = {
     ALL_FINE:                          'All fine',
