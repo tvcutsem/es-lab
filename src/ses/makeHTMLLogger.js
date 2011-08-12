@@ -77,11 +77,11 @@ function makeHTMLLogger(reportsElement, consoleElement) {
 
   var INFLATE = '[+] ';
   var DEFLATE = '[-] ';
-  function deflate(icon, toggler, inflatables) {
+  function deflate(toggler, inflatables) {
+    var icon = appendText(prependNew(toggler, 'tt'), INFLATE);
     inflatables.forEach(function(inflatable) {
       inflatable.style.display = 'none';
     });
-    icon.data = INFLATE;
     toggler.addEventListener('click', function(event) {
       if (icon.data === INFLATE) {
         inflatables.forEach(function(inflatable) {
@@ -122,7 +122,6 @@ function makeHTMLLogger(reportsElement, consoleElement) {
       }
 
       var reportElement = appendNew(li, 'p');
-      var showLinksIcon = appendText(appendNew(reportElement, 'tt'), '');
 
       var classification = ses.logger.classify(report.postSeverity);
       reportElement.className = classification.consoleLevel;
@@ -140,7 +139,7 @@ function makeHTMLLogger(reportsElement, consoleElement) {
       }
 
       var linksBlock = appendNew(li, 'blockquote');
-      deflate(showLinksIcon, reportElement, [linksBlock]);
+      deflate(reportElement, [linksBlock]);
 
       // TODO(erights): sort by URL relevance based on platform
       report.urls.forEach(function(url, i) {
@@ -175,9 +174,8 @@ function makeHTMLLogger(reportsElement, consoleElement) {
     });
 
     if (fineElements.length >= 1) {
-      var showFineIcon = appendText(appendNew(numFineElement, 'tt'), '');
       appendText(numFineElement, fineElements.length + ' fine...');
-      deflate(showFineIcon, numFineElement, fineElements);
+      deflate(numFineElement, fineElements);
     }
 
     maxElement = appendNew(reportsElement, 'p');
@@ -193,10 +191,9 @@ function makeHTMLLogger(reportsElement, consoleElement) {
     var classification = ses.logger.classify(severity);
     var head = textAdder(diagnosisElement, classification.consoleLevel)(
       desc + ' ' + problemList.length + '...');
-    var showTailIcon = appendText(prependNew(head, 'tt'), '');
     var tail = textAdder(diagnosisElement, classification.consoleLevel)(
       problemList.sort().join(' '));
-    deflate(showTailIcon, head, [tail]);
+    deflate(head, [tail]);
   };
 
   ses.logger = logger;
