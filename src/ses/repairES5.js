@@ -122,8 +122,8 @@ var ses;
    *     <dd>test failed before and after, with no repair to attempt.</dd>
    *   <dt>REPAIRED_UNSAFELY</dt>
    *     <dd>test failed before and passed after repair attempt, but
-   *         canRepair was false, indicating that the real problem
-   *         remains.</dd>
+   *         the repair is known to be inadequate for security, so the
+   *         real problem remains.</dd>
    *   <dt>REPAIRED</dt>
    *     <dd>test failed before and passed after repair attempt,
    *         repairing the problem (canRepair was true).</dd>
@@ -1426,7 +1426,7 @@ var ses;
   //   <dt>preSeverity:</dt>
   //     <dd>an enum (see below) indicating the level of severity of
   //         this problem if unrepaired. Or, if !canRepair, then
-  //         whether or not repaired.</dd>
+  //         the severity whether or not repaired.</dd>
   //   <dt>canRepair:</dt>
   //     <dd>a boolean indicating "if the repair exists and the test
   //         subsequently does not detect a problem, are we now ok?"</dd>

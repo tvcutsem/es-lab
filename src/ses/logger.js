@@ -16,8 +16,95 @@
  * @fileoverview Exports a {@code ses.logger} which logs to the
  * console if one exists.
  *
- * <p>For better diagnostics, consider loading and initializing
- * <code>htmlLogger.js</code> first.
+ * <p>This <code>logger.js</code> file both defines the logger API and
+ * provides default implementations for its methods. Because
+ * <code>logger.js</code> is normally packaged in
+ * <code>initSES.js</code>, it is built to support being overridden by
+ * a script run <i>earlier</i>. For example, for better diagnostics,
+ * consider loading and initializing <code>makeHTMLLogger.js</code> first.
+ *
+ * <p>The {@code ses.logger} API consists of
+ * <dl>
+ *   <dt>log, info, warn, and error methods</dt>
+ *     <dd>each of which take a
+ *         string, and which should display this string associated with
+ *         that severity level. If no {@code ses.logger} already
+ *         exists, the default provided here forwards to the pre-existing
+ *         global {@code console} if one exists. Otherwise, all for of these
+ *         do nothing.</dd>
+ *   <dt>classify(postSeverity)</dt>
+ *     <dd>where postSeverity is a severity
+ *         record as defined by {@code ses.severities} in
+ *         <code>repairES5.js</code>, and returns a helpful record
+ *         consisting of a
+ *         <dl>
+ *           <dt>consoleLevel:</dt>
+ *             <dd>which is one of 'log', 'info', 'warn', or
+ *                 'error', which can be used to select one of the above
+ *                 methods.</dd>
+ *           <dt>note:</dt>
+ *             <dd>containing some helpful text to display
+ *                 explaining the impact of this severity on SES.</dd>
+ *         </dl>
+ *   <dt>reportRepairs(reports)</dt>
+ *     <dd>where {@code reports} is the list of repair reports, each
+ *         of which contains
+ *       <dl>
+ *         <dt>description:</dt>
+ *           <dd>a string describing the problem</dd>
+ *         <dt>preSeverity:</dt>
+ *           <dd>a severity record (as defined by {@code
+ *               ses.severities} in <code>repairES5.js</code>)
+ *               indicating the level of severity of this problem if
+ *               unrepaired. Or, if !canRepair, then the severity
+ *               whether or not repaired.</dd>
+ *         <dt>canRepair:</dt>
+ *           <dd>a boolean indicating "if the repair exists and the test
+ *               subsequently does not detect a problem, are we now ok?"</dd>
+ *         <dt>urls:</dt>
+ *           <dd>a list of URL strings, each of which points at a page
+ *               relevant for documenting or tracking the bug in
+ *               question. These are typically into bug-threads in issue
+ *               trackers for the various browsers.</dd>
+ *         <dt>sections:</dt>
+ *           <dd>a list of strings, each of which is a relevant ES5.1
+ *               section number.</dd>
+ *         <dt>tests:</dt>
+ *           <dd>a list of strings, each of which is the name of a
+ *               relevant test262 or sputnik test case.</dd>
+ *         <dt>postSeverity:</dt>
+ *           <dd>a severity record (as defined by {@code
+ *               ses.severities} in <code>repairES5.js</code>)
+ *               indicating the level of severity of this problem
+ *               after all repairs have been attempted.</dd>
+ *         <dt>beforeFailure:</dt>
+ *           <dd>The outcome of the test associated with this record
+ *               as run before any attempted repairs. If {@code
+ *               false}, it means there was no failure. If {@code
+ *               true}, it means that the test fails in some way that
+ *               the authors of <code>repairES5.js</code>
+ *               expected. Otherwise it returns a string describing
+ *               the symptoms of an unexpected form of failure. This
+ *               is typically considered a more severe form of failure
+ *               than {@code true}, since the authors have not
+ *               anticipated the consequences and safety
+ *               implications.</dd>
+ *         <dt>afterFailure:</dt>
+ *           <dd>The outcome of the test associated with this record
+ *               as run after all attempted repairs.</dd>
+ *       </dl>
+ *       The default behavior here ignores the {@code reports}
+ *       argument and displays only a summary of the worst case
+ *       severity seen so far, according to {@code ses.maxSeverity} as
+ *       interpreted by {@code ses.logger.classify}.
+ *   <dt>reportDiagnosis(severity, desc, problemList)</dt>
+ *     <dd>where {@code severity} is a severity record, {@code desc}
+ *         is a brief string description of a list of problems, and
+ *         {@code problemList} is a list of strings, each of which is
+ *         one occurrence of the described problem.
+ *         The default behavior here should only the number of
+ *         problems, not the individual problems.</dd>
+ * </dl>
  *
  * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
  * anticipated ES6.

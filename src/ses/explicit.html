@@ -24,19 +24,21 @@
 .info { color: navy; }
 .warn { color: olive; }
 .error { color: maroon; }
+.reports-text p { margin-top: 0.05em; margin-bottom: 0.05em; }
+.console-text p { margin-top: 0.05em; margin-bottom: 0.05em; }
 </style>
 </head>
 <body>
-<div id="reports"><b>Repair Reports</b></div>
-<div id="console"><hr></div>
+<div id="reports" class="reports-text"><b>Repair Reports</b></div>
+<div id="console" class="console-text"><hr></div>
 <div id="show1">test1...</div>
 <div id="show2">test2...</div>
-<script src="htmlLogger.js"></script>
+<script src="makeHTMLLogger.js"></script>
 <script>
   function gebi(id) { 
     return document.getElementById(id); 
   };
-  htmlLogger(gebi("reports"), gebi("console"));
+  makeHTMLLogger(gebi("reports"), gebi("console"));
   // This severity is too high for any use other than development.
   ses.maxAcceptableSeverityName = 'NEW_SYMPTOM';
 </script>
@@ -45,7 +47,7 @@ The <script src=... tags below, from "logger.js" to "hookupSES.js", is
   equivalent to <script src="initSES.js"></script>, but is more 
   pleasant to debug.
 
-The <script src="htmlLogger.js"> and the inline script above advises 
+The <script src="makeHTMLLogger.js"> and the inline script above advises 
   the scripts below, overriding the default logger, and overriding the
   default maxAcceptableSeverityName.
 -->
