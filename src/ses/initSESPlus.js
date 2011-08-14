@@ -3010,7 +3010,9 @@ var ses;
     LIMIT_SRC(programSrc);
     // Now that we've temporarily limited our attention to ascii...
     var regexp = SHOULD_MATCH_IDENTIFIER();
-    var result = Object.create(null);
+    // Once we decide this file can depends on ES5, the following line
+    // should say "... = Object.create(null);" rather than "... = {};"
+    var result = {};
     var a;
     while ((a = regexp.exec(programSrc))) {
       // Note that we could have avoided the while loop by doing

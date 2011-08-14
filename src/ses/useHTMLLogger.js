@@ -48,6 +48,15 @@ function useHTMLLogger(reportsElement, consoleElement) {
 
   var maxElement;
 
+  /**
+   * Needs to work on ES3
+   */
+  function forEach(list, callback) {
+    for (var i = 0, len = list.length; i < len; i++) {
+      callback(list[i], i);
+    }
+  }
+
   function appendNew(parent, tagName) {
     var result = document.createElement(tagName);
     parent.appendChild(result);
@@ -79,17 +88,17 @@ function useHTMLLogger(reportsElement, consoleElement) {
   var DEFLATE = '[-] ';
   function deflate(toggler, inflatables) {
     var icon = appendText(prependNew(toggler, 'tt'), INFLATE);
-    inflatables.forEach(function(inflatable) {
+    forEach(inflatables, function(inflatable) {
       inflatable.style.display = 'none';
     });
     toggler.addEventListener('click', function(event) {
       if (icon.data === INFLATE) {
-        inflatables.forEach(function(inflatable) {
+        forEach(inflatables, function(inflatable) {
           inflatable.style.removeProperty('display');
         });
         icon.data = DEFLATE;
       } else {
-        inflatables.forEach(function(inflatable) {
+        forEach(inflatables, function(inflatable) {
           inflatable.style.display = 'none';
         });
         icon.data = INFLATE;
@@ -114,7 +123,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
 
     var fineElements = [];
 
-    reports.forEach(function(report, i) {
+    forEach(reports, function(report, i) {
       var li = appendNew(ul, 'li');
       if (report.status === ses.statuses.ALL_FINE) {
         fineElements.push(li);
@@ -142,7 +151,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
       deflate(reportElement, [linksBlock]);
 
       // TODO(erights): sort by URL relevance based on platform
-      report.urls.forEach(function(url, i) {
+      forEach(report.urls, function(url, i) {
         var linkElement = appendNew(linksBlock, 'p');
         if (i === 0) { appendText(linkElement, 'See '); }
         var link = appendNew(linkElement, 'a');
@@ -153,7 +162,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
         // and use it to replace the link text.
       });
 
-      report.sections.forEach(function(section, i) {
+      forEach(report.sections, function(section, i) {
         var linkElement = appendNew(linksBlock, 'p');
         if (i === 0) { appendText(linkElement, 'See '); }
         var link = appendNew(linkElement, 'a');
@@ -162,7 +171,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
         appendText(link, 'Section ' + section);
       });
 
-      report.tests.forEach(function(test, i) {
+      forEach(report.tests, function(test, i) {
         var linkElement = appendNew(linksBlock, 'p');
         if (i === 0) { appendText(linkElement, 'See '); }
         var link = appendNew(linkElement, 'a');
