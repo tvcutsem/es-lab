@@ -21,7 +21,7 @@
  * <code>logger.js</code> is normally packaged in
  * <code>initSES.js</code>, it is built to support being overridden by
  * a script run <i>earlier</i>. For example, for better diagnostics,
- * consider loading and initializing <code>makeHTMLLogger.js</code> first.
+ * consider loading and initializing <code>useHTMLLogger.js</code> first.
  *
  * <p>The {@code ses.logger} API consists of
  * <dl>

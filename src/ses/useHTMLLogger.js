@@ -24,10 +24,10 @@
  * read
  * <pre>  &lt;div id="reports"&gt;&lt;/div&gt;
  *   &lt;div id="console"&gt;&lt;/div&gt;
- *   &lt;script src="makeHTMLLogger.js"&gt;&lt;/script&gt;
+ *   &lt;script src="useHTMLLogger.js"&gt;&lt;/script&gt;
  *   &lt;script&gt;
  *     function gebi(id) { return document.getElementById(id); };
- *     makeHTMLLogger(gebi("reports"), gebi("console"));
+ *     useHTMLLogger(gebi("reports"), gebi("console"));
  *   &lt;/script&gt;
  *   &lt;script src="initSES.js"&gt;&lt;/script&gt;
  * </pre>
@@ -38,12 +38,12 @@
  * @author Mark S. Miller
  * @requires document
  * @overrides ses
- * @provides makeHTMLLogger
+ * @provides useHTMLLogger
  */
 var ses;
 if (!ses) { ses = {}; }
 
-function makeHTMLLogger(reportsElement, consoleElement) {
+function useHTMLLogger(reportsElement, consoleElement) {
   "use strict";
 
   var maxElement;
