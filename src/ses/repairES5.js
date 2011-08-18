@@ -1765,8 +1765,8 @@ var ses;
       repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
-      urls: [],
-      sections: [],
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
+      sections: ['10.4.2.1'],
       tests: []
     }
   ];
