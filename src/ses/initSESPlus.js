@@ -1163,6 +1163,17 @@ var ses;
     return 'Mutating __proto__ neither failed nor succeeded';
   }
 
+  /**
+   *
+   */
+  function test_STRICT_EVAL_LEAKS_GLOBALS() {
+    (1,eval)('"use strict"; var ___global_test_variable___ = 88;');
+    if ('___global_test_variable___' in global) {
+      delete global.___global_test_variable___;
+      return true;
+    }
+    return false;
+  }
 
   ////////////////////// Repairs /////////////////////
   //
@@ -1972,6 +1983,16 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832'],
       sections: ['8.6.2'],
+      tests: []
+    },
+    {
+      description: 'Strict eval function leaks variable definitions',
+      test: test_STRICT_EVAL_LEAKS_GLOBALS,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: [],
       tests: []
     }
   ];
