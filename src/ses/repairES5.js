@@ -15,7 +15,7 @@
 /**
  * @fileoverview Monkey patch almost ES5 platforms into a closer
  * emulation of full <a href=
- * "http://code.google.com/p/es-lab/wiki/SecureableES5">Secureable
+ * "http://code.google.com/p/es-lab/wiki/SecureableES5" >secureable
  * ES5</a>.
  *
  * <p>Assumes only ES3, but only proceeds to do useful repairs when
@@ -29,7 +29,7 @@
  *
  * @author Mark S. Miller
  * @requires ___global_test_function___
- * @requires JSON, navigator, this, eval
+ * @requires JSON, navigator, this
  * @overrides ses, RegExp, WeakMap, Object
  */
 var RegExp;
@@ -43,7 +43,7 @@ var ses;
  * qualifying browsers already include the latest released versions of
  * Internet Explorer (9), Firefox (4), Chrome (11), and Safari
  * (5.0.5), their corresponding standalone (e.g., server-side) JavaScript
- * engines, Rhino 1.73, and BESEN.
+ * engines, Rhino 1.73, BESEN.
  *
  * <p>On such not-quite-ES5 platforms, some elements of these
  * emulations may lose SES safety, as enumerated in the comment on
@@ -58,12 +58,12 @@ var ses;
  * as it is currently on FF7.0a1, then it will repair it in place. The
  * one non-standard element that this file uses is {@code console} if
  * present, in order to report the repairs it found necessary, in
- * which case we use its {@code log, info, warn}, and {@code error}
+ * which case we use its {@code log, info, warn, and error}
  * methods. If {@code console.log} is absent, then this file performs
  * its repairs silently.
  *
  * <p>Generally, this file should be run as the first script in a
- * JavaScript context (i.e. a browser frame), as it relies on other
+ * JavaScript context (i.e. a browser frame), as it replies on other
  * primordial objects and methods not yet being perturbed.
  *
  * <p>TODO(erights): This file tries to protects itself from most
@@ -213,70 +213,6 @@ var ses;
     return ses.maxSeverity.level <= ses.maxAcceptableSeverity.level;
   };
 
-  /**
-   * Operates as close as possible to the way that
-   * {@code name in base} is supposed to work in ES5.
-   */
-  ses['in'] = function(base, name) {
-    return name in base;
-  };
-
-  /**
-   * Operates as close as possible to the way that
-   * {@code delete base[name]} is supposed to work in ES5/strict.
-   *
-   * <p>A strict {@code delete} should either succeed returning true
-   * or should fail by throwing a {@code TypeError}. Host objects and
-   * proxies aside, if {@code base} has a configurable own property
-   * named {@code name}, then {@code delete} should succeed. Host
-   * objects and proxies aside, if {@code delete} succeeds, then
-   * immediately afterwards {@code base} should not have an own
-   * property named {@code name}. If {@code delete} should succeed but
-   * can't, it is better to leave the property poisoned if possible
-   * than not to delete it at all. Successfully poisoning the property
-   * is adequate to report success.
-   */
-  ses['delete'] = function(base, name) {
-    return delete base[name];
-  };
-
-  /**
-   * If {@code base}'s own property {@code name} does not already seem
-   * poisoned, poison it.
-   *
-   * <p>We test by actually getting the value of the own property,
-   * potentially invoking getters causing side effects. If getting the
-   * own property's value throws a {@code TypeError}, then we assume the
-   * property is already poisoned. This is weak evidence, but it's the
-   * strongest practical evidence we've thought of.
-   */
-  ses.poison = function(base, name) {
-    name = String(name);
-    function poison() {
-      throw new TypeError('Cannot access property ' + name +
-                          ' of ' + typeof base);
-    }
-    // Object.prototype.hasOwnProperty.call(base, name) might be
-    // cheaper, but because of
-    // https://bugs.webkit.org/show_bug.cgi?id=63398#c3 might not work
-    // until hasOwnProperty is repaired.
-    if (Object.getOwnPropertyDescriptor(base, name)) {
-      try {
-        var ignored = base[name];
-      } catch (err) {
-        if (err instanceof TypeError) { return; }
-      }
-    }
-    Object.defineProperty(base, name, {
-      get: poison,
-      set: poison,
-      enumerable: false,
-      configurable: false
-    });
-  };
-
-
-
   ////////////////////// Tests /////////////////////
   //
   // Each test is a function of no arguments that should not leave any
@@ -311,7 +247,7 @@ var ses;
   function test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS() {
     global.___global_test_function___ = function() { return this; };
     var that = ___global_test_function___();
-    ses['delete'](global, '___global_test_function___');
+    delete global.___global_test_function___;
     if (that === void 0) { return false; }
     if (that === global) { return true; }
     return 'This leaked as: ' + that;
@@ -388,31 +324,6 @@ var ses;
 
 
   /**
-   * A strict delete should only ever return true or throw a TypeError.
-   *
-   * <p>On IE10preview2, a failed strict delete returns false.
-   * TODO(erights): check that this bug shows up in test262, or, if
-   * not, report it.
-   */
-  function test_STRICT_DELETE_RETURNED_FALSE() {
-    var base = Object.create(null, {foo: {}});
-    var deleted;
-    try {
-      deleted = ses['delete'](base, 'foo');
-    } catch (err) {
-      if (err instanceof TypeError) { return false; }
-      return 'Deletion failed with: ' + err;
-    }
-    if (deleted) {
-      if (base.hasOwnProperty('foo')) {
-        return 'Failed delete reported success';
-      }
-      return 'Deleted non-configurable property';
-    }
-    return true;
-  }
-
-  /**
    * Work around for https://bugzilla.mozilla.org/show_bug.cgi?id=591846
    * as applied to the RegExp constructor.
    *
@@ -425,22 +336,21 @@ var ses;
    */
   function test_REGEXP_CANT_BE_NEUTERED() {
     if (!RegExp.hasOwnProperty('leftContext')) { return false; }
-    var deleted;
+    var deletion;
     try {
-      // Still have to work with all the ways ses.delete might not
-      // work well before it is repaired.
-      deleted = ses['delete'](RegExp, 'leftContext');
+      deletion = delete RegExp.leftContext;
     } catch (err) {
       if (err instanceof TypeError) { return true; }
       return 'Deletion failed with: ' + err;
     }
     if (!RegExp.hasOwnProperty('leftContext')) { return false; }
-    if (deleted) {
+    if (deletion) {
       return 'Deletion of RegExp.leftContext did not succeed.';
     } else {
       // This case happens on IE10preview2, indicating another bug: a
       // strict delete should never return false. A failed strict
-      // delete should throw a TypeError.
+      // delete should throw a TypeError. TODO(erights): check that
+      // this bug shows up in test262, or, if not, report it.
       return true;
     }
   }
@@ -690,15 +600,7 @@ var ses;
    *
    * <p>This kludge seems to be safety preserving, but the issues are
    * delicate and not well understood.
-   *
-   * <p>As support for Domado, it is possible to override this
-   * restriction by adding the flag
-   * "ses_ignoreBug_propertyWillAppearAsOwn" to the property
-   * descriptor. We assume that applying JSON.stringify to DOM nodes
-   * is not interesting. TODO(kpreid): But does the general
-   * possibility of creating objects which if inherited from create
-   * apparent own properties on their children break any security
-    */
+   */
   function test_ACCESSORS_INHERIT_AS_OWN() {
     var base = {};
     var derived = Object.create(base);
@@ -891,7 +793,7 @@ var ses;
     var map = Array.prototype.map;
     if (!has(map, 'caller', 'a builtin')) { return false; }
     try {
-      ses['delete'](map, 'caller');
+      delete map.caller;
     } catch (err) { }
     if (!has(map, 'caller', 'a builtin')) { return false; }
     function foo() { return map.caller; }
@@ -918,7 +820,7 @@ var ses;
     var map = Array.prototype.map;
     if (!has(map, 'arguments', 'a builtin')) { return false; }
     try {
-      ses['delete'](map, 'arguments');
+      delete map.arguments;
     } catch (err) { }
     if (!has(map, 'arguments', 'a builtin')) { return false; }
     function foo() { return map.arguments; }
@@ -944,7 +846,7 @@ var ses;
     var bar = foo.bind({});
     if (!has2(bar, 'caller', 'a bound function')) { return false; }
     try {
-      ses['delete'](bar, 'caller');
+      delete bar.caller;
     } catch (err) { }
     if (!has2(bar, 'caller', 'a bound function')) {
       return '"caller" on bound functions can be deleted.';
@@ -971,7 +873,7 @@ var ses;
     var bar = foo.bind({});
     if (!has2(bar, 'arguments', 'a bound function')) { return false; }
     try {
-      ses['delete'](bar, 'arguments');
+      delete bar.arguments;
     } catch (err) { }
     if (!has2(bar, 'arguments', 'a bound function')) {
       return '"arguments" on bound functions can be deleted.';
@@ -1027,17 +929,6 @@ var ses;
     return 'Mutating __proto__ neither failed nor succeeded';
   }
 
-  /**
-   *
-   */
-  function test_STRICT_EVAL_LEAKS_GLOBALS() {
-    (1,eval)('"use strict"; var ___global_test_variable___ = 88;');
-    if ('___global_test_variable___' in global) {
-      ses['delete'](global, '___global_test_variable___');
-      return true;
-    }
-    return false;
-  }
 
   ////////////////////// Repairs /////////////////////
   //
@@ -1067,15 +958,6 @@ var ses;
         }
       }
       return result;
-    };
-  }
-
-  function repair_STRICT_DELETE_RETURNED_FALSE() {
-    var oldDelete = ses['delete'];
-    ses['delete'] = function(base, name) {
-      var deleted = oldDelete(base, name);
-      if (deleted) { return true; }
-      throw new TypeError('Cannot delete ' + name);
     };
   }
 
@@ -1387,10 +1269,10 @@ var ses;
 
           if ('get' in fullDesc &&
               fullDesc.enumerable &&
-              !fullDesc.configurable &&
-              !desc.ses_ignoreBug_propertyWillAppearAsOwn) {
+              !fullDesc.configurable) {
             logger.warn(complaint);
-            throw new TypeError(complaint);
+            throw new TypeError(complaint
+                + " (Object: " + base + " Property: " + name + ")");
           }
           return defProp(base, name, fullDesc);
         }
@@ -1405,7 +1287,8 @@ var ses;
                            '"' + name + '" already non-configurable');
             }
             logger.warn(complaint);
-            throw new TypeError(complaint);
+            throw new TypeError(complaint + " (During sealing. Object: "
+                + base + " Property: " + name + ")");
           }
         });
       }
@@ -1580,7 +1463,6 @@ var ses;
    */
   var supportedKludges = [
     {
-      name: 'GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS',
       description: 'Global object leaks from global function calls',
       test: test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS,
       repair: void 0,
@@ -1591,7 +1473,6 @@ var ses;
       tests: []
     },
     {
-      name: 'GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS',
       description: 'Global object leaks from anonymous function calls',
       test: test_GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS,
       repair: void 0,
@@ -1602,7 +1483,6 @@ var ses;
       tests: []
     },
     {
-      name: 'GLOBAL_LEAKS_FROM_BUILTINS',
       description: 'Global object leaks from built-in methods',
       test: test_GLOBAL_LEAKS_FROM_BUILTINS,
       repair: void 0,
@@ -1615,7 +1495,6 @@ var ses;
       tests: ['S15.2.4.4_A14']
     },
     {
-      name: 'MISSING_FREEZE_ETC',
       description: 'Object.freeze is missing',
       test: test_MISSING_FREEZE_ETC,
       repair: repair_MISSING_FREEZE_ETC,
@@ -1626,7 +1505,6 @@ var ses;
       tests: []
     },
     {
-      name: 'MISSING_CALLEE_DESCRIPTOR',
       description: 'Phantom callee on strict functions',
       test: test_MISSING_CALLEE_DESCRIPTOR,
       repair: repair_MISSING_CALLEE_DESCRIPTOR,
@@ -1637,18 +1515,6 @@ var ses;
       tests: []
     },
     {
-      name: 'STRICT_DELETE_RETURNED_FALSE',
-      description: 'Failed strict delete returned false instead of throwing',
-      test: test_STRICT_DELETE_RETURNED_FALSE,
-      repair: repair_STRICT_DELETE_RETURNED_FALSE,
-      preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: [],
-      sections: [],
-      tests: []
-    },
-    {
-      name: 'REGEXP_CANT_BE_NEUTERED',
       description: 'Cannot delete ambient mutable RegExp.leftContext',
       test: test_REGEXP_CANT_BE_NEUTERED,
       repair: repair_REGEXP_CANT_BE_NEUTERED,
@@ -1661,7 +1527,6 @@ var ses;
       tests: []
     },
     {
-      name: 'REGEXP_TEST_EXEC_UNSAFE',
       description: 'RegExp.exec leaks match globally',
       test: test_REGEXP_TEST_EXEC_UNSAFE,
       repair: repair_REGEXP_TEST_EXEC_UNSAFE,
@@ -1675,7 +1540,6 @@ var ses;
       tests: ['S15.10.6.2_A12']
     },
     {
-      name: 'FUNCTION_PROTOTYPE_DESCRIPTOR_LIES',
       description: 'A function.prototype\'s descriptor lies',
       test: test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
       repair: void 0,
@@ -1687,7 +1551,6 @@ var ses;
       tests: []
     },
     {
-      name: 'MISSING_BIND',
       description: 'Function.prototype.bind is missing',
       test: test_MISSING_BIND,
       repair: repair_MISSING_BIND,
@@ -1699,7 +1562,6 @@ var ses;
       tests: []
     },
     {
-      name: 'BIND_CALLS_APPLY',
       description: 'Function.prototype.bind calls .apply rather than [[Call]]',
       test: test_BIND_CALLS_APPLY,
       repair: repair_MISSING_BIND,
@@ -1711,7 +1573,6 @@ var ses;
       tests: []
     },
     {
-      name: 'BIND_CANT_CURRY_NEW',
       description: 'Function.prototype.bind does not curry construction',
       test: test_BIND_CANT_CURRY_NEW,
       repair: void 0, // JS-based repair essentially impossible
@@ -1722,7 +1583,6 @@ var ses;
       tests: []
     },
     {
-      name: 'MUTABLE_DATE_PROTO',
       description: 'Date.prototype is a global communication channel',
       test: test_MUTABLE_DATE_PROTO,
       repair: repair_MUTABLE_DATE_PROTO,
@@ -1733,7 +1593,6 @@ var ses;
       tests: []
     },
     {
-      name: 'MUTABLE_WEAKMAP_PROTO',
       description: 'WeakMap.prototype is a global communication channel',
       test: test_MUTABLE_WEAKMAP_PROTO,
       repair: repair_MUTABLE_WEAKMAP_PROTO,
@@ -1744,7 +1603,6 @@ var ses;
       tests: []
     },
     {
-      name: 'NEED_TO_WRAP_FOREACH',
       description: 'Array forEach cannot be frozen while in progress',
       test: test_NEED_TO_WRAP_FOREACH,
       repair: repair_NEED_TO_WRAP_FOREACH,
@@ -1755,7 +1613,6 @@ var ses;
       tests: ['S15.4.4.18_A1', 'S15.4.4.18_A2']
     },
     {
-      name: 'NEEDS_DUMMY_SETTER',
       description: 'Workaround undiagnosed need for dummy setter',
       test: test_NEEDS_DUMMY_SETTER,
       repair: repair_NEEDS_DUMMY_SETTER,
@@ -1766,7 +1623,6 @@ var ses;
       tests: []
     },
     {
-      name: 'ACCESSORS_INHERIT_AS_OWN',
       description: 'Accessor properties inherit as own properties',
       test: test_ACCESSORS_INHERIT_AS_OWN,
       repair: repair_ACCESSORS_INHERIT_AS_OWN,
@@ -1777,7 +1633,6 @@ var ses;
       tests: []
     },
     {
-      name: 'SORT_LEAKS_GLOBAL',
       description: 'Array sort leaks global',
       test: test_SORT_LEAKS_GLOBAL,
       repair: repair_SORT_LEAKS_GLOBAL,
@@ -1788,7 +1643,6 @@ var ses;
       tests: ['S15.4.4.11_A8']
     },
     {
-      name: 'REPLACE_LEAKS_GLOBAL',
       description: 'String replace leaks global',
       test: test_REPLACE_LEAKS_GLOBAL,
       repair: repair_REPLACE_LEAKS_GLOBAL,
@@ -1799,7 +1653,6 @@ var ses;
       tests: ['S15.5.4.11_A12']
     },
     {
-      name: 'CANT_IN_CALLER',
       description: 'Cannot "in" caller on strict function',
       test: test_CANT_IN_CALLER,
       repair: void 0,
@@ -1810,7 +1663,6 @@ var ses;
       tests: []
     },
     {
-      name: 'CANT_IN_ARGUMENTS',
       description: 'Cannot "in" arguments on strict function',
       test: test_CANT_IN_ARGUMENTS,
       repair: void 0,
@@ -1821,7 +1673,6 @@ var ses;
       tests: []
     },
     {
-      name: 'BUILTIN_LEAKS_CALLER',
       description: 'Built in functions leak "caller"',
       test: test_BUILTIN_LEAKS_CALLER,
       repair: void 0,
@@ -1835,7 +1686,6 @@ var ses;
       tests: []
     },
     {
-      name: 'BUILTIN_LEAKS_ARGUMENTS',
       description: 'Built in functions leak "arguments"',
       test: test_BUILTIN_LEAKS_ARGUMENTS,
       repair: void 0,
@@ -1849,7 +1699,6 @@ var ses;
       tests: []
     },
     {
-      name: 'BOUND_FUNCTION_LEAKS_CALLER',
       description: 'Bound functions leak "caller"',
       test: test_BOUND_FUNCTION_LEAKS_CALLER,
       repair: repair_MISSING_BIND,
@@ -1861,7 +1710,6 @@ var ses;
       tests: ['S15.3.4.5_A1']
     },
     {
-      name: 'BOUND_FUNCTION_LEAKS_ARGUMENTS',
       description: 'Bound functions leak "arguments"',
       test: test_BOUND_FUNCTION_LEAKS_ARGUMENTS,
       repair: repair_MISSING_BIND,
@@ -1873,7 +1721,6 @@ var ses;
       tests: ['S15.3.4.5_A2']
     },
     {
-      name: 'JSON_PARSE_PROTO_CONFUSION',
       description: 'JSON.parse confused by "__proto__"',
       test: test_JSON_PARSE_PROTO_CONFUSION,
       repair: repair_JSON_PARSE_PROTO_CONFUSION,
@@ -1885,7 +1732,6 @@ var ses;
       tests: ['S15.12.2_A1']
     },
     {
-      name: 'PROTO_NOT_FROZEN',
       description: 'Prototype still mutable on non-extensible object',
       test: test_PROTO_NOT_FROZEN,
       repair: void 0,
@@ -1893,17 +1739,6 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832'],
       sections: ['8.6.2'],
-      tests: []
-    },
-    {
-      name: 'STRICT_EVAL_LEAKS_GLOBALS',
-      description: 'Strict eval function leaks variable definitions',
-      test: test_STRICT_EVAL_LEAKS_GLOBALS,
-      repair: void 0,
-      preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
-      sections: ['10.4.2.1'],
       tests: []
     }
   ];
@@ -2007,7 +1842,6 @@ var ses;
       }
 
       return {
-        name:          kludge.name,
         description:   kludge.description,
         preSeverity:   kludge.preSeverity,
         canRepair:     kludge.canRepair,
@@ -2026,10 +1860,6 @@ var ses;
   if (ses.ok()) {
     reports.push.apply(reports, testRepairReport(supportedKludges));
   }
-  ses.repairReports = {};
-  reports.forEach(function(report) {
-    ses.repairReports[report.name] = report;
-  });
   logger.reportRepairs(reports);
 
 })(this);
