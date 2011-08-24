@@ -687,7 +687,35 @@ var ses;
   }
 
   /**
+   * Seen on IE10preview2.
    *
+   * <p>TODO(erights): report
+   */
+  function test_CANT_GOPD_CALLER() {
+    var desc = null;
+    try {
+      desc = Object.getOwnPropertyDescriptor(function(){}, 'caller');
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return 'getOwnPropertyDescriptor failed with: ' + err;
+    }
+    if (desc &&
+        typeof desc.get === 'function' &&
+        typeof desc.set === 'function' &&
+        !desc.configurable) {
+      return false;
+    }
+    return 'getOwnPropertyDesciptor returned unexpected caller descriptor';
+  }
+
+  /**
+   * Workaround https://bugs.webkit.org/show_bug.cgi?id=63398
+   *
+   * <p>A strict function's caller should be poisoned only in a way
+   * equivalent to an accessor property with a throwing getter and
+   * setter.
+   *
+   * <p>Seen on Safari 5.0.6 through WebKit Nightly r93670
    */
   function test_CANT_HASOWNPROPERTY_CALLER() {
     var answer = void 0;
@@ -1715,6 +1743,16 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1360'],
       sections: ['15.5.4.11'],
       tests: ['S15.5.4.11_A12']
+    },
+    {
+      description: 'getOwnPropertyDescriptor on strict "caller" throws',
+      test: test_CANT_GOPD_CALLER,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
     },
     {
       description: 'strict_function.hasOwnProperty("caller") throws',
