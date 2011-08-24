@@ -1832,7 +1832,9 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=51097',
              'https://bugs.webkit.org/show_bug.cgi?id=58338',
-             'http://code.google.com/p/v8/issues/detail?id=1437'],
+             'http://code.google.com/p/v8/issues/detail?id=1437',
+	     'https://connect.microsoft.com/IE/feedback/details/' + 
+	       '685430/global-object-leaks-from-built-in-methods'],
       sections: ['15.2.4.4'],
       tests: ['S15.2.4.4_A14']
     },
@@ -1862,7 +1864,8 @@ var ses;
       repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
-      urls: [],
+      urls: ['https://connect.microsoft.com/IE/feedback/details/' + 
+        '685432/strict-delete-sometimes-returns-false-rather-than-throwing'],
       sections: ['11.4.1'],
       tests: []
     },
@@ -2011,7 +2014,8 @@ var ses;
       repair: repair_CANT_GOPD_CALLER,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: true,
-      urls: [],
+      urls: ['https://connect.microsoft.com/IE/feedback/details/' + 
+	       '685436/getownpropertydescriptor-on-strict-caller-throws'],
       sections: ['15.2.3.3', '13.2', '13.2.3'],
       tests: []
     },
