@@ -610,7 +610,21 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
   })();
 
-  var cantNeuter = [];
+  var propertyReports = {};
+
+  /**
+   * Report how a property manipualtion went.
+   */
+  function reportProperty(severity, status, path) {
+    if (severity.level > ses.maxSeverity.level) {
+      ses.maxSeverity = severity.level;
+    }
+    var group = propertyReports[status] || (propertyReports[status] = {
+      severity: severity,
+      list: []
+    });
+    group.list.push(path);
+  }
 
   /**
    * Read the current value of base[name], and freeze that property as
@@ -639,7 +653,8 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         value: result, writable: false, configurable: false
       });
     } catch (ex) {
-      cantNeuter.push({base: base, name: name, err: ex});
+      reportProperty(ses.severities.NEW_SYMPTOM,
+                     'Cannot be neutered', name);
     }
     return result;
   }
@@ -741,9 +756,87 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
   var cleaning = WeakMap();
 
-  var skipped = [];
-  var goodDeletions = [];
-  var badDeletions = [];
+  /**
+   * Delete the property if possible, else try to poison.
+   */
+  function cleanProperty(base, name, path) {
+    function poison() {
+      throw new TypeError('Cannot access property ' + path);
+    }
+
+    if (typeof base === 'function' &&
+        (name === 'caller' || name === 'arguments')) {
+      var desc = Object.getOwnPropertyDescriptor(base, name);
+      if (typeof desc.get === 'function' &&
+          typeof desc.set === 'function' &&
+          !desc.configurable) {
+        try {
+          var dummy = base[name];
+        } catch (poisonedErr) {
+          if (poisonedErr instanceof TypeError) {
+            reportProperty(ses.severities.SAFE,
+                           'Already poisoned', path);
+            return true;
+          }
+        }
+      }
+    }
+
+    var deleted = void 0;
+    var err = void 0;
+    try {
+      deleted = delete base[name];
+    } catch (er) { err = er; }
+    var exists = hop.call(base, name);
+    if (deleted) {
+      if (!exists) {
+        reportProperty(ses.severities.SAFE,
+                       'Deleted', path);
+        return true;
+      }
+      reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+                     'Bounced back', path);
+    } else if (deleted === false) {
+      reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+                     'Strict delete returned false rather than throwing', path);
+    } else if (err instanceof TypeError) {
+      reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+                     'Cannot be deleted', path);
+    } else {
+      reportProperty(ses.severities.NEW_SYMPTOM,
+                     'Delete failed with' + err, path);
+    }
+
+    try {
+      Object.defineProperty(base, name, {
+        get: poison,
+        set: poison,
+        enumerable: false,
+        configurable: false
+      });
+    } catch (cantPoisonErr) {
+      reportProperty(ses.severities.NOT_ISOLATED,
+                     'Cannot be poisoned', path);
+      return false;
+    }
+    var desc2 = Object.getOwnPropertyDescriptor(base, name);
+    if (desc2.get === poison &&
+        desc2.set === poison &&
+        !desc2.configurable) {
+      try {
+        var dummy2 = base[name];
+      } catch (expectedErr) {
+        if (expectedErr instanceof TypeError) {
+          reportProperty(ses.severities.SAFE,
+                         'Successfully poisoned', path);
+          return true;
+        }
+      }
+    }
+    reportProperty(ses.severities.NEW_SYMTOM,
+                   'Failed to be poisoned', path);
+    return false;
+  }
 
   /**
    * Assumes all super objects are otherwise accessible and so will be
@@ -758,60 +851,27 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       var p = getPermit(value, name);
       if (p) {
         if (p === 'skip') {
-          skipped.push(path);
+          reportProperty(ses.severities.SAFE,
+                         'Skipped', path);
         } else {
           var sub = read(value, name);
           clean(sub, path);
         }
       } else {
-        // Strict delete throws on failure, which we can't count on yet
-        var success;
-        try {
-          success = delete value[name];
-        } catch (x) {
-          success = false;
-        }
-        if (success) {
-          goodDeletions.push(path);
-        } else {
-          badDeletions.push(path);
-        }
+        cleanProperty(value, name, path);
       }
     });
     Object.freeze(value);
   }
   clean(root, '');
 
-  function diagnose(severity, desc, problemList) {
-    if (problemList.length >= 1) {
-      ses.logger.reportDiagnosis(severity, desc, problemList);
-      if (severity.level > ses.maxSeverity.level) {
-        ses.maxSeverity = severity.level;
-      }
-    }
-  }
 
-  diagnose(ses.severities.SAFE, 'Skipped', skipped);
-  diagnose(ses.severities.SAFE, 'Deleted', goodDeletions);
+  Object.keys(propertyReports).forEach(function(status) {
+    var group = propertyReports[status];
+    ses.logger.reportDiagnosis(group.severity, status, group.list);
+  });
 
-  if (cantNeuter.length >= 1) {
-    var complaint = cantNeuter.map(function(p) {
-      var desc = Object.getOwnPropertyDescriptor(p.base, p.name);
-      if (!desc) {
-        return '  Missing ' + p.name;
-      }
-      return p.name + '(' + p.err + '): ' +
-        Object.getOwnPropertyNames(desc).map(function(attrName) {
-          var v = desc[attrName];
-          if (v === Object(v)) { v = 'a ' + typeof v; }
-          return attrName + ': ' + v;
-        }).join(', ');
-
-    });
-    diagnose(ses.severities.NEW_SYMPTOM, 'Cannot neuter', complaint);
-  }
-
-  diagnose(ses.severities.NEW_SYMPTOM, 'Cannot delete', badDeletions);
+  ses.logger.reportMax();
 
   if (ses.ok()) {
     // We succeeded. Enable safe Function, eval, and compile to work.

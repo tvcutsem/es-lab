@@ -23,6 +23,7 @@
  * @requires ses, this
  */
 
+var ses;
 (function(global) {
   "use strict";
 
@@ -30,8 +31,15 @@
     return;
   }
 
-  ses.startSES(global,
-               ses.whitelist,
-               ses.atLeastFreeVarNames,
-               ses.ejectorsGuardsTrademarks);
+  try {
+    ses.startSES(global,
+                 ses.whitelist,
+                 ses.atLeastFreeVarNames,
+                 ses.ejectorsGuardsTrademarks);
+  } catch (err) {
+    if (ses.maxSeverity.level < ses.severities.NEW_SYMPTOM.level) {
+      ses.maxSeverity = ses.severities.NEW_SYMPTOM;
+    }
+    logger.error('hookupSESPlus failed with: ' + err);
+  }
 })(this);

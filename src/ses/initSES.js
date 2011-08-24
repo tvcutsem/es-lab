@@ -93,12 +93,13 @@
  *           <dd>The outcome of the test associated with this record
  *               as run after all attempted repairs.</dd>
  *       </dl>
- *       The default behavior here ignores the {@code reports}
- *       argument and displays only a summary of the worst case
- *       severity seen so far, according to {@code ses.maxSeverity} as
- *       interpreted by {@code ses.logger.classify}.
- *   <dt>reportDiagnosis(severity, desc, problemList)</dt>
- *     <dd>where {@code severity} is a severity record, {@code desc}
+ *       The default behavior here is to be silent.</dd>
+ *   <dt>reportMax()</dt>
+ *     <dd>Displays only a summary of the worst case
+ *         severity seen so far, according to {@code ses.maxSeverity} as
+ *         interpreted by {@code ses.logger.classify}.</dd>
+ *   <dt>reportDiagnosis(severity, status, problemList)</dt>
+ *     <dd>where {@code severity} is a severity record, {@code status}
  *         is a brief string description of a list of problems, and
  *         {@code problemList} is a list of strings, each of which is
  *         one occurrence of the described problem.
@@ -198,24 +199,33 @@ if (!ses) { ses = {}; }
   }
 
   /**
-   * By default, logs a report suitable for display on the console.
+   * By default is silent
    */
-  function defaultReportRepairs(reports) {
-    if (ses.maxSeverity.level > ses.severities.SAFE.level) {
-      var maxClassification = ses.logger.classify(ses.maxSeverity);
-      logger[maxClassification.consoleLevel](
-        'Max Severity: ' + maxClassification.note);
-    }
-  };
+  function defaultReportRepairs(reports) {}
 
   if (!logger.reportRepairs) {
     logger.reportRepairs = defaultReportRepairs;
   }
 
-  function defaultReportDiagnosis(severity, desc, problemList) {
+  /**
+   * By default, logs a report suitable for display on the console.
+   */
+  function defaultReportMax() {
+    if (ses.maxSeverity.level > ses.severities.SAFE.level) {
+      var maxClassification = ses.logger.classify(ses.maxSeverity);
+      logger[maxClassification.consoleLevel](
+        'Max Severity: ' + maxClassification.note);
+    }
+  }
+
+  if (!logger.reportMax) {
+    logger.reportMax = defaultReportMax;
+  }
+
+  function defaultReportDiagnosis(severity, status, problemList) {
     var classification = ses.logger.classify(severity);
     ses.logger[classification.consoleLevel](
-      desc + ' ' + problemList.length);
+      problemList.length + ' ' + status);
   }
 
   if (!logger.reportDiagnosis) {
@@ -241,7 +251,7 @@ if (!ses) { ses = {}; }
 /**
  * @fileoverview Monkey patch almost ES5 platforms into a closer
  * emulation of full <a href=
- * "http://code.google.com/p/es-lab/wiki/SecureableES5" >secureable
+ * "http://code.google.com/p/es-lab/wiki/SecureableES5">Secureable
  * ES5</a>.
  *
  * <p>Assumes only ES3, but only proceeds to do useful repairs when
@@ -255,7 +265,7 @@ if (!ses) { ses = {}; }
  *
  * @author Mark S. Miller
  * @requires ___global_test_function___
- * @requires JSON, navigator, this
+ * @requires JSON, navigator, this, eval
  * @overrides ses, RegExp, WeakMap, Object
  */
 var RegExp;
@@ -269,7 +279,7 @@ var ses;
  * qualifying browsers already include the latest released versions of
  * Internet Explorer (9), Firefox (4), Chrome (11), and Safari
  * (5.0.5), their corresponding standalone (e.g., server-side) JavaScript
- * engines, Rhino 1.73, BESEN.
+ * engines, Rhino 1.73, and BESEN.
  *
  * <p>On such not-quite-ES5 platforms, some elements of these
  * emulations may lose SES safety, as enumerated in the comment on
@@ -284,12 +294,12 @@ var ses;
  * as it is currently on FF7.0a1, then it will repair it in place. The
  * one non-standard element that this file uses is {@code console} if
  * present, in order to report the repairs it found necessary, in
- * which case we use its {@code log, info, warn, and error}
+ * which case we use its {@code log, info, warn}, and {@code error}
  * methods. If {@code console.log} is absent, then this file performs
  * its repairs silently.
  *
  * <p>Generally, this file should be run as the first script in a
- * JavaScript context (i.e. a browser frame), as it replies on other
+ * JavaScript context (i.e. a browser frame), as it relies on other
  * primordial objects and methods not yet being perturbed.
  *
  * <p>TODO(erights): This file tries to protects itself from most
@@ -562,15 +572,15 @@ var ses;
    */
   function test_REGEXP_CANT_BE_NEUTERED() {
     if (!RegExp.hasOwnProperty('leftContext')) { return false; }
-    var deletion;
+    var deleted;
     try {
-      deletion = delete RegExp.leftContext;
+      deleted = delete RegExp.leftContext;
     } catch (err) {
       if (err instanceof TypeError) { return true; }
       return 'Deletion failed with: ' + err;
     }
     if (!RegExp.hasOwnProperty('leftContext')) { return false; }
-    if (deletion) {
+    if (deleted) {
       return 'Deletion of RegExp.leftContext did not succeed.';
     } else {
       // This case happens on IE10preview2, indicating another bug: a
@@ -893,6 +903,21 @@ var ses;
   }
 
   /**
+   *
+   */
+  function test_CANT_HASOWNPROPERTY_CALLER() {
+    var answer = void 0;
+    try {
+      answer = function(){}.hasOwnProperty('caller');
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return 'hasOwnProperty failed with: ' + err;
+    }
+    if (answer) { return false; }
+    return 'strict_function.hasOwnProperty("caller") was false';
+  }
+
+  /**
    * Protect an 'in' with a try/catch to workaround a bug in Safari
    * WebKit Nightly Version 5.0.5 (5533.21.1, r89741).
    *
@@ -1153,6 +1178,18 @@ var ses;
     }
     if (y.isPrototypeOf(x)) { return true; }
     return 'Mutating __proto__ neither failed nor succeeded';
+  }
+
+  /**
+   *
+   */
+  function test_STRICT_EVAL_LEAKS_GLOBALS() {
+    (1,eval)('"use strict"; var ___global_test_variable___ = 88;');
+    if ('___global_test_variable___' in global) {
+      delete global.___global_test_variable___;
+      return true;
+    }
+    return false;
   }
 
 
@@ -1593,6 +1630,12 @@ var ses;
     })();
   }
 
+  function repair_CANT_HASOWNPROPERTY_CALLER() {
+    Object.prototype.hasOwnProperty = function(name) {
+      return !!Object.getOwnPropertyDescriptor(this, name);
+    };
+  }
+
   function repair_JSON_PARSE_PROTO_CONFUSION() {
     var unsafeParse = JSON.parse;
     function validate(plainJSON) {
@@ -1741,7 +1784,8 @@ var ses;
       tests: []
     },
     {
-      description: 'Cannot delete ambient mutable RegExp.leftContext',
+      description: 'Non-deletable RegExp statics are a' +
+        ' global communication channel',
       test: test_REGEXP_CANT_BE_NEUTERED,
       repair: repair_REGEXP_CANT_BE_NEUTERED,
       preSeverity: severities.NOT_OCAP_SAFE,
@@ -1879,6 +1923,16 @@ var ses;
       tests: ['S15.5.4.11_A12']
     },
     {
+      description: 'strict_function.hasOwnProperty("caller") throws',
+      test: test_CANT_HASOWNPROPERTY_CALLER,
+      repair: repair_CANT_HASOWNPROPERTY_CALLER,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
       description: 'Cannot "in" caller on strict function',
       test: test_CANT_IN_CALLER,
       repair: void 0,
@@ -1965,6 +2019,16 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832'],
       sections: ['8.6.2'],
+      tests: []
+    },
+    {
+      description: 'Strict eval function leaks variable definitions',
+      test: test_STRICT_EVAL_LEAKS_GLOBALS,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
+      sections: ['10.4.2.1'],
       tests: []
     }
   ];
@@ -2082,11 +2146,20 @@ var ses;
     });
   }
 
-  var reports = testRepairReport(baseKludges);
-  if (ses.ok()) {
-    reports.push.apply(reports, testRepairReport(supportedKludges));
+  try {
+    var reports = testRepairReport(baseKludges);
+    if (ses.ok()) {
+      reports.push.apply(reports, testRepairReport(supportedKludges));
+    }
+    logger.reportRepairs(reports);
+  } catch (err) {
+    if (ses.maxSeverity.level < ses.severities.NEW_SYMPTOM.level) {
+      ses.maxSeverity = ses.severities.NEW_SYMPTOM;
+    }
+    logger.error('ES5 Repair failed with: ' + err);
   }
-  logger.reportRepairs(reports);
+
+  logger.reportMax();
 
 })(this);
 // Copyright (C) 2011 Google Inc.
@@ -3633,7 +3706,21 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
   })();
 
-  var cantNeuter = [];
+  var propertyReports = {};
+
+  /**
+   * Report how a property manipualtion went.
+   */
+  function reportProperty(severity, status, path) {
+    if (severity.level > ses.maxSeverity.level) {
+      ses.maxSeverity = severity.level;
+    }
+    var group = propertyReports[status] || (propertyReports[status] = {
+      severity: severity,
+      list: []
+    });
+    group.list.push(path);
+  }
 
   /**
    * Read the current value of base[name], and freeze that property as
@@ -3662,7 +3749,8 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         value: result, writable: false, configurable: false
       });
     } catch (ex) {
-      cantNeuter.push({base: base, name: name, err: ex});
+      reportProperty(ses.severities.NEW_SYMPTOM,
+                     'Cannot be neutered', name);
     }
     return result;
   }
@@ -3764,9 +3852,87 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
   var cleaning = WeakMap();
 
-  var skipped = [];
-  var goodDeletions = [];
-  var badDeletions = [];
+  /**
+   * Delete the property if possible, else try to poison.
+   */
+  function cleanProperty(base, name, path) {
+    function poison() {
+      throw new TypeError('Cannot access property ' + path);
+    }
+
+    if (typeof base === 'function' &&
+        (name === 'caller' || name === 'arguments')) {
+      var desc = Object.getOwnPropertyDescriptor(base, name);
+      if (typeof desc.get === 'function' &&
+          typeof desc.set === 'function' &&
+          !desc.configurable) {
+        try {
+          var dummy = base[name];
+        } catch (poisonedErr) {
+          if (poisonedErr instanceof TypeError) {
+            reportProperty(ses.severities.SAFE,
+                           'Already poisoned', path);
+            return true;
+          }
+        }
+      }
+    }
+
+    var deleted = void 0;
+    var err = void 0;
+    try {
+      deleted = delete base[name];
+    } catch (er) { err = er; }
+    var exists = hop.call(base, name);
+    if (deleted) {
+      if (!exists) {
+        reportProperty(ses.severities.SAFE,
+                       'Deleted', path);
+        return true;
+      }
+      reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+                     'Bounced back', path);
+    } else if (deleted === false) {
+      reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+                     'Strict delete returned false rather than throwing', path);
+    } else if (err instanceof TypeError) {
+      reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+                     'Cannot be deleted', path);
+    } else {
+      reportProperty(ses.severities.NEW_SYMPTOM,
+                     'Delete failed with' + err, path);
+    }
+
+    try {
+      Object.defineProperty(base, name, {
+        get: poison,
+        set: poison,
+        enumerable: false,
+        configurable: false
+      });
+    } catch (cantPoisonErr) {
+      reportProperty(ses.severities.NOT_ISOLATED,
+                     'Cannot be poisoned', path);
+      return false;
+    }
+    var desc2 = Object.getOwnPropertyDescriptor(base, name);
+    if (desc2.get === poison &&
+        desc2.set === poison &&
+        !desc2.configurable) {
+      try {
+        var dummy2 = base[name];
+      } catch (expectedErr) {
+        if (expectedErr instanceof TypeError) {
+          reportProperty(ses.severities.SAFE,
+                         'Successfully poisoned', path);
+          return true;
+        }
+      }
+    }
+    reportProperty(ses.severities.NEW_SYMTOM,
+                   'Failed to be poisoned', path);
+    return false;
+  }
 
   /**
    * Assumes all super objects are otherwise accessible and so will be
@@ -3781,60 +3947,27 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       var p = getPermit(value, name);
       if (p) {
         if (p === 'skip') {
-          skipped.push(path);
+          reportProperty(ses.severities.SAFE,
+                         'Skipped', path);
         } else {
           var sub = read(value, name);
           clean(sub, path);
         }
       } else {
-        // Strict delete throws on failure, which we can't count on yet
-        var success;
-        try {
-          success = delete value[name];
-        } catch (x) {
-          success = false;
-        }
-        if (success) {
-          goodDeletions.push(path);
-        } else {
-          badDeletions.push(path);
-        }
+        cleanProperty(value, name, path);
       }
     });
     Object.freeze(value);
   }
   clean(root, '');
 
-  function diagnose(severity, desc, problemList) {
-    if (problemList.length >= 1) {
-      ses.logger.reportDiagnosis(severity, desc, problemList);
-      if (severity.level > ses.maxSeverity.level) {
-        ses.maxSeverity = severity.level;
-      }
-    }
-  }
 
-  diagnose(ses.severities.SAFE, 'Skipped', skipped);
-  diagnose(ses.severities.SAFE, 'Deleted', goodDeletions);
+  Object.keys(propertyReports).forEach(function(status) {
+    var group = propertyReports[status];
+    ses.logger.reportDiagnosis(group.severity, status, group.list);
+  });
 
-  if (cantNeuter.length >= 1) {
-    var complaint = cantNeuter.map(function(p) {
-      var desc = Object.getOwnPropertyDescriptor(p.base, p.name);
-      if (!desc) {
-        return '  Missing ' + p.name;
-      }
-      return p.name + '(' + p.err + '): ' +
-        Object.getOwnPropertyNames(desc).map(function(attrName) {
-          var v = desc[attrName];
-          if (v === Object(v)) { v = 'a ' + typeof v; }
-          return attrName + ': ' + v;
-        }).join(', ');
-
-    });
-    diagnose(ses.severities.NEW_SYMPTOM, 'Cannot neuter', complaint);
-  }
-
-  diagnose(ses.severities.NEW_SYMPTOM, 'Cannot delete', badDeletions);
+  ses.logger.reportMax();
 
   if (ses.ok()) {
     // We succeeded. Enable safe Function, eval, and compile to work.
@@ -3869,6 +4002,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
  * @requires ses, this
  */
 
+var ses;
 (function(global) {
   "use strict";
 
@@ -3876,8 +4010,15 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     return;
   }
 
-  ses.startSES(global,
-               ses.whitelist,
-               ses.atLeastFreeVarNames,
-               function () { return {}; });
+  try {
+    ses.startSES(global,
+                 ses.whitelist,
+                 ses.atLeastFreeVarNames,
+                 function () { return {}; });
+  } catch (err) {
+    if (ses.maxSeverity.level < ses.severities.NEW_SYMPTOM.level) {
+      ses.maxSeverity = ses.severities.NEW_SYMPTOM;
+    }
+    logger.error('hookupSES failed with: ' + err);
+  }
 })(this);
