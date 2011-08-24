@@ -113,6 +113,16 @@
 //    The fix() trap (or the 3 dedicated traps) could still
 //    return false or throw an exception to avoid fixing.
 //    This would simplify the API for developers.
+// C) This FixedHandler design does away entirely with the old
+//    'become' semantics. However, some proxy handlers may actually want
+//    the old 'become' semantics and no longer pay for the overhead of
+//    invariant enforcement checking. We could have the fix() trap
+//    signal to the proxy which of the following it wants:
+//    - reject the fix (perhaps by returning undefined, perhaps by simply
+//      throwing an exception explicitly)
+//    - accept the fix, but request continued interception
+//    - accept the fix, relinquish control and return a pdmap
+//      describing a fresh object to become
 
 // ----------------------------------------------------------------------------
 
@@ -289,6 +299,17 @@ FixedHandler.prototype = {
     //  props[name] = handler.targetHandler.getOwnPropertyDescriptor(name);
     //});
     
+    // I'm being fixed by the real proxy implementation
+    /* if (operation === undefined) {
+      // proxy becomes the fixedProps
+      var fixedPropsMap = Object.create(null);
+      Object.getOwnPropertyNames(this.fixedProps).forEach(function (name) {
+        fixedPropsMap[name] =
+          Object.getOwnPropertyDescriptor(this.fixedProps,name);
+      }.bind(this));
+      return fixedPropsMap;
+    } */
+    
     // the fix() trap should only be called on an extensible proxy
     // fixing a non-extensible proxy should have no effect 
     if (this.isExtensible) {
@@ -310,13 +331,26 @@ FixedHandler.prototype = {
       if (props === undefined) {
         throw new TypeError(operation + " was rejected");
       }
-
+      
       // will throw if any of the props returned already exist in
       // fixedProps and are incompatible with existing attributes
       Object.defineProperties(this.fixedProps, props);
       
       // set the proxy to non-extensible
       this.isExtensible = false;
+      
+      /*if (props === someMarker) {
+        // do a 'real' fix
+        var prim_fixer = ({
+          preventExtensions: prim_preventExtensions,
+          seal:prim_seal,
+          freeze:prim_freeze})[operation];
+        prim_fixer(this.proxy);
+      } else {
+        // do a 'virtual' fix
+        // set the proxy to non-extensible
+        this.isExtensible = false;
+      }*/
     }
   },
   
@@ -714,7 +748,8 @@ FixedHandler.installAsDefault = function() {
       fixableProxies.set(proxy, fixedHandler);
       return proxy;
     };
-    Proxy.createFunction = function(handler, call, construct) {
+    Proxy.createFunction = function(handler, call, opt_construct) {
+      var construct = opt_construct || call;
       var fixedHandler = new FixedHandler(handler);
       var proxy = primCreateFunction(fixedHandler, call, construct);
       fixableProxies.set(proxy, fixedHandler);
