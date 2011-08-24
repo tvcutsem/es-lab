@@ -20,7 +20,7 @@
  * anticipated ES6.
  *
  * @author Mark S. Miller
- * @requires this, logger
+ * @requires this
  * @overrides ses
  */
 
@@ -40,6 +40,6 @@
     if (ses.maxSeverity.level < ses.severities.NEW_SYMPTOM.level) {
       ses.maxSeverity = ses.severities.NEW_SYMPTOM;
     }
-    logger.error('hookupSES failed with: ' + err);
+    ses.logger.error('hookupSES failed with: ' + err);
   }
 })(this);

@@ -4403,7 +4403,7 @@ var ses;
  * anticipated ES6.
  *
  * @author Mark S. Miller
- * @requires this, logger
+ * @requires this
  * @overrides ses
  */
 
@@ -4423,6 +4423,6 @@ var ses;
     if (ses.maxSeverity.level < ses.severities.NEW_SYMPTOM.level) {
       ses.maxSeverity = ses.severities.NEW_SYMPTOM;
     }
-    logger.error('hookupSESPlus failed with: ' + err);
+    ses.logger.error('hookupSESPlus failed with: ' + err);
   }
 })(this);
