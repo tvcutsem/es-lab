@@ -1678,6 +1678,31 @@ var ses;
     })();
   }
 
+  function repair_CANT_GOPD_CALLER() {
+    var unsafeGOPD = Object.getOwnPropertyDescriptor;
+    function gopdWrapper(base, name) {
+      try {
+        return unsafeGOPD(base, name);
+      } catch (err) {
+        if (err instanceof TypeError &&
+            typeof base === 'function' &&
+            (name === 'caller' || name === 'arguments')) {
+          return (function(message) {
+             function fakePoison() { throw new TypeError(message); }
+             return {
+               get: fakePoison,
+               set: fakePoison,
+               enumerable: false,
+               configurable: false
+             };
+           })(err.message);
+        }
+        throw err;
+      }
+    }
+    defProp(Object, 'getOwnPropertyDescriptor', { value: gopdWrapper });
+  }
+
   function repair_CANT_HASOWNPROPERTY_CALLER() {
     Object.prototype.hasOwnProperty = function(name) {
       return !!Object.getOwnPropertyDescriptor(this, name);
@@ -1838,7 +1863,7 @@ var ses;
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
       urls: [],
-      sections: [],
+      sections: ['11.4.1'],
       tests: []
     },
     {
@@ -1875,7 +1900,7 @@ var ses;
       canRepair: false,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1530',
              'http://code.google.com/p/v8/issues/detail?id=1570'],
-      sections: [],
+      sections: ['15.2.3.3', '15.2.3.6', '15.3.5.2'],
       tests: []
     },
     {
@@ -1957,7 +1982,7 @@ var ses;
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: true,
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=637994'],
-      sections: [],
+      sections: ['8.6.1'],
       tests: []
     },
     {
@@ -1983,11 +2008,11 @@ var ses;
     {
       description: 'getOwnPropertyDescriptor on strict "caller" throws',
       test: test_CANT_GOPD_CALLER,
-      repair: void 0,
+      repair: repair_CANT_GOPD_CALLER,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: false,
+      canRepair: true,
       urls: [],
-      sections: [],
+      sections: ['15.2.3.3', '13.2', '13.2.3'],
       tests: []
     },
     {
@@ -1997,7 +2022,7 @@ var ses;
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: true,
       urls: [],
-      sections: [],
+      sections: ['15.2.4.5', '13.2', '13.2.3'],
       tests: []
     },
     {
@@ -2007,7 +2032,7 @@ var ses;
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398'],
-      sections: [],
+      sections: ['11.8.7', '13.2', '13.2.3'],
       tests: []
     },
     {
@@ -2017,7 +2042,7 @@ var ses;
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398'],
-      sections: [],
+      sections: ['11.8.7', '13.2', '13.2.3'],
       tests: []
     },
     {
