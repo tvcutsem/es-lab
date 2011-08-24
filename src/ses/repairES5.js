@@ -324,6 +324,23 @@ var ses;
 
 
   /**
+   * This case occurs on IE10preview2
+   */
+  function test_STRICT_DELETE_RETURNS_FALSE() {
+    if (!RegExp.hasOwnProperty('rightContext')) { return false; }
+    var deleted;
+    try {
+      deleted = delete RegExp.rightContext;
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      return 'Deletion failed with: ' + err;
+    }
+    if (deleted) { return false; }
+    return true;
+  }
+
+
+  /**
    * Work around for https://bugzilla.mozilla.org/show_bug.cgi?id=591846
    * as applied to the RegExp constructor.
    *
@@ -351,7 +368,7 @@ var ses;
       // strict delete should never return false. A failed strict
       // delete should throw a TypeError. TODO(erights): check that
       // this bug shows up in test262, or, if not, report it.
-      return 'Strict delete returned false rather than throwing';
+      return true;
     }
   }
 
@@ -1545,6 +1562,16 @@ var ses;
       canRepair: true,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=55537'],
       sections: ['15.2.3.4'],
+      tests: []
+    },
+    {
+      description: 'Strict delete returned false rather than throwing',
+      test: test_STRICT_DELETE_RETURNS_FALSE,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: [],
       tests: []
     },
     {
