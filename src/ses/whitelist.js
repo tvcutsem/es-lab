@@ -198,8 +198,8 @@ var ses;
         bind: t,
         prototype: '*',
         length: '*',
-        caller: s,                 // when not poison, could be fatal
-        arguments: s,              // when not poison, could be fatal
+        //caller: s,                 // when not poison, could be fatal
+        //arguments: s,              // when not poison, could be fatal
         arity: s,                  // non-std, deprecated in favor of length
         name: s,                   // non-std
         isGenerator: t

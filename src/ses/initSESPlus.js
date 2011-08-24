@@ -560,7 +560,12 @@ var ses;
 
 
   /**
-   * This case occurs on IE10preview2
+   * A strict delete should either succeed, returning true, or it
+   * should fail by throwing a TypeError. Under no circumstances
+   * should a strict delete return false.
+   *
+   * <p>This case occurs on IE10preview2. TODO(erights): check that
+   * this bug shows up in test262, or, if not, report it.
    */
   function test_STRICT_DELETE_RETURNS_FALSE() {
     if (!RegExp.hasOwnProperty('rightContext')) { return false; }
@@ -600,10 +605,8 @@ var ses;
     if (deleted) {
       return 'Deletion of RegExp.leftContext did not succeed.';
     } else {
-      // This case happens on IE10preview2, indicating another bug: a
-      // strict delete should never return false. A failed strict
-      // delete should throw a TypeError. TODO(erights): check that
-      // this bug shows up in test262, or, if not, report it.
+      // This case happens on IE10preview2, as demonstrated by
+      // test_STRICT_DELETE_RETURNS_FALSE.
       return true;
     }
   }
@@ -2800,8 +2803,8 @@ var ses;
         bind: t,
         prototype: '*',
         length: '*',
-        caller: s,                 // when not poison, could be fatal
-        arguments: s,              // when not poison, could be fatal
+        //caller: s,                 // when not poison, could be fatal
+        //arguments: s,              // when not poison, could be fatal
         arity: s,                  // non-std, deprecated in favor of length
         name: s,                   // non-std
         isGenerator: t

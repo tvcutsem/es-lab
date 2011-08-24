@@ -183,7 +183,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
     });
 
     if (fineElements.length >= 1) {
-      appendText(numFineElement, fineElements.length + ' Fine');
+      appendText(numFineElement, fineElements.length + ' Fine.');
       deflate(numFineElement, fineElements);
     }
   };
@@ -205,7 +205,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
     var diagnosisElement = appendNew(reportsElement, 'p');
     var classification = ses.logger.classify(severity);
     var head = textAdder(diagnosisElement, classification.consoleLevel)(
-      problemList.length + ' ' + status);
+      problemList.length + ' ' + status + '. ' + classification.note);
     var tail = textAdder(diagnosisElement, classification.consoleLevel)(
       problemList.sort().join(' '));
     deflate(head, [tail]);
