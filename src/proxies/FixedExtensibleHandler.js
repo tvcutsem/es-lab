@@ -484,8 +484,6 @@ FixedHandler.prototype = {
           throw new TypeError("Cannot report successful assignment for " +
                               "non-configurable, non-writable data property "+
                               name);
-        }
-      }
     }
     
     return res;
@@ -564,7 +562,10 @@ var fixableProxies = new WeakMap();
 // store a reference to the real ES5 primitives before patching them
 var prim_preventExtensions = Object.preventExtensions,
     prim_seal = Object.seal,
-    prim_freeze = Object.freeze;
+    prim_freeze = Object.freeze,
+    prim_isExtensible = Object.isExtensible,
+    prim_isSealed = Object.isSealed,
+    prim_isFrozen = Object.isFrozen;
 
 // patch Object.{preventExtensions,seal,freeze} so that
 // they recognize fixable proxies and act accordingly
@@ -606,6 +607,30 @@ Object.freeze = function(target) {
     return target;
   } else {
     return prim_freeze(target);
+  }
+};
+Object.isExtensible = function(target) {
+  var fixedHandler = fixableProxies.get(target);
+  if (fixedHandler !== undefined) {
+    return fixedHandler.isExtensible;
+  } else {
+    return prim_isExtensible(target);
+  }
+};
+Object.isSealed = function(target) {
+  var fixedHandler = fixableProxies.get(target);
+  if (fixedHandler !== undefined) {
+    return prim_isSealed(fixedHandler.fixedProps);
+  } else {
+    return prim_isSealed(target);
+  }
+};
+Object.isFrozen = function(target) {
+  var fixedHandler = fixableProxies.get(target);
+  if (fixedHandler !== undefined) {
+    return prim_isFrozen(fixedHandler.fixedProps);
+  } else {
+    return prim_isFrozen(target);
   }
 };
 
