@@ -351,7 +351,7 @@ var ses;
       // strict delete should never return false. A failed strict
       // delete should throw a TypeError. TODO(erights): check that
       // this bug shows up in test262, or, if not, report it.
-      return true;
+      return 'Strict delete returned false rather than throwing';
     }
   }
 

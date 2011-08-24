@@ -20,10 +20,10 @@
  * anticipated ES6.
  *
  * @author Mark S. Miller
- * @requires ses, this
+ * @requires this, logger
+ * @overrides ses
  */
 
-var ses;
 (function(global) {
   "use strict";
 

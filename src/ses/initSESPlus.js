@@ -587,7 +587,7 @@ var ses;
       // strict delete should never return false. A failed strict
       // delete should throw a TypeError. TODO(erights): check that
       // this bug shows up in test262, or, if not, report it.
-      return true;
+      return 'Strict delete returned false rather than throwing';
     }
   }
 
@@ -4373,10 +4373,10 @@ var ses;
  * anticipated ES6.
  *
  * @author Mark S. Miller
- * @requires ses, this
+ * @requires this, logger
+ * @overrides ses
  */
 
-var ses;
 (function(global) {
   "use strict";
 

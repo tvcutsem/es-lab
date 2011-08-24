@@ -18,7 +18,7 @@ v=({}).valueOf,that='dummy';try{that=v()}catch(err){return err instanceof TypeEr
 test_MISSING_FREEZE_ETC(){return!('freeze'in Object)}function test_MISSING_CALLEE_DESCRIPTOR(){function
 foo(){}return Object.getOwnPropertyNames(foo).indexOf('callee')<0?false:foo.hasOwnProperty('callee')?'Empty strict function has own callee':true}function
 test_REGEXP_CANT_BE_NEUTERED(){var deleted;if(!RegExp.hasOwnProperty('leftContext'))return false;try{deleted=delete
-RegExp.leftContext}catch(err){return err instanceof TypeError?true:'Deletion failed with: '+err}return RegExp.hasOwnProperty('leftContext')?deleted?'Deletion of RegExp.leftContext did not succeed.':true:false}function
+RegExp.leftContext}catch(err){return err instanceof TypeError?true:'Deletion failed with: '+err}return RegExp.hasOwnProperty('leftContext')?deleted?'Deletion of RegExp.leftContext did not succeed.':'Strict delete returned false rather than throwing':false}function
 test_REGEXP_TEST_EXEC_UNSAFE(){var match;return/foo/.test('xfoox'),match=(new RegExp('(.|\r|\n)*','').exec())[0],match==='undefined'?false:match==='xfoox'?true:'regExp.exec() does not match against \"undefined\".'}function
 test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES(){function foo(){}return Object.defineProperty(foo,'prototype',{'value':{}}),foo.prototype!==Object.getOwnPropertyDescriptor(foo,'prototype').value}function
 test_MISSING_BIND(){return!('bind'in Function.prototype)}function test_BIND_CALLS_APPLY(){var
