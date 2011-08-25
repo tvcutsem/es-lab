@@ -214,15 +214,14 @@ desc=Object.getOwnPropertyDescriptor(global,name),permit,value;desc&&(permit=whi
 register(value,permit){var oldPermit;if(value!==Object(value))return;if(typeof permit!=='object')return;oldPermit=whiteTable.get(value),oldPermit&&fail('primordial reachable through multiple paths'),whiteTable.set(value,permit),Object.keys(permit).forEach(function(name){var
 sub;permit[name]!=='skip'&&(sub=read(value,name),register(sub,permit[name]))})}register(root,whitelist);function
 getPermit(base,name){var permit=whiteTable.get(base),result;if(permit){if(permit[name])return permit[name]};while(true){base=Object.getPrototypeOf(base);if(base===null)return false;permit=whiteTable.get(base);if(permit&&hop.call(permit,name))return result=permit[name],result==='*'||result==='skip'?result:false}}cleaning=WeakMap();function
-cleanProperty(base,name,path){var deleted,desc,desc2,dummy,dummy2,err,exists,isFunctionMagic;function
+cleanProperty(base,name,path){var deleted,desc,desc2,dummy,dummy2,err,exists,isFunctionMagic,value;function
 poison(){throw new TypeError('Cannot access property '+path)}isFunctionMagic=typeof
 base==='function'&&(name==='caller'||name==='arguments');if(isFunctionMagic){desc=Object.getOwnPropertyDescriptor(base,name);if(typeof
 desc.get==='function'&&typeof desc.set==='function'&&!desc.configurable)try{dummy=base[name]}catch(poisonedErr){if(poisonedErr
 instanceof TypeError)return reportProperty(ses.severities.SAFE,'Already poisoned',path),true}}deleted=void
 0,err=void 0;try{deleted=delete base[name]}catch(er){err=er}exists=hop.call(base,name);if(deleted){if(!exists)return reportProperty(ses.severities.SAFE,'Deleted',path),true;reportProperty(ses.severities.SAFE_SPEC_VIOLATION,'Bounced back',path)}else
 if(deleted===false)reportProperty(ses.severities.SAFE_SPEC_VIOLATION,'Strict delete returned false rather than throwing',path);else
-if(err instanceof TypeError)reportProperty(ses.severities.SAFE_SPEC_VIOLATION,'Cannot be deleted',path);else
-reportProperty(ses.severities.NEW_SYMPTOM,'Delete failed with'+err,path);try{Object.defineProperty(base,name,{'get':poison,'set':poison,'enumerable':false,'configurable':false})}catch(cantPoisonErr){try{Object.defineProperty(base,name,{'value':void
+if(err instanceof TypeError);else reportProperty(ses.severities.NEW_SYMPTOM,'Delete failed with'+err,path);try{Object.defineProperty(base,name,{'get':poison,'set':poison,'enumerable':false,'configurable':false})}catch(cantPoisonErr){try{value=Object.getOwnPropertyDescriptor(base,name).value,Object.defineProperty(base,name,{'value':value===null?null:void
 0,'writable':false,'configurable':false})}catch(cantFreezeHarmless){return reportProperty(isFunctionMagic?ses.severities.UNSAFE_SPEC_VIOLATION:ses.severities.NOT_ISOLATED),false}}desc2=Object.getOwnPropertyDescriptor(base,name);if(desc2.get===poison&&desc2.set===poison&&!desc2.configurable)try{dummy2=base[name]}catch(expectedErr){if(expectedErr
 instanceof TypeError)return reportProperty(ses.severities.SAFE,'Successfully poisoned',path),true}else
 if((desc2.value===void 0||desc2.value===null)&&!desc2.writable&&!desc2.configurable)return reportProperty(ses.severities.SAFE,'Frozen harmless',path),false;return reportProperty(ses.severities.NEW_SYMTOM,'Failed to be poisoned',path),false}function

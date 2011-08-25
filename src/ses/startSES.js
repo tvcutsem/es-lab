@@ -803,8 +803,11 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
                      'Strict delete returned false rather than throwing', path);
     } else if (err instanceof TypeError) {
-      reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
-                     'Cannot be deleted', path);
+      // This is the normal abnormal case, so leave it to the next
+      // section to emit a diagnostic.
+      // 
+      // reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+      //                'Cannot be deleted', path);
     } else {
       reportProperty(ses.severities.NEW_SYMPTOM,
                      'Delete failed with' + err, path);
@@ -821,8 +824,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       try {
         // Perhaps it's writable non-configurable, it which case we
         // should still be able to freeze it in a harmless state.
+        var value = Object.getOwnPropertyDescriptor(base, name).value;
         Object.defineProperty(base, name, {
-          value: void 0,
+          value: value === null ? null : void 0,
           writable: false,
           configurable: false
         });

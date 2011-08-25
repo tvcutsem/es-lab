@@ -1095,7 +1095,9 @@ var ses;
       delete map.caller;
     } catch (err) { }
     if (!has(map, 'caller', 'a builtin')) { return false; }
-    function foo() { return map.caller; }
+    function foo() {
+      return map.caller;
+    }
     // using Function so it'll be non-strict
     var testfn = Function('f', 'return [1].map(f)[0];');
     var caller;
@@ -1833,7 +1835,7 @@ var ses;
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=51097',
              'https://bugs.webkit.org/show_bug.cgi?id=58338',
              'http://code.google.com/p/v8/issues/detail?id=1437',
-             'https://connect.microsoft.com/IE/feedback/details/' + 
+             'https://connect.microsoft.com/IE/feedback/details/' +
                '685430/global-object-leaks-from-built-in-methods'],
       sections: ['15.2.4.4'],
       tests: ['S15.2.4.4_A14']
@@ -1864,8 +1866,8 @@ var ses;
       repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
-      urls: ['https://connect.microsoft.com/IE/feedback/details/' + 
-               '685432/strict-delete-sometimes-returns-false-' + 
+      urls: ['https://connect.microsoft.com/IE/feedback/details/' +
+               '685432/strict-delete-sometimes-returns-false-' +
                'rather-than-throwing'],
       sections: ['11.4.1'],
       tests: []
@@ -1880,8 +1882,8 @@ var ses;
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
                'conventions:make_non-standard_properties_configurable',
-             'https://connect.microsoft.com/IE/feedback/details/' + 
-               '685439/non-deletable-regexp-statics-are-a-global-' + 
+             'https://connect.microsoft.com/IE/feedback/details/' +
+               '685439/non-deletable-regexp-statics-are-a-global-' +
                'communication-channel'],
       sections: [],
       tests: []
@@ -2018,7 +2020,7 @@ var ses;
       repair: repair_CANT_GOPD_CALLER,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: true,
-      urls: ['https://connect.microsoft.com/IE/feedback/details/' + 
+      urls: ['https://connect.microsoft.com/IE/feedback/details/' +
                '685436/getownpropertydescriptor-on-strict-caller-throws'],
       sections: ['15.2.3.3', '13.2', '13.2.3'],
       tests: []
@@ -4000,8 +4002,11 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
                      'Strict delete returned false rather than throwing', path);
     } else if (err instanceof TypeError) {
-      reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
-                     'Cannot be deleted', path);
+      // This is the normal abnormal case, so leave it to the next
+      // section to emit a diagnostic.
+      // 
+      // reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+      //                'Cannot be deleted', path);
     } else {
       reportProperty(ses.severities.NEW_SYMPTOM,
                      'Delete failed with' + err, path);
@@ -4018,8 +4023,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       try {
         // Perhaps it's writable non-configurable, it which case we
         // should still be able to freeze it in a harmless state.
+        var value = Object.getOwnPropertyDescriptor(base, name).value;
         Object.defineProperty(base, name, {
-          value: void 0,
+          value: value === null ? null : void 0,
           writable: false,
           configurable: false
         });
