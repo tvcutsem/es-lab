@@ -2876,8 +2876,8 @@ var ses;
         length: '*',
         //caller: s,                 // when not poison, could be fatal
         //arguments: s,              // when not poison, could be fatal
-        arity: s,                  // non-std, deprecated in favor of length
-        name: s,                   // non-std
+        arity: '*',                  // non-std, deprecated in favor of length
+        name: '*',                   // non-std
         isGenerator: t
       }
     },
@@ -2942,7 +2942,7 @@ var ses;
         toUpperCase: t,
         toLocaleUpperCase: t,
         trim: t,
-        length: s                  // can't be redefined on Mozilla
+        length: '*'                  // can't be redefined on Mozilla
       },
       fromCharCode: t
     },
@@ -3049,12 +3049,12 @@ var ses;
       prototype: {
         exec: t,
         test: t,
-        source: s,
-        global: s,
-        ignoreCase: s,
-        multiline: s,
-        lastIndex: s,
-        sticky: s                    // non-std
+        source: '*',
+        global: '*',
+        ignoreCase: '*',
+        multiline: '*',
+        lastIndex: '*',
+        sticky: '*'                  // non-std
       }
     },
     Error: {
@@ -3814,7 +3814,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    */
   function reportProperty(severity, status, path) {
     if (severity.level > ses.maxSeverity.level) {
-      ses.maxSeverity = severity.level;
+      ses.maxSeverity = severity;
     }
     var group = propertyReports[status] || (propertyReports[status] = {
       severity: severity,
@@ -3851,7 +3851,8 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       });
     } catch (ex) {
       reportProperty(ses.severities.NEW_SYMPTOM,
-                     'Cannot be neutered', name);
+                     'Cannot be neutered',
+                     '(a ' + typeof base + ').' + name);
     }
     return result;
   }
@@ -3961,8 +3962,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       throw new TypeError('Cannot access property ' + path);
     }
 
-    if (typeof base === 'function' &&
-        (name === 'caller' || name === 'arguments')) {
+    var isFunctionMagic = typeof base === 'function' &&
+      (name === 'caller' || name === 'arguments');
+
+    if (isFunctionMagic) {
       var desc = Object.getOwnPropertyDescriptor(base, name);
       if (typeof desc.get === 'function' &&
           typeof desc.set === 'function' &&
@@ -4012,9 +4015,24 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         configurable: false
       });
     } catch (cantPoisonErr) {
-      reportProperty(ses.severities.NOT_ISOLATED,
-                     'Cannot be poisoned', path);
-      return false;
+      try {
+        // Perhaps it's writable non-configurable, it which case we
+        // should still be able to freeze it in a harmless state.
+        Object.defineProperty(base, name, {
+          value: void 0,
+          writable: false,
+          configurable: false
+        });
+      } catch (cantFreezeHarmless) {
+        if (isFunctionMagic) {
+          reportProperty(ses.severities.UNSAFE_SPEC_VIOLATION,
+                         'Cannot be made harmless', path);
+        } else {
+          reportProperty(ses.severities.NOT_ISOLATED,
+                         'Cannot be poisoned', path);
+        }
+        return false;
+      }
     }
     var desc2 = Object.getOwnPropertyDescriptor(base, name);
     if (desc2.get === poison &&
@@ -4029,6 +4047,12 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           return true;
         }
       }
+    } else if ((desc2.value === void 0 || desc2.value === null) &&
+               !desc2.writable &&
+               !desc2.configurable) {
+      reportProperty(ses.severities.SAFE,
+                     'Frozen harmless', path);
+      return false;
     }
     reportProperty(ses.severities.NEW_SYMTOM,
                    'Failed to be poisoned', path);
@@ -4063,7 +4087,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   clean(root, '');
 
 
-  Object.keys(propertyReports).forEach(function(status) {
+  Object.keys(propertyReports).sort().forEach(function(status) {
     var group = propertyReports[status];
     ses.logger.reportDiagnosis(group.severity, status, group.list);
   });

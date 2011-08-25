@@ -200,8 +200,8 @@ var ses;
         length: '*',
         //caller: s,                 // when not poison, could be fatal
         //arguments: s,              // when not poison, could be fatal
-        arity: s,                  // non-std, deprecated in favor of length
-        name: s,                   // non-std
+        arity: '*',                  // non-std, deprecated in favor of length
+        name: '*',                   // non-std
         isGenerator: t
       }
     },
@@ -266,7 +266,7 @@ var ses;
         toUpperCase: t,
         toLocaleUpperCase: t,
         trim: t,
-        length: s                  // can't be redefined on Mozilla
+        length: '*'                  // can't be redefined on Mozilla
       },
       fromCharCode: t
     },
@@ -373,12 +373,12 @@ var ses;
       prototype: {
         exec: t,
         test: t,
-        source: s,
-        global: s,
-        ignoreCase: s,
-        multiline: s,
-        lastIndex: s,
-        sticky: s                    // non-std
+        source: '*',
+        global: '*',
+        ignoreCase: '*',
+        multiline: '*',
+        lastIndex: '*',
+        sticky: '*'                  // non-std
       }
     },
     Error: {

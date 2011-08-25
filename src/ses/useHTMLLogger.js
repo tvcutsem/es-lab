@@ -206,7 +206,8 @@ function useHTMLLogger(reportsElement, consoleElement) {
     var classification = ses.logger.classify(severity);
     var head = textAdder(diagnosisElement, classification.consoleLevel)(
       problemList.length + ' ' + status + '. ' + classification.note);
-    var tail = textAdder(diagnosisElement, classification.consoleLevel)(
+    var tail = appendNew(diagnosisElement, 'blockquote');
+    textAdder(tail, classification.consoleLevel)(
       problemList.sort().join(' '));
     deflate(head, [tail]);
   };
