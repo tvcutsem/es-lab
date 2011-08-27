@@ -79,7 +79,7 @@ var Function;
  *
  * <p>Under server-side Caja translation for old pre-ES5 browsers, the
  * synchronous interface of the evaluation APIs (currently {@code
- * eval, Function, cajaVM.{compile, compileModule, eval, Function}})
+ * eval, Function, cajaVM.{compileExpr, compileModule, eval, Function}})
  * cannot reasonably be provided. Instead, under translation we expect
  * <ul>
  * <li>Not to have a binding for the pseudo-global {@code "eval"} on root,
@@ -93,7 +93,7 @@ var Function;
  * <li>The {@code Q} API to always be available, to handle
  *     asyncronous, promise, and remote requests.
  * <li>The evaluating methods on {@code cajaVM} -- currently {@code
- *     compile, compileModule, eval, and Function} -- to be remote
+ *     compileExpr, compileModule, eval, and Function} -- to be remote
  *     promises for their normal interfaces, which therefore must be
  *     invoked with {@code Q.post}.
  * <li>Since {@code Q.post} can be used for asynchronously invoking
@@ -363,14 +363,15 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
 
     /**
-     * Compile {@code exprSrc} as a strict expression into a function
+     * Compiles {@code exprSrc} as a strict expression into a function
      * of an environment {@code env}, that when called evaluates
      * {@code exprSrc} in a virtual global environment consisting only
      * of the whitelisted globals and a snapshot of the own properties
      * of {@code env}.
      *
-     * <p>When SES {@code compile} is provided primitively, it should
-     * accept a Program and return a function that evaluates it to the
+     * <p>When SES is provided primitively, it should provide an
+     * analogous {@code compileProgram} function that accepts a
+     * Program and return a function that evaluates it to the
      * Program's completion value. Unfortunately, this is not
      * practical as a library without some non-standard support from
      * the platform such as a parser API that provides an AST.
@@ -385,10 +386,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      *
      * <p>TODO(erights): Find out if any platforms have any way to
      * associate a file name and line number with eval'ed text, and
-     * arrange to pass these through compile and all its relevant
-     * callers.
+     * arrange to pass these through {@code compileExpr} and all its
+     * relevant callers.
      */
-    function compile(exprSrc) {
+    function compileExpr(exprSrc) {
       if (dirty) { fail('Initial cleaning failed'); }
       verifyStrictExpression(exprSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
@@ -483,7 +484,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * from the text to be compiled.
      */
     function compileModule(modSrc) {
-      var moduleMaker = compile('(function() {' + modSrc + '}).call(this)');
+      var moduleMaker = compileExpr('(function() {' + modSrc + '}).call(this)');
       moduleMaker.requirements = getRequirements(modSrc);
       Object.freeze(moduleMaker.prototype);
       return Object.freeze(moduleMaker);
@@ -503,7 +504,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       body = String(body || '');
       params = params.join(',');
       var exprSrc = '(function(' + params + '\n){' + body + '})';
-      return compile(exprSrc)({});
+      return compileExpr(exprSrc)({});
     }
     FakeFunction.prototype = UnsafeFunction.prototype;
     FakeFunction.prototype.constructor = FakeFunction;
@@ -544,7 +545,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       } catch (x) {
         src = '(function() {' + src + '\n}).call(this)';
       }
-      return compile(src)({});
+      return compileExpr(src)({});
     }
 
     if (TAME_GLOBAL_EVAL) {
@@ -597,7 +598,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         }
       },
       def: def,
-      compile: compile,
+      compileExpr: compileExpr,
       compileModule: compileModule,
       eval: fakeEval,
       Function: FakeFunction
@@ -616,9 +617,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * Report how a property manipualtion went.
    */
   function reportProperty(severity, status, path) {
-    if (severity.level > ses.maxSeverity.level) {
-      ses.maxSeverity = severity;
-    }
+    ses.updateMaxSeverity(severity);
     var group = propertyReports[status] || (propertyReports[status] = {
       severity: severity,
       list: []
@@ -805,7 +804,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     } else if (err instanceof TypeError) {
       // This is the normal abnormal case, so leave it to the next
       // section to emit a diagnostic.
-      // 
+      //
       // reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
       //                'Cannot be deleted', path);
     } else {
@@ -902,7 +901,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   ses.logger.reportMax();
 
   if (ses.ok()) {
-    // We succeeded. Enable safe Function, eval, and compile to work.
+    // We succeeded. Enable safe Function, eval, and compile* to work.
     dirty = false;
     ses.logger.log('initSES succeeded.');
   } else {

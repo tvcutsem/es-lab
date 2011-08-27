@@ -449,6 +449,99 @@ var ses;
     return ses.maxSeverity.level <= ses.maxAcceptableSeverity.level;
   };
 
+  /**
+   * Update the max based on the provided severity.
+   *
+   * <p>If the provided severity exceeds the max so far, update the
+   * max to match.
+   */
+  ses.updateMaxSeverity = function(severity) {
+    if (severity.level > ses.maxSeverity.level) {
+      ses.maxSeverity = severity;
+    }
+  };
+
+  //////// Prepare for "caller" and "argument" testing and repair /////////
+
+  /**
+   * Needs to work on ES3, since repairES5.js may be run on an ES3
+   * platform.
+   */
+  function strictForEachFn(list, callback) {
+    for (var i = 0, len = list.length; i < len; i++) {
+      callback(list[i], i);
+    }
+  }
+
+  /**
+   * Needs to work on ES3, since repairES5.js may be run on an ES3
+   * platform.
+   *
+   * <p>Also serves as our representative strict function, by contrast
+   * to builtInMapMethod below, for testing what the "caller" and
+   * "arguments" properties of a strict function reveals.
+   */
+  function strictMapFn(list, callback) {
+    var result = [];
+    for (var i = 0, len = list.length; i < len; i++) {
+      result.push(callback(list[i], i));
+    }
+    return result;
+  }
+
+  /**
+   * Sample map early, to obtain a representative built-in for testing.
+   *
+   * <p>There is no reliable test for whether a function is a
+   * built-in, and it is possible some of the tests below might
+   * replace the built-in Array.prototype.map, though currently none
+   * do. Since we <i>assume</i> (but with no reliable way to check)
+   * that repairES5.js runs in its JavaScript context before anything
+   * which might have replaced map, we sample it now. The map method
+   * is a particularly nice one to sample, since it can easily be used
+   * to test what the "caller" and "arguments" properties on a
+   * in-progress built-in method reveals.
+   */
+  var builtInMapMethod = Array.prototype.map;
+
+  /**
+   * By the time this module exits, either this is repaired to be a
+   * function that is adequate to make the "caller" property of a
+   * strict or built-in function harmess, or this module has reported
+   * a failure to repair.
+   *
+   * <p>Start off with the optimistic assumption that nothing is
+   * needed to make the "caller" property of a strict or built-in
+   * function harmless. We are not concerned with the "caller"
+   * property of non-strict functions. It is not the responsibility of
+   * this module to actually make these "caller" properties
+   * harmless. Rather, this module only provides this function so
+   * clients such as startSES.js can use it to do so on the functions
+   * they whitelist.
+   *
+   * <p>If the "caller" property of strict functions are not already
+   * harmless, then this platform cannot be repaired to be
+   * SES-safe. The only reason why {@code makeCallerHarmless} must
+   * work on strict functions in addition to built-in is that some of
+   * the other repairs below will replace some of the built-ins with
+   * strict functions, so startSES.js will apply {@code
+   * makeCallerHarmless} blindly to both strict and built-in
+   * functions. {@code makeCallerHarmless} simply need not to complete
+   * without breaking anything when given a strict function argument.
+   */
+  ses.makeCallerHarmless = function(func, path) {};
+
+  /**
+   * By the time this module exits, either this is repaired to be a
+   * function that is adequate to make the "arguments" property of a
+   * strict or built-in function harmess, or this module has reported
+   * a failure to repair.
+   *
+   * Exactly analogous to {@code makeCallerHarmless}, but for
+   * "arguments" rather than "caller".
+   */
+  ses.makeArgumentsHarmless = function(func, path) {};
+
   ////////////////////// Tests /////////////////////
   //
   // Each test is a function of no arguments that should not leave any
@@ -1084,25 +1177,60 @@ var ses;
   }
 
   /**
-   * No workaround (yet?) for
-   * https://bugzilla.mozilla.org/show_bug.cgi?id=591846 as applied to
-   * "caller"
+   *
    */
-  function test_BUILTIN_LEAKS_CALLER() {
-    var map = Array.prototype.map;
-    if (!has(map, 'caller', 'a builtin')) { return false; }
-    try {
-      delete map.caller;
-    } catch (err) { }
-    if (!has(map, 'caller', 'a builtin')) { return false; }
-    function foo() {
-      return map.caller;
-    }
+  function test_STRICT_CALLER_NOT_POISONED() {
+    if (!has2(strictMapFn, 'caller', 'a strict function')) { return false; }
+    function foo(m) { return m.caller; }
     // using Function so it'll be non-strict
-    var testfn = Function('f', 'return [1].map(f)[0];');
+    var testfn = Function('m', 'f', 'return m([m], f)[0];');
     var caller;
     try {
-      caller = testfn(foo);
+      caller = testfn(strictMapFn, foo);
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      return 'Strict "caller" failed with: ' + err;
+    }
+    if (null === caller || void 0 === caller) { return true; }
+    if (testfn === caller) {
+      return 'Strict "caller" reveals caller';
+    }
+    return 'Unexpected "caller": ' + caller;
+  }
+
+  /**
+   *
+   */
+  function test_STRICT_ARGUMENTS_NOT_POISONED() {
+    if (!has2(strictMapFn, 'arguments', 'a strict function')) { return false; }
+    function foo(m) { return m.arguments; }
+    // using Function so it'll be non-strict
+    var testfn = Function('m', 'f', 'return m([m], f)[0];');
+    var args;
+    try {
+      args = testfn(strictMapFn, foo);
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      return 'Strict "arguments" failed with: ' + err;
+    }
+    if (args === void 0 || args === null) { return true; }
+    return 'Strict "arguments" reveals something';
+  }
+
+  /**
+   * Workaround https://bugzilla.mozilla.org/show_bug.cgi?id=591846 as
+   * applied to "caller"
+   */
+  function test_BUILTIN_LEAKS_CALLER() {
+    if (!has(builtInMapMethod, 'caller', 'a builtin')) { return false; }
+    function foo(m) { return m.caller; }
+    // using Function so it'll be non-strict
+    var testfn = Function('a', 'f', 'return a.map(f)[0];');
+    var a = [builtInMapMethod];
+    a.map = builtInMapMethod;
+    var caller;
+    try {
+      caller = testfn(a, foo);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
       return 'Built-in "caller" failed with: ' + err;
@@ -1113,23 +1241,19 @@ var ses;
   }
 
   /**
-   * No workaround (yet?) for
-   * https://bugzilla.mozilla.org/show_bug.cgi?id=591846 as applied to
-   * "arguments"
+   * Workaround https://bugzilla.mozilla.org/show_bug.cgi?id=591846 as
+   * applied to "arguments"
    */
   function test_BUILTIN_LEAKS_ARGUMENTS() {
-    var map = Array.prototype.map;
-    if (!has(map, 'arguments', 'a builtin')) { return false; }
-    try {
-      delete map.arguments;
-    } catch (err) { }
-    if (!has(map, 'arguments', 'a builtin')) { return false; }
-    function foo() { return map.arguments; }
+    if (!has(builtInMapMethod, 'arguments', 'a builtin')) { return false; }
+    function foo(m) { return m.arguments; }
     // using Function so it'll be non-strict
-    var testfn = Function('f', 'return [1].map(f)[0];');
+    var testfn = Function('a', 'f', 'return a.map(f)[0];');
+    var a = [builtInMapMethod];
+    a.map = builtInMapMethod;
     var args;
     try {
-      args = testfn(foo);
+      args = testfn(a, foo);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
       return 'Built-in "arguments" failed with: ' + err;
@@ -1146,14 +1270,8 @@ var ses;
     function foo() { return bar.caller; }
     var bar = foo.bind({});
     if (!has2(bar, 'caller', 'a bound function')) { return false; }
-    try {
-      delete bar.caller;
-    } catch (err) { }
-    if (!has2(bar, 'caller', 'a bound function')) {
-      return '"caller" on bound functions can be deleted.';
-    }
     // using Function so it'll be non-strict
-    var testfn = Function('f', 'return f();');
+    var testfn = Function('b', 'return b();');
     var caller;
     try {
       caller = testfn(bar);
@@ -1161,7 +1279,8 @@ var ses;
       if (err instanceof TypeError) { return false; }
       return 'Bound function "caller" failed with: ' + err;
     }
-    if ([testfn, void 0, null].indexOf(caller) >= 0) { return false; }
+    if (caller === void 0 || caller === null) { return false; }
+    if (caller === testfn) { return true; }
     return 'Unexpected "caller": ' + caller;
   }
 
@@ -1173,14 +1292,8 @@ var ses;
     function foo() { return bar.arguments; }
     var bar = foo.bind({});
     if (!has2(bar, 'arguments', 'a bound function')) { return false; }
-    try {
-      delete bar.arguments;
-    } catch (err) { }
-    if (!has2(bar, 'arguments', 'a bound function')) {
-      return '"arguments" on bound functions can be deleted.';
-    }
     // using Function so it'll be non-strict
-    var testfn = Function('f', 'return f();');
+    var testfn = Function('b', 'return b();');
     var args;
     try {
       args = testfn(bar);
@@ -1711,6 +1824,62 @@ var ses;
     };
   }
 
+  function makeHarmless(magicName, func, path) {
+    function poison() {
+      throw new TypeError('Cannot access property ' + path);
+    }
+    var desc = Object.getOwnPropertyDescriptor(func, magicName);
+    if ((!desc && Object.isExtensible(func)) || desc.configurable) {
+      try {
+        Object.defineProperty(func, magicName, {
+          get: poison,
+          set: poison,
+          configurable: false
+        });
+      } catch (cantPoisonErr) {
+        return 'Poisoning failed with ' + cantPoisonErr;
+      }
+      desc = Object.getOwnPropertyDescriptor(func, magicName);
+      if (desc &&
+          desc.get === poison &&
+          desc.set === poison &&
+          !desc.configurable) {
+        return 'Apparently oisoned';
+      }
+      return 'Not poisoned';
+    }
+    if ('get' in desc || 'set' in desc) {
+      return 'Apparently safe';
+    }
+    try {
+      Object.defineProperty(func, magicName, {
+        value: desc.value === null ? null : void 0,
+        writable: false,
+        configurable: false
+      });
+    } catch (cantFreezeHarmlessErr) {
+      return 'Freezing harmless failed with ' + cantFreezeHarmlessErr;
+    }
+    desc = Object.getOwnPropertyDescriptor(func, magicName);
+    if (desc &&
+        (desc.value === null || desc.value === void 0) &&
+        !desc.writable &&
+        !desc.configurable) {
+      return 'Apparently frozen harmless';
+    }
+    return 'Did not freeze harmless';
+  }
+
+  function repair_BUILTIN_LEAKS_CALLER() {
+    ses.makeCallerHarmless = makeHarmless.bind(void 0, 'caller');
+    logger.info(ses.makeCallerHarmless(builtInMapMethod));
+  }
+
+  function repair_BUILTIN_LEAKS_ARGUMENTS() {
+    ses.makeArgumentsHarmless = makeHarmless.bind(void 0, 'arguments');
+    logger.info(ses.makeArgumentsHarmless(builtInMapMethod));
+  }
+
   function repair_JSON_PARSE_PROTO_CONFUSION() {
     var unsafeParse = JSON.parse;
     function validate(plainJSON) {
@@ -2056,11 +2225,31 @@ var ses;
       tests: []
     },
     {
-      description: 'Built in functions leak "caller"',
-      test: test_BUILTIN_LEAKS_CALLER,
+      description: 'Strict "caller" not poisoned',
+      test: test_STRICT_CALLER_NOT_POISONED,
       repair: void 0,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'Strict "arguments" not poisoned',
+      test: test_STRICT_ARGUMENTS_NOT_POISONED,
+      repair: void 0,
+      preSeverity: severities.NOT_OCAP_SAFE,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'Built in functions leak "caller"',
+      test: test_BUILTIN_LEAKS_CALLER,
+      repair: repair_BUILTIN_LEAKS_CALLER,
+      preSeverity: severities.NOT_OCAP_SAFE,
+      canRepair: true,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
@@ -2071,9 +2260,9 @@ var ses;
     {
       description: 'Built in functions leak "arguments"',
       test: test_BUILTIN_LEAKS_ARGUMENTS,
-      repair: void 0,
+      repair: repair_BUILTIN_LEAKS_ARGUMENTS,
       preSeverity: severities.NOT_OCAP_SAFE,
-      canRepair: false,
+      canRepair: true,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
@@ -2139,26 +2328,6 @@ var ses;
   ////////////////////// Testing, Repairing, Reporting ///////////
 
   /**
-   * Needs to work on ES3
-   */
-  function forEach(list, callback) {
-    for (var i = 0, len = list.length; i < len; i++) {
-      callback(list[i], i);
-    }
-  }
-
-  /**
-   * Needs to work on ES3
-   */
-  function map(list, callback) {
-    var result = [];
-    for (var i = 0, len = list.length; i < len; i++) {
-      result.push(callback(list[i], i));
-    }
-    return result;
-  }
-
-  /**
    * Run a set of tests & repairs, and report results.
    *
    * <p>First run all the tests before repairing anything.
@@ -2168,11 +2337,11 @@ var ses;
    * And finally return a list of records of results.
    */
   function testRepairReport(kludges) {
-    var beforeFailures = map(kludges, function(kludge) {
+    var beforeFailures = strictMapFn(kludges, function(kludge) {
       return kludge.test();
     });
     var repairs = [];
-    forEach(kludges, function(kludge, i) {
+    strictForEachFn(kludges, function(kludge, i) {
       if (beforeFailures[i]) {
         var repair = kludge.repair;
         if (repair && repairs.lastIndexOf(repair) === -1) {
@@ -2181,11 +2350,11 @@ var ses;
         }
       }
     });
-    var afterFailures = map(kludges, function(kludge) {
+    var afterFailures = strictMapFn(kludges, function(kludge) {
       return kludge.test();
     });
 
-    return map(kludges, function(kludge, i) {
+    return strictMapFn(kludges, function(kludge, i) {
       var status = statuses.ALL_FINE;
       var postSeverity = severities.SAFE;
       var beforeFailure = beforeFailures[i];
@@ -2230,9 +2399,7 @@ var ses;
         postSeverity = severities.NEW_SYMPTOM;
       }
 
-      if (postSeverity.level > ses.maxSeverity.level) {
-        ses.maxSeverity = postSeverity;
-      }
+      ses.updateMaxSeverity(postSeverity);
 
       return {
         description:   kludge.description,
@@ -2256,9 +2423,7 @@ var ses;
     }
     logger.reportRepairs(reports);
   } catch (err) {
-    if (ses.maxSeverity.level < ses.severities.NEW_SYMPTOM.level) {
-      ses.maxSeverity = ses.severities.NEW_SYMPTOM;
-    }
+    ses.updateMaxSeverity(ses.severities.NOT_SUPPORTED);
     logger.error('ES5 Repair failed with: ' + err);
   }
 
@@ -2794,8 +2959,9 @@ var ses;
     cajaVM: {                        // Caja support
       log: t,
       def: t,
-      compile: t,
+      compileExpr: t,
       compileModule: t,              // experimental
+      compileProgram: t,             // Cannot be implemented in just ES5.1.
       eval: t,
       Function: t,
 
@@ -2944,7 +3110,7 @@ var ses;
         toUpperCase: t,
         toLocaleUpperCase: t,
         trim: t,
-        length: '*'                  // can't be redefined on Mozilla
+        length: '*'
       },
       fromCharCode: t
     },
@@ -3278,7 +3444,7 @@ var Function;
  *
  * <p>Under server-side Caja translation for old pre-ES5 browsers, the
  * synchronous interface of the evaluation APIs (currently {@code
- * eval, Function, cajaVM.{compile, compileModule, eval, Function}})
+ * eval, Function, cajaVM.{compileExpr, compileModule, eval, Function}})
  * cannot reasonably be provided. Instead, under translation we expect
  * <ul>
  * <li>Not to have a binding for the pseudo-global {@code "eval"} on root,
@@ -3292,7 +3458,7 @@ var Function;
  * <li>The {@code Q} API to always be available, to handle
  *     asyncronous, promise, and remote requests.
  * <li>The evaluating methods on {@code cajaVM} -- currently {@code
- *     compile, compileModule, eval, and Function} -- to be remote
+ *     compileExpr, compileModule, eval, and Function} -- to be remote
  *     promises for their normal interfaces, which therefore must be
  *     invoked with {@code Q.post}.
  * <li>Since {@code Q.post} can be used for asynchronously invoking
@@ -3562,14 +3728,15 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
 
     /**
-     * Compile {@code exprSrc} as a strict expression into a function
+     * Compiles {@code exprSrc} as a strict expression into a function
      * of an environment {@code env}, that when called evaluates
      * {@code exprSrc} in a virtual global environment consisting only
      * of the whitelisted globals and a snapshot of the own properties
      * of {@code env}.
      *
-     * <p>When SES {@code compile} is provided primitively, it should
-     * accept a Program and return a function that evaluates it to the
+     * <p>When SES is provided primitively, it should provide an
+     * analogous {@code compileProgram} function that accepts a
+     * Program and return a function that evaluates it to the
      * Program's completion value. Unfortunately, this is not
      * practical as a library without some non-standard support from
      * the platform such as a parser API that provides an AST.
@@ -3584,10 +3751,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      *
      * <p>TODO(erights): Find out if any platforms have any way to
      * associate a file name and line number with eval'ed text, and
-     * arrange to pass these through compile and all its relevant
-     * callers.
+     * arrange to pass these through {@code compileExpr} and all its
+     * relevant callers.
      */
-    function compile(exprSrc) {
+    function compileExpr(exprSrc) {
       if (dirty) { fail('Initial cleaning failed'); }
       verifyStrictExpression(exprSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
@@ -3682,7 +3849,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * from the text to be compiled.
      */
     function compileModule(modSrc) {
-      var moduleMaker = compile('(function() {' + modSrc + '}).call(this)');
+      var moduleMaker = compileExpr('(function() {' + modSrc + '}).call(this)');
       moduleMaker.requirements = getRequirements(modSrc);
       Object.freeze(moduleMaker.prototype);
       return Object.freeze(moduleMaker);
@@ -3702,7 +3869,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       body = String(body || '');
       params = params.join(',');
       var exprSrc = '(function(' + params + '\n){' + body + '})';
-      return compile(exprSrc)({});
+      return compileExpr(exprSrc)({});
     }
     FakeFunction.prototype = UnsafeFunction.prototype;
     FakeFunction.prototype.constructor = FakeFunction;
@@ -3743,7 +3910,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       } catch (x) {
         src = '(function() {' + src + '\n}).call(this)';
       }
-      return compile(src)({});
+      return compileExpr(src)({});
     }
 
     if (TAME_GLOBAL_EVAL) {
@@ -3796,7 +3963,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         }
       },
       def: def,
-      compile: compile,
+      compileExpr: compileExpr,
       compileModule: compileModule,
       eval: fakeEval,
       Function: FakeFunction
@@ -3815,9 +3982,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * Report how a property manipualtion went.
    */
   function reportProperty(severity, status, path) {
-    if (severity.level > ses.maxSeverity.level) {
-      ses.maxSeverity = severity;
-    }
+    ses.updateMaxSeverity(severity);
     var group = propertyReports[status] || (propertyReports[status] = {
       severity: severity,
       list: []
@@ -4004,7 +4169,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     } else if (err instanceof TypeError) {
       // This is the normal abnormal case, so leave it to the next
       // section to emit a diagnostic.
-      // 
+      //
       // reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
       //                'Cannot be deleted', path);
     } else {
@@ -4101,7 +4266,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   ses.logger.reportMax();
 
   if (ses.ok()) {
-    // We succeeded. Enable safe Function, eval, and compile to work.
+    // We succeeded. Enable safe Function, eval, and compile* to work.
     dirty = false;
     ses.logger.log('initSES succeeded.');
   } else {
@@ -4147,9 +4312,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
                  ses.atLeastFreeVarNames,
                  function () { return {}; });
   } catch (err) {
-    if (ses.maxSeverity.level < ses.severities.NEW_SYMPTOM.level) {
-      ses.maxSeverity = ses.severities.NEW_SYMPTOM;
-    }
+    ses.updateMaxSeverity(ses.severities.NOT_SUPPORTED);
     ses.logger.error('hookupSES failed with: ' + err);
   }
 })(this);

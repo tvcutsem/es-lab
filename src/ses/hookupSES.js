@@ -37,9 +37,7 @@
                  ses.atLeastFreeVarNames,
                  function () { return {}; });
   } catch (err) {
-    if (ses.maxSeverity.level < ses.severities.NEW_SYMPTOM.level) {
-      ses.maxSeverity = ses.severities.NEW_SYMPTOM;
-    }
+    ses.updateMaxSeverity(ses.severities.NOT_SUPPORTED);
     ses.logger.error('hookupSES failed with: ' + err);
   }
 })(this);

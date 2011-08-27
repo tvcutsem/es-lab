@@ -116,8 +116,9 @@ var ses;
     cajaVM: {                        // Caja support
       log: t,
       def: t,
-      compile: t,
+      compileExpr: t,
       compileModule: t,              // experimental
+      compileProgram: t,             // Cannot be implemented in just ES5.1.
       eval: t,
       Function: t,
 
@@ -266,7 +267,7 @@ var ses;
         toUpperCase: t,
         toLocaleUpperCase: t,
         trim: t,
-        length: '*'                  // can't be redefined on Mozilla
+        length: '*'
       },
       fromCharCode: t
     },

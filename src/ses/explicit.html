@@ -69,7 +69,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       return;
     }
 
-    var output = cajaVM.eval('3+4') * cajaVM.compile('window')({window: 6});
+    var output = cajaVM.eval('3+4') * cajaVM.compileExpr('window')({window: 6});
     var text1 = output === 42 ? 'succeeded' : 'failed: ' + output;
     show1.appendChild(document.createTextNode(text1));
 
