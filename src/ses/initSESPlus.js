@@ -529,7 +529,9 @@ var ses;
    * functions. {@code makeCallerHarmless} simply need not to complete
    * without breaking anything when given a strict function argument.
    */
-  ses.makeCallerHarmless = function(func, path) {};
+  ses.makeCallerHarmless = function(func, path) {
+    return 'Apparently fine';
+  };
 
   /**
    * By the time this module exits, either this is repaired to be a
@@ -540,7 +542,9 @@ var ses;
    * Exactly analogous to {@code makeCallerHarmless}, but for
    * "arguments" rather than "caller".
    */
-  ses.makeArgumentsHarmless = function(func, path) {};
+  ses.makeArgumentsHarmless = function(func, path) {
+    return 'Apparently fine';
+  };
 
   ////////////////////// Tests /////////////////////
   //
@@ -1844,7 +1848,7 @@ var ses;
           desc.get === poison &&
           desc.set === poison &&
           !desc.configurable) {
-        return 'Apparently oisoned';
+        return 'Apparently poisoned';
       }
       return 'Not poisoned';
     }
@@ -4128,24 +4132,20 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     function poison() {
       throw new TypeError('Cannot access property ' + path);
     }
+    var diagnostic;
 
-    var isFunctionMagic = typeof base === 'function' &&
-      (name === 'caller' || name === 'arguments');
-
-    if (isFunctionMagic) {
-      var desc = Object.getOwnPropertyDescriptor(base, name);
-      if (typeof desc.get === 'function' &&
-          typeof desc.set === 'function' &&
-          !desc.configurable) {
-        try {
-          var dummy = base[name];
-        } catch (poisonedErr) {
-          if (poisonedErr instanceof TypeError) {
-            reportProperty(ses.severities.SAFE,
-                           'Already poisoned', path);
-            return true;
-          }
-        }
+    if (typeof base === 'function') {
+      if (name === 'caller') {
+        diagnostic = ses.makeCallerHarmless(base, path);
+        reportProperty(ses.severities.SAFE,
+                       diagnostic, path);
+        return true;
+      }
+      if (name === 'arguments') {
+        diagnostic = ses.makeArgumentsHarmless(base, path);
+        reportProperty(ses.severities.SAFE,
+                       diagnostic, path);
+        return true;
       }
     }
 
@@ -4195,13 +4195,8 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           configurable: false
         });
       } catch (cantFreezeHarmless) {
-        if (isFunctionMagic) {
-          reportProperty(ses.severities.UNSAFE_SPEC_VIOLATION,
-                         'Cannot be made harmless', path);
-        } else {
-          reportProperty(ses.severities.NOT_ISOLATED,
-                         'Cannot be poisoned', path);
-        }
+        reportProperty(ses.severities.NOT_ISOLATED,
+                       'Cannot be poisoned', path);
         return false;
       }
     }

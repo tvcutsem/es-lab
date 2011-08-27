@@ -293,7 +293,9 @@ var ses;
    * functions. {@code makeCallerHarmless} simply need not to complete
    * without breaking anything when given a strict function argument.
    */
-  ses.makeCallerHarmless = function(func, path) {};
+  ses.makeCallerHarmless = function(func, path) {
+    return 'Apparently fine';
+  };
 
   /**
    * By the time this module exits, either this is repaired to be a
@@ -304,7 +306,9 @@ var ses;
    * Exactly analogous to {@code makeCallerHarmless}, but for
    * "arguments" rather than "caller".
    */
-  ses.makeArgumentsHarmless = function(func, path) {};
+  ses.makeArgumentsHarmless = function(func, path) {
+    return 'Apparently fine';
+  };
 
   ////////////////////// Tests /////////////////////
   //
@@ -1608,7 +1612,7 @@ var ses;
           desc.get === poison &&
           desc.set === poison &&
           !desc.configurable) {
-        return 'Apparently oisoned';
+        return 'Apparently poisoned';
       }
       return 'Not poisoned';
     }
