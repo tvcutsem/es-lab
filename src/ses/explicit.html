@@ -99,5 +99,19 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     show2.appendChild(document.createTextNode(text2));
   })();
 </script>
+
+<p>
+Using <span id="browserName">unknown</span> 
+ <span id="browserVersion">unknown</span>
+on <span id="browserOS">unknown</span>
+<script src="detect.js"></script>
+<script>
+(function(){
+  "use strict"
+  gebi('browserName').textContent = BrowserDetect.browser;
+  gebi('browserVersion').textContent = BrowserDetect.version;
+  gebi('browserOS').textContent = BrowserDetect.OS;  
+})();
+</script>
 </body>
 </html>
