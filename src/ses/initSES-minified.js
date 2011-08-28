@@ -146,11 +146,10 @@ makeHarmless(magicName,func,path){var desc;function poison(){throw new TypeError
 desc||'set'in desc)return'Apparently safe';try{Object.defineProperty(func,magicName,{'value':desc.value===null?null:void
 0,'writable':false,'configurable':false})}catch(cantFreezeHarmlessErr){return'Freezing harmless failed with '+cantFreezeHarmlessErr}return desc=Object.getOwnPropertyDescriptor(func,magicName),desc&&(desc.value===null||desc.value===void
 0)&&!desc.writable&&!desc.configurable?'Apparently frozen harmless':'Did not freeze harmless'}function
-repair_BUILTIN_LEAKS_CALLER(){ses.makeCallerHarmless=makeHarmless.bind(void 0,'caller'),logger.info(ses.makeCallerHarmless(builtInMapMethod))}function
+repair_BUILTIN_LEAKS_CALLER(){ses.makeCallerHarmless=makeHarmless.bind(void 0,'caller')}function
 repair_BUILTIN_LEAKS_ARGUMENTS(){ses.makeArgumentsHarmless=makeHarmless.bind(void
-0,'arguments'),logger.info(ses.makeArgumentsHarmless(builtInMapMethod))}function
-repair_JSON_PARSE_PROTO_CONFUSION(){var unsafeParse=JSON.parse;function validate(plainJSON){var
-proto;if(plainJSON!==Object(plainJSON))return;proto=Object.getPrototypeOf(plainJSON);if(proto!==Object.prototype&&proto!==Array.prototype)throw new
+0,'arguments')}function repair_JSON_PARSE_PROTO_CONFUSION(){var unsafeParse=JSON.parse;function
+validate(plainJSON){var proto;if(plainJSON!==Object(plainJSON))return;proto=Object.getPrototypeOf(plainJSON);if(proto!==Object.prototype&&proto!==Array.prototype)throw new
 TypeError('Parse resulted in invalid JSON. See http://code.google.com/p/v8/issues/detail?id=621');Object.keys(plainJSON).forEach(function(key){validate(plainJSON[key])})}defProp(JSON,'parse',{'value':function(text,opt_reviver){var
 result=unsafeParse(text);return validate(result),opt_reviver?unsafeParse(text,opt_reviver):result},'writable':true,'enumerable':false,'configurable':true})}severities=ses.severities,statuses=ses.statuses,baseKludges=[{'description':'Missing getOwnPropertyNames','test':test_MISSING_GETOWNPROPNAMES,'repair':void
 0,'preSeverity':severities.NOT_SUPPORTED,'canRepair':false,'urls':[],'sections':['15.2.3.4'],'tests':[]}],supportedKludges=[{'description':'Global object leaks from global function calls','test':test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS,'repair':void

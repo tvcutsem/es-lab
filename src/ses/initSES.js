@@ -1883,12 +1883,12 @@ var ses;
 
   function repair_BUILTIN_LEAKS_CALLER() {
     ses.makeCallerHarmless = makeHarmless.bind(void 0, 'caller');
-    logger.info(ses.makeCallerHarmless(builtInMapMethod));
+    //logger.info(ses.makeCallerHarmless(builtInMapMethod));
   }
 
   function repair_BUILTIN_LEAKS_ARGUMENTS() {
     ses.makeArgumentsHarmless = makeHarmless.bind(void 0, 'arguments');
-    logger.info(ses.makeArgumentsHarmless(builtInMapMethod));
+    //logger.info(ses.makeArgumentsHarmless(builtInMapMethod));
   }
 
   function repair_JSON_PARSE_PROTO_CONFUSION() {
