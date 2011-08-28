@@ -130,13 +130,8 @@ if (!ses) { ses = {}; }
     // We no longer test (typeof console.log === 'function') since,
     // on IE9 and IE10preview, in violation of the ES5 spec, it
     // is callable but has typeof "object".
-    // TODO(erights): report to MS.
-
-    // TODO(erights): This assumes without checking that if
-    // console.log is present, then console has working log, info,
-    // warn, and error methods. Check that this is actually the case
-    // on all platforms we care about, or, if not, do something
-    // fancier here.
+    // See https://connect.microsoft.com/IE/feedback/details/685962/
+    //   console-log-and-others-are-callable-but-arent-typeof-function
 
     // We manually wrap each call to a console method because <ul>
     // <li>On some platforms, these methods depend on their
@@ -1013,8 +1008,9 @@ var ses;
     'x'.replace(/x/, capture);
     if (that === void 0) { return false; }
     if (that === capture) {
-      // This case happens on IE10preview2, indicating another
-      // bug. TODO(erights): report it.
+      // This case happens on IE10preview2. See
+      // https://connect.microsoft.com/IE/feedback/details/685928/
+      //   bad-this-binding-for-callback-in-string-prototype-replace
       // TODO(erights): When this happens, the kludge.description is
       // wrong.
       return true;
@@ -2947,11 +2943,9 @@ var ses;
  *
  * The "skip" markings are workarounds for browser bugs or other
  * temporary problems. For each of these, there should be an
- * explanatory comment explaining why or a bug citation
- * (TODO(erights)). Any of these whose comments say "fatal" need to be
- * fixed before SES might be considered safe. Ideally, we can retire
- * all "skip" entries by the time SES is ready for secure production
- * use.
+ * explanatory comment explaining why or a bug citation. Ideally, we
+ * can retire all "skip" entries by the time SES is ready for secure
+ * production use.
  *
  * The members of the whitelist are either
  * <ul>
@@ -2996,6 +2990,7 @@ var ses;
       compileExpr: t,
       compileModule: t,              // experimental
       compileProgram: t,             // Cannot be implemented in just ES5.1.
+      sharedGlobals: t,
       eval: t,
       Function: t,
 
@@ -3102,6 +3097,8 @@ var ses;
         reduce: t,
         reduceRight: t,
         length: s                    // can't be redefined on Mozilla
+        // See https://bugzilla.mozilla.org/show_bug.cgi?id=591059
+        // and https://bugzilla.mozilla.org/show_bug.cgi?id=598996
       },
       isArray: t
     },
@@ -3430,14 +3427,15 @@ var ses;
  * original eval, enforcing SES language restrictions.
  *
  * <p>If TAME_GLOBAL_EVAL is true, both the global {@code eval}
- * variable, and the pseudo-global {@code "eval"} property of root,
- * are set to the safe wrapper. If TAME_GLOBAL_EVAL is false, in order
- * to work around a bug in the Chrome debugger, then the global {@code
- * eval} is unaltered and no {@code "eval"} property is available on
- * root. In either case, SES-evaled-code and SES-script-code can both
- * access the safe eval wrapper as {@code cajaVM.eval}.
+ * variable, and the pseudo-global {@code "eval"} property of
+ * sharedGlobals, are set to the safe wrapper. If TAME_GLOBAL_EVAL is
+ * false, in order to work around a bug in the Chrome debugger, then
+ * the global {@code eval} is unaltered and no {@code "eval"} property
+ * is available on sharedGlobals. In either case, SES-evaled-code and
+ * SES-script-code can both access the safe eval wrapper as {@code
+ * cajaVM.eval}.
  *
- * <p>By making the safe eval available on root only when we also make
+ * <p>By making the safe eval available on sharedGlobals only when we also make
  * it be the genuine global eval, we preserve the property that
  * SES-evaled-code differs from SES-script-code only by having a
  * subset of the same variables in globalish scope. This is a
@@ -3454,7 +3452,7 @@ var eval;
 /**
  * The global {@code Function} constructor is always replaced with a
  * safe wrapper, which is also made available as the {@code
- * "Function"} pseudo-global on root.
+ * "Function"} pseudo-global on sharedGlobals.
  *
  * <p>Both the original Function constructor and this safe wrapper
  * point at the original {@code Function.prototype}, so {@code
@@ -3478,7 +3476,7 @@ var Function;
  * eval, Function, cajaVM.{compileExpr, compileModule, eval, Function}})
  * cannot reasonably be provided. Instead, under translation we expect
  * <ul>
- * <li>Not to have a binding for the pseudo-global {@code "eval"} on root,
+ * <li>Not to have a binding for the pseudo-global {@code "eval"} on sharedGlobals,
  *     just as we would not if TAME_GLOBAL_EVAL is false.
  * <li>The global {@code eval} seen by scripts is either unaltered (to
  *     work around the Chrome debugger bug if TAME_GLOBAL_EVAL is
@@ -3549,11 +3547,11 @@ var cajaVM;
  *        global object.
  * @param whitelist ::Record(Permit) where Permit = true | "*" |
  *        "skip" | Record(Permit).  Describes the subset of naming
- *        paths starting from the root that should be accessible. The
+ *        paths starting from the sharedGlobals that should be accessible. The
  *        <i>accessible primordials</i> are all values found by
- *        navigating these paths starting from this root. All
+ *        navigating these paths starting from this sharedGlobals. All
  *        non-whitelisted properties of accessible primordials are
- *        deleted, and then the root and all accessible primordials
+ *        deleted, and then the sharedGlobals and all accessible primordials
  *        are frozen with the whitelisted properties frozen as data
  *        properties. TODO(erights): fix the code and documentation to
  *        also support confined-ES5, suitable for confining
@@ -3631,15 +3629,15 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   }
 
   /**
-   * Code being eval'ed sees {@code root} as its top-level
-   * {@code this}, as if {@code root} were the global object.
+   * Code being eval'ed sees {@code sharedGlobals} as its top-level
+   * {@code this}, as if {@code sharedGlobals} were the global object.
    *
-   * <p>Root's properties are exactly the whitelisted global variable
-   * references. These properties, both as they appear on the global
-   * object and on this root object, are frozen and so cannot
-   * diverge. This preserves the illusion.
+   * <p>{@code sharedGlobals}'s properties are exactly the whitelisted
+   * global variable references. These properties, both as they appear
+   * on the global object and on this sharedGlobals object, are frozen and so
+   * cannot diverge. This preserves the illusion.
    */
-  var root = Object.create(null);
+  var sharedGlobals = Object.create(null);
 
   (function() {
 
@@ -3729,7 +3727,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      */
     function makeVirtualGlobal(env) {
       var virtualGlobal = Object.create(null);
-      initGlobalProperties(root, virtualGlobal);
+      initGlobalProperties(sharedGlobals, virtualGlobal);
       initGlobalProperties(env, virtualGlobal);
       return Object.freeze(virtualGlobal);
     }
@@ -3785,7 +3783,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * arrange to pass these through {@code compileExpr} and all its
      * relevant callers.
      */
-    function compileExpr(exprSrc) {
+    function compileExpr(exprSrc, opt_sourcePosition) {
       if (dirty) { fail('Initial cleaning failed'); }
       verifyStrictExpression(exprSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
@@ -3879,8 +3877,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * {@code getRequirements} above would also have to extract these
      * from the text to be compiled.
      */
-    function compileModule(modSrc) {
-      var moduleMaker = compileExpr('(function() {' + modSrc + '}).call(this)');
+    function compileModule(modSrc, opt_sourcePosition) {
+      var moduleMaker = compileExpr(
+        '(function() {' + modSrc + '}).call(this)',
+        opt_sourcePosition);
       moduleMaker.requirements = getRequirements(modSrc);
       Object.freeze(moduleMaker.prototype);
       return Object.freeze(moduleMaker);
@@ -3988,14 +3988,16 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         if (typeof console !== 'undefined' && 'log' in console) {
           // We no longer test (typeof console.log === 'function') since,
           // on IE9 and IE10preview, in violation of the ES5 spec, it
-          // is callable but has typeof "object". TODO(erights):
-          // report to MS.
+          // is callable but has typeof "object". See
+          // https://connect.microsoft.com/IE/feedback/details/685962/
+          //   console-log-and-others-are-callable-but-arent-typeof-function
           console.log(str);
         }
       },
-      def: def,
       compileExpr: compileExpr,
       compileModule: compileModule,
+      // compileProgram: compileProgram, // Cannot be implemented in ES5.1.
+      sharedGlobals: sharedGlobals,
       eval: fakeEval,
       Function: FakeFunction
     };
@@ -4004,6 +4006,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       Object.defineProperty(cajaVM, p,
           Object.getOwnPropertyDescriptor(extensionsRecord, p));
     });
+    // Move this down here so it is not available during the call to
+    // extensions.
+    global.cajaVM.def = def;
 
   })();
 
@@ -4056,12 +4061,12 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   }
 
   /**
-   * Initialize accessible global variables and {@code root}.
+   * Initialize accessible global variables and {@code sharedGlobals}.
    *
    * For each of the whitelisted globals, we {@code read} its value,
    * freeze that global property as a data property, and mirror that
    * property with a frozen data property of the same name and value
-   * on {@code root}, but always non-enumerable. We make these
+   * on {@code sharedGlobals}, but always non-enumerable. We make these
    * non-enumerable since ES5.1 specifies that all these properties
    * are non-enumerable on the global object.
    */
@@ -4071,7 +4076,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       var permit = whitelist[name];
       if (permit) {
         var value = read(global, name);
-        Object.defineProperty(root, name, {
+        Object.defineProperty(sharedGlobals, name, {
           value: value,
           writable: true,
           enumerable: false,
@@ -4081,7 +4086,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
   });
   if (TAME_GLOBAL_EVAL) {
-    Object.defineProperty(root, 'eval', {
+    Object.defineProperty(sharedGlobals, 'eval', {
       value: cajaVM.eval,
       writable: true,
       enumerable: false,
@@ -4120,7 +4125,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       }
     });
   }
-  register(root, whitelist);
+  register(sharedGlobals, whitelist);
 
   /**
    * Should the property named {@code name} be whitelisted on the
@@ -4285,7 +4290,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     });
     Object.freeze(value);
   }
-  clean(root, '');
+  clean(sharedGlobals, '');
 
 
   Object.keys(propertyReports).sort().forEach(function(status) {

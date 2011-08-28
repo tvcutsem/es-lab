@@ -70,11 +70,9 @@ var ses;
  *
  * The "skip" markings are workarounds for browser bugs or other
  * temporary problems. For each of these, there should be an
- * explanatory comment explaining why or a bug citation
- * (TODO(erights)). Any of these whose comments say "fatal" need to be
- * fixed before SES might be considered safe. Ideally, we can retire
- * all "skip" entries by the time SES is ready for secure production
- * use.
+ * explanatory comment explaining why or a bug citation. Ideally, we
+ * can retire all "skip" entries by the time SES is ready for secure
+ * production use.
  *
  * The members of the whitelist are either
  * <ul>
@@ -119,6 +117,7 @@ var ses;
       compileExpr: t,
       compileModule: t,              // experimental
       compileProgram: t,             // Cannot be implemented in just ES5.1.
+      sharedGlobals: t,
       eval: t,
       Function: t,
 
@@ -225,6 +224,8 @@ var ses;
         reduce: t,
         reduceRight: t,
         length: s                    // can't be redefined on Mozilla
+        // See https://bugzilla.mozilla.org/show_bug.cgi?id=591059
+        // and https://bugzilla.mozilla.org/show_bug.cgi?id=598996
       },
       isArray: t
     },

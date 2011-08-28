@@ -130,13 +130,8 @@ if (!ses) { ses = {}; }
     // We no longer test (typeof console.log === 'function') since,
     // on IE9 and IE10preview, in violation of the ES5 spec, it
     // is callable but has typeof "object".
-    // TODO(erights): report to MS.
-
-    // TODO(erights): This assumes without checking that if
-    // console.log is present, then console has working log, info,
-    // warn, and error methods. Check that this is actually the case
-    // on all platforms we care about, or, if not, do something
-    // fancier here.
+    // See https://connect.microsoft.com/IE/feedback/details/685962/
+    //   console-log-and-others-are-callable-but-arent-typeof-function
 
     // We manually wrap each call to a console method because <ul>
     // <li>On some platforms, these methods depend on their

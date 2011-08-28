@@ -777,8 +777,9 @@ var ses;
     'x'.replace(/x/, capture);
     if (that === void 0) { return false; }
     if (that === capture) {
-      // This case happens on IE10preview2, indicating another
-      // bug. TODO(erights): report it.
+      // This case happens on IE10preview2. See
+      // https://connect.microsoft.com/IE/feedback/details/685928/
+      //   bad-this-binding-for-callback-in-string-prototype-replace
       // TODO(erights): When this happens, the kludge.description is
       // wrong.
       return true;
