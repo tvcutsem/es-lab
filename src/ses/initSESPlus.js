@@ -3046,11 +3046,8 @@ var ses;
         bind: t,
         prototype: '*',
         length: '*',
-        //caller: s,                 // when not poison, could be fatal
-        //arguments: s,              // when not poison, could be fatal
         arity: '*',                  // non-std, deprecated in favor of length
-        name: '*',                   // non-std
-        isGenerator: t
+        name: '*'                    // non-std
       }
     },
     Array: {
@@ -3983,7 +3980,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   var propertyReports = {};
 
   /**
-   * Report how a property manipualtion went.
+   * Report how a property manipulation went.
    */
   function reportProperty(severity, status, path) {
     ses.updateMaxSeverity(severity);
@@ -4137,12 +4134,20 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     if (typeof base === 'function') {
       if (name === 'caller') {
         diagnostic = ses.makeCallerHarmless(base, path);
+        // We can use a severity of SAFE here since if this isn't
+        // safe, it is the responsibility of repairES5.js to tell us
+        // so. All the same, we should inspect the reports on all
+        // platforms we care about to see if there are any surprises.
         reportProperty(ses.severities.SAFE,
                        diagnostic, path);
         return true;
       }
       if (name === 'arguments') {
         diagnostic = ses.makeArgumentsHarmless(base, path);
+        // We can use a severity of SAFE here since if this isn't
+        // safe, it is the responsibility of repairES5.js to tell us
+        // so. All the same, we should inspect the reports on all
+        // platforms we care about to see if there are any surprises.
         reportProperty(ses.severities.SAFE,
                        diagnostic, path);
         return true;
@@ -4314,6 +4319,40 @@ var ses;
       });
     }
 
+    /**
+     * During the call to {@code ejectorsGuardsTrademarks}, {@code
+     * ejectorsGuardsTrademarks} must not call {@code cajaVM.def},
+     * since startSES.js has not yet finished cleaning things. See the
+     * doc-comments on the {@code extensions} parameter of
+     * startSES.js.
+     *
+     * <p>Instead, we define here some conveniences for freezing just
+     * enough without prematurely freezing primodial objects
+     * transitively reachable from these, like {@code
+     * Function.prototype}. The {@code freezeFuncion} function will
+     * freeze a function and (if present) its prototype.
+     */
+    function freezeFunction(func) {
+      if (func.prototype) { Object.freeze(func.prototype); }
+      return Object.freeze(func);
+    }
+
+    /**
+     * The {@code freezeObjectRecord} takes as argument a record
+     * assumed to hold some methods in its properties.
+     *
+     * <p>{@code freezeObjectRecord} freezes the record and freezes
+     * (using {@code freezeFunction}) any functions found in own
+     * properties of that record.
+     */
+    function freezeObjectRecord(record) {
+      Object.getOwnPropertyNames(record).forEach(function(name) {
+        var val = record[name];
+        if (typeof val === 'function') { freezeFunction(val); }
+      });
+      return Object.freeze(record);
+    }
+
     ////////////////////////////////////////////////////////////////////////
     // Ejectors
     ////////////////////////////////////////////////////////////////////////
@@ -4453,36 +4492,39 @@ var ses;
 
     /**
      * Internal routine for making a trademark from a table.
-     * <p>
-     * To untangle a cycle, the guard made by {@code makeTrademark} is
-     * not yet either stamped or frozen. The caller of
-     * {@code makeTrademark} must do both before allowing it to
-     * escape.
+     *
+     * <p>To untangle a cycle, the guard made by {@code makeTrademark}
+     * is not yet stamped. The caller of {@code makeTrademark} must
+     * stamp it before allowing the guard to escape.
+     *
+     * <p>Note that {@code makeTrademark} is called during the call to
+     * {@code ejectorsGuardsTrademarks}, and so must not call {@code
+     * cajaVM.def}.
      */
     function makeTrademark(typename, table) {
       typename = '' + typename;
 
-      var stamp = {
+      var stamp = freezeObjectRecord({
         toString: function() { return typename + 'Stamp'; }
-      };
+      });
 
-      stampers.set(stamp, cajaVM.def(function(obj) {
+      stampers.set(stamp, function(obj) {
         table.set(obj, true);
         return obj;
-      }));
+      });
 
-      return cajaVM.def({
-          toString: function() { return typename + 'Mark'; },
-          stamp: stamp,
-          guard: {
-            toString: function() { return typename + 'T'; },
-            coerce: function(specimen, opt_ejector) {
-              if (table.get(specimen)) { return specimen; }
-              eject(opt_ejector,
-                    'Specimen does not have the "' + typename + '" trademark');
-            }
+      return freezeObjectRecord({
+        toString: function() { return typename + 'Mark'; },
+        stamp: stamp,
+        guard: freezeObjectRecord({
+          toString: function() { return typename + 'T'; },
+          coerce: function(specimen, opt_ejector) {
+            if (table.get(specimen)) { return specimen; }
+            eject(opt_ejector,
+                  'Specimen does not have the "' + typename + '" trademark');
           }
-        });
+        })
+      });
     }
 
     /**
@@ -4511,15 +4553,15 @@ var ses;
      * records as carrying that trademark and the corresponding guard
      * cerifies objects as carrying that trademark (and therefore as
      * having been marked by that stamp).
-     * <p>
-     * By convention, a guard representing the type-like concept 'Foo'
-     * is named 'FooT'. The corresponding stamp is 'FooStamp'. And the
-     * record holding both is 'FooMark'. Many guards also have
-     * {@code of} methods for making guards like themselves but
-     * parameterized by further constraints, which are usually other
-     * guards. For example, {@code T.ListT} is the guard representing
-     * frozen array, whereas {@code T.ListT.of(cajita.GuardT)}
-     * represents frozen arrays of guards.
+     *
+     * <p>By convention, a guard representing the type-like concept
+     * 'Foo' is named 'FooT'. The corresponding stamp is
+     * 'FooStamp'. And the record holding both is 'FooMark'. Many
+     * guards also have {@code of} methods for making guards like
+     * themselves but parameterized by further constraints, which are
+     * usually other guards. For example, {@code T.ListT} is the guard
+     * representing frozen array, whereas {@code
+     * T.ListT.of(cajaVM.GuardT)} represents frozen arrays of guards.
      */
     function Trademark(typename) {
       var result = makeTrademark(typename, new WeakMap());
@@ -4619,16 +4661,7 @@ var ses;
     // Exporting
     ////////////////////////////////////////////////////////////////////////
 
-    // Note that extensions must not call cajaVM.def during the call
-    // to extensions, since startSES has not yet finished cleaning
-    // things. See the doc-comments on the extensions parameter of startSES.
-
-    // For the record returned below and its members, extensions also
-    // doesn't need to cajaVM.def them, since they will become
-    // reachable for the startSES root, which startSES will eventually
-    // def.
-
-    return {
+    return freezeObjectRecord({
       callWithEjector: callWithEjector,
       eject: eject,
       makeSealerUnsealerPair: makeSealerUnsealerPair,
@@ -4638,8 +4671,7 @@ var ses;
       guard: guard,
       passesGuard: passesGuard,
       stamp: stamp
-    };
-
+    });
   };
 })();
 // Copyright (C) 2011 Google Inc.

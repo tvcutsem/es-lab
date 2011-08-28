@@ -199,11 +199,8 @@ var ses;
         bind: t,
         prototype: '*',
         length: '*',
-        //caller: s,                 // when not poison, could be fatal
-        //arguments: s,              // when not poison, could be fatal
         arity: '*',                  // non-std, deprecated in favor of length
-        name: '*',                   // non-std
-        isGenerator: t
+        name: '*'                    // non-std
       }
     },
     Array: {

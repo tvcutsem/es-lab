@@ -614,7 +614,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   var propertyReports = {};
 
   /**
-   * Report how a property manipualtion went.
+   * Report how a property manipulation went.
    */
   function reportProperty(severity, status, path) {
     ses.updateMaxSeverity(severity);
@@ -768,12 +768,20 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     if (typeof base === 'function') {
       if (name === 'caller') {
         diagnostic = ses.makeCallerHarmless(base, path);
+        // We can use a severity of SAFE here since if this isn't
+        // safe, it is the responsibility of repairES5.js to tell us
+        // so. All the same, we should inspect the reports on all
+        // platforms we care about to see if there are any surprises.
         reportProperty(ses.severities.SAFE,
                        diagnostic, path);
         return true;
       }
       if (name === 'arguments') {
         diagnostic = ses.makeArgumentsHarmless(base, path);
+        // We can use a severity of SAFE here since if this isn't
+        // safe, it is the responsibility of repairES5.js to tell us
+        // so. All the same, we should inspect the reports on all
+        // platforms we care about to see if there are any surprises.
         reportProperty(ses.severities.SAFE,
                        diagnostic, path);
         return true;
