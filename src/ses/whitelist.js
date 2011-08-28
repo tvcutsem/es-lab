@@ -99,9 +99,8 @@ var ses;
  * encountered such a need. Should we need this extra expressiveness,
  * we'll need to refactor to enable a different encoding.
  *
- * <p>We factor out {@code true} and {@code "skip"} into the variables
- * {@code t} and {@code s} just to get a bit better compression from
- * simple minifiers.
+ * <p>We factor out {@code true} into the variable {@code t} just to
+ * get a bit better compression from simple minifiers.
  */
 (function() {
   "use strict";
@@ -109,7 +108,6 @@ var ses;
   if (!ses) { ses = {}; }
 
   var t = true;
-  var s = 'skip';
   ses.whitelist = {
     cajaVM: {                        // Caja support
       log: t,
@@ -223,7 +221,7 @@ var ses;
         filter: t,
         reduce: t,
         reduceRight: t,
-        length: s                    // can't be redefined on Mozilla
+        length: 'skip'               // can't be redefined on Mozilla
         // See https://bugzilla.mozilla.org/show_bug.cgi?id=591059
         // and https://bugzilla.mozilla.org/show_bug.cgi?id=598996
       },

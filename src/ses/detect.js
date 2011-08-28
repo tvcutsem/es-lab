@@ -33,8 +33,10 @@ var BrowserDetect;
     searchVersion: function(dataString) {
       var index = dataString.indexOf(this.versionSearchString);
       if (index == -1) { return void 0; }
-      return parseFloat(dataString.substring(
-                          index + this.versionSearchString.length + 1));
+      var startsWithVersion = dataString.substring(
+        index + this.versionSearchString.length + 1);
+      var match = (/^([0-9\.]*)/).exec(startsWithVersion);
+      return match && match[1];
     },
     dataBrowser: [
       {
