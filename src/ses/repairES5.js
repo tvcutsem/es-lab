@@ -329,7 +329,12 @@ var ses;
   // attempts. Finally, we report what happened.
 
   /**
+   * If {@code Object.getOwnPropertyNames} is missing, we consider
+   * this to be an ES3 browser which is unsuitable for attempting to
+   * run SES.
    *
+   * <p>If {@code Object.getOwnPropertyNames}, there is no way to
+   * emulate it.
    */
   function test_MISSING_GETOWNPROPNAMES() {
     return !('getOwnPropertyNames' in Object);
@@ -351,7 +356,7 @@ var ses;
   }
 
   /**
-   *
+   * Detects whether the most painful ES3 leak is still with us.
    */
   function test_GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS() {
     var that = (function(){ return this; })();
@@ -425,8 +430,7 @@ var ses;
    * should fail by throwing a TypeError. Under no circumstances
    * should a strict delete return false.
    *
-   * <p>This case occurs on IE10preview2. TODO(erights): check that
-   * this bug shows up in test262, or, if not, report it.
+   * <p>This case occurs on IE10preview2.
    */
   function test_STRICT_DELETE_RETURNS_FALSE() {
     if (!RegExp.hasOwnProperty('rightContext')) { return false; }
@@ -490,7 +494,9 @@ var ses;
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1530
    *
-   *
+   * <p>Detects whether the value of a function's "prototype" property
+   * as seen by normal object operations might deviate from the value
+   * as seem by the reflective {@code Object.getOwnPropertyDescriptor}
    */
   function test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
     function foo() {}
@@ -773,7 +779,7 @@ var ses;
     if (that === capture) {
       // This case happens on IE10preview2, indicating another
       // bug. TODO(erights): report it.
-      // TODO(erights): When this happens, the kludge description is
+      // TODO(erights): When this happens, the kludge.description is
       // wrong.
       return true;
     }
@@ -784,9 +790,12 @@ var ses;
   }
 
   /**
-   * Seen on IE10preview2.
+   * Workaround for
+   * https://connect.microsoft.com/IE/feedback/details/
+   *   685436/getownpropertydescriptor-on-strict-caller-throws
    *
-   * <p>TODO(erights): report
+   * <p>Object.getOwnPropertyDescriptor must work even on poisoned
+   * "caller" properties.
    */
   function test_CANT_GOPD_CALLER() {
     var desc = null;
@@ -952,7 +961,7 @@ var ses;
   }
 
   /**
-   *
+   * Detects whether strict function violate caller anonymity.
    */
   function test_STRICT_CALLER_NOT_POISONED() {
     if (!has2(strictMapFn, 'caller', 'a strict function')) { return false; }
@@ -974,7 +983,7 @@ var ses;
   }
 
   /**
-   *
+   * Detects whether strict functions are encapsulated.
    */
   function test_STRICT_ARGUMENTS_NOT_POISONED() {
     if (!has2(strictMapFn, 'arguments', 'a strict function')) { return false; }
@@ -988,8 +997,11 @@ var ses;
       if (err instanceof TypeError) { return false; }
       return 'Strict "arguments" failed with: ' + err;
     }
-    // Seen on IE 9
-    return true;
+    if (args[1] === foo) {
+      // Seen on IE 9
+      return true;
+    }
+    return 'Unexpected arguments: ' + arguments;
   }
 
   /**
@@ -1102,7 +1114,11 @@ var ses;
   }
 
   /**
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=65832
    *
+   * <p>On a non-extensible object, it must not be possible to change
+   * its internal [[Prototype]] property, i.e., which object it
+   * inherits from.
    */
   function test_PROTO_NOT_FROZEN() {
     var x = Object.preventExtensions({});
@@ -1119,7 +1135,11 @@ var ses;
   }
 
   /**
+   * Detects http://code.google.com/p/v8/issues/detail?id=1624
    *
+   * <p>Both a direct strict eval operator and an indirect strict eval
+   * function must not leak top level declarations in the string being
+   * evaluated into their containing context.
    */
   function test_STRICT_EVAL_LEAKS_GLOBALS() {
     (1,eval)('"use strict"; var ___global_test_variable___ = 88;');
@@ -1954,7 +1974,10 @@ var ses;
       repair: repair_REPLACE_LEAKS_GLOBAL,
       preSeverity: severities.NOT_ISOLATED,
       canRepair: true,
-      urls: ['http://code.google.com/p/v8/issues/detail?id=1360'],
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1360',
+             'https://connect.microsoft.com/IE/feedback/details/' +
+               '685928/bad-this-binding-for-callback-in-string-' +
+               'prototype-replace'],
       sections: ['15.5.4.11'],
       tests: ['S15.5.4.11_A12']
     },
