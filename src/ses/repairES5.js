@@ -802,6 +802,13 @@ var ses;
         !desc.configurable) {
       return false;
     }
+    if (desc &&
+        desc.value === null &&
+        !desc.writable &&
+        !desc.configurable) {
+      // Seen in IE9. Harmless by itself
+      return false;
+    }
     return 'getOwnPropertyDesciptor returned unexpected caller descriptor';
   }
 
@@ -959,9 +966,9 @@ var ses;
       if (err instanceof TypeError) { return false; }
       return 'Strict "caller" failed with: ' + err;
     }
-    if (null === caller || void 0 === caller) { return true; }
     if (testfn === caller) {
-      return 'Strict "caller" reveals caller';
+      // Seen on IE 9
+      return true;
     }
     return 'Unexpected "caller": ' + caller;
   }
@@ -981,8 +988,8 @@ var ses;
       if (err instanceof TypeError) { return false; }
       return 'Strict "arguments" failed with: ' + err;
     }
-    if (args === void 0 || args === null) { return true; }
-    return 'Strict "arguments" reveals something';
+    // Seen on IE 9
+    return true;
   }
 
   /**
@@ -1760,7 +1767,7 @@ var ses;
       preSeverity: severities.NOT_ISOLATED,
       canRepair: false,
       urls: [],
-      sections: [],
+      sections: ['10.4.3'],
       tests: []
     },
     {
@@ -1968,7 +1975,7 @@ var ses;
       repair: repair_CANT_HASOWNPROPERTY_CALLER,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: true,
-      urls: [],
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398#c3'],
       sections: ['15.2.4.5', '13.2', '13.2.3'],
       tests: []
     },
@@ -1999,7 +2006,7 @@ var ses;
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: false,
       urls: [],
-      sections: [],
+      sections: ['13.2'],
       tests: []
     },
     {
@@ -2009,7 +2016,7 @@ var ses;
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: false,
       urls: [],
-      sections: [],
+      sections: ['13.2'],
       tests: []
     },
     {
@@ -2021,7 +2028,7 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
-             'conventions:make_non-standard_properties_configurable'],
+               'conventions:make_non-standard_properties_configurable'],
       sections: [],
       tests: []
     },
@@ -2034,7 +2041,7 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
-             'conventions:make_non-standard_properties_configurable'],
+               'conventions:make_non-standard_properties_configurable'],
       sections: [],
       tests: []
     },
