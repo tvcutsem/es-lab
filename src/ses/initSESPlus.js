@@ -2280,7 +2280,8 @@ var ses;
       repair: repair_BUILTIN_LEAKS_CALLER,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: true,
-      urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1643',
+             'http://code.google.com/p/v8/issues/detail?id=1548',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
                'conventions:make_non-standard_properties_configurable'],
@@ -2293,7 +2294,8 @@ var ses;
       repair: repair_BUILTIN_LEAKS_ARGUMENTS,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: true,
-      urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1643',
+             'http://code.google.com/p/v8/issues/detail?id=1548',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
                'conventions:make_non-standard_properties_configurable'],
@@ -4457,8 +4459,7 @@ var ses;
 
     /**
      * One-arg form is known in scheme as "call with escape
-     * continuation" (call/ec), and is the semantics currently
-     * proposed for EcmaScript Harmony's "return to label".
+     * continuation" (call/ec).
      *
      * <p>In this analogy, a call to {@code callWithEjector} emulates a
      * labeled statement. The ejector passed to the {@code attemptFunc}
@@ -4488,16 +4489,6 @@ var ses;
      * at which point the ejector is disabled. Calling a disabled
      * ejector throws.
      *
-     * <p>In order to emulate the semantics I expect of ES-Harmony's
-     * return-to-label and to prevent the reification of the internal
-     * token thrown in order to emulate call/ec, {@code tameException}
-     * immediately rethrows this token, preventing Cajita and Valija
-     * {@code catch} clauses from catching it. However,
-     * {@code finally} clauses will still be run while unwinding an
-     * ejection. If these do their own non-local exit, that takes
-     * precedence over the ejection in progress but leave the ejector
-     * live.
-     *
      * <p>Historic note: This was first invented by John C. Reynolds in
      * <a href="http://doi.acm.org/10.1145/800194.805852"
      * >Definitional interpreters for higher-order programming
@@ -4508,7 +4499,6 @@ var ses;
       var failFunc = opt_failFunc || function (x) { return x; };
       var disabled = false;
       var token = new Token('ejection');
-      // token.UNCATCHABLE___ = true; // TODO(kpreid): can't do in ES5?
       var stash = void 0;
       function ejector(result) {
         if (disabled) {

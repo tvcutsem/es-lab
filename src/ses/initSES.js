@@ -2280,7 +2280,8 @@ var ses;
       repair: repair_BUILTIN_LEAKS_CALLER,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: true,
-      urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1643',
+             'http://code.google.com/p/v8/issues/detail?id=1548',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
                'conventions:make_non-standard_properties_configurable'],
@@ -2293,7 +2294,8 @@ var ses;
       repair: repair_BUILTIN_LEAKS_ARGUMENTS,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: true,
-      urls: ['http://code.google.com/p/v8/issues/detail?id=1548',
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1643',
+             'http://code.google.com/p/v8/issues/detail?id=1548',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=591846',
              'http://wiki.ecmascript.org/doku.php?id=' +
                'conventions:make_non-standard_properties_configurable'],
