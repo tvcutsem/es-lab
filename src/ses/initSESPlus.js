@@ -484,6 +484,8 @@ var ses;
     return result;
   }
 
+  var objToString = Object.prototype.toString;
+
   /**
    * Sample map early, to obtain a representative built-in for testing.
    *
@@ -1394,7 +1396,6 @@ var ses;
   var apply = Function.prototype.apply;
 
   var hop = Object.prototype.hasOwnProperty;
-  var objToString = Object.prototype.toString;
   var slice = Array.prototype.slice;
   var concat = Array.prototype.concat;
   var defProp = Object.defineProperty;
@@ -1659,6 +1660,42 @@ var ses;
               throw new TypeError('Cannot set ".' + name + '"');
             }
           }
+
+          if (objToString.call(base) === '[object HTMLFormElement]' &&
+              typeof desc.get === 'function' &&
+              desc.set === undefined &&
+              gopd(base, name) === void 0) {
+            // This repair was triggering bug
+            // http://code.google.com/p/chromium/issues/detail?id=94666
+            // on Chrome, causing
+            // http://code.google.com/p/google-caja/issues/detail?id=1401
+            // so if base is an HTMLFormElement we skip this
+            // fix. Since this repair and this situation are both
+            // Chrome only, it is ok that we're conditioning this on
+            // the unspecified [[Class]] value of base.
+            //
+            // To avoid the further bug identified at Comment 2
+            // http://code.google.com/p/chromium/issues/detail?id=94666#c2
+            // We also have to reconstruct the requested desc so that
+            // the setter is absent. This is why we additionally
+            // condition this special case on the absence of an own
+            // name property on base.
+            var desc2 = {get: desc.get};
+            if ('enumerable' in desc) {
+              desc2.enumerable = desc.enumerable;
+            }
+            if ('configurable' in desc) {
+              desc2.configurable = desc.configurable;
+            }
+            var result = defProp(base, name, desc2);
+            var newDesc = gopd(base, name);
+            if (newDesc.get === desc.get) {
+              return result;
+            } else {
+              debugger;
+            }
+          }
+
           freeze(dummySetter.prototype);
           freeze(dummySetter);
 
@@ -2655,7 +2692,7 @@ var WeakMap;
     if (!originalProps.isExtensible(key)) { return NO_IDENT; }
 
     name = 'hash:' + Math.random();
-    // If the following two lines a swapped, Safari WebKit Nightly
+    // If the following two lines are swapped, Safari WebKit Nightly
     // Version 5.0.5 (5533.21.1, r87697) crashes.
     // See https://bugs.webkit.org/show_bug.cgi?id=61758
     originalProps.freeze(identGetter.prototype);

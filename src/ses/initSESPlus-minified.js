@@ -10,7 +10,7 @@ maxSev.level==='number'&&maxSev.level>=ses.severities.SAFE.level&&maxSev.level<s
 logger.error('Ignoring bad maxAcceptableSeverityName: '+ses.maxAcceptableSeverityName+'.'),ses.maxAcceptableSeverityName='SAFE_SPEC_VIOLATION'}else
 ses.maxAcceptableSeverityName='SAFE_SPEC_VIOLATION';ses.maxAcceptableSeverity=ses.severities[ses.maxAcceptableSeverityName],ses.ok=function(){return ses.maxSeverity.level<=ses.maxAcceptableSeverity.level},ses.updateMaxSeverity=function(severity){severity.level>ses.maxSeverity.level&&(ses.maxSeverity=severity)};function
 strictForEachFn(list,callback){var i,len;for(i=0,len=list.length;i<len;++i)callback(list[i],i)}function
-strictMapFn(list,callback){var result=[],i,len;for(i=0,len=list.length;i<len;++i)result.push(callback(list[i],i));return result}builtInMapMethod=Array.prototype.map,ses.makeCallerHarmless=function(func,path){return'Apparently fine'},ses.makeArgumentsHarmless=function(func,path){return'Apparently fine'};function
+strictMapFn(list,callback){var result=[],i,len;for(i=0,len=list.length;i<len;++i)result.push(callback(list[i],i));return result}objToString=Object.prototype.toString,builtInMapMethod=Array.prototype.map,ses.makeCallerHarmless=function(func,path){return'Apparently fine'},ses.makeArgumentsHarmless=function(func,path){return'Apparently fine'};function
 test_MISSING_GETOWNPROPNAMES(){return!('getOwnPropertyNames'in Object)}function
 test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS(){var that;return global.___global_test_function___=function(){return this},that=___global_test_function___(),delete
 global.___global_test_function___,that===void 0?false:that===global?true:'This leaked as: '+that}function
@@ -86,7 +86,7 @@ test_PROTO_NOT_FROZEN(){var x=Object.preventExtensions({}),y;if(x.__proto__===vo
 0&&!('__proto__'in x))return false;y={};try{x.__proto__=y}catch(err){return err
 instanceof TypeError?false:'Mutating __proto__ failed with: '+err}return y.isPrototypeOf(x)?true:'Mutating __proto__ neither failed nor succeeded'}function
 test_STRICT_EVAL_LEAKS_GLOBALS(){return eval('\"use strict\"; var ___global_test_variable___ = 88;'),'___global_test_variable___'in
-global?(delete global.___global_test_variable___,true):false}call=Function.prototype.call,apply=Function.prototype.apply,hop=Object.prototype.hasOwnProperty,objToString=Object.prototype.toString,slice=Array.prototype.slice,concat=Array.prototype.concat,defProp=Object.defineProperty,getPrototypeOf=Object.getPrototypeOf;function
+global?(delete global.___global_test_variable___,true):false}call=Function.prototype.call,apply=Function.prototype.apply,hop=Object.prototype.hasOwnProperty,slice=Array.prototype.slice,concat=Array.prototype.concat,defProp=Object.defineProperty,getPrototypeOf=Object.getPrototypeOf;function
 repair_MISSING_CALLEE_DESCRIPTOR(){var realGOPN=Object.getOwnPropertyNames;Object.getOwnPropertyNames=function
 calleeFix(base){var result=realGOPN(base),i;return typeof base==='function'&&(i=result.indexOf('callee'),i>=0&&!hop.call(base,'callee')&&result.splice(i,1)),result}}function
 repair_REGEXP_CANT_BE_NEUTERED(){var UnsafeRegExp=RegExp,FakeRegExp=function(pattern,flags){switch(arguments.length){case
@@ -114,8 +114,10 @@ repair_MUTABLE_WEAKMAP_PROTO(){['set','delete'].forEach(makeMutableProtoPatcher(
 repair_NEED_TO_WRAP_FOREACH(){(function(){var forEach=Array.prototype.forEach;defProp(Array.prototype,'forEach',{'value':function
 forEachWrapper(callbackfn,opt_thisArg){return apply.call(forEach,this,arguments)}})})()}function
 repair_NEEDS_DUMMY_SETTER(){(function(){var defProp=Object.defineProperty,gopd=Object.getOwnPropertyDescriptor,freeze=Object.freeze,complained=false;defProp(Object,'defineProperty',{'value':function(base,name,desc){var
-fullDesc,oldDesc,testBase;function dummySetter(newValue){if(name==='ident___')complained||(logger.warn('Undiagnosed call to setter for ident___'),complained=true);else
-throw new TypeError('Cannot set \".'+name+'\"')}return freeze(dummySetter.prototype),freeze(dummySetter),oldDesc=gopd(base,name),testBase={},oldDesc&&defProp(testBase,name,oldDesc),defProp(testBase,name,desc),fullDesc=gopd(testBase,name),'get'in
+desc2,fullDesc,newDesc,oldDesc,result,testBase;function dummySetter(newValue){if(name==='ident___')complained||(logger.warn('Undiagnosed call to setter for ident___'),complained=true);else
+throw new TypeError('Cannot set \".'+name+'\"')}if(objToString.call(base)==='[object HTMLFormElement]'&&typeof
+desc.get==='function'&&desc.set===undefined&&gopd(base,name)===void 0){desc2={'get':desc.get},'enumerable'in
+desc&&(desc2.enumerable=desc.enumerable),'configurable'in desc&&(desc2.configurable=desc.configurable),result=defProp(base,name,desc2),newDesc=gopd(base,name);if(newDesc.get===desc.get)return result;debugger}return freeze(dummySetter.prototype),freeze(dummySetter),oldDesc=gopd(base,name),testBase={},oldDesc&&defProp(testBase,name,oldDesc),defProp(testBase,name,desc),fullDesc=gopd(testBase,name),'get'in
 fullDesc&&fullDesc.set===void 0&&(fullDesc.set=dummySetter),defProp(base,name,fullDesc)}}),NEEDS_DUMMY_SETTER_repaired=true})()}function
 repair_ACCESSORS_INHERIT_AS_OWN(){(function(){var defProp=Object.defineProperty,freeze=Object.freeze,seal=Object.seal,gopn=Object.getOwnPropertyNames,gopd=Object.getOwnPropertyDescriptor,complaint='Workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=637994  prohibits enumerable non-configurable accessor properties.';function
 isBadAccessor(derived,name){var desc=gopd(derived,name),base,superDesc;return!desc||!('get'in
