@@ -112,12 +112,16 @@ var ses;
     cajaVM: {                        // Caja support
       log: t,
       def: t,
+
       compileExpr: t,
       compileModule: t,              // experimental
       compileProgram: t,             // Cannot be implemented in just ES5.1.
-      sharedGlobals: t,
       eval: t,
       Function: t,
+      
+      sharedImports: t,
+      makeImports: t,
+      copyToImports: t,
 
       callWithEjector: t,
       eject: t,

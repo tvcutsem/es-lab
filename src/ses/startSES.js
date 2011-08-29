@@ -33,19 +33,18 @@ var ses;
  * SES-safe. {@code cajaVM.eval} is a safe wrapper around this
  * original eval, enforcing SES language restrictions.
  *
- * <p>If TAME_GLOBAL_EVAL is true, both the global {@code eval}
- * variable, and the pseudo-global {@code "eval"} property of
- * sharedGlobals, are set to the safe wrapper. If TAME_GLOBAL_EVAL is
- * false, in order to work around a bug in the Chrome debugger, then
- * the global {@code eval} is unaltered and no {@code "eval"} property
- * is available on sharedGlobals. In either case, SES-evaled-code and
- * SES-script-code can both access the safe eval wrapper as {@code
- * cajaVM.eval}.
+ * <p>If {@code TAME_GLOBAL_EVAL} is true, both the global {@code
+ * eval} variable and {@code sharedImports.eval} are set to the safe
+ * wrapper. If {@code TAME_GLOBAL_EVAL} is false, in order to work
+ * around a bug in the Chrome debugger, then the global {@code eval}
+ * is unaltered and no {@code "eval"} property is available on {@code
+ * sharedImports}. In either case, SES-evaled-code and SES-script-code
+ * can both access the safe eval wrapper as {@code cajaVM.eval}.
  *
- * <p>By making the safe eval available on sharedGlobals only when we also make
- * it be the genuine global eval, we preserve the property that
- * SES-evaled-code differs from SES-script-code only by having a
- * subset of the same variables in globalish scope. This is a
+ * <p>By making the safe eval available on {@code sharedImports} only
+ * when we also make it be the genuine global eval, we preserve the
+ * property that SES-evaled-code differs from SES-script-code only by
+ * having a subset of the same variables in globalish scope. This is a
  * nice-to-have that makes explanation easier rather than a hard
  * requirement. With this property, any SES-evaled-code that does not
  * fail to access a global variable (or to test whether it could)
@@ -58,8 +57,8 @@ var eval;
 
 /**
  * The global {@code Function} constructor is always replaced with a
- * safe wrapper, which is also made available as the {@code
- * "Function"} pseudo-global on sharedGlobals.
+ * safe wrapper, which is also made available as
+ * {@code sharedImports.Function}.
  *
  * <p>Both the original Function constructor and this safe wrapper
  * point at the original {@code Function.prototype}, so {@code
@@ -83,16 +82,18 @@ var Function;
  * eval, Function, cajaVM.{compileExpr, compileModule, eval, Function}})
  * cannot reasonably be provided. Instead, under translation we expect
  * <ul>
- * <li>Not to have a binding for the pseudo-global {@code "eval"} on sharedGlobals,
- *     just as we would not if TAME_GLOBAL_EVAL is false.
+ * <li>Not to have a binding for {@code "eval"} on
+ *     {@code sharedImports}, just as we would not if
+ *     {@code TAME_GLOBAL_EVAL} is false.
  * <li>The global {@code eval} seen by scripts is either unaltered (to
- *     work around the Chrome debugger bug if TAME_GLOBAL_EVAL is
- *     false), or is replaced by a function that throws an appropriate
- *     EvalError diagnostic (if TAME_GLOBAL_EVAL is true).
+ *     work around the Chrome debugger bug if {@code TAME_GLOBAL_EVAL}
+ *     is false), or is replaced by a function that throws an
+ *     appropriate EvalError diagnostic (if {@code TAME_GLOBAL_EVAL}
+ *     is true).
  * <li>The global {@code Function} constructor, both as seen by script
  *     code and evaled code, to throw an appropriate diagnostic.
  * <li>The {@code Q} API to always be available, to handle
- *     asyncronous, promise, and remote requests.
+ *     asynchronous, promise, and remote requests.
  * <li>The evaluating methods on {@code cajaVM} -- currently {@code
  *     compileExpr, compileModule, eval, and Function} -- to be remote
  *     promises for their normal interfaces, which therefore must be
@@ -100,15 +101,15 @@ var Function;
  * <li>Since {@code Q.post} can be used for asynchronously invoking
  *     non-promises, invocations like
  *     {@code Q.post(cajaVM, 'eval', ['2+3'])}, for example,
- *     will return a promise for a 5. This will work both under Caja
+ *     will return a promise for a 5. This should work both under Caja
  *     translation and (TODO(erights)) under SES verification when
  *     {@code Q} is also installed, and so is the only portable
  *     evaluating API that SES code should use during this transition
  *     period.
- * <li>TODO(erights): {code Q.post(cajaVM, 'compileModule',
+ * <li>TODO(erights): {@code Q.post(cajaVM, 'compileModule',
  *     [moduleSrc]} should eventually pre-load the transitive
  *     synchronous dependencies of moduleSrc before resolving the
- *     promise for its result. It currently does not, instead
+ *     promise for its result. It currently would not, instead
  *     requiring its client to do so manually.
  * </ul>
  */
@@ -143,7 +144,7 @@ var cajaVM;
  * presume to defend ourselves from a browser that is out to get us.
  *
  * @param global ::Record(any) Assumed to be the real global object
- *        for this frame. Since {@code ses.startSES} will allow global
+ *        for some frame. Since {@code ses.startSES} will allow global
  *        variable references that appear at the top level of the
  *        whitelist, our safety depends on these variables being
  *        frozen as a side effect of freezing the corresponding
@@ -152,20 +153,24 @@ var cajaVM;
  *        provided as the {@code this} binding for the safe
  *        evaluation calls -- emulating the safe subset of the normal
  *        global object.
+ *        TODO(erights): Currently, the code has only been tested when
+ *        {@code global} is the global object of <i>this</i>
+ *        frame. The code should be made to work for cross-frame use.
  * @param whitelist ::Record(Permit) where Permit = true | "*" |
  *        "skip" | Record(Permit).  Describes the subset of naming
- *        paths starting from the sharedGlobals that should be accessible. The
- *        <i>accessible primordials</i> are all values found by
- *        navigating these paths starting from this sharedGlobals. All
- *        non-whitelisted properties of accessible primordials are
- *        deleted, and then the sharedGlobals and all accessible primordials
- *        are frozen with the whitelisted properties frozen as data
- *        properties. TODO(erights): fix the code and documentation to
- *        also support confined-ES5, suitable for confining
- *        potentially offensive code but not supporting defensive
- *        code, where we skip this last freezing step. With
- *        confined-ES5, each frame is considered a separate protection
- *        domain rather that each individual object.
+ *        paths starting from {@code sharedImports} that should be
+ *        accessible. The <i>accessible primordials</i> are all values
+ *        found by navigating these paths starting from {@code
+ *        sharedImports}. All non-whitelisted properties of accessible
+ *        primordials are deleted, and then {@code sharedImports}
+ *        and all accessible primordials are frozen with the
+ *        whitelisted properties frozen as data properties.
+ *        TODO(erights): fix the code and documentation to also
+ *        support confined-ES5, suitable for confining potentially
+ *        offensive code but not supporting defensive code, where we
+ *        skip this last freezing step. With confined-ES5, each frame
+ *        is considered a separate protection domain rather that each
+ *        individual object.
  * @param atLeastFreeVarNames ::F([string], Record(true))
  *        Given the sourceText for a strict Program,
  *        atLeastFreeVarNames(sourceText) returns a Record whose
@@ -184,7 +189,7 @@ var cajaVM;
  *        code size. At the time that {@code startSES} calls {@code
  *        extensions}, {@code cajaVM} exists but should not yet be
  *        used. In particular, {@code extensions} should not call
- *        {@code cajaVM.def} when called, because def would then
+ *        {@code cajaVM.def} during this setup, because def would then
  *        freeze priordials before startSES cleans them (removes
  *        non-whitelisted properties). The methods that
  *        {@code extensions} contributes can, of course, use
@@ -210,10 +215,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * <p>Workaround for Chrome debugger's own use of 'eval'
    *
    * <p>This kludge is safety preserving but not semantics
-   * preserving. When TAME_GLOBAL_EVAL is false, no synchronous 'eval'
-   * is available as a pseudo-global to untrusted (eval) code, and the
-   * 'eval' available as a global to trusted (script) code is the
-   * original 'eval', and so is not safe.
+   * preserving. When {@code TAME_GLOBAL_EVAL} is false, no {@code
+   * sharedImports.eval} is available, and the 'eval' available as a
+   * global to trusted (script) code is the original 'eval', and so is
+   * not safe.
    */
   //var TAME_GLOBAL_EVAL = true;
   var TAME_GLOBAL_EVAL = false;
@@ -236,15 +241,22 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   }
 
   /**
-   * Code being eval'ed sees {@code sharedGlobals} as its top-level
-   * {@code this}, as if {@code sharedGlobals} were the global object.
+   * Code being eval'ed by {@code cajaVM.eval} sees {@code
+   * sharedImports} as its top-level {@code this}, as if {@code
+   * sharedImports} were the global object.
    *
-   * <p>{@code sharedGlobals}'s properties are exactly the whitelisted
+   * <p>{@code sharedImports}'s properties are exactly the whitelisted
    * global variable references. These properties, both as they appear
-   * on the global object and on this sharedGlobals object, are frozen and so
-   * cannot diverge. This preserves the illusion.
+   * on the global object and on this {@code sharedImports} object,
+   * are frozen and so cannot diverge. This preserves the illusion.
+   *
+   * <p>For code being evaluated by {@code cajaVM.compileExpr} and its
+   * ilk, the {@code imports} provided to the compiled function is bound
+   * to the top-level {@code this} of the evaluated code. For sanity,
+   * this {@code imports} should first be initialized with a copy of the
+   * properties of {@code sharedImports}, but nothing enforces this.
    */
-  var sharedGlobals = Object.create(null);
+  var sharedImports = Object.create(null);
 
   (function() {
 
@@ -292,83 +304,166 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
 
     /**
+     * Make a virtual global object whose initial own properties are
+     * a copy of the own properties of {@code sharedImports}.
+     *
+     * <p>Further uses of {@code copyToImports} to copy properties
+     * onto this imports object will overwrite, effectively shadowing
+     * the {@code sharedImports}. You should shadow by overwriting
+     * rather than inheritance so that shadowing makes the original
+     * binding inaccessible.
+     *
+     * <p>The returned imports object is extensible and all its
+     * properties are configurable and non-enumerable. Once fully
+     * initialized, the caller can of course freeze the imports
+     * objects if desired. A reason not to do so it to emulate
+     * traditional JavaScript intermodule linkage by side effects to a
+     * shared (virtual) global object.
+     *
+     * <p>See {@code copyToImports} for the precise semantic of the
+     * property copying.
+     */
+    function makeImports() {
+      var imports = Object.create(null);
+      copyToImports(imports, sharedImports);
+      return imports;
+    }
+
+    /**
      * For all the own properties of {@code from}, copy their
-     * descriptors to {@code virtualGlobal}, except that the property
-     * added to {@code virtualGlobal} is unconditionally
-     * non-enumerable and (for the moment) configurable.
+     * descriptors to {@code imports}, except that each property
+     * added to {@code imports} is unconditionally configurable
+     * and non-enumerable.
      *
      * <p>By copying descriptors rather than values, any accessor
-     * properties of {@code env} become accessors of {@code
-     * virtualGlobal} with the same getter and setter. If these do not
-     * use their {@code this} value, then the original and any copied
-     * properties are effectively joined. (If the getter/setter do use
-     * their {@code this}, when compiled (verified untrusted) code
-     * accesses these with virtualGlobal as the base, their {@code
-     * this} will be bound to the virtualGlobal rather than {@code
-     * env}.)
+     * properties of {@code env} become accessors of {@code imports}
+     * with the same getter and setter. If these do not use their
+     * {@code this} value, then the original and any copied properties
+     * are effectively joined. If the getter/setter do use their
+     * {@code this}, when accessed with {@code imports} as the base,
+     * their {@code this} will be bound to the {@code imports} rather
+     * than {@code from}. If {@code from} contains writable value
+     * properties, this will copy the current value of the property,
+     * after which they may diverge.
      *
-     * <p>We make these configurable so that {@code virtualGlobal} can
+     * <p>We make these configurable so that {@code imports} can
      * be further configured before being frozen. We make these
      * non-enumerable in order to emulate the normal behavior of
      * built-in properties of typical global objects, such as the
      * browser's {@code window} object.
      */
-    function initGlobalProperties(from, virtualGlobal) {
+    function copyToImports(imports, from) {
       Object.getOwnPropertyNames(from).forEach(function(name) {
         var desc = Object.getOwnPropertyDescriptor(from, name);
         desc.enumerable = false;
         desc.configurable = true;
-        Object.defineProperty(virtualGlobal, name, desc);
+        Object.defineProperty(imports, name, desc);
       });
+      return imports;
     }
 
     /**
-     * Make a frozen virtual global object whose properties are the
-     * union of the whitelisted globals and the own properties of
-     * {@code env}.
-     *
-     * <p>If there is a collision, the property from {@code env}
-     * shadows the whitelisted global. We shadow by overwriting rather
-     * than inheritance so that shadowing makes the original binding
-     * inaccessible.
-     */
-    function makeVirtualGlobal(env) {
-      var virtualGlobal = Object.create(null);
-      initGlobalProperties(sharedGlobals, virtualGlobal);
-      initGlobalProperties(env, virtualGlobal);
-      return Object.freeze(virtualGlobal);
-    }
-
-    /**
-     * Make a frozen scope object which inherits from
-     * {@code virtualGlobal}, for use by {@code with} to prevent
+     * Make a frozen scope object which reflects all access onto
+     * {@code imports}, for use by {@code with} to prevent
      * access to any {@code freeNames} other than those found on the.
-     * {@code virtualGlobal}.
+     * {@code imports}.
      */
-    function makeScopeObject(virtualGlobal, freeNames) {
-      var scopeObject = Object.create(virtualGlobal);
+    function makeScopeObject(imports, freeNames) {
+      var scopeObject = Object.create(null);
       Object.keys(freeNames).forEach(function(name) {
-        if (!(name in virtualGlobal)) {
-          Object.defineProperty(scopeObject, name, {
+        var desc = Object.getOwnPropertyDescriptor(imports, name);
+        if (!desc || desc.writable !== false || desc.configurable) {
+          // If there is no own property, or it isn't a non-writable
+          // value property, or it is configurable. Note that this
+          // case includes accessor properties. The reason we wrap
+          // rather than copying over getters and setters is so the
+          // this-binding of the original getters and setters will be
+          // the imports rather than the scopeObject.
+          desc = {
             get: function() {
+              if (name in imports) {
+                var result = imports[name];
+                if (typeof result === 'function') {
+                  // If it were possible to know that the getter call
+                  // was on behalf of a simple function call to the
+                  // gotten function, we could instead return that
+                  // function as bound to undefined. Unfortunately,
+                  // without parsing (or possibly proxies?), that isn't
+                  // possible.
+                }
+                return result;
+              }
+              // if it were possible to know that the getter call was on
+              // behalf of a typeof expression, we'd return the string
+              // "undefined" here instead. Unfortunately, without
+              // parsing or proxies, that isn't possible.
               throw new ReferenceError('"' + name + '" not in scope');
             },
-            set: function(ignored) {
+            set: function(newValue) {
+              if (name in imports) {
+                imports[name] = newValue;
+              }
               throw new TypeError('Cannot set "' + name + '"');
-            }
-          });
+            },
+            enumerable: false
+          };
         }
+        desc.enumerable = false;
+        Object.defineProperty(scopeObject, name, desc);
       });
       return Object.freeze(scopeObject);
     }
 
 
     /**
+     * Like {@code compileExpr} but does not freeze the function it
+     * returns.
+     */
+    function internalCompileExpr(exprSrc, opt_sourcePosition) {
+      if (dirty) { fail('Initial cleaning failed'); }
+      verifyStrictExpression(exprSrc);
+      var freeNames = atLeastFreeVarNames(exprSrc);
+
+      /**
+       * Notice that the source text placed around {@code exprSrc}
+       * <ul>
+       * <li>brings no variable names into scope, avoiding any
+       *     non-hygienic name capture issues, and
+       * <li>does not introduce any newlines preceding exprSrc, so
+       *     that all line number which a debugger might report are
+       *     accurate wrt the original source text. And except for the
+       *     first line, all the column numbers are accurate too.
+       * </ul>
+       */
+      var wrapperSrc =
+        '(function() { ' +
+        // non-strict code, where this === scopeObject
+        '  with (this) { ' +
+        '    return function() { ' +
+        '      "use strict"; ' +
+        '      return ( ' +
+        // strict code, where this === imports
+        '        ' + exprSrc + '\n' +
+        '      );\n' +
+        '    };\n' +
+        '  }\n' +
+        '})';
+      var wrapper = unsafeEval(wrapperSrc);
+
+      function compiledCode(imports) {
+        var scopeObject = makeScopeObject(imports, freeNames);
+        return wrapper.call(scopeObject).call(imports);
+      };
+      Object.freeze(compiledCode.prototype);
+      return compiledCode;
+    }
+
+    /**
      * Compiles {@code exprSrc} as a strict expression into a function
-     * of an environment {@code env}, that when called evaluates
-     * {@code exprSrc} in a virtual global environment consisting only
-     * of the whitelisted globals and a snapshot of the own properties
-     * of {@code env}.
+     * of an {@code imports}, that when called evaluates {@code
+     * exprSrc} in a virtual global environment whose {@code this} is
+     * bound to that {@code imports}, and whose free variables
+     * refer only to the properties of that {@code imports}.
      *
      * <p>When SES is provided primitively, it should provide an
      * analogous {@code compileProgram} function that accepts a
@@ -381,50 +476,16 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * {@code with} together with RegExp matching to intercept free
      * variable access without parsing.
      *
-     * <p>TODO(erights): Switch to Erik Corry's suggestion that we
-     * bring each of these variables into scope by generating a
-     * shadowing declaration, rather than using "with".
-     *
      * <p>TODO(erights): Find out if any platforms have any way to
-     * associate a file name and line number with eval'ed text, and
-     * arrange to pass these through {@code compileExpr} and all its
-     * relevant callers.
+     * associate a file name and line number with eval'ed text, so
+     * that we can do something useful with the optional {@code
+     * opt_sourcePosition} to better support debugging.
      */
     function compileExpr(exprSrc, opt_sourcePosition) {
-      if (dirty) { fail('Initial cleaning failed'); }
-      verifyStrictExpression(exprSrc);
-      var freeNames = atLeastFreeVarNames(exprSrc);
-
-      /**
-       * Notice that the source text placed around exprSrc
-       * <ul>
-       * <li>brings no variable names into scope, avoiding any
-       *     non-hygienic name capture issues, and
-       * <li>does not introduce any newlines preceding exprSrc, so
-       *     that all line number which a debugger might report are
-       *     accurate wrt the original source text. And except for the
-       *     first line, all the column numbers are accurate too.
-       */
-      var wrapperSrc =
-        '(function() { ' +
-        // non-strict code, where this === scopeObject
-        '  with (this) { ' +
-        '    return function() { ' +
-        '      "use strict"; ' +
-        '      return ( ' +
-        // strict code, where this === virtualGlobal
-        '        ' + exprSrc + '\n' +
-        '      );\n' +
-        '    };\n' +
-        '  }\n' +
-        '})';
-      var wrapper = unsafeEval(wrapperSrc);
-      return function(env) {
-        var virtualGlobal = makeVirtualGlobal(env);
-        var scopeObject = makeScopeObject(virtualGlobal, freeNames);
-        return wrapper.call(scopeObject).call(virtualGlobal);
-      };
+      var result = internalCompileExpr(exprSrc, opt_sourcePosition);
+      return Object.freeze(result);
     }
+
 
     var directivePattern = (/^['"](?:\w|\s)*['"]$/m);
 
@@ -460,8 +521,8 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
 
     /**
-     * A module source is actually any valid FunctionBody, and thus any valid
-     * Program.
+     * A module source is actually any valid FunctionBody, and thus
+     * any valid Program.
      *
      * <p>In addition, in case the module source happens to begin with
      * a streotyped prelude of the CommonJS module system, the
@@ -485,18 +546,17 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * from the text to be compiled.
      */
     function compileModule(modSrc, opt_sourcePosition) {
-      var moduleMaker = compileExpr(
+      var moduleMaker = internalCompileExpr(
         '(function() {' + modSrc + '}).call(this)',
         opt_sourcePosition);
       moduleMaker.requirements = getRequirements(modSrc);
-      Object.freeze(moduleMaker.prototype);
       return Object.freeze(moduleMaker);
     }
 
     /**
      * A safe form of the {@code Function} constructor, which
      * constructs strict functions that can only refer freely to the
-     * whitelisted globals.
+     * {@code sharedImports}.
      *
      * <p>The returned function is strict whether or not it declares
      * itself to be.
@@ -507,7 +567,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       body = String(body || '');
       params = params.join(',');
       var exprSrc = '(function(' + params + '\n){' + body + '})';
-      return compileExpr(exprSrc)({});
+      return compileExpr(exprSrc)(sharedImports);
     }
     FakeFunction.prototype = UnsafeFunction.prototype;
     FakeFunction.prototype.constructor = FakeFunction;
@@ -516,7 +576,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     /**
      * A safe form of the indirect {@code eval} function, which
      * evaluates {@code src} as strict code that can only refer freely
-     * to the whitelisted globals.
+     * to the {@code sharedImports}.
      *
      * <p>Given our parserless methods of verifying untrusted sources,
      * we unfortunately have no practical way to obtain the completion
@@ -524,7 +584,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * compromise based on the following observation. All Expressions
      * are valid Programs, and all Programs are valid
      * FunctionBodys. If {@code src} parses as a strict expression,
-     * then we evaluate it as an expression it and correctly return its
+     * then we evaluate it as an expression and correctly return its
      * completion value, since that is simply the value of the
      * expression.
      *
@@ -532,15 +592,12 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * return what that would return from its implicit enclosing
      * function. If {@code src} is simply a Program, then it would not
      * have an explicit {@code return} statement, and so we fail to
-     * return its completion value. This is sufficient for using
-     * {@code eval} to emulate script tags, since script tags also
-     * lose the completion value.
+     * return its completion value.
      *
      * <p>When SES {@code eval} is provided primitively, it should
      * accept a Program and evaluate it to the Program's completion
-     * value. Unfortunately, this is not practical as a library
-     * without some non-standard support from the platform such as an
-     * parser API that provides an AST.
+     * value. Unfortunately, this is not possible on ES5 without
+     * parsing.
      */
     function fakeEval(src) {
       try {
@@ -548,7 +605,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       } catch (x) {
         src = '(function() {' + src + '\n}).call(this)';
       }
-      return compileExpr(src)({});
+      return compileExpr(src)(sharedImports);
     }
 
     if (TAME_GLOBAL_EVAL) {
@@ -601,12 +658,16 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           console.log(str);
         }
       },
+
       compileExpr: compileExpr,
       compileModule: compileModule,
       // compileProgram: compileProgram, // Cannot be implemented in ES5.1.
-      sharedGlobals: sharedGlobals,
       eval: fakeEval,
-      Function: FakeFunction
+      Function: FakeFunction,
+
+      sharedImports: sharedImports,
+      makeImports: makeImports,
+      copyToImports: copyToImports
     };
     var extensionsRecord = extensions();
     Object.getOwnPropertyNames(extensionsRecord).forEach(function (p) {
@@ -668,14 +729,14 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   }
 
   /**
-   * Initialize accessible global variables and {@code sharedGlobals}.
+   * Initialize accessible global variables and {@code sharedImports}.
    *
    * For each of the whitelisted globals, we {@code read} its value,
    * freeze that global property as a data property, and mirror that
    * property with a frozen data property of the same name and value
-   * on {@code sharedGlobals}, but always non-enumerable. We make these
-   * non-enumerable since ES5.1 specifies that all these properties
-   * are non-enumerable on the global object.
+   * on {@code sharedImports}, but always non-enumerable. We make
+   * these non-enumerable since ES5.1 specifies that all these
+   * properties are non-enumerable on the global object.
    */
   Object.keys(whitelist).forEach(function(name) {
     var desc = Object.getOwnPropertyDescriptor(global, name);
@@ -683,7 +744,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       var permit = whitelist[name];
       if (permit) {
         var value = read(global, name);
-        Object.defineProperty(sharedGlobals, name, {
+        Object.defineProperty(sharedImports, name, {
           value: value,
           writable: true,
           enumerable: false,
@@ -693,7 +754,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
   });
   if (TAME_GLOBAL_EVAL) {
-    Object.defineProperty(sharedGlobals, 'eval', {
+    Object.defineProperty(sharedImports, 'eval', {
       value: cajaVM.eval,
       writable: true,
       enumerable: false,
@@ -732,7 +793,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       }
     });
   }
-  register(sharedGlobals, whitelist);
+  register(sharedImports, whitelist);
 
   /**
    * Should the property named {@code name} be whitelisted on the
@@ -897,7 +958,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     });
     Object.freeze(value);
   }
-  clean(sharedGlobals, '');
+  clean(sharedImports, '');
 
 
   Object.keys(propertyReports).sort().forEach(function(status) {
