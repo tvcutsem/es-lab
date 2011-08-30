@@ -259,9 +259,9 @@ if (!ses) { ses = {}; }
  * need to lie to the linter since it can't tell.
  *
  * @author Mark S. Miller
- * @requires ___global_test_function___, document
- * @requires JSON, navigator, this, eval
- * @overrides ses, RegExp, WeakMap, Object
+ * @requires ___global_test_function___
+ * @requires JSON, navigator, this, eval, document
+ * @overrides ses, RegExp, WeakMap, Object, parseInt
  */
 var RegExp;
 var ses;
@@ -1409,6 +1409,17 @@ var ses;
   }
 
 
+  /**
+   * Workaround for http://code.google.com/p/v8/issues/detail?id=1645
+   */
+  function test_PARSEINT_STILL_PARSING_OCTAL() {
+    var n = parseInt('010');
+    if (n === 10) { return false; }
+    if (n === 8)  { return true; }
+    return 'parseInt("010") returned ' + n;
+  }
+
+
   ////////////////////// Repairs /////////////////////
   //
   // Each repair_NAME function exists primarily to repair the problem
@@ -2007,6 +2018,25 @@ var ses;
     });
   }
 
+  function repair_PARSEINT_STILL_PARSING_OCTAL() {
+    var badParseInt = parseInt;
+    function goodParseInt(n, radix) {
+      n = '' + n;
+      // This turns an undefined radix into a NaN but is ok since NaN
+      // is treated as undefined by badParseInt
+      radix = +radix;
+      var isHexOrOctal = /^\s*[+-]?\s*0(x?)/.exec(n);
+      var isOct = isHexOrOctal ? isHexOrOctal[1] !== 'x' : false;
+
+      if (isOct && (radix !== radix || 0 === radix)) {
+        return badParseInt(n, 10);
+      }
+      return badParseInt(n, radix);
+    }
+    parseInt = goodParseInt;
+  }
+
+
   ////////////////////// Kludge Records /////////////////////
   //
   // Each kludge record has a <dl>
@@ -2425,6 +2455,16 @@ var ses;
       canRepair: false,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
       sections: ['10.4.2.1'],
+      tests: []
+    },
+    {
+      description: 'parseInt still parsing octal',
+      test: test_PARSEINT_STILL_PARSING_OCTAL,
+      repair: repair_PARSEINT_STILL_PARSING_OCTAL,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1645'],
+      sections: ['15.1.2.2'],
       tests: []
     }
   ];
