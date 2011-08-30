@@ -28,7 +28,7 @@
  * need to lie to the linter since it can't tell.
  *
  * @author Mark S. Miller
- * @requires ___global_test_function___
+ * @requires ___global_test_function___, document
  * @requires JSON, navigator, this, eval
  * @overrides ses, RegExp, WeakMap, Object
  */
@@ -693,6 +693,30 @@ var ses;
   /** we use this variable only because we haven't yet isolated a test
    * for the problem. */
   var NEEDS_DUMMY_SETTER_repaired = false;
+
+
+  /**
+   * Partial workaround for
+   * http://code.google.com/p/chromium/issues/detail?id=94666
+   */
+  function test_FORM_GETTERS_DISAPPEAR() {
+    function getter() { return 'gotten'; }
+
+    if (typeof document === 'undefined' ||
+       typeof document.createElement !== 'function') {
+      // likely not a browser environment
+      return false;
+    }
+    var f = document.createElement("form");
+    Object.defineProperty(f, 'foo', {
+      get: getter,
+      set: void 0
+    });
+    var desc = Object.getOwnPropertyDescriptor(f, 'foo');
+    if (desc.get === getter) { return false; }
+    if (desc.get === void 0) { return true; }
+    return 'Getter became ' + desc.get;
+  }
 
 
   /**
@@ -1983,6 +2007,17 @@ var ses;
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: true,
       urls: [],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'Getter on HTMLFormElement disappears',
+      test: test_FORM_GETTERS_DISAPPEAR,
+      repair: repair_NEEDS_DUMMY_SETTER,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['http://code.google.com/p/chromium/issues/detail?id=94666',
+             'http://code.google.com/p/google-caja/issues/detail?id=1401'],
       sections: [],
       tests: []
     },
