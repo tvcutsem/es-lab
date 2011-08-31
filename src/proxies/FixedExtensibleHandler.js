@@ -64,7 +64,9 @@
 //   attributes of a fixed property (e.g. reporting a non-configurable
 //   property as configurable, or reporting a non-configurable, non-writable
 //   property as writable)
-// - getPropertyDescriptor: same constraints as for getOwnPropertyDescriptor
+// - getPropertyDescriptor cannot report fixed own properties as non-existent
+// - getPropertyDescriptor cannot report incompatible changes to the
+//   attributes of a fixed own property
 // - defineProperty cannot make incompatible changes to the attributes of
 //   fixed properties
 // - defineProperty cannot reject compatible changes made to the attributes of
@@ -123,6 +125,10 @@
 //    - accept the fix, but request continued interception
 //    - accept the fix, relinquish control and return a pdmap
 //      describing a fresh object to become
+// D) We could make fixing entirely orthogonal to trapping:
+//    introduce Proxy.fix(aProxy) which calls the fix() trap, giving the
+//    proxy a chance to 'become' a fixed object, without necessarily being
+//    preventExtensions'd, sealed or frozen.
 
 // ----------------------------------------------------------------------------
 
@@ -255,6 +261,8 @@ FixedHandler.prototype = {
       // But how do we know whether desc is inherited? Can only know by calling
       // the handler's getOwnPropertyDescriptor trap and check for undefined.
       // That implies Object.getPropertyDescriptor(aProxy,aName) would trigger 2 traps.
+      // Alternatively (markm): keep track of descriptors returned by this trap
+      // in a separate object: this.fixedOwnProps and this.fixedOwnOrInheritedProps
       
       // will throw if desc is not compatible with fixedDesc, if it exists
       Object.defineProperty(this.fixedProps, name, desc);
