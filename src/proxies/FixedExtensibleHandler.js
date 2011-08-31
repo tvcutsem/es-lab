@@ -248,6 +248,14 @@ FixedHandler.prototype = {
     // if targetHandler reports 'name' as a non-configurable property
     // or 'name' was previously fixed, check and remember the returned desc
     if (fixedDesc !== undefined || !desc.configurable) {
+      // TODO(tvcutsem): we should not keep track of inherited property descriptors:
+      //   - an inherited descriptor can be shadowed by a property with incompatible
+      //     attributes later...
+      //   - other code assumes this.fixedProps contains only own properties
+      // But how do we know whether desc is inherited? Can only know by calling
+      // the handler's getOwnPropertyDescriptor trap and check for undefined.
+      // That implies Object.getPropertyDescriptor(aProxy,aName) would trigger 2 traps.
+      
       // will throw if desc is not compatible with fixedDesc, if it exists
       Object.defineProperty(this.fixedProps, name, desc);
     }
@@ -269,13 +277,13 @@ FixedHandler.prototype = {
     }
 
     if (fixedDesc !== undefined || !desc.configurable) {
-      // will throw if desc is not compatible with fixedDesc, if it exists
-      Object.defineProperty(this.fixedProps, name, desc);
       if (success !== true) {
         // TODO(tvcutsem): not sure whether this check is actually necessary
         throw new TypeError("Cannot reject a valid change to non-configurable"+
                             " property "+name);
       }
+      // will throw if desc is not compatible with fixedDesc, if it exists
+      Object.defineProperty(this.fixedProps, name, desc);
     }
     return success;
   },
@@ -373,6 +381,8 @@ FixedHandler.prototype = {
   getOwnPropertyNames: function() {
     // TODO(tvcutsem): strictly speaking, the returned result should
     // at least contain the non-configurable properties from this.fixedProps
+    // but that would make this check O(|this.fixedProps| + |trapResult|)
+    // Currently, the check is O(|trapResult|)
     
     var trapResult = this.targetHandler.getOwnPropertyNames();
     
@@ -390,6 +400,7 @@ FixedHandler.prototype = {
     for (var i = 0; i < numProps; i++) {
       var s = String(trapResult[i]);
       if (propNames[s]) {
+        // TODO(tvcutsem): we could also silently ignore duplicates
         throw new TypeError("getOwnPropertyNames cannot list a "+
                             "duplicate property "+name);
       }
@@ -409,6 +420,8 @@ FixedHandler.prototype = {
   getPropertyNames: function() {
     // TODO(tvcutsem): strictly speaking, the returned result should
     // at least contain the non-configurable properties from this.fixedProps
+    // but that would make this check O(|this.fixedProps| + |trapResult|)
+    // Currently, the check is O(|trapResult|)
     
     var trapResult = this.targetHandler.getPropertyNames();
     
@@ -749,9 +762,10 @@ FixedHandler.installAsDefault = function() {
       return proxy;
     };
     Proxy.createFunction = function(handler, call, opt_construct) {
-      var construct = opt_construct || call;
       var fixedHandler = new FixedHandler(handler);
-      var proxy = primCreateFunction(fixedHandler, call, construct);
+      var proxy = opt_construct ?
+                   primCreateFunction(fixedHandler, call, opt_construct) :
+                   primCreateFunction(fixedHandler, call);
       fixableProxies.set(proxy, fixedHandler);
       return proxy;
     };
