@@ -49,7 +49,8 @@ Proxy.createConstructor = function(handler, callTrap) {
     callTrap,
     function() {
       var instance = Object.create(proto);
-      var result = callTrap.apply(instance, arguments);
+      var result = // callTrap.apply(instance, arguments);
+        Function.prototype.apply.call(callTrap, instance, arguments);
       if (Object(result) === result) {
         return result;
       } else {
