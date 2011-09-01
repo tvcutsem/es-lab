@@ -37,26 +37,31 @@
  *
  */
 
+(function(){ // function-as-module pattern
 "use strict";
 
 // ----------------------------------------------------------------------------
 // this is a prototype implementation of
 // http://wiki.ecmascript.org/doku.php?id=strawman:fixed_properties
 
-// A FixedHandler can be used to wrap an existing proxy handler H.
+// Loading this file will automatically patch Proxy.create and
+// Proxy.createFunction such that their handler argument is automatically
+// wrapped in a FixedHandler that checks ES5.1 invariants.
+
+// A FixedHandler is a wrapper for a target proxy handler H.
 // The FixedHandler forwards all operations to H, but additionally
 // performs a number of integrity checks on the results of some traps,
 // to make sure H does not violate the ES5 invariants w.r.t. non-configurable
 // properties and non-extensible, sealed or frozen objects.
 
-// For each own or inherited non-configurable property that H exposes
+// For each own non-configurable property that H exposes
 // (e.g. by returning a descriptor from a call to getOwnPropertyDescriptor)
 // the FixedHandler keeps a record of that property's attributes
 // (it does so by defining these properties on a non-proxy "fixedProps"
 //  object)
 
-// We will name such previously exposed, non-configurable properties
-// "fixed properties"
+// We will name such previously exposed, own non-configurable properties
+// "fixed properties".
 
 // The FixedHandler upholds the following invariants w.r.t. non-configurability:
 // - getOwnPropertyDescriptor cannot report fixed properties as non-existent
@@ -64,9 +69,10 @@
 //   attributes of a fixed property (e.g. reporting a non-configurable
 //   property as configurable, or reporting a non-configurable, non-writable
 //   property as writable)
-// - getPropertyDescriptor cannot report fixed own properties as non-existent
+// - getPropertyDescriptor cannot report fixed properties as non-existent
 // - getPropertyDescriptor cannot report incompatible changes to the
-//   attributes of a fixed own property
+//   attributes of a fixed property. It _can_ report incompatible changes
+//   to the attributes of non-own, inherited properties.
 // - defineProperty cannot make incompatible changes to the attributes of
 //   fixed properties
 // - defineProperty cannot reject compatible changes made to the attributes of
@@ -86,9 +92,11 @@
 // thrown.
 
 // Additionally, once Object.preventExtensions, Object.seal or Object.freeze
-// is invoked on the proxy, the handler is queried for all of its own
-// properties. Any property name that is not reported is henceforth
-// treated as a 'new' property.
+// is invoked on the proxy, the set of own property names for the proxy is
+// fixed. For a non-extensible proxy, a "fixed property" can be both a
+// previously exposed non-configurable property, as well as a configurable
+// property. Any property name that does not belong to this set of fixed
+// properties is called a 'new' property.
 
 // The FixedHandler upholds the following invariants regarding extensibility:
 // - getOwnPropertyDescriptor cannot report new properties as existent
@@ -99,38 +107,40 @@
 // - keys cannot list new properties
 
 // The FixedHandler is compatible with the existing ForwardingHandler.
-// When a FixedHandler wraps a ForwardingHandler to an ES5-compliant object,
-// the FixedHandler will never throw a TypeError.
+// Invariant: when a FixedHandler wraps a ForwardingHandler to an
+// ES5-compliant object, the FixedHandler will never throw a TypeError.
 
+// === Design Note ===
 // This FixedHandler hints at possible new designs for fixing proxies:
 // A) The fix() trap could be replaced by dedicated
 //    freeze, seal, preventExtensions traps. This allows the ForwardingHandler
 //    to forward all operations to its target. Alternatively,
 //    fix() could be parameterized with the names of the operations,
 //    enabling generic forwarding of the operation.
-// B) The fix() trap does not necessarily need to return either
-//    a property descriptor map | undefined
-//    We could query a handler for its alleged own props via
-//    getOwnPropertyDescriptor + getOwnPropertyNames
-//    The fix() trap (or the 3 dedicated traps) could still
-//    return false or throw an exception to avoid fixing.
-//    This would simplify the API for developers.
-// C) This FixedHandler design does away entirely with the old
+// B) This FixedHandler design does away entirely with the old
 //    'become' semantics. However, some proxy handlers may actually want
 //    the old 'become' semantics and no longer pay for the overhead of
-//    invariant enforcement checking. We could have the fix() trap
+//    invariant checking. We could have the fix() trap
 //    signal to the proxy which of the following it wants:
-//    - reject the fix (perhaps by returning undefined, perhaps by simply
-//      throwing an exception explicitly)
-//    - accept the fix, but request continued interception
-//    - accept the fix, relinquish control and return a pdmap
+//    - reject the fix (by having the fix() trap throw an exception explicitly)
+//    - accept the fix, but request to continue trapping by returning
+//      |undefined|. To determine the fixed set of properties, the proxy
+//      implementation could simply query the handler for all of its current
+//      own properties via the getOwnPropertyNames trap.
+//    - accept the fix, stop trapping and return a pdmap
 //      describing a fresh object to become
-// D) We could make fixing entirely orthogonal to trapping:
+//      (Open issue: do we default to Object.create or do we want to allow
+//       for the possibility of Array.create etc.?)
+// C) We could make fixing more orthogonal to trapping:
 //    introduce Proxy.fix(aProxy) which calls the fix() trap, giving the
 //    proxy a chance to 'become' a fixed object, without necessarily being
 //    preventExtensions'd, sealed or frozen.
+//    The opposite would still hold: calling pE/seal/freeze would necessarily
+//    fix the proxy.
 
 // ----------------------------------------------------------------------------
+
+// ---- Auxiliary functions ----
 
 // From http://wiki.ecmascript.org/doku.php?id=harmony:egal
 if (!Object.is) {
@@ -154,9 +164,109 @@ if (!Object.is) {
   }); 
 }
 
+function isStandardAttribute(name) {
+  return /^(get|set|value|writable|enumerable|configurable)$/.test(name);
+}
+
+// Adapted from ES5 section 8.10.5
+function toPropertyDescriptor(obj) {
+  if (Object(obj) !== obj) {
+    throw new TypeError("toPropertyDescriptor expects an Object, given: "+obj);
+  }
+  var desc = {};
+  if ('enumerable' in obj) { desc.enumerable = !!obj.enumerable; }
+  if ('configurable' in obj) { desc.configurable = !!obj.configurable; }
+  if ('value' in obj) { desc.value = obj.value; }
+  if ('writable' in obj) { desc.writable = !!obj.writable; }
+  if ('get' in obj) {
+    var getter = obj.get;
+    // TODO(tvcutsem): how to reliably check whether getter is callable?
+    if (getter !== undefined && typeof getter !== "function") {
+      throw new TypeError("property descriptor 'get' attribute must be "+
+                          "callable or undefined, given: "+getter);
+    }
+    desc.get = getter;
+  }
+  if ('set' in obj) {
+    var setter = obj.set;
+    // TODO(tvcutsem): how to reliably check whether setter is callable?
+    if (setter !== undefined && typeof setter !== "function") {
+      throw new TypeError("property descriptor 'set' attribute must be "+
+                          "callable or undefined, given: "+setter);
+    }
+    desc.set = setter;
+  }
+  if ('get' in desc || 'set' in desc) {
+    if ('value' in desc || 'writable' in desc) {
+      throw new TypeError("property descriptor cannot be both a data and an "+
+                          "accessor descriptor: "+obj);
+    }
+  }
+  return desc;
+}
+
+function isAccessorDescriptor(desc) {
+  if (desc === undefined) return false;
+  return ('get' in desc || 'set' in desc);
+}
+function isDataDescriptor(desc) {
+  if (desc === undefined) return false;
+  return ('value' in desc || 'writable' in desc);
+}
+function isGenericDescriptor(desc) {
+  if (desc === undefined) return false;
+  return !isAccessorDescriptor(desc) && !isDataDescriptor(desc);
+}
+
+function toCompletePropertyDescriptor(desc) {
+  var internalDesc = toPropertyDescriptor(desc);
+  if (isGenericDescriptor(internalDesc) || isDataDescriptor(internalDesc)) {
+    if (!('value' in internalDesc)) { internalDesc.value = undefined; }
+    if (!('writable' in internalDesc)) { internalDesc.writable = false; }
+  } else {
+    if (!('get' in internalDesc)) { internalDesc.get = undefined; }
+    if (!('set' in internalDesc)) { internalDesc.set = undefined; }
+  }
+  if (!('enumerable' in internalDesc)) { internalDesc.enumerable = false; }
+  if (!('configurable' in internalDesc)) { internalDesc.configurable = false; }
+  return internalDesc;
+}
+
+/**
+ * Returns a fresh property descriptor that is guaranteed
+ * to be complete (i.e. contain all the standard attributes).
+ * Additionally, any non-standard enumerable properties of
+ * attributes are copied over to the fresh descriptor.
+ *
+ * See also: http://wiki.ecmascript.org/doku.php?id=harmony:proxies_semantics
+ */
+function normalizeAndCompletePropertyDescriptor(attributes) {
+  var desc = toCompletePropertyDescriptor(attributes);
+  // note: no need to call FromPropertyDescriptor(desc), as we represent
+  // "internal" property descriptors as proper Objects from the start
+  for (var name in attributes) {
+    if (!isStandardAttribute(name)) {
+      Object.defineProperty(desc, name,
+        { value: attributes[name],
+          writable: true,
+          enumerable: true,
+          configurable: true });
+    }
+  }
+  return desc;
+}
+
+// ---- The FixedHandler wrapper ----
+
 function FixedHandler(targetHandler) {
+  // the handler that is "guarded"
   this.targetHandler = targetHandler;
+  // A record of previously exposed own properties.
+  // As long as the proxy is extensible, fixedProps need only store
+  // non-configurable properties. Once the proxy becomes non-extensible,
+  // fixedProps stores all own properties, including configurable ones.
   this.fixedProps = Object.create(null);
+  // A flag indicating whether the proxy is still extensible
   // could also use Object.isExtensible(this.fixedProps) instead
   this.isExtensible = true;
 }
@@ -165,13 +275,18 @@ FixedHandler.prototype = {
   
   // === fundamental traps ===
   
-  // if name denotes a fixed own property, check for incompatible changes
+  /**
+   * If name denotes a fixed property, check:
+   *   - whether targetHandler reports it as existent
+   *   - whether the returned descriptor is compatible with the fixed property
+   * If the proxy is non-extensible, check:
+   *   - whether name is not a new property
+   * Additionally, the returned descriptor is normalized and completed.
+   */
   getOwnPropertyDescriptor: function(name) {
     var desc = this.targetHandler.getOwnPropertyDescriptor(name);
     var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
-    
-    // TODO(tvcutsem): desc = NormalizeAndCompletePropertyDescriptor(desc)
-    
+
     if (desc === undefined) {
       // targetHandler says it doesn't have a 'name' property
       // verify that claim
@@ -179,12 +294,11 @@ FixedHandler.prototype = {
         // ok, 'name' is not one of the fixed properties
         return undefined;
       } else {
-        // 'name' was fixed
-        // if it's a non-configurable property, it cannot be reported as
-        // non-existent
+        // 'name' was fixed. If it's a non-configurable property, it cannot
+        // be reported as non-existent
         if (!fixedDesc.configurable) {
           throw new TypeError("cannot report non-configurable property "+name+
-                              " as non-existent"); 
+                              " as non-existent");
         } else {
           // 'name' is configurable and appears to have been deleted
           // from the targetHandler
@@ -196,6 +310,8 @@ FixedHandler.prototype = {
     
     // at this point, we know (desc !== undefined), i.e.
     // targetHandler reports 'name' as an existing property
+    
+    // TODO(tvcutsem): desc = normalizeAndCompletePropertyDescriptor(desc)
     
     if (!this.isExtensible && fixedDesc === undefined) {
       // if the proxy is non-extensible and
@@ -214,14 +330,20 @@ FixedHandler.prototype = {
     return desc;
   },
   
-  // if name denotes a fixed own or inherited property,
-  // check for incompatible changes
+  /**
+   * If name denotes a fixed property, check:
+   *   - whether targetHandler reports it as existent
+   *   - whether the returned descriptor is compatible with the fixed property
+   * Additionally, the returned descriptor is normalized and completed.
+   * If name does not denote a fixed property, we assume the returned property
+   * is inherited. In that case, no further checks are required, since an
+   * inherited property, even if non-configurable, can always be shadowed later
+   * by an incompatible property further down the inheritance chain
+   */
   getPropertyDescriptor: function(name) {
     var desc = this.targetHandler.getPropertyDescriptor(name);
     var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
-    
-    // TODO(tvcutsem): desc = NormalizeAndCompletePropertyDescriptor(desc);
-    
+
     if (desc === undefined) {
       // targetHandler says it doesn't have a 'name' property
       // verify that claim
@@ -234,7 +356,7 @@ FixedHandler.prototype = {
         // non-existent
         if (!fixedDesc.configurable) {
           throw new TypeError("cannot report non-configurable property "+name+
-                              " as non-existent"); 
+                              " as non-existent");
         } else {
           // 'name' is configurable and appears to have been deleted
           // from the targetHandler
@@ -247,23 +369,16 @@ FixedHandler.prototype = {
     // at this point, we know (desc !== undefined), i.e.
     // targetHandler reports 'name' as an existing property
     
+    // TODO(tvcutsem): desc = normalizeAndCompletePropertyDescriptor(desc);
+    
     // even if proxy is non-extensible and does not define 'name',
     // [[GetProperty]] may return a descriptor ('name' may have been
     // defined on a non-extensible [[Prototype]])
     
-    // if targetHandler reports 'name' as a non-configurable property
-    // or 'name' was previously fixed, check and remember the returned desc
-    if (fixedDesc !== undefined || !desc.configurable) {
-      // TODO(tvcutsem): we should not keep track of inherited property descriptors:
-      //   - an inherited descriptor can be shadowed by a property with incompatible
-      //     attributes later...
-      //   - other code assumes this.fixedProps contains only own properties
-      // But how do we know whether desc is inherited? Can only know by calling
-      // the handler's getOwnPropertyDescriptor trap and check for undefined.
-      // That implies Object.getPropertyDescriptor(aProxy,aName) would trigger 2 traps.
-      // Alternatively (markm): keep track of descriptors returned by this trap
-      // in a separate object: this.fixedOwnProps and this.fixedOwnOrInheritedProps
-      
+    // if 'name' was previously fixed, check and remember the returned desc
+    // Note: if fixedDesc is undefined (no previous record),
+    // we treat desc as an inherited property and perform no check
+    if (fixedDesc !== undefined) {
       // will throw if desc is not compatible with fixedDesc, if it exists
       Object.defineProperty(this.fixedProps, name, desc);
     }
@@ -271,9 +386,13 @@ FixedHandler.prototype = {
     return desc;
   },
   
+  /**
+   * If name denotes a fixed property, check for incompatible changes.
+   * If the proxy is non-extensible, check that new properties are rejected.
+   */
   defineProperty: function(name, desc) {
     var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
-    // TODO(tvcutsem): desc = NormalizePropertyDescriptor(desc);
+    // TODO(tvcutsem): desc = normalizePropertyDescriptor(desc);
     var success = this.targetHandler.defineProperty(name, desc);
     success = !!success; // coerce to Boolean
     
@@ -285,47 +404,28 @@ FixedHandler.prototype = {
     }
 
     if (fixedDesc !== undefined || !desc.configurable) {
+      // will throw if desc is not compatible with fixedDesc, if it exists
+      Object.defineProperty(this.fixedProps, name, desc);
+      
       if (success !== true) {
         // TODO(tvcutsem): not sure whether this check is actually necessary
+        // Note also that the above defineProperty call will have recorded
+        // the successful change in the fixedProps even if we bail out here
         throw new TypeError("Cannot reject a valid change to non-configurable"+
                             " property "+name);
       }
-      // will throw if desc is not compatible with fixedDesc, if it exists
-      Object.defineProperty(this.fixedProps, name, desc);
     }
     return success;
   },
   
-  // merges properties returned by fix() with the already fixed properties
+  /**
+   * Check whether all properties returned by the fix() trap are compatible
+   * with the already fixed properties.
+   *
+   * Note: we slightly modified the fix trap such that it receives the
+   * operation name (freeze,seal,preventExtensions) as an argument.
+   */
   fix: function(operation) {
-
-    // TODO(tvcutsem): as an alternative to introducing a fix() trap,
-    // the proxy implementation could also simply query the handler for
-    // all of its alleged own properties via the getOwnPropertyNames and 
-    // getOwnPropertyDescriptor traps.
-    
-    // The fix() trap would still be called to give the targetHandler
-    // a chance to forward the operation, and to reject the operation,
-    // e.g. by returning a special value or throwing an exception itself
-    
-    // query targetHandler for all properties it wants to see fixed
-    //var handler = this;
-    //var props = Object.create(null);
-    //this.targetHandler.getOwnPropertyNames().forEach(function (name) {
-    //  props[name] = handler.targetHandler.getOwnPropertyDescriptor(name);
-    //});
-    
-    // I'm being fixed by the real proxy implementation
-    /* if (operation === undefined) {
-      // proxy becomes the fixedProps
-      var fixedPropsMap = Object.create(null);
-      Object.getOwnPropertyNames(this.fixedProps).forEach(function (name) {
-        fixedPropsMap[name] =
-          Object.getOwnPropertyDescriptor(this.fixedProps,name);
-      }.bind(this));
-      return fixedPropsMap;
-    } */
-    
     // the fix() trap should only be called on an extensible proxy
     // fixing a non-extensible proxy should have no effect 
     if (this.isExtensible) {
@@ -354,23 +454,12 @@ FixedHandler.prototype = {
       
       // set the proxy to non-extensible
       this.isExtensible = false;
-      
-      /*if (props === someMarker) {
-        // do a 'real' fix
-        var prim_fixer = ({
-          preventExtensions: prim_preventExtensions,
-          seal:prim_seal,
-          freeze:prim_freeze})[operation];
-        prim_fixer(this.proxy);
-      } else {
-        // do a 'virtual' fix
-        // set the proxy to non-extensible
-        this.isExtensible = false;
-      }*/
     }
   },
   
-  // if name denotes a fixed property, check whether handler rejects
+  /**
+   * If name denotes a fixed property, check whether handler rejects.
+   */
   'delete': function(name) { 
     var res = this.targetHandler['delete'](name);
     res = !!res; // coerce to Boolean
@@ -386,25 +475,30 @@ FixedHandler.prototype = {
     return res;
   },
   
+  /**
+   * Checks whether the trap result does not contain any new properties
+   * if the proxy is non-extensible.
+   *
+   * Additionally, the trap result is normalized.
+   * Instead of returning the trap result directly:
+   *  - create and return a fresh Array,
+   *  - of which each element is coerced to String,
+   *  - which does not contain duplicates.
+   *
+   * TODO(tvcutsem): strictly speaking, the returned result should
+   * at least contain the non-configurable properties from this.fixedProps
+   * but that would make this check O(|this.fixedProps| + |trapResult|)
+   * Currently, the check is O(|trapResult|), which is no worse than the
+   * time required to normalize the result.
+   */
   getOwnPropertyNames: function() {
-    // TODO(tvcutsem): strictly speaking, the returned result should
-    // at least contain the non-configurable properties from this.fixedProps
-    // but that would make this check O(|this.fixedProps| + |trapResult|)
-    // Currently, the check is O(|trapResult|)
-    
     var trapResult = this.targetHandler.getOwnPropertyNames();
-    
-    // do not return trapResult directly, instead:
-    //  - create and return a fresh Array,
-    //  - of which each element is coerced to String,
-    //  - which does not contain duplicates,
-    //  - and, for non-extensible proxies, which does not
-    //    contain any new properties
-    
+
     // propNames is used as a set of strings
     var propNames = Object.create(null);
     var numProps = trapResult.length;
     var result = new Array(numProps);
+    
     for (var i = 0; i < numProps; i++) {
       var s = String(trapResult[i]);
       if (propNames[s]) {
@@ -425,23 +519,32 @@ FixedHandler.prototype = {
     return result;
   },
   
+  /**
+   * Contrary to getOwnPropertyNames, this trap does not check whether the
+   * trap result does not contain any new properties if the proxy is
+   * non-extensible: the proxy may still inherit from extensible prototypes
+   * that add new properties later.
+   *
+   * The trap result is normalized.
+   * Instead of returning the trap result directly:
+   *  - create and return a fresh Array,
+   *  - of which each element is coerced to String,
+   *  - which does not contain duplicates.
+   *
+   * TODO(tvcutsem): strictly speaking, the returned result should
+   * at least contain the non-configurable properties from this.fixedProps
+   * but that would make this check O(|this.fixedProps| + |trapResult|)
+   * Currently, the check is O(|trapResult|), which is no worse than the
+   * time required to normalize the result.
+   */
   getPropertyNames: function() {
-    // TODO(tvcutsem): strictly speaking, the returned result should
-    // at least contain the non-configurable properties from this.fixedProps
-    // but that would make this check O(|this.fixedProps| + |trapResult|)
-    // Currently, the check is O(|trapResult|)
-    
     var trapResult = this.targetHandler.getPropertyNames();
-    
-    // do not return trapResult directly, instead:
-    //  - create and return a fresh Array,
-    //  - of which each element is coerced to String,
-    //  - which does not contain duplicates
-    
+  
     // propNames is used as a set of strings
     var propNames = Object.create(null);
     var numProps = trapResult.length;
     var result = new Array(numProps);
+    
     for (var i = 0; i < numProps; i++) {
       var s = String(trapResult[i]);
       if (propNames[s]) {
@@ -456,7 +559,11 @@ FixedHandler.prototype = {
   
   // === derived traps ===
   
-  // if name denotes a fixed property, check whether answer is true
+  /**
+   * If name denotes a fixed property, check whether the trap returns true.
+   * If name denotes a new property on a non-extensible proxy, check whether
+   * the trap returns false.
+   */
   hasOwn: function(name) {
     // simulate missing derived trap fall-back behavior
     var res = this.targetHandler.hasOwn ?
@@ -483,7 +590,9 @@ FixedHandler.prototype = {
     return res;
   },
   
-  // if name denotes a fixed property, check whether answer is true
+  /**
+   * If name denotes a fixed property, check whether the trap returns true.
+   */
   has: function(name) {
     // simulate missing derived trap fall-back behavior
     var res = this.targetHandler.has ?
@@ -501,9 +610,11 @@ FixedHandler.prototype = {
     return res;
   },
   
-  // if name denotes a fixed non-configurable, non-writable data property,
-  // check its return value against the previously asserted value of the
-  // fixed property
+  /**
+   * If name denotes a fixed non-configurable, non-writable data property,
+   * check its return value against the previously asserted value of the
+   * fixed property.
+   */
   get: function(rcvr, name) {
     // simulate missing derived trap fall-back behavior
     var res = this.targetHandler.get ?
@@ -523,8 +634,10 @@ FixedHandler.prototype = {
     return res;
   },
   
-  // if name denotes a fixed, non-configurable, non-writable data property,
-  // check that 'set' reports the assignment as failed
+  /**
+   * If name denotes a fixed non-configurable, non-writable data property,
+   * check that the trap rejects the assignment.
+   */
   set: function(rcvr, name, val) {
     // simulate missing derived trap fall-back behavior
     var res = this.targetHandler.set ?
@@ -544,21 +657,30 @@ FixedHandler.prototype = {
     return res;
   },
   
+  /**
+   * The trap result is normalized.
+   * The trap result is not returned directly. Instead:
+   *  - create and return a fresh Array,
+   *  - of which each element is coerced to String,
+   *  - which does not contain duplicates
+   *
+   * TODO(tvcutsem): strictly speaking, the returned result should
+   * at least contain the enumerable non-configurable fixed properties
+   * but that would make this check O(|this.fixedProps| + |trapResult|)
+   * Currently, the check is O(|trapResult|), which is no worse than the
+   * time required to normalize the result.
+   */
   enumerate: function() {
     // simulate missing derived trap fall-back behavior
     var trapResult = this.targetHandler.enumerate ?
                        this.targetHandler.enumerate() :
                        TrapDefaults.enumerate.call(this.targetHandler);
-             
-    // do not return trapResult directly, instead:
-    //  - create and return a fresh Array,
-    //  - of which each element is coerced to String,
-    //  - which does not contain duplicates
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
     var numProps = trapResult.length;
     var result = new Array(numProps);
+    
     for (var i = 0; i < numProps; i++) {
       var s = String(trapResult[i]);
       if (propNames[s]) {
@@ -573,23 +695,33 @@ FixedHandler.prototype = {
     return result;
   },
   
+  /**
+   * Checks whether the trap result does not contain any new properties
+   * if the proxy is non-extensible.
+   *
+   * The trap result is normalized.
+   * The trap result is not returned directly. Instead:
+   *  - create and return a fresh Array,
+   *  - of which each element is coerced to String,
+   *  - which does not contain duplicates
+   *
+   * TODO(tvcutsem): strictly speaking, the returned result should
+   * at least contain the enumerable non-configurable fixed properties
+   * but that would make this check O(|this.fixedProps| + |trapResult|)
+   * Currently, the check is O(|trapResult|), which is no worse than the
+   * time required to normalize the result.
+   */
   keys: function() {
     // simulate missing derived trap fall-back behavior
     var trapResult = this.targetHandler.keys ?
                        this.targetHandler.keys() :
                        TrapDefaults.keys.call(this.targetHandler);
-    
-    // do not return trapResult directly, instead:
-    //  - create and return a fresh Array,
-    //  - of which each element is coerced to String,
-    //  - which does not contain duplicates
-    //  - and, for non-extensible proxies, which does not
-    //    contain any new properties
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
     var numProps = trapResult.length;
     var result = new Array(numProps);
+    
     for (var i = 0; i < numProps; i++) {
      var s = String(trapResult[i]);
      if (propNames[s]) {
@@ -611,7 +743,13 @@ FixedHandler.prototype = {
   }
 };
 
-// maps proxies to their FixedHandlers
+// === end of the FixedHandler ===
+
+// In what follows, a 'fixable proxy' is a proxy
+// whose handler is a FixedHandler. Such proxies can be made non-extensible,
+// sealed or frozen without losing the ability to trap.
+
+// maps fixable proxies to their FixedHandlers
 var fixableProxies = new WeakMap();
 
 // store a reference to the real ES5 primitives before patching them
@@ -748,34 +886,36 @@ var TrapDefaults = {
     return true;
   },
   enumerate: function() {
+    var h = this;
     return this.getPropertyNames().filter(
-      function (name) { return this.getPropertyDescriptor(name).enumerable }.bind(this));
+      function (name) { return h.getPropertyDescriptor(name).enumerable });
   },
   keys: function() {
+    var h = this;
     return this.getOwnPropertyNames().filter(
-      function (name) { return this.getOwnPropertyDescriptor(name).enumerable }.bind(this));
+      function (name) { return h.getOwnPropertyDescriptor(name).enumerable });
   }
   
 }; // end TrapDefaults
 
-FixedHandler.installAsDefault = function() {
-  if (typeof Proxy === "object") {
-    var primCreate = Proxy.create,
-        primCreateFunction = Proxy.createFunction;
+if (typeof Proxy === "object") {
+  var primCreate = Proxy.create,
+      primCreateFunction = Proxy.createFunction;
 
-    Proxy.create = function(handler, proto) {
-      var fixedHandler = new FixedHandler(handler);
-      var proxy = primCreate(fixedHandler, proto);
-      fixableProxies.set(proxy, fixedHandler);
-      return proxy;
-    };
-    Proxy.createFunction = function(handler, call, opt_construct) {
-      var fixedHandler = new FixedHandler(handler);
-      var proxy = opt_construct ?
-                   primCreateFunction(fixedHandler, call, opt_construct) :
-                   primCreateFunction(fixedHandler, call);
-      fixableProxies.set(proxy, fixedHandler);
-      return proxy;
-    };
-  } 
-};
+  Proxy.create = function(handler, proto) {
+    var fixedHandler = new FixedHandler(handler);
+    var proxy = primCreate(fixedHandler, proto);
+    fixableProxies.set(proxy, fixedHandler);
+    return proxy;
+  };
+  Proxy.createFunction = function(handler, call, opt_construct) {
+    var fixedHandler = new FixedHandler(handler);
+    var proxy = opt_construct !== undefined ?
+                 primCreateFunction(fixedHandler, call, opt_construct) :
+                 primCreateFunction(fixedHandler, call);
+    fixableProxies.set(proxy, fixedHandler);
+    return proxy;
+  };
+} 
+
+})(); // function-as-module pattern
