@@ -335,8 +335,8 @@ var ses;
    * this to be an ES3 browser which is unsuitable for attempting to
    * run SES.
    *
-   * <p>If {@code Object.getOwnPropertyNames}, there is no way to
-   * emulate it.
+   * <p>If {@code Object.getOwnPropertyNames} is missing, there is no
+   * way to emulate it.
    */
   function test_MISSING_GETOWNPROPNAMES() {
     return !('getOwnPropertyNames' in Object);
@@ -390,7 +390,7 @@ var ses;
 
 
   /**
-   * Workaround for https://bugs.webkit.org/show_bug.cgi?id=55736
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=55736
    *
    * <p>As of this writing, the only major browser that does implement
    * Object.getOwnPropertyNames but not Object.freeze etc is the
@@ -409,7 +409,7 @@ var ses;
 
 
   /**
-   * Workaround for https://bugs.webkit.org/show_bug.cgi?id=55537
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=55537
    *
    * This bug is fixed on the latest Safari beta 5.0.5 (5533.21.1,
    * r88603). When the released Safari has this fix, we can retire
@@ -449,15 +449,13 @@ var ses;
 
 
   /**
-   * Work around for https://bugzilla.mozilla.org/show_bug.cgi?id=591846
+   * Detects https://bugzilla.mozilla.org/show_bug.cgi?id=591846
    * as applied to the RegExp constructor.
    *
    * <p>Note that Mozilla lists this bug as closed. But reading that
-   * bug thread clarifies that is partially because the following code
-   * allows us to work around the non-configurability of the RegExp
-   * statics.
-   *
-   * <p>This kludge is safety preserving.
+   * bug thread clarifies that is partially because the code in {@code
+   * repair_REGEXP_CANT_BE_NEUTERED} enables us to work around the
+   * non-configurability of the RegExp statics.
    */
   function test_REGEXP_CANT_BE_NEUTERED() {
     if (!RegExp.hasOwnProperty('leftContext')) { return false; }
@@ -480,7 +478,7 @@ var ses;
 
 
   /**
-   * Work around for http://code.google.com/p/v8/issues/detail?id=1393
+   * Detects http://code.google.com/p/v8/issues/detail?id=1393
    *
    * <p>This kludge is safety preserving.
    */
@@ -509,7 +507,7 @@ var ses;
 
 
   /**
-   * Workaround for https://bugs.webkit.org/show_bug.cgi?id=26382
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=26382
    *
    * <p>As of this writing, the only major browser that does implement
    * Object.getOwnPropertyNames but not Function.prototype.bind is
@@ -527,7 +525,7 @@ var ses;
   }
 
   /**
-   * Workaround for http://code.google.com/p/v8/issues/detail?id=892
+   * Detects http://code.google.com/p/v8/issues/detail?id=892
    *
    * <p>This tests whether the built-in bind method violates the spec
    * by calling the original using its current .apply method rather
@@ -581,7 +579,7 @@ var ses;
 
 
   /**
-   * Workaround for http://code.google.com/p/google-caja/issues/detail?id=1362
+   * Detects http://code.google.com/p/google-caja/issues/detail?id=1362
    *
    * <p>This is an unfortunate oversight in the ES5 spec: Even if
    * Date.prototype is frozen, it is still defined to be a Date, and
@@ -612,7 +610,7 @@ var ses;
 
 
   /**
-   * Workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=656828
+   * Detects https://bugzilla.mozilla.org/show_bug.cgi?id=656828
    *
    * <p>A bug in the current FF6.0a1 implementation: Even if
    * WeakMap.prototype is frozen, it is still defined to be a WeakMap,
@@ -642,7 +640,7 @@ var ses;
 
 
   /**
-   * Workaround for http://code.google.com/p/v8/issues/detail?id=1447
+   * Detects http://code.google.com/p/v8/issues/detail?id=1447
    *
    * <p>This bug is fixed as of V8 r8258 bleeding-edge, but is not yet
    * available in the latest dev-channel Chrome (13.0.782.15 dev).
@@ -696,8 +694,7 @@ var ses;
 
 
   /**
-   * Partial workaround for
-   * http://code.google.com/p/chromium/issues/detail?id=94666
+   * Detects http://code.google.com/p/chromium/issues/detail?id=94666
    */
   function test_FORM_GETTERS_DISAPPEAR() {
     function getter() { return 'gotten'; }
@@ -720,7 +717,7 @@ var ses;
 
 
   /**
-   * Work around for https://bugzilla.mozilla.org/show_bug.cgi?id=637994
+   * Detects https://bugzilla.mozilla.org/show_bug.cgi?id=637994
    *
    * <p>On Firefox 4 an inherited non-configurable accessor property
    * appears to be an own property of all objects which inherit this
@@ -776,7 +773,7 @@ var ses;
 
 
   /**
-   * Workaround for http://code.google.com/p/v8/issues/detail?id=1360
+   * Detects http://code.google.com/p/v8/issues/detail?id=1360
    *
    * Our workaround wraps {@code sort} to wrap the comparefn.
    */
@@ -792,7 +789,7 @@ var ses;
 
 
   /**
-   * Workaround for http://code.google.com/p/v8/issues/detail?id=1360
+   * Detects http://code.google.com/p/v8/issues/detail?id=1360
    *
    * <p>Our workaround wraps {@code replace} to wrap the replaceValue
    * if it's a function.
@@ -817,7 +814,7 @@ var ses;
   }
 
   /**
-   * Workaround for
+   * Detects
    * https://connect.microsoft.com/IE/feedback/details/
    *   685436/getownpropertydescriptor-on-strict-caller-throws
    *
@@ -849,7 +846,7 @@ var ses;
   }
 
   /**
-   * Workaround https://bugs.webkit.org/show_bug.cgi?id=63398
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
    *
    * <p>A strict function's caller should be poisoned only in a way
    * equivalent to an accessor property with a throwing getter and
@@ -1032,7 +1029,7 @@ var ses;
   }
 
   /**
-   * Workaround https://bugzilla.mozilla.org/show_bug.cgi?id=591846 as
+   * Detects https://bugzilla.mozilla.org/show_bug.cgi?id=591846 as
    * applied to "caller"
    */
   function test_BUILTIN_LEAKS_CALLER() {
@@ -1055,7 +1052,7 @@ var ses;
   }
 
   /**
-   * Workaround https://bugzilla.mozilla.org/show_bug.cgi?id=591846 as
+   * Detects https://bugzilla.mozilla.org/show_bug.cgi?id=591846 as
    * applied to "arguments"
    */
   function test_BUILTIN_LEAKS_ARGUMENTS() {
@@ -1077,7 +1074,7 @@ var ses;
   }
 
   /**
-   * Workaround for http://code.google.com/p/v8/issues/detail?id=893
+   * Detects http://code.google.com/p/v8/issues/detail?id=893
    */
   function test_BOUND_FUNCTION_LEAKS_CALLER() {
     if (!('bind' in Function.prototype)) { return false; }
@@ -1099,7 +1096,7 @@ var ses;
   }
 
   /**
-   * Workaround for http://code.google.com/p/v8/issues/detail?id=893
+   * Detects http://code.google.com/p/v8/issues/detail?id=893
    */
   function test_BOUND_FUNCTION_LEAKS_ARGUMENTS() {
     if (!('bind' in Function.prototype)) { return false; }
@@ -1120,7 +1117,7 @@ var ses;
   }
 
   /**
-   * Workaround for http://code.google.com/p/v8/issues/detail?id=621
+   * Detects http://code.google.com/p/v8/issues/detail?id=621
    *
    */
   function test_JSON_PARSE_PROTO_CONFUSION() {
@@ -1146,6 +1143,15 @@ var ses;
    * <p>On a non-extensible object, it must not be possible to change
    * its internal [[Prototype]] property, i.e., which object it
    * inherits from.
+   *
+   * TODO(erights): investigate the following:
+   * At http://goo.gl/ycCmo Mike Stay says
+   * <blockquote>
+   * Kevin notes in domado.js that on some versions of FF, event
+   * objects switch prototypes when moving between frames. You should
+   * probably check out their behavior around freezing and sealing.
+   * </blockquote>
+   * But I couldn't find it.
    */
   function test_PROTO_NOT_FROZEN() {
     var x = Object.preventExtensions({});
@@ -1179,7 +1185,7 @@ var ses;
 
 
   /**
-   * Workaround for http://code.google.com/p/v8/issues/detail?id=1645
+   * Detects http://code.google.com/p/v8/issues/detail?id=1645
    */
   function test_PARSEINT_STILL_PARSING_OCTAL() {
     var n = parseInt('010');
@@ -1495,8 +1501,6 @@ var ses;
             var newDesc = gopd(base, name);
             if (newDesc.get === desc.get) {
               return result;
-            } else {
-              debugger;
             }
           }
 
