@@ -45,8 +45,9 @@
 // http://wiki.ecmascript.org/doku.php?id=strawman:fixed_properties
 
 // Loading this file will automatically patch Proxy.create and
-// Proxy.createFunction such that their handler argument is automatically
-// wrapped in a FixedHandler that checks ES5.1 invariants.
+// Proxy.createFunction such that they support fixed, trapping proxies
+// This is done by automatically wrapping all user-defined proxy handlers
+// in a FixedHandler that checks and enforces ES5.1 invariants.
 
 // A FixedHandler is a wrapper for a target proxy handler H.
 // The FixedHandler forwards all operations to H, but additionally

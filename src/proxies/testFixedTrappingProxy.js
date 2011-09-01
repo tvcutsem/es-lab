@@ -36,7 +36,10 @@
  * Contributor(s):
  *
  */
-load('FixedExtensibleHandler.js');
+
+// once this file is loaded, Proxy.create{Function} is patched to
+// support fixed trapping proxies
+load('FixedTrappingProxy.js');
 load('forwardingHandler.js');
 
 function assert(b, msg) {
@@ -51,8 +54,6 @@ function assertThrows(message, fn) {
     assert(e.message === message, "assertThrows: "+e.message);
   }
 }
-
-// FixedHandler.installAsDefault();
 
 // the 'main' function
 function test() {
