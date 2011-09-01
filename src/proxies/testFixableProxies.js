@@ -1,4 +1,4 @@
-load('FixedHandler.js');
+load('FixedExtensibleHandler.js');
 load('forwardingHandler.js');
 
 function assert(b, msg) {
