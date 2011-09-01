@@ -399,6 +399,7 @@ FixedHandler.prototype = {
     //  {value:undefined,writable:false,enumerable:false,configurable:false}
     // This will also set all other attributes to their default value,
     // which is unexpected and different from [[DefineOwnProperty]].
+    // Bug filed: https://bugzilla.mozilla.org/show_bug.cgi?id=601329
     
     // TODO(tvcutsem): desc = normalizePropertyDescriptor(desc);
 
