@@ -655,7 +655,7 @@ var ses;
    */
   function test_NEED_TO_WRAP_FOREACH() {
     if (!('freeze' in Object)) {
-      // Object.freeze is still absent on released Safari and would
+      // Object.freeze is still absent on released Android and would
       // cause a bogus bug detection in the following try/catch code.
       return false;
     }
@@ -1154,6 +1154,12 @@ var ses;
    * But I couldn't find it.
    */
   function test_PROTO_NOT_FROZEN() {
+    if (!('freeze' in Object)) {
+      // Object.freeze and its ilk (including preventExtensions) are
+      // still absent on released Android and would
+      // cause a bogus bug detection in the following try/catch code.
+      return false;
+    }
     var x = Object.preventExtensions({});
     if (x.__proto__ === void 0 && !('__proto__' in x)) { return false; }
     var y = {};
@@ -1259,6 +1265,22 @@ var ses;
     };
   }
 
+  function repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
+    var unsafeDefProp = Object.defineProperty;
+    function repairedDefineProperty(base, name, desc) {
+      if (typeof base === 'function' &&
+          name === 'prototype' &&
+          'value' in desc) {
+        try {
+          base.prototype = desc.value;
+        } catch (x) {
+          logger.warn('prototype fixup failed');
+        }
+      }
+      return unsafeDefProp(base, name, desc);
+    }
+    defProp(Object, 'defineProperty', { value: repairedDefineProperty });
+  }
 
   function patchMissingProp(base, name, missingFunc) {
     if (!(name in base)) {
@@ -1964,9 +1986,9 @@ var ses;
     {
       description: 'A function.prototype\'s descriptor lies',
       test: test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
-      repair: void 0,
+      repair: repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: false,
+      canRepair: true,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1530',
              'http://code.google.com/p/v8/issues/detail?id=1570'],
       sections: ['15.2.3.3', '15.2.3.6', '15.3.5.2'],
