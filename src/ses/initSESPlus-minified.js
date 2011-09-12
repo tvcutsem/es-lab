@@ -110,10 +110,10 @@ fakeIsExtensible(obj){return true})}BOGUS_BOUND_PROTOTYPE={'toString':function()
 repair_MISSING_BIND(){defProp(Function.prototype,'bind',{'value':function fakeBind(self,var_args){var
 thisFunc=this,leftArgs=slice.call(arguments,1);function funcBound(var_args){var args;if(this===Object(this)&&Object.getPrototypeOf(this)===BOGUS_BOUND_PROTOTYPE)throw new
 TypeError('Cannot emulate \"new\" on pseudo-bound function.');return args=concat.call(leftArgs,slice.call(arguments,0)),apply.call(thisFunc,self,args)}return funcBound.prototype=BOGUS_BOUND_PROTOTYPE,defProp(funcBound,'prototype',{'value':BOGUS_BOUND_PROTOTYPE,'writable':false,'configurable':false}),funcBound},'writable':true,'enumerable':false,'configurable':true})}function
-makeMutableProtoPatcher(constr,classString){var proto=constr.prototype,baseToString=objToString.call(proto);if(baseToString!=='[object '+classString+']')throw new
-TypeError('unexpected: '+baseToString);if(getPrototypeOf(proto)!==Object.prototype)throw new
-TypeError('unexpected inheritance: '+classString);function mutableProtoPatcher(name){var
-originalMethod;if(!hop.call(proto,name))return;originalMethod=proto[name],originalMethod.apply=apply;function
+makeMutableProtoPatcher(constr,classString){var proto=constr.prototype,baseToString=objToString.call(proto),grandBaseToString,grandProto;if(baseToString!=='[object '+classString+']')throw new
+TypeError('unexpected: '+baseToString);grandProto=getPrototypeOf(proto),grandBaseToString=objToString.call(grandProto);if(grandBaseToString==='[object '+classString+']')throw new
+TypeError('malformed inheritance: '+classString);grandProto!==Object.prototype&&logger.log('unexpected inheritance: '+classString);function
+mutableProtoPatcher(name){var originalMethod;if(!hop.call(proto,name))return;originalMethod=proto[name],originalMethod.apply=apply;function
 replacement(var_args){var parent=getPrototypeOf(this),thisToString;if(objToString.call(parent)!==baseToString)throw thisToString=objToString.call(this),thisToString===baseToString?new
 TypeError('May not mutate internal state of a '+classString+'.prototype'):new TypeError('Unexpected: '+thisToString);return originalMethod.apply(this,arguments)}defProp(proto,name,{'value':replacement})}return mutableProtoPatcher}function
 repair_MUTABLE_DATE_PROTO(){['setYear','setTime','setFullYear','setUTCFullYear','setMonth','setUTCMonth','setDate','setUTCDate','setHours','setUTCHours','setMinutes','setUTCMinutes','setSeconds','setUTCSeconds','setMilliseconds','setUTCMilliseconds'].forEach(makeMutableProtoPatcher(Date,'Date'))}function

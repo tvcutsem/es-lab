@@ -1628,8 +1628,13 @@ var ses;
     if (baseToString !== '[object ' + classString + ']') {
       throw new TypeError('unexpected: ' + baseToString);
     }
-    if (getPrototypeOf(proto) !== Object.prototype) {
-      throw new TypeError('unexpected inheritance: ' + classString);
+    var grandProto = getPrototypeOf(proto);
+    var grandBaseToString = objToString.call(grandProto);
+    if (grandBaseToString === '[object ' + classString + ']') {
+      throw new TypeError('malformed inheritance: ' + classString);
+    }
+    if (grandProto !== Object.prototype) {
+      logger.log('unexpected inheritance: ' + classString);
     }
     function mutableProtoPatcher(name) {
       if (!hop.call(proto, name)) { return; }
