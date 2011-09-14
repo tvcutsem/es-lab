@@ -137,7 +137,7 @@ TESTS.testNonConfigurableExists =
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
     delete emulatedProps.x;
-    assertThrows("cannot report non-configurable property x as non-existent",
+    assertThrows("cannot report non-configurable property 'x' as non-existent",
       function() { Object.getOwnPropertyDescriptor(brokenProxy, 'x'); });
   };
   
@@ -166,7 +166,7 @@ TESTS.testNonExtensibleReportNoNewProps =
            'x was observed as non-configurable');
     Object.preventExtensions(brokenProxy);
     emulatedProps.y = {value:2,configurable:true};
-    assertThrows("cannot report a new property y on a non-extensible proxy",
+    assertThrows("cannot report a new own property 'y' on a non-extensible object",
       function() { Object.getOwnPropertyDescriptor(brokenProxy, 'y'); });
   };
   
@@ -185,22 +185,11 @@ TESTS.testNonExtensibleDefineNoNewProps =
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 2, 'x was updated');
     // should not be possible to add a new property 'y'
-    assertThrows("cannot successfully add a new property y to a "+
+    assertThrows("cannot successfully add a new property 'y' to a "+
                  "non-extensible object",
       function() {
         success.y = true;
         Object.defineProperty(brokenProxy, 'y', {value:3});
-      });
-  };
-  
-TESTS.testNonConfigurableCantRejectChange =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
-    emulatedProps.x = {value:1,writable:true,configurable:false};
-    assertThrows("cannot reject a valid change to non-configurable "+
-                 "property x",
-      function() {
-        success.x = false;
-        Object.defineProperty(brokenProxy, 'x', {value:1,writable:false});
       });
   };
   
@@ -223,7 +212,7 @@ TESTS.testNonConfigurableNoDelete =
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
-    assertThrows("property x is non-configurable and cannot be deleted",
+    assertThrows("property 'x' is non-configurable and can't be deleted",
       function() {
         success.x = true;
         delete brokenProxy.x;      
@@ -236,7 +225,7 @@ TESTS.testGOPNCannotListNewProperties =
     Object.preventExtensions(brokenProxy);
     emulatedProps.y = {value:2, configurable:true};
     assertThrows("getOwnPropertyNames cannot list a new property "+
-                 "y on a non-extensible object",
+                 "'y' on a non-extensible object",
       function() {
         Object.getOwnPropertyNames(brokenProxy);  
       });
@@ -249,8 +238,8 @@ TESTS.testNonConfigurableMustBeReportedByHasOwn =
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
     delete emulatedProps.x;
-    assertThrows("cannot report existing non-configurable property "+
-                 "x as a non-existent own property",
+    assertThrows("cannot report existing non-configurable own property "+
+                 "'x' as a non-existent own property",
       function() {
         Object.prototype.hasOwnProperty.call(brokenProxy, 'x');  
       });
@@ -261,7 +250,7 @@ TESTS.testNewPropertyCantBeReportedByHasOwn =
     emulatedProps.x = {value:1, configurable:false};
     Object.preventExtensions(brokenProxy);
     emulatedProps.y = {value:2, configurable:true};
-    assertThrows("cannot report a new own property y "+
+    assertThrows("cannot report a new own property 'y' "+
                  "on a non-extensible object",
       function() {
         Object.prototype.hasOwnProperty.call(brokenProxy, 'y');  
@@ -275,8 +264,8 @@ TESTS.testNonConfigurableMustBeReportedByHas =
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
     delete emulatedProps.x;
-    assertThrows("cannot report existing non-configurable property "+
-                 "x as a non-existent property",
+    assertThrows("cannot report existing non-configurable own property "+
+                 "'x' as a non-existent property",
       function() {
         'x' in brokenProxy;
       });
@@ -289,8 +278,7 @@ TESTS.testNonConfigurableNonWritableHasStableValue =
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
     emulatedProps.x = {value:2, writable:false,configurable:false};
-    assertThrows("inconsistent value reported for non-configurable "+
-                 "property x, expected: 1 but got: 2",
+    assertThrows("can't redefine non-configurable property 'x'",
       function() {
         brokenProxy.x;
       });
@@ -302,8 +290,7 @@ TESTS.testNonConfigurableNonWritableCantBeAssigned =
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
-    assertThrows("cannot report successful assignment for "+
-                 "non-configurable, non-writable data property x",
+    assertThrows("can't redefine non-configurable property 'x'",
       function() {
         success.x = true;
         brokenProxy.x = 2;
@@ -316,7 +303,7 @@ TESTS.testKeysCannotListNewProperties =
     Object.preventExtensions(brokenProxy);
     emulatedProps.y = {value:2, enumerable:true, configurable:true};
     assertThrows("keys trap cannot list a new property "+
-                 "y on a non-extensible object",
+                 "'y' on a non-extensible object",
       function() {
         Object.keys(brokenProxy);  
       });
