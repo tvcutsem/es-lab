@@ -259,7 +259,7 @@ if (!ses) { ses = {}; }
  * need to lie to the linter since it can't tell.
  *
  * @author Mark S. Miller
- * @requires ___global_test_function___
+ * @requires ___global_test_function___, ___global_valueOf_function___
  * @requires JSON, navigator, this, eval, document
  * @overrides ses, RegExp, WeakMap, Object, parseInt
  */
@@ -615,6 +615,23 @@ var ses;
     } catch (err) {
       if (err instanceof TypeError) { return false; }
       return 'valueOf() threw: ' + err;
+    }
+    return true;
+  }
+
+  /**
+   *
+   */
+  function test_GLOBAL_LEAKS_FROM_GLOBALLY_CALLED_BUILTINS() {
+    global.___global_valueOf_function___ = {}.valueOf;
+    var that = 'dummy';
+    try {
+      that = ___global_valueOf_function___();
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      return 'valueOf() threw: ' + err;
+    } finally {
+      delete global.___global_valueOf_function___;
     }
     return true;
   }
@@ -2157,6 +2174,16 @@ var ses;
                '685430/global-object-leaks-from-built-in-methods'],
       sections: ['15.2.4.4'],
       tests: ['S15.2.4.4_A14']
+    },
+    {
+      description: 'Global object leaks from globally called built-in methods',
+      test: test_GLOBAL_LEAKS_FROM_GLOBALLY_CALLED_BUILTINS,
+      repair: void 0,
+      preSeverity: severities.NOT_ISOLATED,
+      canRepair: false,
+      urls: [],
+      sections: ['10.2.1.2', '10.2.1.2.6', '15.2.4.4'],
+      tests: []
     },
     {
       description: 'Object.freeze is missing',
