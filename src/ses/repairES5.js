@@ -1902,7 +1902,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['15.2.3.4'],
-      tests: []
+      tests: ['15.2.3.4-0-1.js']
     }
   ];
 

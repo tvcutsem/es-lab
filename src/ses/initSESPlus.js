@@ -2133,7 +2133,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['15.2.3.4'],
-      tests: []
+      tests: ['15.2.3.4-0-1.js']
     }
   ];
 
@@ -4373,7 +4373,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   function getPermit(base, name) {
     var permit = whiteTable.get(base);
     if (permit) {
-      if (permit[name]) { return permit[name]; }
+      if (hop.call(permit, name)) { return permit[name]; }
     }
     while (true) {
       base = Object.getPrototypeOf(base);
