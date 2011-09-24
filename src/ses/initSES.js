@@ -229,6 +229,7 @@ if (!ses) { ses = {}; }
 
   ses.logger = logger;
 })();
+;
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -2133,7 +2134,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['15.2.3.4'],
-      tests: ['15.2.3.4-0-1.js']
+      tests: ['15.2.3.4-0-1']
     }
   ];
 
@@ -2149,7 +2150,7 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=64250'],
       sections: ['10.2.1.2', '10.2.1.2.6'],
-      tests: []
+      tests: ['10.4.3-1-8gs']
     },
     {
       description: 'Global object leaks from anonymous function calls',
@@ -2159,7 +2160,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['10.4.3'],
-      tests: []
+      tests: ['S10.4.3_A1']
     },
     {
       description: 'Global object leaks from built-in methods',
@@ -2183,7 +2184,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['10.2.1.2', '10.2.1.2.6', '15.2.4.4'],
-      tests: []
+      tests: ['S15.2.4.4_A15']
     },
     {
       description: 'Object.freeze is missing',
@@ -2193,7 +2194,7 @@ var ses;
       canRepair: false,           // repair for development, not safety
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=55736'],
       sections: ['15.2.3.9'],
-      tests: []
+      tests: ['15.2.3.9-0-1']
     },
     {
       description: 'Phantom callee on strict functions',
@@ -2203,7 +2204,7 @@ var ses;
       canRepair: true,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=55537'],
       sections: ['15.2.3.4'],
-      tests: []
+      tests: ['S15.2.3.4_A1_T1']
     },
     {
       description: 'Strict delete returned false rather than throwing',
@@ -2215,7 +2216,7 @@ var ses;
                '685432/strict-delete-sometimes-returns-false-' +
                'rather-than-throwing'],
       sections: ['11.4.1'],
-      tests: []
+      tests: ['S11.4.1_A5']
     },
     {
       description: 'Non-deletable RegExp statics are a' +
@@ -2255,7 +2256,7 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1530',
              'http://code.google.com/p/v8/issues/detail?id=1570'],
       sections: ['15.2.3.3', '15.2.3.6', '15.3.5.2'],
-      tests: []
+      tests: ['S15.3.3.1_A4']
     },
     {
       description: 'Function.prototype.bind is missing',
@@ -2266,7 +2267,7 @@ var ses;
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=26382',
              'https://bugs.webkit.org/show_bug.cgi?id=42371'],
       sections: ['15.3.4.5'],
-      tests: []
+      tests: ['S15.3.4.5_A3']
     },
     {
       description: 'Function.prototype.bind calls .apply rather than [[Call]]',
@@ -2277,7 +2278,7 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=892',
              'http://code.google.com/p/v8/issues/detail?id=828'],
       sections: ['15.3.4.5.1'],
-      tests: []
+      tests: ['S15.3.4.5_A4']
     },
     {
       description: 'Function.prototype.bind does not curry construction',
@@ -2287,7 +2288,7 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=26382#c29'],
       sections: ['15.3.4.5.2'],
-      tests: []
+      tests: ['S15.3.4.5_A5']
     },
     {
       description: 'Date.prototype is a global communication channel',
@@ -2336,9 +2337,10 @@ var ses;
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: true,
       urls: ['http://code.google.com/p/chromium/issues/detail?id=94666',
+             'http://code.google.com/p/v8/issues/detail?id=1651',
              'http://code.google.com/p/google-caja/issues/detail?id=1401'],
-      sections: [],
-      tests: []
+      sections: ['15.2.3.6'],
+      tests: ['S15.2.3.6_A1']
     },
     {
       description: 'Accessor properties inherit as own properties',
@@ -2347,8 +2349,8 @@ var ses;
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: true,
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=637994'],
-      sections: ['8.6.1'],
-      tests: []
+      sections: ['8.6.1', '15.2.3.6'],
+      tests: ['S15.2.3.6_A2']
     },
     {
       description: 'Array sort leaks global',
@@ -2382,7 +2384,7 @@ var ses;
       urls: ['https://connect.microsoft.com/IE/feedback/details/' +
                '685436/getownpropertydescriptor-on-strict-caller-throws'],
       sections: ['15.2.3.3', '13.2', '13.2.3'],
-      tests: []
+      tests: ['S13.2_A6_T1']
     },
     {
       description: 'strict_function.hasOwnProperty("caller") throws',
@@ -2392,7 +2394,7 @@ var ses;
       canRepair: true,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398#c3'],
       sections: ['15.2.4.5', '13.2', '13.2.3'],
-      tests: []
+      tests: ['S13.2_A7_T1']
     },
     {
       description: 'Cannot "in" caller on strict function',
@@ -2402,7 +2404,7 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398'],
       sections: ['11.8.7', '13.2', '13.2.3'],
-      tests: []
+      tests: ['S13.2_A8_T1']
     },
     {
       description: 'Cannot "in" arguments on strict function',
@@ -2412,7 +2414,7 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398'],
       sections: ['11.8.7', '13.2', '13.2.3'],
-      tests: []
+      tests: ['S13.2_A8_T2']
     },
     {
       description: 'Strict "caller" not poisoned',
@@ -2422,7 +2424,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['13.2'],
-      tests: []
+      tests: ['S13.2.3_A1']
     },
     {
       description: 'Strict "arguments" not poisoned',
@@ -2432,7 +2434,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['13.2'],
-      tests: []
+      tests: ['S13.2.3_A1']
     },
     {
       description: 'Built in functions leak "caller"',
@@ -2471,7 +2473,7 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=893',
              'https://bugs.webkit.org/show_bug.cgi?id=63398'],
       sections: ['15.3.4.5'],
-      tests: ['S15.3.4.5_A1']
+      tests: ['S13.2.3_A1', 'S15.3.4.5_A1']
     },
     {
       description: 'Bound functions leak "arguments"',
@@ -2482,7 +2484,7 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=893',
              'https://bugs.webkit.org/show_bug.cgi?id=63398'],
       sections: ['15.3.4.5'],
-      tests: ['S15.3.4.5_A2']
+      tests: ['S13.2.3_A1', 'S15.3.4.5_A2']
     },
     {
       description: 'JSON.parse confused by "__proto__"',
@@ -2503,7 +2505,7 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832'],
       sections: ['8.6.2'],
-      tests: []
+      tests: ['S8.6.2_A8']
     },
     {
       description: 'Strict eval function leaks variable definitions',
@@ -2513,7 +2515,7 @@ var ses;
       canRepair: false,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
       sections: ['10.4.2.1'],
-      tests: []
+      tests: ['S10.4.2.1_A1']
     },
     {
       description: 'parseInt still parsing octal',
@@ -2523,7 +2525,7 @@ var ses;
       canRepair: true,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1645'],
       sections: ['15.1.2.2'],
-      tests: []
+      tests: ['S15.1.2.2_A5.1_T1']
     }
   ];
 
@@ -2632,6 +2634,7 @@ var ses;
   logger.reportMax();
 
 })(this);
+;
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -3043,6 +3046,7 @@ var WeakMap;
   });
 
 })();
+;
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -3457,6 +3461,7 @@ var ses;
     }
   };
 })();
+;
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -3565,6 +3570,7 @@ var ses;
   };
 
 })();
+;
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -4543,6 +4549,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     ses.logger.error('initSES failed.');
   }
 };
+;
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
