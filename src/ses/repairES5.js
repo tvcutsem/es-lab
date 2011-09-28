@@ -1999,8 +1999,8 @@ var ses;
              'https://connect.microsoft.com/IE/feedback/details/' +
                '685439/non-deletable-regexp-statics-are-a-global-' +
                'communication-channel'],
-      sections: [],
-      tests: []
+      sections: ['11.4.1'],
+      tests: ['S11.4.1_A5']
     },
     {
       description: 'RegExp.exec leaks match globally',
@@ -2216,7 +2216,7 @@ var ses;
              'http://wiki.ecmascript.org/doku.php?id=' +
                'conventions:make_non-standard_properties_configurable'],
       sections: [],
-      tests: []
+      tests: ['Sbp_A10_T1']
     },
     {
       description: 'Built in functions leak "arguments"',
@@ -2230,7 +2230,7 @@ var ses;
              'http://wiki.ecmascript.org/doku.php?id=' +
                'conventions:make_non-standard_properties_configurable'],
       sections: [],
-      tests: []
+      tests: ['Sbp_A10_T2']
     },
     {
       description: 'Bound functions leak "caller"',
