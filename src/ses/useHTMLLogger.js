@@ -114,6 +114,44 @@ function useHTMLLogger(reportsElement, consoleElement) {
     error: textAdder(consoleElement, 'error')
   };
 
+  var TestIDPattern = /^(Sbp|S)?([\d\.]*)/;
+
+  /**
+   *
+   */
+  function linkToTest(test) {
+    var match = TestIDPattern.exec(test);
+    if (match) {
+      var parts = match[2].split('.');
+      var result = 'http://hg.ecmascript.org/tests/test262/file/' +
+        'c84161250e66/' + // TODO(erights): How do I get the tip automatically?
+        'test/suite/';
+      if (match[1] === void 0) {
+        result += 'chapter';
+      } else if (match[1] === 'S') {
+        result += 'ch';
+      } else if (match[1] === 'Sbp') {
+        result += 'bestPractice';
+      }
+      var len = parts.length;
+      if (len === 0) {
+        result += '/';
+      } else {
+        result += (parts[0].length === 1 ? '0' : '') + parts[0] + '/';
+        for (var i = 1; i < len; i++) {
+          result += parts.slice(0, i+1).join('.') + '/';
+        }
+      }
+      result += test + '.js';
+      return result;
+    }
+
+    var site = test.charAt(0) === 'S' ?
+      '+site%3Acode.google.com' : '+site%3Aes5conform.svn.codeplex.com';
+    return 'http://www.google.com/search?btnI=&q=' +
+      encodeURIComponent(test) + site;
+  }
+
   /**
    * Logs a report suitable for display on a web page.
    */
@@ -178,10 +216,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
 
         // TODO(erights): Only until we have a good way to index
         // directly into hg.ecmascript.org
-        var site = test.charAt(0) === 'S' ?
-            '+site%3Acode.google.com' : '+site%3Aes5conform.svn.codeplex.com';
-        link.href = 'http://www.google.com/search?btnI=&q=' +
-                    encodeURIComponent(test) + site;
+        link.href = linkToTest(test);
         link.target = '_blank';
         appendText(link, 'Test ' + test);
       });

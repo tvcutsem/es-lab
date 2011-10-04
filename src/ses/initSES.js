@@ -617,7 +617,8 @@ var ses;
       if (err instanceof TypeError) { return false; }
       return 'valueOf() threw: ' + err;
     }
-    return true;
+    if (that === global) { return true; }
+    return 'valueOf() leaked as: ' + that;
   }
 
   /**
@@ -634,7 +635,8 @@ var ses;
     } finally {
       delete global.___global_valueOf_function___;
     }
-    return true;
+    if (that === global) { return true; }
+    return 'valueOf() leaked as: ' + that;
   }
 
 
@@ -1030,10 +1032,8 @@ var ses;
     var that = 'dummy';
     [2,3].sort(function(x,y) { that = this; return x - y; });
     if (that === void 0) { return false; }
-    if (that !== global) {
-      return 'sort called comparefn with "this" === ' + that;
-    }
-    return true;
+    if (that === global) { return true; }
+    return 'sort called comparefn with "this" === ' + that;
   }
 
 
@@ -1056,10 +1056,8 @@ var ses;
       // wrong.
       return true;
     }
-    if (that !== global) {
-      return 'Replace called replaceValue function with "this" === ' + that;
-    }
-    return true;
+    if (that === global) { return true; }
+    return 'Replace called replaceValue function with "this" === ' + that;
   }
 
   /**
