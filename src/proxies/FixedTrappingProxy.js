@@ -55,11 +55,12 @@
 // to make sure H does not violate the ES5 invariants w.r.t. non-configurable
 // properties and non-extensible, sealed or frozen objects.
 
-// For each own non-configurable property that H exposes
+// For each property that H exposes as own, non-configurable
 // (e.g. by returning a descriptor from a call to getOwnPropertyDescriptor)
 // the FixedHandler keeps a record of that property's attributes
 // (it does so by defining these properties on a non-proxy "fixedProps"
-//  object)
+//  object). When the proxy becomes non-extensible, the "fixedProps" object
+// will additionally store configurable own properties.
 
 // We will name such previously exposed, own non-configurable properties
 // "fixed properties".
@@ -78,23 +79,22 @@
 //   fixed properties
 // - properties returned by the fix() trap are merged with fixed properties,
 //   ensuring no incompatible changes can be made when calling freeze, seal,
-//   preventExtensions
+//   preventExtensions. This merging is as atomic as Object.defineProperties.
 // - delete cannot report a successful deletion of a fixed property
 // - hasOwn cannot report a fixed property as non-existent
 // - has cannot report a fixed property as non-existent
 // - get cannot report inconsistent values for non-writable fixed data
-//   properties
+//   properties, and must report undefined for fixed accessors with an
+//   undefined getter
 // - set cannot report a successful assignment for non-writable fixed data
-//   properties
+//   properties or accessors with an undefined setter.
 
 // Violation of any of these invariants by H will result in TypeError being
 // thrown.
 
 // Additionally, once Object.preventExtensions, Object.seal or Object.freeze
 // is invoked on the proxy, the set of own property names for the proxy is
-// fixed. For a non-extensible proxy, a "fixed property" can be both a
-// previously exposed non-configurable property, as well as a configurable
-// property. Any property name that does not belong to this set of fixed
+// determined. Any property name that does not belong to this set of determined
 // properties is called a 'new' property.
 
 // The FixedHandler upholds the following invariants regarding extensibility:
@@ -105,18 +105,33 @@
 // - hasOwn cannot report true for new properties (it must report false)
 // - keys cannot list new properties
 
+// Invariants currently not enforced:
+// - getOwnPropertyNames lists only own property names
+// - getOwnPropertyNames lists all own property names
+// - keys lists only enumerable own property names
+// - keys lists all enumerable own property names
+// - enumerate lists all enumerable own property names
+
+// Invariants with regard to inheritance are currently not enforced.
+// - a non-configurable potentially inherited property on a proxy with a
+//   fixed ancestry cannot be reported as non-existent
+
+// An object with a fixed ancestry is a non-extensible object whose
+// [[Prototype]] is either null or an object with a fixed ancestry.
+
 // The FixedHandler is compatible with the existing ForwardingHandler.
 // Invariant: when a FixedHandler wraps a ForwardingHandler to an
 // ES5-compliant object, the FixedHandler will never throw a TypeError.
 
 // === Design Notes ===
 // This FixedHandler hints at possible new designs for fixing proxies:
-// A) The fix() trap could be replaced by dedicated
-//    freeze, seal, preventExtensions traps. This allows the ForwardingHandler
-//    to forward all operations to its target. Alternatively,
-//    fix() could be parameterized with the names of the operations,
+// A) The fix() trap could be parameterized with the names of the operations,
 //    enabling generic forwarding of the operation.
-// B) This FixedHandler design does away entirely with the old
+// B) fix() returns either falsy (reject) or a pdmap
+//    returning a pdmap merges the properties with the fixedProps
+//    it does not stop the handler from trapping
+
+//     This FixedHandler design does away entirely with the old
 //    'become' semantics. However, some proxy handlers may actually want
 //    the old 'become' semantics and no longer pay for the overhead of
 //    invariant checking. We could have the fix() trap
@@ -130,17 +145,29 @@
 //      describing a fresh object to become
 //      (Open issue: do we default to Object.create or do we want to allow
 //       for the possibility of Array.create etc.?)
+
 // C) We could make fixing more orthogonal to trapping:
-//    introduce Proxy.fix(aProxy) which calls the fix() trap, giving the
-//    proxy a chance to 'become' a fixed object, without necessarily being
-//    preventExtensions'd, sealed or frozen.
-//    The opposite would still hold: calling pE/seal/freeze would necessarily
-//    fix the proxy.
+//    Object.stopTrapping(obj) -> return obj
+//       if obj is not a proxy, this is a no-op
+//       if obj is a proxy, calls handler.fix('stopTrapping'),
+//       merges the returned pdmap, and then sets the handler to null
+//       (the handler now stops trapping, without necessarily becoming non-extensible)
+//       (if the trap returns undefined, reject silently)
+//       (asymmetry with freeze/seal/preventExtensions is that stopTrapping
+//        should not have any 'visible' side-effects anyway)
+
 // D) We could make the initial fixedProps object parameterizable, as in:
 //      Proxy.create(handler, proto, fixedProps)
 //    The proxy would inherit from its fixedProps object its [[Class]], for use
 //    in ({}).prototype.toString.call(aProxy) or possibly even in internal
 //    nominal type checks.
+//    => Direct proxies
+
+// === Deficiencies of this Implementation ===
+// - Fixing is not implemented yet. Implement by testing whether
+//   targetHandler === null
+//   (also add Object.fix which calls fix() and sets targetHandler to null if
+//    fix trap does not return undefined) // TODO: need better name than 'fix'
 
 // ----------------------------------------------------------------------------
 
@@ -666,11 +693,19 @@ FixedHandler.prototype = {
     
     var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
     // check consistency of the returned value
-    if (fixedDesc !== undefined &&     // getting an existing
-        isDataDescriptor(fixedDesc)) { // own data property
-      // if name is a fixed non-configurable, non-writable property,
-      // this call will throw unless SameValue(res, this.fixedProps[name])
-      Object.defineProperty(this.fixedProps, name, {value: res});    
+    if (fixedDesc !== undefined) { // getting an existing property
+      if (isDataDescriptor(fixedDesc)) { // own data property
+        // if name is a fixed non-configurable, non-writable property,
+        // this call will throw unless SameValue(res, this.fixedProps[name])
+        Object.defineProperty(this.fixedProps, name, {value: res});    
+      } else { // it's an accessor property
+        if (fixedDesc.configurable === false && // non-configurable
+            fixedDesc.get === undefined &&      // accessor with undefined getter
+            res !== undefined) {                // that does not return undefined
+          throw new TypeError("must report undefined for non-configurable "+
+                              "accessor property '"+name"' without getter");
+        }
+      }
     }
     
     return res;
@@ -690,11 +725,18 @@ FixedHandler.prototype = {
     // if success is reported, check whether property is truly assignable
     if (res === true) {
       var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
-      if (fixedDesc !== undefined &&     // setting an existing
-          isDataDescriptor(fixedDesc)) { // own data property
-        // if name is a fixed non-configurable, non-writable property,
-        // this call will throw unless SameValue(val, this.fixedProps[name])
-        Object.defineProperty(this.fixedProps, name, {value: val});
+      if (fixedDesc !== undefined) { // setting an existing property
+        if (isDataDescriptor(fixedDesc)) { // own data property
+          // if name is a fixed non-configurable, non-writable property,
+          // this call will throw unless SameValue(val, this.fixedProps[name])
+          Object.defineProperty(this.fixedProps, name, {value: val});
+        } else { // it's an accessor property
+          if (fixedDesc.configurable === false && // non-configurable
+              fixedDesc.set === undefined) {      // accessor with undefined setter
+            throw new TypeError("setting a property '"+name+"' that has "+
+                                " only a getter");
+          }
+        }
       }
     }
     
