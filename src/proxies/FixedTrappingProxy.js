@@ -61,41 +61,43 @@
 // (it does so by defining these properties on a non-proxy "fixedProps"
 //  object). When the proxy becomes non-extensible, the "fixedProps" object
 // will additionally store configurable own properties.
-
-// We will name such previously exposed, own non-configurable properties
+// We will call such properties that are stored on the "fixedProps" object
 // "fixed properties".
 
+// We will name fixed non-configurable properties "sealed properties".
+// We will name fixed non-configurable non-writable properties "frozen
+// properties".
+
 // The FixedHandler upholds the following invariants w.r.t. non-configurability:
-// - getOwnPropertyDescriptor cannot report fixed properties as non-existent
+// - getOwnPropertyDescriptor cannot report sealed properties as non-existent
 // - getOwnPropertyDescriptor cannot report incompatible changes to the
-//   attributes of a fixed property (e.g. reporting a non-configurable
+//   attributes of a sealed property (e.g. reporting a non-configurable
 //   property as configurable, or reporting a non-configurable, non-writable
 //   property as writable)
-// - getPropertyDescriptor cannot report fixed properties as non-existent
+// - getPropertyDescriptor cannot report sealed properties as non-existent
 // - getPropertyDescriptor cannot report incompatible changes to the
-//   attributes of a fixed property. It _can_ report incompatible changes
+//   attributes of a sealed property. It _can_ report incompatible changes
 //   to the attributes of non-own, inherited properties.
 // - defineProperty cannot make incompatible changes to the attributes of
-//   fixed properties
+//   sealed properties
 // - properties returned by the fix() trap are merged with fixed properties,
 //   ensuring no incompatible changes can be made when calling freeze, seal,
 //   preventExtensions. This merging is as atomic as Object.defineProperties.
-// - delete cannot report a successful deletion of a fixed property
-// - hasOwn cannot report a fixed property as non-existent
-// - has cannot report a fixed property as non-existent
-// - get cannot report inconsistent values for non-writable fixed data
-//   properties, and must report undefined for fixed accessors with an
+// - delete cannot report a successful deletion of a sealed property
+// - hasOwn cannot report a sealed property as non-existent
+// - has cannot report a sealed property as non-existent
+// - get cannot report inconsistent values for frozen data
+//   properties, and must report undefined for sealed accessors with an
 //   undefined getter
-// - set cannot report a successful assignment for non-writable fixed data
-//   properties or accessors with an undefined setter.
+// - set cannot report a successful assignment for frozen data
+//   properties or sealed accessors with an undefined setter.
 
 // Violation of any of these invariants by H will result in TypeError being
 // thrown.
 
 // Additionally, once Object.preventExtensions, Object.seal or Object.freeze
 // is invoked on the proxy, the set of own property names for the proxy is
-// determined. Any property name that does not belong to this set of determined
-// properties is called a 'new' property.
+// fixed. Any property name that is not fixed is called a 'new' property.
 
 // The FixedHandler upholds the following invariants regarding extensibility:
 // - getOwnPropertyDescriptor cannot report new properties as existent
@@ -113,11 +115,11 @@
 // - enumerate lists all enumerable own property names
 
 // Invariants with regard to inheritance are currently not enforced.
-// - a non-configurable potentially inherited property on a proxy with a
-//   fixed ancestry cannot be reported as non-existent
+// - a non-configurable potentially inherited property on a proxy with
+//   non-mutable ancestry cannot be reported as non-existent
 
-// An object with a fixed ancestry is a non-extensible object whose
-// [[Prototype]] is either null or an object with a fixed ancestry.
+// An object with non-mutable ancestry is a non-extensible object whose
+// [[Prototype]] is either null or an object with non-mutable ancestry.
 
 // The FixedHandler is compatible with the existing ForwardingHandler.
 // Invariant: when a FixedHandler wraps a ForwardingHandler to an
@@ -130,6 +132,10 @@
 // B) fix() returns either falsy (reject) or a pdmap
 //    returning a pdmap merges the properties with the fixedProps
 //    it does not stop the handler from trapping
+//   TODO: find a better name for the trap
+//   fix is ambiguous:
+//     - old meaning referred to preventExtensions
+//     - new meaning = 'pinning' properties to the fixedProps object
 
 //     This FixedHandler design does away entirely with the old
 //    'become' semantics. However, some proxy handlers may actually want
@@ -166,8 +172,8 @@
 // === Deficiencies of this Implementation ===
 // - Fixing is not implemented yet. Implement by testing whether
 //   targetHandler === null
-//   (also add Object.fix which calls fix() and sets targetHandler to null if
-//    fix trap does not return undefined) // TODO: need better name than 'fix'
+//   (also add Object.stopTrapping which calls fix() and sets targetHandler to
+//    null if fix trap does not return undefined)
 
 // ----------------------------------------------------------------------------
 
@@ -189,7 +195,6 @@ function toPropertyDescriptor(obj) {
   if ('writable' in obj) { desc.writable = !!obj.writable; }
   if ('get' in obj) {
     var getter = obj.get;
-    // TODO(tvcutsem): how to reliably check whether getter is callable?
     if (getter !== undefined && typeof getter !== "function") {
       throw new TypeError("property descriptor 'get' attribute must be "+
                           "callable or undefined, given: "+getter);
@@ -198,7 +203,6 @@ function toPropertyDescriptor(obj) {
   }
   if ('set' in obj) {
     var setter = obj.set;
-    // TODO(tvcutsem): how to reliably check whether setter is callable?
     if (setter !== undefined && typeof setter !== "function") {
       throw new TypeError("property descriptor 'set' attribute must be "+
                           "callable or undefined, given: "+setter);
@@ -293,7 +297,7 @@ FixedHandler.prototype = {
    * Extensibility of the proxy is derived from extensibility of its
    * fixedProps object.
    */
-  get isExtensible() {
+  isExtensible: function() {
     return prim_isExtensible(this.fixedProps);
   },
   
@@ -316,8 +320,9 @@ FixedHandler.prototype = {
    */
   getOwnPropertyDescriptor: function(name) {
     "use strict";
+    name = String(name);
     var desc = this.targetHandler.getOwnPropertyDescriptor(name);
-    // TODO(tvcutsem): desc = normalizeAndCompletePropertyDescriptor(desc)
+    // TODO(tvcutsem): desc = normalizeAndCompletePropertyDescriptor(desc);
     
     if (desc === undefined) {
       // if name exists and is non-configurable, delete will throw
@@ -325,7 +330,7 @@ FixedHandler.prototype = {
       // if name does not exist, will be a no-op
       // if name is configurable, will delete the property      
       try {
-        delete this.fixedProps[name];        
+        delete this.fixedProps[name];
       } catch (e) {
         // re-throw solely to improve the error message
         throw new TypeError("cannot report non-configurable property '"+name+
@@ -340,7 +345,7 @@ FixedHandler.prototype = {
     // Note: we could collapse the following two if-tests into a single
     // test. Separating out the cases to improve error reporting.
     
-    if (!this.isExtensible) {
+    if (!this.isExtensible()) {
       // if name exists, should be a no-op as per ES5 8.12.9, step 5
       // if name does not exist, will raise an exception
       // as per ES5 8.12.9, step 3
@@ -374,6 +379,8 @@ FixedHandler.prototype = {
    * by an incompatible property further down the inheritance chain
    */
   getPropertyDescriptor: function(name) {
+    "use strict";
+    name = String(name);
     var desc = this.targetHandler.getPropertyDescriptor(name);
     // TODO(tvcutsem): desc = normalizeAndCompletePropertyDescriptor(desc);
 
@@ -389,7 +396,7 @@ FixedHandler.prototype = {
         throw new TypeError("cannot report non-configurable property '"+name+
                             "' as non-existent");
       }
-      return desc;
+      return undefined;
     }
     
     // at this point, we know (desc !== undefined), i.e.
@@ -397,7 +404,7 @@ FixedHandler.prototype = {
     
     // even if proxy is non-extensible and does not define 'name',
     // [[GetProperty]] may return a descriptor ('name' may have been
-    // defined on a non-extensible [[Prototype]])
+    // defined on an extensible [[Prototype]])
     
     // if 'name' was previously fixed, check and remember the returned desc
     // Note: if name was not previously fixed,
@@ -424,9 +431,9 @@ FixedHandler.prototype = {
     // This will also set all other attributes to their default value,
     // which is unexpected and different from [[DefineOwnProperty]].
     // Bug filed: https://bugzilla.mozilla.org/show_bug.cgi?id=601329
-    
-    // TODO(tvcutsem): desc = normalizePropertyDescriptor(desc);
 
+    name = String(name);    
+    // TODO(tvcutsem): desc = normalizePropertyDescriptor(desc);
     var success = this.targetHandler.defineProperty(name, desc);
     success = !!success; // coerce to Boolean
 
@@ -436,7 +443,7 @@ FixedHandler.prototype = {
       // Note: we could collapse the following two if-tests into a single
       // test. Separating out the cases to improve error reporting.
       
-      if (!this.isExtensible) {
+      if (!this.isExtensible()) {
         // if name exists, should be a no-op as per ES5 8.12.9, step 5
         // if name does not exist, will raise an exception
         // as per ES5 8.12.9, step 3
@@ -498,6 +505,7 @@ FixedHandler.prototype = {
    */
   'delete': function(name) { 
     "use strict";
+    name = String(name);
     var res = this.targetHandler['delete'](name);
     res = !!res; // coerce to Boolean
     
@@ -548,7 +556,7 @@ FixedHandler.prototype = {
         throw new TypeError("getOwnPropertyNames cannot list a "+
                             "duplicate property '"+s+"'");
       }
-      if (!this.isExtensible && !this.isFixed(s)) {
+      if (!this.isExtensible() && !this.isFixed(s)) {
         // non-extensible proxies don't tolerate new own property names
         throw new TypeError("getOwnPropertyNames cannot list a new "+
                             "property '"+s+"' on a non-extensible object");
@@ -630,7 +638,7 @@ FixedHandler.prototype = {
     } else {
       // res === true, if the proxy is non-extensible,
       // check that name is no new property
-      if (!this.isExtensible) {
+      if (!this.isExtensible()) {
         // if name exists, should be a no-op as per ES5 8.12.9, step 5
         // if name does not exist, will raise an exception
         // as per ES5 8.12.9, step 3
@@ -814,7 +822,7 @@ FixedHandler.prototype = {
        throw new TypeError("keys trap cannot list a "+
                            "duplicate property '"+s+"'");
      }
-     if (!this.isExtensible && !this.isFixed(s)) {
+     if (!this.isExtensible() && !this.isFixed(s)) {
        // non-extensible proxies don't tolerate new own property names
        throw new TypeError("keys trap cannot list a new "+
                            "property '"+s+"' on a non-extensible object");
