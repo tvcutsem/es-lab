@@ -92,6 +92,11 @@
 // - set cannot report a successful assignment for frozen data
 //   properties or sealed accessors with an undefined setter.
 
+// - if a property of a non-extensible proxy is reported as non-existent,
+//   then it must forever be reported as non-existent. This applies to
+//   own and inherited properties and is enforced in the
+//   delete, fix, get{Own}PropertyDescriptor and has{Own} traps.
+
 // Violation of any of these invariants by H will result in TypeError being
 // thrown.
 
@@ -113,6 +118,9 @@
 // - keys lists only enumerable own property names
 // - keys lists all enumerable own property names
 // - enumerate lists all enumerable own property names
+// - if any of the enumerating traps reports a property as non-existent,
+//   we do not enforce that such properties cannot later be reported
+//   as existent
 
 // Invariants with regard to inheritance are currently not enforced.
 // - a non-configurable potentially inherited property on a proxy with
@@ -536,17 +544,15 @@ FixedHandler.prototype = {
    *  - which does not contain duplicates.
    *
    * TODO(tvcutsem): strictly speaking, the returned result should
-   * at least contain the non-configurable properties from this.fixedProps
-   * but that would make this check O(|this.fixedProps| + |trapResult|)
-   * Currently, the check is O(|trapResult|), which is no worse than the
-   * time required to normalize the result.
+   * at least contain the non-configurable properties from this.fixedProps,
+   * but this might require an unpleasant amount of bookkeeping.
    */
   getOwnPropertyNames: function() {
     var trapResult = this.targetHandler.getOwnPropertyNames();
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
-    var numProps = trapResult.length;
+    var numProps = +trapResult.length;
     var result = new Array(numProps);
     
     for (var i = 0; i < numProps; i++) {
@@ -583,16 +589,14 @@ FixedHandler.prototype = {
    *
    * TODO(tvcutsem): strictly speaking, the returned result should
    * at least contain the non-configurable properties from this.fixedProps
-   * but that would make this check O(|this.fixedProps| + |trapResult|)
-   * Currently, the check is O(|trapResult|), which is no worse than the
-   * time required to normalize the result.
+   * but this might require an unpleasant amount of bookkeeping.
    */
   getPropertyNames: function() {
     var trapResult = this.targetHandler.getPropertyNames();
   
     // propNames is used as a set of strings
     var propNames = Object.create(null);
-    var numProps = trapResult.length;
+    var numProps = +trapResult.length;
     var result = new Array(numProps);
     
     for (var i = 0; i < numProps; i++) {
@@ -616,10 +620,12 @@ FixedHandler.prototype = {
    */
   hasOwn: function(name) {
     "use strict";
+    name = String(name);
     // simulate missing derived trap fall-back behavior
-    var res = this.targetHandler.hasOwn ?
-                this.targetHandler.hasOwn(name) :
-                TrapDefaults.hasOwn.call(this.targetHandler, name);
+    var trap = this.targetHandler.hasOwn;
+    var res =  trap !== undefined ?
+                 trap(name) :
+                 TrapDefaults.hasOwn.call(this.targetHandler, name);
     res = !!res; // coerce to Boolean
         
     if (res === false) {
@@ -627,7 +633,8 @@ FixedHandler.prototype = {
         // if name exists and is non-configurable, delete will throw
         //   (can't report a non-configurable own property as non-existent)
         // if name does not exist, will be a no-op
-        // if name is configurable, will delete the property          
+        // if name is configurable, will delete the property (this also
+        // ensures that on a non-extensible proxy it cannot be added later)         
         delete this.fixedProps[name];
       } catch (e) {
         // re-throw solely to improve the error message
@@ -660,9 +667,11 @@ FixedHandler.prototype = {
    */
   has: function(name) {
     "use strict";
+    name = String(name);
     // simulate missing derived trap fall-back behavior
-    var res = this.targetHandler.has ?
-                this.targetHandler.has(name) :
+    var trap = this.targetHandler.has;
+    var res = trap !== undefined ?
+                trap(name) :
                 TrapDefaults.has.call(this.targetHandler, name);
     res = !!res; // coerce to Boolean
     
@@ -694,9 +703,11 @@ FixedHandler.prototype = {
    * fixed property.
    */
   get: function(rcvr, name) {
+    name = String(name);
     // simulate missing derived trap fall-back behavior
-    var res = this.targetHandler.get ?
-                this.targetHandler.get(rcvr, name) :
+    var trap = this.targetHandler.get;
+    var res = trap !== undefined ?
+                trap(rcvr, name) :
                 TrapDefaults.get.call(this.targetHandler, rcvr, name);
     
     var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
@@ -705,7 +716,7 @@ FixedHandler.prototype = {
       if (isDataDescriptor(fixedDesc)) { // own data property
         // if name is a fixed non-configurable, non-writable property,
         // this call will throw unless SameValue(res, this.fixedProps[name])
-        Object.defineProperty(this.fixedProps, name, {value: res});    
+        Object.defineProperty(this.fixedProps, name, {value: res}); 
       } else { // it's an accessor property
         if (fixedDesc.configurable === false && // non-configurable
             fixedDesc.get === undefined &&      // accessor with undefined getter
@@ -724,9 +735,11 @@ FixedHandler.prototype = {
    * check that the trap rejects the assignment.
    */
   set: function(rcvr, name, val) {
+    name = String(name);
     // simulate missing derived trap fall-back behavior
-    var res = this.targetHandler.set ?
-                this.targetHandler.set(rcvr, name, val) :
+    var trap = this.targetHandler.set;
+    var res = trap !== undefined ?
+                trap(rcvr, name, val) :
                 TrapDefaults.set.call(this.targetHandler, rcvr, name, val);
     res = !!res; // coerce to Boolean
          
@@ -759,20 +772,18 @@ FixedHandler.prototype = {
    *  - which does not contain duplicates
    *
    * TODO(tvcutsem): strictly speaking, the returned result should
-   * at least contain the enumerable non-configurable fixed properties
-   * but that would make this check O(|this.fixedProps| + |trapResult|)
-   * Currently, the check is O(|trapResult|), which is no worse than the
-   * time required to normalize the result.
+   * at least contain the enumerable non-configurable fixed properties.
    */
   enumerate: function() {
     // simulate missing derived trap fall-back behavior
-    var trapResult = this.targetHandler.enumerate ?
-                       this.targetHandler.enumerate() :
+    var trap = this.targetHandler.enumerate;
+    var trapResult = trap !== undefined ?
+                       trap() :
                        TrapDefaults.enumerate.call(this.targetHandler);
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
-    var numProps = trapResult.length;
+    var numProps = +trapResult.length;
     var result = new Array(numProps);
     
     for (var i = 0; i < numProps; i++) {
@@ -800,20 +811,18 @@ FixedHandler.prototype = {
    *  - which does not contain duplicates
    *
    * TODO(tvcutsem): strictly speaking, the returned result should
-   * at least contain the enumerable non-configurable fixed properties
-   * but that would make this check O(|this.fixedProps| + |trapResult|)
-   * Currently, the check is O(|trapResult|), which is no worse than the
-   * time required to normalize the result.
+   * at least contain the enumerable non-configurable fixed properties.
    */
   keys: function() {
     // simulate missing derived trap fall-back behavior
-    var trapResult = this.targetHandler.keys ?
-                       this.targetHandler.keys() :
+    var trap = this.targetHandler.keys;
+    var trapResult = trap !== undefined ?
+                       trap() :
                        TrapDefaults.keys.call(this.targetHandler);
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
-    var numProps = trapResult.length;
+    var numProps = +trapResult.length;
     var result = new Array(numProps);
     
     for (var i = 0; i < numProps; i++) {
@@ -888,7 +897,7 @@ Object.freeze = function(target) {
 Object.isExtensible = function(target) {
   var fixedHandler = fixableProxies.get(target);
   if (fixedHandler !== undefined) {
-    return fixedHandler.isExtensible;
+    return prim_isExtensible(fixedHandler.fixedProps);
   } else {
     return prim_isExtensible(target);
   }
