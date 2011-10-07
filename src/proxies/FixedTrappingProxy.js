@@ -624,9 +624,7 @@ FixedHandler.prototype = {
     name = String(name);
     // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.hasOwn;
-    var res =  trap !== undefined ?
-                 trap(name) :
-                 TrapDefaults.hasOwn.call(this.targetHandler, name);
+    var res = (trap || TrapDefaults.hasOwn).call(this.targetHandler, name);
     res = !!res; // coerce to Boolean
         
     if (res === false) {
@@ -671,9 +669,7 @@ FixedHandler.prototype = {
     name = String(name);
     // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.has;
-    var res = trap !== undefined ?
-                trap(name) :
-                TrapDefaults.has.call(this.targetHandler, name);
+    var res = (trap || TrapDefaults.has).call(this.targetHandler, name);
     res = !!res; // coerce to Boolean
     
     if (res === false) {
@@ -707,9 +703,7 @@ FixedHandler.prototype = {
     name = String(name);
     // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.get;
-    var res = trap !== undefined ?
-                trap(rcvr, name) :
-                TrapDefaults.get.call(this.targetHandler, rcvr, name);
+    var res = (trap || TrapDefaults.get).call(this.targetHandler, rcvr, name);
     
     var fixedDesc = Object.getOwnPropertyDescriptor(this.fixedProps, name);
     // check consistency of the returned value
@@ -739,9 +733,7 @@ FixedHandler.prototype = {
     name = String(name);
     // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.set;
-    var res = trap !== undefined ?
-                trap(rcvr, name, val) :
-                TrapDefaults.set.call(this.targetHandler, rcvr, name, val);
+    var res = (trap || TrapDefaults.set).call(this.targetHandler, rcvr, name, val);
     res = !!res; // coerce to Boolean
          
     // if success is reported, check whether property is truly assignable
@@ -778,9 +770,7 @@ FixedHandler.prototype = {
   enumerate: function() {
     // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.enumerate;
-    var trapResult = trap !== undefined ?
-                       trap() :
-                       TrapDefaults.enumerate.call(this.targetHandler);
+    var trapResult = (trap || TrapDefaults.enumerate).call(this.targetHandler);
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
@@ -817,9 +807,7 @@ FixedHandler.prototype = {
   keys: function() {
     // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.keys;
-    var trapResult = trap !== undefined ?
-                       trap() :
-                       TrapDefaults.keys.call(this.targetHandler);
+    var trapResult = (trap || TrapDefaults.keys).call(this.targetHandler);
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
