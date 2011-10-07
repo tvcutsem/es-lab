@@ -176,6 +176,7 @@
 //    in ({}).prototype.toString.call(aProxy) or possibly even in internal
 //    nominal type checks.
 //    => Direct proxies
+// E) Proxy.startTrapping (aka Proxy.attach)
 
 // === Deficiencies of this Implementation ===
 // - Fixing is not implemented yet. Implement by testing whether
@@ -722,7 +723,7 @@ FixedHandler.prototype = {
             fixedDesc.get === undefined &&      // accessor with undefined getter
             res !== undefined) {                // that does not return undefined
           throw new TypeError("must report undefined for non-configurable "+
-                              "accessor property '"+name"' without getter");
+                              "accessor property '"+name+"' without getter");
         }
       }
     }
