@@ -44,6 +44,17 @@
 // this is a prototype implementation of
 // http://wiki.ecmascript.org/doku.php?id=strawman:fixed_properties
 
+// This code was tested on tracemonkey / Firefox 7
+// The code also loads correctly on v8 --harmony_proxies --harmony_weakmaps (v3.6.5.1)
+// but does not work entirely as intended, since v8 proxies don't allow
+// proxy handlers to return non-configurable property descriptors
+
+// Dependencies:
+//  - ECMAScript 5, ES5 strict mode
+//  - Harmony Proxies with non-standard support for passing through
+//    non-configurable properties
+//  - Harmony WeakMaps
+
 // Loading this file will automatically patch Proxy.create and
 // Proxy.createFunction such that they support fixed, trapping proxies
 // This is done by automatically wrapping all user-defined proxy handlers
@@ -186,7 +197,7 @@
 
 // ----------------------------------------------------------------------------
 
-// ---- Auxiliary functions ----
+// ---- Normalization functions for property descriptors ----
 
 function isStandardAttribute(name) {
   return /^(get|set|value|writable|enumerable|configurable)$/.test(name);
@@ -195,7 +206,8 @@ function isStandardAttribute(name) {
 // Adapted from ES5 section 8.10.5
 function toPropertyDescriptor(obj) {
   if (Object(obj) !== obj) {
-    throw new TypeError("toPropertyDescriptor expects an Object, given: "+obj);
+    throw new TypeError("property descriptor should be an Object, given: "+
+                        obj);
   }
   var desc = {};
   if ('enumerable' in obj) { desc.enumerable = !!obj.enumerable; }
@@ -260,11 +272,40 @@ function toCompletePropertyDescriptor(desc) {
  * Additionally, any non-standard enumerable properties of
  * attributes are copied over to the fresh descriptor.
  *
+ * If attributes is undefined, returns undefined.
+ *
  * See also: http://wiki.ecmascript.org/doku.php?id=harmony:proxies_semantics
  */
 function normalizeAndCompletePropertyDescriptor(attributes) {
+  if (attributes === undefined) { return undefined; }
   var desc = toCompletePropertyDescriptor(attributes);
-  // note: no need to call FromPropertyDescriptor(desc), as we represent
+  // Note: no need to call FromPropertyDescriptor(desc), as we represent
+  // "internal" property descriptors as proper Objects from the start
+  for (var name in attributes) {
+    if (!isStandardAttribute(name)) {
+      Object.defineProperty(desc, name,
+        { value: attributes[name],
+          writable: true,
+          enumerable: true,
+          configurable: true });
+    }
+  }
+  return desc;
+}
+
+/**
+ * Returns a fresh property descriptor whose standard
+ * attributes are guaranteed to be data properties of the right type.
+ * Additionally, any non-standard enumerable properties of
+ * attributes are copied over to the fresh descriptor.
+ *
+ * If attributes is undefined, will throw a TypeError.
+ *
+ * See also: http://wiki.ecmascript.org/doku.php?id=harmony:proxies_semantics
+ */
+function normalizePropertyDescriptor(attributes) {
+  var desc = toPropertyDescriptor(attributes);
+  // Note: no need to call FromGenericPropertyDescriptor(desc), as we represent
   // "internal" property descriptors as proper Objects from the start
   for (var name in attributes) {
     if (!isStandardAttribute(name)) {
@@ -331,7 +372,7 @@ FixedHandler.prototype = {
     "use strict";
     name = String(name);
     var desc = this.targetHandler.getOwnPropertyDescriptor(name);
-    // TODO(tvcutsem): desc = normalizeAndCompletePropertyDescriptor(desc);
+    desc = normalizeAndCompletePropertyDescriptor(desc);
     
     if (desc === undefined) {
       // if name exists and is non-configurable, delete will throw
@@ -391,7 +432,7 @@ FixedHandler.prototype = {
     "use strict";
     name = String(name);
     var desc = this.targetHandler.getPropertyDescriptor(name);
-    // TODO(tvcutsem): desc = normalizeAndCompletePropertyDescriptor(desc);
+    desc = normalizeAndCompletePropertyDescriptor(desc);
 
     if (desc === undefined) {
       // if name exists and is non-configurable, delete will throw
@@ -442,7 +483,7 @@ FixedHandler.prototype = {
     // Bug filed: https://bugzilla.mozilla.org/show_bug.cgi?id=601329
 
     name = String(name);    
-    // TODO(tvcutsem): desc = normalizePropertyDescriptor(desc);
+    desc = normalizePropertyDescriptor(desc);
     var success = this.targetHandler.defineProperty(name, desc);
     success = !!success; // coerce to Boolean
 
@@ -908,23 +949,29 @@ Object.isFrozen = function(target) {
   }
 };
 
-// Trap defaults, from http://wiki.ecmascript.org/doku.php?id=harmony:proxies
-// call with |this| bound to the required handler
+// ---- Trap Defaults ----
+
+// Adapted from <http://wiki.ecmascript.org/doku.php?id=harmony:proxies>
+// with added normalization checks. Call these with |this| bound to the
+// required handler
 var TrapDefaults = {
   has: function(name) { return !!this.getPropertyDescriptor(name); },
   hasOwn: function(name) { return !!this.getOwnPropertyDescriptor(name); },
   get: function(receiver, name) {
     var desc = this.getPropertyDescriptor(name);
+    desc = normalizeAndCompletePropertyDescriptor(desc);
     if (desc === undefined) { return undefined; }
     if ('value' in desc) {
       return desc.value;
     } else {
       if (desc.get === undefined) { return undefined; }
+      // Note: assumes original Function.prototype.call
       return desc.get.call(receiver);
     }
   },
   set: function(receiver, name, val) {
     var desc = this.getOwnPropertyDescriptor(name);
+    desc = normalizeAndCompletePropertyDescriptor(desc);
     if (desc) {
       if ('writable' in desc) {
         if (desc.writable) {
@@ -935,6 +982,7 @@ var TrapDefaults = {
         }
       } else { // accessor
         if (desc.set) {
+          // Note: assumes original Function.prototype.call
           desc.set.call(receiver, val);
           return true;
         } else {
@@ -943,6 +991,7 @@ var TrapDefaults = {
       }
     }
     desc = this.getPropertyDescriptor(name);
+    desc = normalizeAndCompletePropertyDescriptor(desc);
     if (desc) {
       if ('writable' in desc) {
         if (desc.writable) {
@@ -952,6 +1001,7 @@ var TrapDefaults = {
         }
       } else { // accessor
         if (desc.set) {
+          // Note: assumes original Function.prototype.call
           desc.set.call(receiver, val);
           return true;
         } else {
@@ -967,14 +1017,32 @@ var TrapDefaults = {
     return true;
   },
   enumerate: function() {
-    var h = this;
-    return this.getPropertyNames().filter(
-      function (name) { return h.getPropertyDescriptor(name).enumerable });
+    var trapResult = this.getPropertyNames();
+    var l = +trapResult.length;
+    var result = [];
+    for (var i = 0; i < l; i++) {
+      var name = String(trapResult[i]);
+      var desc = this.getPropertyDescriptor(name);
+      desc = normalizeAndCompletePropertyDescriptor(desc);
+      if (desc.enumerable) {
+        result.push(name);
+      }
+    }
+    return result;
   },
   keys: function() {
-    var h = this;
-    return this.getOwnPropertyNames().filter(
-      function (name) { return h.getOwnPropertyDescriptor(name).enumerable });
+    var trapResult = this.getOwnPropertyNames();
+    var l = +trapResult.length;
+    var result = [];
+    for (var i = 0; i < l; i++) {
+      var name = String(trapResult[i]);
+      var desc = this.getOwnPropertyDescriptor(name);
+      desc = normalizeAndCompletePropertyDescriptor(desc);
+      if (desc.enumerable) {
+        result.push(name);
+      }
+    }
+    return result;
   }
   
 }; // end TrapDefaults
