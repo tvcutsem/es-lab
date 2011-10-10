@@ -144,56 +144,44 @@
 // Invariant: when a FixedHandler wraps a ForwardingHandler to an
 // ES5-compliant object, the FixedHandler will never throw a TypeError.
 
+// ==== Changes in Handler API compared to current Harmony:Proxies ====
+
+// 1. The fix() trap is parameterized with the name of the operation that
+//    caused the trap invocation, either one of the Strings 'freeze', 'seal',
+//    or 'preventExtensions'. The idea is that a forwarding handler can
+//    now easily forward this operation generically by performing:
+//    fix: function(op) { Object[op](target); return true; }
+
+// 2. The fix() trap no longer "fixes" the proxy in the sense that the
+//    proxy doesn't "become" a new object. The proxy remains fully
+//    trapping. There is a new Proxy.stopTrapping(obj) operation that
+//    can control this aspect of a proxy separately.
+
+//    Proxy.stopTrapping(obj)
+//      - expects an Object, and always returns obj
+//      - if obj is a non-proxy object, this is a no-op
+//      - if obj is a proxy, calls the proxy's new "stopTrapping" trap.
+//        This trap either returns undefined | pdmap.
+//        If the trap returns a pdmap, the proxy henceforth 'becomes'
+//        an object that contains the props in the pdmap.
+//        If the trap returns undefined, Proxy.stopTrapping is a no-op.
+//        (rationale for the no-op behavior: we don't want clients to be
+//         able to figure out whether an object is a proxy by calling
+//         Object.stopTrapping).
+
 // === Design Notes ===
-// This FixedHandler hints at possible new designs for fixing proxies:
-// A) The fix() trap could be parameterized with the names of the operations,
-//    enabling generic forwarding of the operation.
-// B) fix() returns either falsy (reject) or a pdmap
-//    returning a pdmap merges the properties with the fixedProps
-//    it does not stop the handler from trapping
-//   TODO: find a better name for the trap
-//   fix is ambiguous:
-//     - old meaning referred to preventExtensions
-//     - new meaning = 'pinning' properties to the fixedProps object
 
-//     This FixedHandler design does away entirely with the old
-//    'become' semantics. However, some proxy handlers may actually want
-//    the old 'become' semantics and no longer pay for the overhead of
-//    invariant checking. We could have the fix() trap
-//    signal to the proxy which of the following it wants:
-//    - reject the fix (by having the fix() trap throw an exception explicitly)
-//    - accept the fix, but request to continue trapping by returning
-//      |undefined|. To determine the fixed set of properties, the proxy
-//      implementation could simply query the handler for all of its current
-//      own properties via the getOwnPropertyNames trap.
-//    - accept the fix, stop trapping and return a pdmap
-//      describing a fresh object to become
-//      (Open issue: do we default to Object.create or do we want to allow
-//       for the possibility of Array.create etc.?)
+// Changes to consider:
+// - Rename 'fix' trap to 'protect' trap. The term 'fix' is ambiguous:
+//   - old meaning referred to preventExtensions
+//   - new meaning = 'pinning' properties to the fixedProps object
 
-// C) We could make fixing more orthogonal to trapping:
-//    Object.stopTrapping(obj) -> return obj
-//       if obj is not a proxy, this is a no-op
-//       if obj is a proxy, calls handler.fix('stopTrapping'),
-//       merges the returned pdmap, and then sets the handler to null
-//       (the handler now stops trapping, without necessarily becoming non-extensible)
-//       (if the trap returns undefined, reject silently)
-//       (asymmetry with freeze/seal/preventExtensions is that stopTrapping
-//        should not have any 'visible' side-effects anyway)
-
-// D) We could make the initial fixedProps object parameterizable, as in:
+// - We could make the initial fixedProps object parameterizable, as in:
 //      Proxy.create(handler, proto, fixedProps)
 //    The proxy would inherit from its fixedProps object its [[Class]], for use
 //    in ({}).prototype.toString.call(aProxy) or possibly even in internal
-//    nominal type checks.
-//    => Direct proxies
-// E) Proxy.startTrapping (aka Proxy.attach)
-
-// === Deficiencies of this Implementation ===
-// - Fixing is not implemented yet. Implement by testing whether
-//   targetHandler === null
-//   (also add Object.stopTrapping which calls fix() and sets targetHandler to
-//    null if fix trap does not return undefined)
+//    nominal type checks. This is the starting direction for the new
+//    "Direct Proxies" proposal, coming soon.
 
 // ----------------------------------------------------------------------------
 
@@ -548,6 +536,41 @@ FixedHandler.prototype = {
     
     // the proxy is set to non-extensible by the caller of fix, by
     // making this.fixedProps non-extensible, sealed or frozen
+  },
+  
+  /**
+   * A new fundamental trap, triggered by Object.stopTrapping(aProxy)
+   *
+   * Returns undefined | a property descriptor map
+   * The FixedHandler merges the returned properties with the fixedProps
+   * object.
+   */
+  stopTrapping: function() {
+    // guard against recursive calls to stopTrapping
+    if (this.stopping) {
+      throw new TypeError("cannot recursively call stopTrapping() "+
+                          "while calling stopTrapping() on a proxy");
+    }
+
+    var props = null;
+    try {
+      this.stopping = true;
+      props = this.targetHandler.stopTrapping();
+    } finally {
+      delete this.stopping;
+    }
+    
+    if (props) {
+      // will throw if any of the props returned already exist in
+      // fixedProps and are incompatible with existing attributes
+      Object.defineProperties(this.fixedProps, props);      
+    }
+    
+    // the FixedHandler proxy becomes disabled by the caller of
+    // the stopTrapping trap, by replacing the proxy's handler
+    // traps by default forwarding traps
+
+    return props;
   },
   
   /**
@@ -947,6 +970,33 @@ Object.isFrozen = function(target) {
   } else {
     return prim_isFrozen(target);
   }
+};
+Object.stopTrapping = function(target) {
+  var fixedHandler = fixableProxies.get(target);
+  if (fixedHandler !== undefined) {
+    // replace the FixedHandler by a default Forwarding Handler
+    if (fixedHandler instanceof FixedHandler) {
+      // call the 'stopTrapping' trap
+      var props = fixedHandler.stopTrapping();
+      if (props !== undefined) {
+        // if that trap returns successfully, the proxy now 'becomes'
+        // a simple forwarding proxy to the fixedProps object
+        for (var trapName in Handler.prototype) {
+          // override all of FixedHandler's traps to instead perform
+          // the default forwarding behavior on fixedProps
+          fixedHandler[trapName] = Handler.prototype[trapName];
+        }
+        // 'fixedProps' becomes the 'target'
+        fixedHandler.target = fixedHandler.fixedProps;
+        // we can now release the targetHandler:
+        delete fixedHandler.targetHandler;
+        // keep the fixedProps object on fixedHandler such that
+        // freeze, seal, preventExtensions, isFrozen, isSealed, isExtensible
+        // continue to work
+      }
+    }
+  }
+  return target;
 };
 
 // ---- Trap Defaults ----

@@ -40,7 +40,7 @@
 // once this file is loaded, Proxy.create{Function} is patched to
 // support fixed trapping proxies
 load('FixedTrappingProxy.js');
-load('forwardingHandler.js');
+load('Handler.js');
 
 function assert(b, msg) {
   print((b ? 'success: ' : 'fail: ') + msg);
@@ -66,6 +66,7 @@ function test() {
   try {
     testTrapEvenWhenFrozen();
     testForwardingHandler();
+    testStopTrapping();
     
     for (var testName in TESTS) {
       emulatedProps = {};
@@ -315,7 +316,7 @@ TESTS.testKeysCannotListNewProperties =
  */
 function testTrapEvenWhenFrozen() {
   var target = {};
-  var forwarder = new ForwardingHandler(target);
+  var forwarder = new Proxy.Handler(target);
   var proxy = Proxy.create(forwarder);
   assert(proxy.x === undefined, 'proxy.x === undefined');
 
@@ -370,7 +371,7 @@ function testForwardingHandler() {
   });
   
   var proxy = Proxy.create(
-    new ForwardingHandler(target), proto);
+    new Proxy.Handler(target), proto);
 
   
   result = Object.getOwnPropertyDescriptor(proxy, 'non-existent-prop');
@@ -456,6 +457,39 @@ function testForwardingHandler() {
   result = Object.keys(proxy); // wncdp 
   assert(result.length === 1,
          'FWD: keys returned correct #names');
+}
+
+function testStopTrapping() {
+  var proxy = Proxy.create({
+    getOwnPropertyDescriptor: function(name) {
+      return { value: 42, configurable: true }
+    },
+    stopTrapping: function() {
+      return { x: {value:1, configurable: false} };
+    }
+  });
+  
+  // while proxy is trapping, it knows all properties:
+  assert(42 === Object.getOwnPropertyDescriptor(proxy, "x").value,
+         'stopTrapping: proxy knows x');
+  assert(42 === Object.getOwnPropertyDescriptor(proxy, "y").value,
+         'stopTrapping: proxy knows y');
+
+  // stop trapping
+  assert(proxy === Object.stopTrapping(proxy),
+         'stopTrapping returns the proxy');
+  
+  // now, proxy only knows 'x'
+  var desc = Object.getOwnPropertyDescriptor(proxy, "x");
+  assert(1 === desc.value && false === desc.configurable,
+         'stopTrapping: proxy knows a non-configurable x');
+  assert(undefined === Object.getOwnPropertyDescriptor(proxy, "y"),
+         'stopTrapping: proxy no longer knows y');
+  
+  // stopTrapping is a no-op for objects
+  var obj = {};
+  assert(obj === Object.stopTrapping(obj),
+         'stopTrapping is a no-op for non-proxy objects');
 }
 
 if (typeof window === "undefined") {
