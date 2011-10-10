@@ -486,6 +486,9 @@ function testStopTrapping() {
   assert(undefined === Object.getOwnPropertyDescriptor(proxy, "y"),
          'stopTrapping: proxy no longer knows y');
   
+  assert(proxy === Object.stopTrapping(proxy),
+         'calling stopTrapping again should have no effect');
+           
   // stopTrapping is a no-op for objects
   var obj = {};
   assert(obj === Object.stopTrapping(obj),

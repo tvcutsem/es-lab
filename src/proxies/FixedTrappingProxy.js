@@ -556,7 +556,7 @@ FixedHandler.prototype = {
     // guard against recursive calls to stopTrapping
     if (this.stopping) {
       throw new TypeError("cannot recursively call stopTrapping() "+
-                          "while calling stopTrapping() on a proxy");
+                          "on a proxy");
     }
 
     var props = null;
@@ -982,7 +982,10 @@ Object.stopTrapping = function(target) {
   var fixedHandler = fixableProxies.get(target);
   if (fixedHandler !== undefined) {
     // replace the FixedHandler by a default Forwarding Handler
-    if (fixedHandler instanceof FixedHandler) {
+    // This is done only if the fixedHandler still has a 'targetHandler'
+    // property. This property is deleted when the fixedHandler is
+    // turned into a forwarding handler
+    if (fixedHandler.targetHandler) {
       // call the 'stopTrapping' trap
       var props = fixedHandler.stopTrapping();
       if (props !== undefined) {
@@ -995,11 +998,12 @@ Object.stopTrapping = function(target) {
         }
         // 'fixedProps' becomes the 'target'
         fixedHandler.target = fixedHandler.fixedProps;
-        // we can now release the targetHandler:
+        // we can now release the targetHandler. This also unmarks the
+        // handler as a trapping FixedHandler.
         delete fixedHandler.targetHandler;
-        // keep the fixedProps object on fixedHandler such that
+        // keep the fixedProps object on fixedHandler such that the patched
         // freeze, seal, preventExtensions, isFrozen, isSealed, isExtensible
-        // continue to work
+        // functions continue to work
       }
     }
   }
