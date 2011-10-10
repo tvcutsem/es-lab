@@ -49,11 +49,18 @@
 // but does not work entirely as intended, since v8 proxies don't allow
 // proxy handlers to return non-configurable property descriptors
 
-// Dependencies:
+// Language Dependencies:
 //  - ECMAScript 5, ES5 strict mode
 //  - Harmony Proxies with non-standard support for passing through
 //    non-configurable properties
 //  - Harmony WeakMaps
+// Imports:
+//  - function Handler from Handler.js
+// Patches:
+//  - Object.{freeze,seal,preventExtensions}
+//  - Object.{isFrozen,isSealed,isExtensible}
+//  - Object.stopTrapping
+//  - Proxy.create{Function}
 
 // Loading this file will automatically patch Proxy.create and
 // Proxy.createFunction such that they support fixed, trapping proxies
