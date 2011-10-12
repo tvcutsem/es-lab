@@ -818,14 +818,15 @@ var ses;
     }
     var d;
     try {
-      d = construct(Date, [1957, 5, 27]);
+      d = construct(Date, [1957, 4, 27]);
     } catch (err) {
       if (err instanceof TypeError) { return true; }
       return 'Curries construction failed with: ' + err;
     }
+    if (typeof d === 'string') { return true; } // Opera
     var str = objToString.call(d);
     if (str === '[object Date]') { return false; }
-    return 'Unexpected: ' + str;
+    return 'Unexpected: ' + str + '(' + d + ')';
   }
 
 
@@ -956,10 +957,15 @@ var ses;
       return false;
     }
     var f = document.createElement("form");
-    Object.defineProperty(f, 'foo', {
-      get: getter,
-      set: void 0
-    });
+    try {
+      Object.defineProperty(f, 'foo', {
+        get: getter,
+        set: void 0
+      });
+    } catch (err) {
+      // Happens on Safari 5.0.2 on IPad2.
+      return 'defining accessor on form failed with: ' + err;
+    }
     var desc = Object.getOwnPropertyDescriptor(f, 'foo');
     if (desc.get === getter) { return false; }
     if (desc.get === void 0) { return true; }
@@ -2505,6 +2511,7 @@ var ses;
       sections: ['8.6.2'],
       tests: ['S8.6.2_A8']
     },
+    /* Crashes Opera 12 pre-alpha build 1085
     {
       description: 'Strict eval function leaks variable definitions',
       test: test_STRICT_EVAL_LEAKS_GLOBALS,
@@ -2514,7 +2521,7 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
       sections: ['10.4.2.1'],
       tests: ['S10.4.2.1_A1']
-    },
+    },*/
     {
       description: 'parseInt still parsing octal',
       test: test_PARSEINT_STILL_PARSING_OCTAL,
