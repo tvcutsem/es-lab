@@ -1085,7 +1085,7 @@ var TrapDefaults = {
       var name = String(trapResult[i]);
       var desc = this.getPropertyDescriptor(name);
       desc = normalizeAndCompletePropertyDescriptor(desc);
-      if (desc.enumerable) {
+      if (desc !== undefined && desc.enumerable) {
         result.push(name);
       }
     }
@@ -1099,7 +1099,7 @@ var TrapDefaults = {
       var name = String(trapResult[i]);
       var desc = this.getOwnPropertyDescriptor(name);
       desc = normalizeAndCompletePropertyDescriptor(desc);
-      if (desc.enumerable) {
+      if (desc !== undefined && desc.enumerable) {
         result.push(name);
       }
     }
