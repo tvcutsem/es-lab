@@ -66,11 +66,10 @@ var ses;
  * JavaScript context (i.e. a browser frame), as it relies on other
  * primordial objects and methods not yet being perturbed.
  *
- * <p>TODO(erights): This file tries to protects itself from most
+ * <p>Code installed by the repairs protects itself from
  * post-initialization perturbation, by stashing the primordials it
- * needs for later use, but this attempt is currently incomplete. We
- * need to revisit this when we support Confined-ES5, as a variant of
- * SES in which the primordials are not frozen.
+ * needs for later use, so we can support Confined-ES5, as a variant
+ * of SES in which the primordials are not frozen.
  */
 (function(global) {
   "use strict";
@@ -1229,23 +1228,52 @@ var ses;
   // failures can still trigger a given repair.
 
 
-  var call = Function.prototype.call;
-  var apply = Function.prototype.apply;
+  var builtInApplyMethod = Function.prototype.apply;
+  var builtInCallMethod = Function.prototype.call;
+  var builtInSliceMethod = Array.prototype.slice;
 
-  var hop = Object.prototype.hasOwnProperty;
-  var slice = Array.prototype.slice;
-  var concat = Array.prototype.concat;
-  var defProp = Object.defineProperty;
+  builtInApplyMethod.reallyCall = builtInCallMethod;
+  Function.prototype.apply = function(thisArg, argArray) {
+    return builtInApplyMethod.reallyCall(this, thisArg, argArray);
+  };
+
+  function applyFn(func, thisArg, argArray) {
+    return builtInApplyMethod.reallyCall(func, thisArg, argArray);
+  }
+  ses.applyFn = applyFn;
+  function callFn(func, thisArg, var_args) {
+    var args = builtInApplyMethod.reallyCall(builtInSliceMethod,
+                                             arguments, [2]);
+    return builtInApplyMethod.reallyCall(func, thisArg, args);
+  }
+  ses.callFn = callFn;
+  function method2Function(meth) {
+    return function(self, var_args) {
+      var args = builtInApplyMethod.reallyCall(builtInSliceMethod,
+                                               arguments, [1]);
+      return builtInApplyMethod.reallyCall(meth, self, args);
+    };
+  }
+  ses.method2Function = method2Function;
+
+  var hopFn = ses.hopFn = method2Function(Object.prototype.hasOwnProperty);
+  var toStringFn = ses.toStringFn = method2Function(objToString);
+  var sliceFn = ses.sliceFn = method2Function(builtInSliceMethod);
+  var spliceFn = ses.spliceFn = method2Function(Array.prototype.splice);
+  var concatFn = ses.concatFn = method2Function(Array.prototype.concat);
+  var indexOfFn = ses.indexOfFn = method2Function(Array.prototype.indexOf);
+
   var getPrototypeOf = Object.getPrototypeOf;
+
 
   function repair_MISSING_CALLEE_DESCRIPTOR() {
     var realGOPN = Object.getOwnPropertyNames;
     Object.getOwnPropertyNames = function calleeFix(base) {
       var result = realGOPN(base);
       if (typeof base === 'function') {
-        var i = result.indexOf('callee');
-        if (i >= 0 && !hop.call(base, 'callee')) {
-          result.splice(i, 1);
+        var i = indexOfFn(result, 'callee');
+        if (i >= 0 && !hopFn(base, 'callee')) {
+          spliceFn(result, i, 1);
         }
       }
       return result;
@@ -1274,15 +1302,13 @@ var ses;
 
   function repair_REGEXP_TEST_EXEC_UNSAFE() {
     var unsafeRegExpExec = RegExp.prototype.exec;
-    unsafeRegExpExec.call = call;
     var unsafeRegExpTest = RegExp.prototype.test;
-    unsafeRegExpTest.call = call;
 
     RegExp.prototype.exec = function fakeExec(specimen) {
-      return unsafeRegExpExec.call(this, String(specimen));
+      return callFn(unsafeRegExpExec, this, String(specimen));
     };
     RegExp.prototype.test = function fakeTest(specimen) {
-      return unsafeRegExpTest.call(this, String(specimen));
+      return callFn(unsafeRegExpTest, this, String(specimen));
     };
   }
 
@@ -1300,12 +1326,14 @@ var ses;
       }
       return unsafeDefProp(base, name, desc);
     }
-    defProp(Object, 'defineProperty', { value: repairedDefineProperty });
+    Object.defineProperty(Object, 'defineProperty', {
+      value: repairedDefineProperty
+    });
   }
 
   function patchMissingProp(base, name, missingFunc) {
     if (!(name in base)) {
-      defProp(base, name, {
+      Object.defineProperty(base, name, {
         value: missingFunc,
         writable: true,
         enumerable: false,
@@ -1367,25 +1395,20 @@ var ses;
   }
 
   function repair_MISSING_BIND() {
+    var defProp = Object.defineProperty;
     defProp(Function.prototype, 'bind', {
       value: function fakeBind(self, var_args) {
         var thisFunc = this;
-        var leftArgs = slice.call(arguments, 1);
+        var leftArgs = sliceFn(arguments, 1);
         function funcBound(var_args) {
           if (this === Object(this) &&
-              Object.getPrototypeOf(this) === BOGUS_BOUND_PROTOTYPE) {
+              getPrototypeOf(this) === BOGUS_BOUND_PROTOTYPE) {
             throw new TypeError(
               'Cannot emulate "new" on pseudo-bound function.');
           }
-          var args = concat.call(leftArgs, slice.call(arguments, 0));
-          return apply.call(thisFunc, self, args);
+          var args = concatFn(leftArgs, sliceFn(arguments, 0));
+          return applyFn(thisFunc, self, args);
         }
-        // We do this direct assignment first in case
-        // http://code.google.com/p/v8/issues/detail?id=1530
-        // See test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES above
-        // TODO(erights): investigate repairing this if needed by
-        // monkey patching Object.defineProperty.
-        funcBound.prototype = BOGUS_BOUND_PROTOTYPE;
         defProp(funcBound, 'prototype', {
           value: BOGUS_BOUND_PROTOTYPE,
           writable: false,
@@ -1414,12 +1437,12 @@ var ses;
    */
   function makeMutableProtoPatcher(constr, classString) {
     var proto = constr.prototype;
-    var baseToString = objToString.call(proto);
+    var baseToString = toStringFn(proto);
     if (baseToString !== '[object ' + classString + ']') {
       throw new TypeError('unexpected: ' + baseToString);
     }
     var grandProto = getPrototypeOf(proto);
-    var grandBaseToString = objToString.call(grandProto);
+    var grandBaseToString = toStringFn(grandProto);
     if (grandBaseToString === '[object ' + classString + ']') {
       throw new TypeError('malformed inheritance: ' + classString);
     }
@@ -1427,13 +1450,12 @@ var ses;
       logger.log('unexpected inheritance: ' + classString);
     }
     function mutableProtoPatcher(name) {
-      if (!hop.call(proto, name)) { return; }
+      if (!hopFn(proto, name)) { return; }
       var originalMethod = proto[name];
-      originalMethod.apply = apply;
       function replacement(var_args) {
         var parent = getPrototypeOf(this);
-        if (objToString.call(parent) !== baseToString) {
-          var thisToString = objToString.call(this);
+        if (toStringFn(parent) !== baseToString) {
+          var thisToString = toStringFn(this);
           if (thisToString === baseToString) {
             throw new TypeError('May not mutate internal state of a ' +
                                 classString + '.prototype');
@@ -1441,9 +1463,9 @@ var ses;
             throw new TypeError('Unexpected: ' + thisToString);
           }
         }
-        return originalMethod.apply(this, arguments);
+        return applyFn(originalMethod, this, arguments);
       }
-      defProp(proto, name, {value: replacement});
+      Object.defineProperty(proto, name, {value: replacement});
     }
     return mutableProtoPatcher;
   }
@@ -1479,9 +1501,9 @@ var ses;
   function repair_NEED_TO_WRAP_FOREACH() {
     (function() {
       var forEach = Array.prototype.forEach;
-      defProp(Array.prototype, 'forEach', {
+      Object.defineProperty(Array.prototype, 'forEach', {
         value: function forEachWrapper(callbackfn, opt_thisArg) {
-          return apply.call(forEach, this, arguments);
+          return applyFn(forEach, this, arguments);
         }
       });
     })();
@@ -1519,7 +1541,7 @@ var ses;
             }
           }
 
-          if (objToString.call(base) === '[object HTMLFormElement]' &&
+          if (toStringFn(base) === '[object HTMLFormElement]' &&
               typeof desc.get === 'function' &&
               desc.set === undefined &&
               gopd(base, name) === void 0) {
@@ -1576,6 +1598,9 @@ var ses;
 
   function repair_ACCESSORS_INHERIT_AS_OWN() {
     (function(){
+      var forEach = Array.prototype.forEach;
+      var filter = Array.prototype.filter;
+
       // restrict these
       var defProp = Object.defineProperty;
       var freeze = Object.freeze;
@@ -1625,7 +1650,7 @@ var ses;
       });
 
       function ensureSealable(base) {
-        gopn(base).forEach(function(name) {
+        call(forEach, gopn(base), function(name) {
           var desc = gopd(base, name);
           if ('get' in desc && desc.enumerable) {
             if (!desc.configurable) {
@@ -1655,7 +1680,7 @@ var ses;
 
       defProp(Object.prototype, 'hasOwnProperty', {
         value: function hasOwnPropertyWrapper(name) {
-          return hop.call(this, name) && !isBadAccessor(this, name);
+          return hopFn(this, name) && !isBadAccessor(this, name);
         }
       });
 
@@ -1668,7 +1693,7 @@ var ses;
 
       defProp(Object, 'getOwnPropertyNames', {
         value: function getOwnPropertyNamesWrapper(base) {
-          return gopn(base).filter(function(name) {
+          return call(filter, gopn(base), function(name) {
             return !isBadAccessor(base, name);
           });
         }
@@ -1680,25 +1705,23 @@ var ses;
   function repair_SORT_LEAKS_GLOBAL() {
    (function(){
       var unsafeSort = Array.prototype.sort;
-      unsafeSort.call = call;
       function sortWrapper(opt_comparefn) {
         function comparefnWrapper(x, y) {
           return opt_comparefn(x, y);
         }
         if (arguments.length === 0) {
-          return unsafeSort.call(this);
+          return callFn(unsafeSort, this);
         } else {
-          return unsafeSort.call(this, comparefnWrapper);
+          return callFn(unsafeSort, this, comparefnWrapper);
         }
       }
-      defProp(Array.prototype, 'sort', { value: sortWrapper });
+      Object.defineProperty(Array.prototype, 'sort', { value: sortWrapper });
     })();
   }
 
   function repair_REPLACE_LEAKS_GLOBAL() {
     (function(){
       var unsafeReplace = String.prototype.replace;
-      unsafeReplace.call = call;
       function replaceWrapper(searchValue, replaceValue) {
         var safeReplaceValue = replaceValue;
         function replaceValueWrapper(m1, m2, m3) {
@@ -1707,9 +1730,11 @@ var ses;
         if (typeof replaceValue === 'function') {
           safeReplaceValue = replaceValueWrapper;
         }
-        return unsafeReplace.call(this, searchValue, safeReplaceValue);
+        return callFn(unsafeReplace, this, searchValue, safeReplaceValue);
       }
-      defProp(String.prototype, 'replace', { value: replaceWrapper });
+      Object.defineProperty(String.prototype, 'replace', {
+        value: replaceWrapper
+      });
     })();
   }
 
@@ -1735,7 +1760,9 @@ var ses;
         throw err;
       }
     }
-    defProp(Object, 'getOwnPropertyDescriptor', { value: gopdWrapper });
+    Object.defineProperty(Object, 'getOwnPropertyDescriptor', {
+      value: gopdWrapper
+    });
   }
 
   function repair_CANT_HASOWNPROPERTY_CALLER() {
@@ -1791,17 +1818,25 @@ var ses;
   }
 
   function repair_BUILTIN_LEAKS_CALLER() {
+    // The call to .bind as a method here is fine since it happens
+    // after all repairs which might fix .bind and before any
+    // untrusted code runs.
     ses.makeCallerHarmless = makeHarmless.bind(void 0, 'caller');
     //logger.info(ses.makeCallerHarmless(builtInMapMethod));
   }
 
   function repair_BUILTIN_LEAKS_ARGUMENTS() {
+    // The call to .bind as a method here is fine since it happens
+    // after all repairs which might fix .bind and before any
+    // untrusted code runs.
     ses.makeArgumentsHarmless = makeHarmless.bind(void 0, 'arguments');
     //logger.info(ses.makeArgumentsHarmless(builtInMapMethod));
   }
 
   function repair_JSON_PARSE_PROTO_CONFUSION() {
     var unsafeParse = JSON.parse;
+    var keys = Object.keys;
+    var forEach = Array.prototype.forEach;
     function validate(plainJSON) {
       if (plainJSON !== Object(plainJSON)) {
         // If we were trying to do a full validation, we would
@@ -1813,17 +1848,17 @@ var ses;
         // to this repair.
         return;
       }
-      var proto = Object.getPrototypeOf(plainJSON);
+      var proto = getPrototypeOf(plainJSON);
       if (proto !== Object.prototype && proto !== Array.prototype) {
         throw new TypeError(
           'Parse resulted in invalid JSON. ' +
             'See http://code.google.com/p/v8/issues/detail?id=621');
       }
-      Object.keys(plainJSON).forEach(function(key) {
+      call(forEach, keys(plainJSON), function(key) {
         validate(plainJSON[key]);
       });
     }
-    defProp(JSON, 'parse', {
+    Object.defineProperty(JSON, 'parse', {
       value: function(text, opt_reviver) {
         var result = unsafeParse(text);
         validate(result);
@@ -1841,12 +1876,13 @@ var ses;
 
   function repair_PARSEINT_STILL_PARSING_OCTAL() {
     var badParseInt = parseInt;
+    var exec = RegExp.prototype.exec;
     function goodParseInt(n, radix) {
       n = '' + n;
       // This turns an undefined radix into a NaN but is ok since NaN
       // is treated as undefined by badParseInt
       radix = +radix;
-      var isHexOrOctal = /^\s*[+-]?\s*0(x?)/.exec(n);
+      var isHexOrOctal = callFn(exec, (/^\s*[+-]?\s*0(x?)/), n);
       var isOct = isHexOrOctal ? isHexOrOctal[1] !== 'x' : false;
 
       if (isOct && (radix !== radix || 0 === radix)) {

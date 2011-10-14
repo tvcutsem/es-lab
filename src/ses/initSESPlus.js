@@ -298,11 +298,10 @@ var ses;
  * JavaScript context (i.e. a browser frame), as it relies on other
  * primordial objects and methods not yet being perturbed.
  *
- * <p>TODO(erights): This file tries to protects itself from most
+ * <p>Code installed by the repairs protects itself from
  * post-initialization perturbation, by stashing the primordials it
- * needs for later use, but this attempt is currently incomplete. We
- * need to revisit this when we support Confined-ES5, as a variant of
- * SES in which the primordials are not frozen.
+ * needs for later use, so we can support Confined-ES5, as a variant
+ * of SES in which the primordials are not frozen.
  */
 (function(global) {
   "use strict";
@@ -1461,23 +1460,52 @@ var ses;
   // failures can still trigger a given repair.
 
 
-  var call = Function.prototype.call;
-  var apply = Function.prototype.apply;
+  var builtInApplyMethod = Function.prototype.apply;
+  var builtInCallMethod = Function.prototype.call;
+  var builtInSliceMethod = Array.prototype.slice;
 
-  var hop = Object.prototype.hasOwnProperty;
-  var slice = Array.prototype.slice;
-  var concat = Array.prototype.concat;
-  var defProp = Object.defineProperty;
+  builtInApplyMethod.reallyCall = builtInCallMethod;
+  Function.prototype.apply = function(thisArg, argArray) {
+    return builtInApplyMethod.reallyCall(this, thisArg, argArray);
+  };
+
+  function applyFn(func, thisArg, argArray) {
+    return builtInApplyMethod.reallyCall(func, thisArg, argArray);
+  }
+  ses.applyFn = applyFn;
+  function callFn(func, thisArg, var_args) {
+    var args = builtInApplyMethod.reallyCall(builtInSliceMethod,
+                                             arguments, [2]);
+    return builtInApplyMethod.reallyCall(func, thisArg, args);
+  }
+  ses.callFn = callFn;
+  function method2Function(meth) {
+    return function(self, var_args) {
+      var args = builtInApplyMethod.reallyCall(builtInSliceMethod,
+                                               arguments, [1]);
+      return builtInApplyMethod.reallyCall(meth, self, args);
+    };
+  }
+  ses.method2Function = method2Function;
+
+  var hopFn = ses.hopFn = method2Function(Object.prototype.hasOwnProperty);
+  var toStringFn = ses.toStringFn = method2Function(objToString);
+  var sliceFn = ses.sliceFn = method2Function(builtInSliceMethod);
+  var spliceFn = ses.spliceFn = method2Function(Array.prototype.splice);
+  var concatFn = ses.concatFn = method2Function(Array.prototype.concat);
+  var indexOfFn = ses.indexOfFn = method2Function(Array.prototype.indexOf);
+
   var getPrototypeOf = Object.getPrototypeOf;
+
 
   function repair_MISSING_CALLEE_DESCRIPTOR() {
     var realGOPN = Object.getOwnPropertyNames;
     Object.getOwnPropertyNames = function calleeFix(base) {
       var result = realGOPN(base);
       if (typeof base === 'function') {
-        var i = result.indexOf('callee');
-        if (i >= 0 && !hop.call(base, 'callee')) {
-          result.splice(i, 1);
+        var i = indexOfFn(result, 'callee');
+        if (i >= 0 && !hopFn(base, 'callee')) {
+          spliceFn(result, i, 1);
         }
       }
       return result;
@@ -1506,15 +1534,13 @@ var ses;
 
   function repair_REGEXP_TEST_EXEC_UNSAFE() {
     var unsafeRegExpExec = RegExp.prototype.exec;
-    unsafeRegExpExec.call = call;
     var unsafeRegExpTest = RegExp.prototype.test;
-    unsafeRegExpTest.call = call;
 
     RegExp.prototype.exec = function fakeExec(specimen) {
-      return unsafeRegExpExec.call(this, String(specimen));
+      return callFn(unsafeRegExpExec, this, String(specimen));
     };
     RegExp.prototype.test = function fakeTest(specimen) {
-      return unsafeRegExpTest.call(this, String(specimen));
+      return callFn(unsafeRegExpTest, this, String(specimen));
     };
   }
 
@@ -1532,12 +1558,14 @@ var ses;
       }
       return unsafeDefProp(base, name, desc);
     }
-    defProp(Object, 'defineProperty', { value: repairedDefineProperty });
+    Object.defineProperty(Object, 'defineProperty', {
+      value: repairedDefineProperty
+    });
   }
 
   function patchMissingProp(base, name, missingFunc) {
     if (!(name in base)) {
-      defProp(base, name, {
+      Object.defineProperty(base, name, {
         value: missingFunc,
         writable: true,
         enumerable: false,
@@ -1599,25 +1627,20 @@ var ses;
   }
 
   function repair_MISSING_BIND() {
+    var defProp = Object.defineProperty;
     defProp(Function.prototype, 'bind', {
       value: function fakeBind(self, var_args) {
         var thisFunc = this;
-        var leftArgs = slice.call(arguments, 1);
+        var leftArgs = sliceFn(arguments, 1);
         function funcBound(var_args) {
           if (this === Object(this) &&
-              Object.getPrototypeOf(this) === BOGUS_BOUND_PROTOTYPE) {
+              getPrototypeOf(this) === BOGUS_BOUND_PROTOTYPE) {
             throw new TypeError(
               'Cannot emulate "new" on pseudo-bound function.');
           }
-          var args = concat.call(leftArgs, slice.call(arguments, 0));
-          return apply.call(thisFunc, self, args);
+          var args = concatFn(leftArgs, sliceFn(arguments, 0));
+          return applyFn(thisFunc, self, args);
         }
-        // We do this direct assignment first in case
-        // http://code.google.com/p/v8/issues/detail?id=1530
-        // See test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES above
-        // TODO(erights): investigate repairing this if needed by
-        // monkey patching Object.defineProperty.
-        funcBound.prototype = BOGUS_BOUND_PROTOTYPE;
         defProp(funcBound, 'prototype', {
           value: BOGUS_BOUND_PROTOTYPE,
           writable: false,
@@ -1646,12 +1669,12 @@ var ses;
    */
   function makeMutableProtoPatcher(constr, classString) {
     var proto = constr.prototype;
-    var baseToString = objToString.call(proto);
+    var baseToString = toStringFn(proto);
     if (baseToString !== '[object ' + classString + ']') {
       throw new TypeError('unexpected: ' + baseToString);
     }
     var grandProto = getPrototypeOf(proto);
-    var grandBaseToString = objToString.call(grandProto);
+    var grandBaseToString = toStringFn(grandProto);
     if (grandBaseToString === '[object ' + classString + ']') {
       throw new TypeError('malformed inheritance: ' + classString);
     }
@@ -1659,13 +1682,12 @@ var ses;
       logger.log('unexpected inheritance: ' + classString);
     }
     function mutableProtoPatcher(name) {
-      if (!hop.call(proto, name)) { return; }
+      if (!hopFn(proto, name)) { return; }
       var originalMethod = proto[name];
-      originalMethod.apply = apply;
       function replacement(var_args) {
         var parent = getPrototypeOf(this);
-        if (objToString.call(parent) !== baseToString) {
-          var thisToString = objToString.call(this);
+        if (toStringFn(parent) !== baseToString) {
+          var thisToString = toStringFn(this);
           if (thisToString === baseToString) {
             throw new TypeError('May not mutate internal state of a ' +
                                 classString + '.prototype');
@@ -1673,9 +1695,9 @@ var ses;
             throw new TypeError('Unexpected: ' + thisToString);
           }
         }
-        return originalMethod.apply(this, arguments);
+        return applyFn(originalMethod, this, arguments);
       }
-      defProp(proto, name, {value: replacement});
+      Object.defineProperty(proto, name, {value: replacement});
     }
     return mutableProtoPatcher;
   }
@@ -1711,9 +1733,9 @@ var ses;
   function repair_NEED_TO_WRAP_FOREACH() {
     (function() {
       var forEach = Array.prototype.forEach;
-      defProp(Array.prototype, 'forEach', {
+      Object.defineProperty(Array.prototype, 'forEach', {
         value: function forEachWrapper(callbackfn, opt_thisArg) {
-          return apply.call(forEach, this, arguments);
+          return applyFn(forEach, this, arguments);
         }
       });
     })();
@@ -1751,7 +1773,7 @@ var ses;
             }
           }
 
-          if (objToString.call(base) === '[object HTMLFormElement]' &&
+          if (toStringFn(base) === '[object HTMLFormElement]' &&
               typeof desc.get === 'function' &&
               desc.set === undefined &&
               gopd(base, name) === void 0) {
@@ -1808,6 +1830,9 @@ var ses;
 
   function repair_ACCESSORS_INHERIT_AS_OWN() {
     (function(){
+      var forEach = Array.prototype.forEach;
+      var filter = Array.prototype.filter;
+
       // restrict these
       var defProp = Object.defineProperty;
       var freeze = Object.freeze;
@@ -1857,7 +1882,7 @@ var ses;
       });
 
       function ensureSealable(base) {
-        gopn(base).forEach(function(name) {
+        call(forEach, gopn(base), function(name) {
           var desc = gopd(base, name);
           if ('get' in desc && desc.enumerable) {
             if (!desc.configurable) {
@@ -1887,7 +1912,7 @@ var ses;
 
       defProp(Object.prototype, 'hasOwnProperty', {
         value: function hasOwnPropertyWrapper(name) {
-          return hop.call(this, name) && !isBadAccessor(this, name);
+          return hopFn(this, name) && !isBadAccessor(this, name);
         }
       });
 
@@ -1900,7 +1925,7 @@ var ses;
 
       defProp(Object, 'getOwnPropertyNames', {
         value: function getOwnPropertyNamesWrapper(base) {
-          return gopn(base).filter(function(name) {
+          return call(filter, gopn(base), function(name) {
             return !isBadAccessor(base, name);
           });
         }
@@ -1912,25 +1937,23 @@ var ses;
   function repair_SORT_LEAKS_GLOBAL() {
    (function(){
       var unsafeSort = Array.prototype.sort;
-      unsafeSort.call = call;
       function sortWrapper(opt_comparefn) {
         function comparefnWrapper(x, y) {
           return opt_comparefn(x, y);
         }
         if (arguments.length === 0) {
-          return unsafeSort.call(this);
+          return callFn(unsafeSort, this);
         } else {
-          return unsafeSort.call(this, comparefnWrapper);
+          return callFn(unsafeSort, this, comparefnWrapper);
         }
       }
-      defProp(Array.prototype, 'sort', { value: sortWrapper });
+      Object.defineProperty(Array.prototype, 'sort', { value: sortWrapper });
     })();
   }
 
   function repair_REPLACE_LEAKS_GLOBAL() {
     (function(){
       var unsafeReplace = String.prototype.replace;
-      unsafeReplace.call = call;
       function replaceWrapper(searchValue, replaceValue) {
         var safeReplaceValue = replaceValue;
         function replaceValueWrapper(m1, m2, m3) {
@@ -1939,9 +1962,11 @@ var ses;
         if (typeof replaceValue === 'function') {
           safeReplaceValue = replaceValueWrapper;
         }
-        return unsafeReplace.call(this, searchValue, safeReplaceValue);
+        return callFn(unsafeReplace, this, searchValue, safeReplaceValue);
       }
-      defProp(String.prototype, 'replace', { value: replaceWrapper });
+      Object.defineProperty(String.prototype, 'replace', {
+        value: replaceWrapper
+      });
     })();
   }
 
@@ -1967,7 +1992,9 @@ var ses;
         throw err;
       }
     }
-    defProp(Object, 'getOwnPropertyDescriptor', { value: gopdWrapper });
+    Object.defineProperty(Object, 'getOwnPropertyDescriptor', {
+      value: gopdWrapper
+    });
   }
 
   function repair_CANT_HASOWNPROPERTY_CALLER() {
@@ -2023,17 +2050,25 @@ var ses;
   }
 
   function repair_BUILTIN_LEAKS_CALLER() {
+    // The call to .bind as a method here is fine since it happens
+    // after all repairs which might fix .bind and before any
+    // untrusted code runs.
     ses.makeCallerHarmless = makeHarmless.bind(void 0, 'caller');
     //logger.info(ses.makeCallerHarmless(builtInMapMethod));
   }
 
   function repair_BUILTIN_LEAKS_ARGUMENTS() {
+    // The call to .bind as a method here is fine since it happens
+    // after all repairs which might fix .bind and before any
+    // untrusted code runs.
     ses.makeArgumentsHarmless = makeHarmless.bind(void 0, 'arguments');
     //logger.info(ses.makeArgumentsHarmless(builtInMapMethod));
   }
 
   function repair_JSON_PARSE_PROTO_CONFUSION() {
     var unsafeParse = JSON.parse;
+    var keys = Object.keys;
+    var forEach = Array.prototype.forEach;
     function validate(plainJSON) {
       if (plainJSON !== Object(plainJSON)) {
         // If we were trying to do a full validation, we would
@@ -2045,17 +2080,17 @@ var ses;
         // to this repair.
         return;
       }
-      var proto = Object.getPrototypeOf(plainJSON);
+      var proto = getPrototypeOf(plainJSON);
       if (proto !== Object.prototype && proto !== Array.prototype) {
         throw new TypeError(
           'Parse resulted in invalid JSON. ' +
             'See http://code.google.com/p/v8/issues/detail?id=621');
       }
-      Object.keys(plainJSON).forEach(function(key) {
+      call(forEach, keys(plainJSON), function(key) {
         validate(plainJSON[key]);
       });
     }
-    defProp(JSON, 'parse', {
+    Object.defineProperty(JSON, 'parse', {
       value: function(text, opt_reviver) {
         var result = unsafeParse(text);
         validate(result);
@@ -2073,12 +2108,13 @@ var ses;
 
   function repair_PARSEINT_STILL_PARSING_OCTAL() {
     var badParseInt = parseInt;
+    var exec = RegExp.prototype.exec;
     function goodParseInt(n, radix) {
       n = '' + n;
       // This turns an undefined radix into a NaN but is ok since NaN
       // is treated as undefined by badParseInt
       radix = +radix;
-      var isHexOrOctal = /^\s*[+-]?\s*0(x?)/.exec(n);
+      var isHexOrOctal = callFn(exec, (/^\s*[+-]?\s*0(x?)/), n);
       var isOct = isHexOrOctal ? isHexOrOctal[1] !== 'x' : false;
 
       if (isOct && (radix !== radix || 0 === radix)) {
@@ -2743,6 +2779,9 @@ var WeakMap;
   var hop = Object.prototype.hasOwnProperty;
   var gopn = Object.getOwnPropertyNames;
   var defProp = Object.defineProperty;
+  var random = Math.random;
+  var indexOf = Array.prototype.indexOf;
+  var splice = Array.prototype.splice;
 
   /**
    * Holds the orginal static properties of the Object constructor,
@@ -2832,7 +2871,7 @@ var WeakMap;
     if (desc) { return desc.get; }
     if (!originalProps.isExtensible(key)) { return NO_IDENT; }
 
-    name = 'hash:' + Math.random();
+    name = 'hash:' + random();
     // If the following two lines are swapped, Safari WebKit Nightly
     // Version 5.0.5 (5533.21.1, r87697) crashes.
     // See https://bugs.webkit.org/show_bug.cgi?id=61758
@@ -2859,10 +2898,11 @@ var WeakMap;
    */
   function identifyFirst(base, name) {
     var oldFunc = base[name];
+    oldFunc.reallyApply = Function.prototype.apply;
     defProp(base, name, {
       value: function(obj, var_args) {
         identity(obj);
-        return oldFunc.apply(this, arguments);
+        return oldFunc.reallyApply(this, arguments);
       }
     });
   }
@@ -2875,8 +2915,10 @@ var WeakMap;
   defProp(Object, 'getOwnPropertyNames', {
     value: function fakeGetOwnPropertyNames(obj) {
       var result = gopn(obj);
-      var i = result.indexOf('ident___');
-      if (i >= 0) { result.splice(i, 1); }
+      result.reallyIndexOf = indexOf;
+      var i = result.reallyIndexOf('ident___');
+      result.reallySplice = splice;
+      if (i >= 0) { result.reallySplice(i, 1); }
       return result;
     }
   });
@@ -2893,8 +2935,10 @@ var WeakMap;
     defProp(Object, 'getPropertyNames', {
       value: function fakeGetPropertyNames(obj) {
         var result = originalProps.getPropertyNames(obj);
-        var i = result.indexOf('ident___');
-        if (i >= 0) { result.splice(i, 1); }
+        result.reallyIndexOf = indexOf;
+        var i = result.reallyIndexOf('ident___');
+        result.reallySplice = splice;
+        if (i >= 0) { result.reallySplice(i, 1); }
         return result;
       }
     });
@@ -2921,9 +2965,12 @@ var WeakMap;
     }
   });
 
+  var freeze = Object.freeze;
+  var create = Object.create;
+
   function constFunc(func) {
-    Object.freeze(func.prototype);
-    return Object.freeze(func);
+    freeze(func.prototype);
+    return freeze(func);
   }
 
   WeakMap = function() {
@@ -2940,7 +2987,7 @@ var WeakMap;
         name = id();
       }
       var opt_ids = identities[name];
-      var i = opt_ids ? opt_ids.indexOf(id) : -1;
+      var i = opt_ids ? opt_ids.reallyIndexOf(id) : -1;
       // Using original freeze is safe since this record can't escape.
       return originalProps.freeze({
         name: name,
@@ -2961,8 +3008,20 @@ var WeakMap;
 
     function set___(key, value) {
       var f = find(key);
-      var ids = f.opt_ids || (identities[f.name] = []);
-      var vals = values[f.name] || (values[f.name] = []);
+      var ids = f.opt_ids;
+      if (!ids) {
+        ids = [];
+        ids.reallyIndexOf = indexOf;
+        ids.reallySplice = splice;
+        identities[f.name] = ids;
+      }
+      var vals = values[f.name];
+      if (!vals) {
+        vals = [];
+        vals.reallyIndexOf = indexOf;
+        vals.reallySplice = splice;
+        values[f.name] = vals;
+      }
       var i = (f.i >= 0) ? f.i : ids.length;
       ids[i] = f.id;
       vals[i] = value;
@@ -2980,20 +3039,20 @@ var WeakMap;
         var vals = values[f.name];
         ids[f.i] = ids[last];
         vals[f.i] = vals[last];
-        ids.splice(last);
-        vals.splice(last);
+        ids.reallySplice(last);
+        vals.reallySplice(last);
       }
       return true;
     }
 
-    return Object.create(WeakMap.prototype, {
+    return create(WeakMap.prototype, {
       get___: { value: constFunc(get___) },
       has___: { value: constFunc(has___) },
       set___: { value: constFunc(set___) },
       delete___: { value: constFunc(delete___) }
     });
   };
-  WeakMap.prototype = Object.create(Object.prototype, {
+  WeakMap.prototype = create(Object.prototype, {
     get: {
       /**
        * Return the value most recently associated with key, or
@@ -3515,7 +3574,9 @@ var ses;
 (function() {
   "use strict";
 
-   if (!ses) { ses = {}; }
+  var callFn = ses.callFn;
+  var test = RegExp.prototype.test;
+  var exec = RegExp.prototype.exec;
 
   /////////////// KLUDGE SWITCHES ///////////////
 
@@ -3527,10 +3588,10 @@ var ses;
    * <p>This is only a temporary development hack. TODO(erights): fix.
    */
   function LIMIT_SRC(programSrc) {
-    if ((/[^\u0000-\u007f]/).test(programSrc)) {
+    if (callFn(test, (/[^\u0000-\u007f]/), programSrc)) {
       throw new EvalError('Non-ascii text not yet supported');
     }
-    if ((/\\u/).test(programSrc)) {
+    if (callFn(test, (/\\u/), programSrc)) {
       throw new EvalError('Backslash-u escape encoded text not yet supported');
     }
   }
@@ -3562,7 +3623,7 @@ var ses;
     // should say "... = Object.create(null);" rather than "... = {};"
     var result = {};
     var a;
-    while ((a = regexp.exec(programSrc))) {
+    while ((a = callFn(exec, regexp, programSrc))) {
       // Note that we could have avoided the while loop by doing
       // programSrc.match(regexp), except that then we'd need
       // temporary storage proportional to the total number of
@@ -3777,7 +3838,6 @@ var cajaVM;
 ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   "use strict";
 
-
   /////////////// KLUDGE SWITCHES ///////////////
 
   /////////////////////////////////
@@ -3807,7 +3867,26 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
   var dirty = true;
 
-  var hop = Object.prototype.hasOwnProperty;
+  var callFn = ses.callFn;
+  var hopFn = ses.hopFn;
+  var sliceFn = ses.sliceFn;
+  var create = Object.create;
+  var gopn = Object.getOwnPropertyNames;
+  var gopd = Object.getOwnPropertyDescriptor;
+  var defProp = Object.defineProperty;
+  var keys = Object.keys;
+  var freeze = Object.freeze;
+  var getPrototypeOf = Object.getPrototypeOf;
+  var split = String.prototype.split;
+  var trim = String.prototype.trim;
+  var test = RegExp.prototype.test;
+  var exec = RegExp.prototype.exec;
+  var push = Array.prototype.push;
+  var pop = Array.prototype.pop;
+  var join = Array.prototype.join;
+
+  var method2Function = ses.method2Function;
+  var forEachFn = method2Function(Array.prototype.forEach);
 
   function fail(str) {
     debugger;
@@ -3834,7 +3913,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * this {@code imports} should first be initialized with a copy of the
    * properties of {@code sharedImports}, but nothing enforces this.
    */
-  var sharedImports = Object.create(null);
+  var sharedImports = create(null);
 
   (function() {
 
@@ -3902,7 +3981,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * property copying.
      */
     function makeImports() {
-      var imports = Object.create(null);
+      var imports = create(null);
       copyToImports(imports, sharedImports);
       return imports;
     }
@@ -3931,11 +4010,11 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * browser's {@code window} object.
      */
     function copyToImports(imports, from) {
-      Object.getOwnPropertyNames(from).forEach(function(name) {
-        var desc = Object.getOwnPropertyDescriptor(from, name);
+      forEachFn(gopn(from), function(name) {
+        var desc = gopd(from, name);
         desc.enumerable = false;
         desc.configurable = true;
-        Object.defineProperty(imports, name, desc);
+        defProp(imports, name, desc);
       });
       return imports;
     }
@@ -3947,9 +4026,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * {@code imports}.
      */
     function makeScopeObject(imports, freeNames) {
-      var scopeObject = Object.create(null);
-      Object.keys(freeNames).forEach(function(name) {
-        var desc = Object.getOwnPropertyDescriptor(imports, name);
+      var scopeObject = create(null);
+      forEachFn(keys(freeNames), function(name) {
+        var desc = gopd(imports, name);
         if (!desc || desc.writable !== false || desc.configurable) {
           // If there is no own property, or it isn't a non-writable
           // value property, or it is configurable. Note that this
@@ -3987,9 +4066,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           };
         }
         desc.enumerable = false;
-        Object.defineProperty(scopeObject, name, desc);
+        defProp(scopeObject, name, desc);
       });
-      return Object.freeze(scopeObject);
+      return freeze(scopeObject);
     }
 
 
@@ -4030,9 +4109,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
       function compiledCode(imports) {
         var scopeObject = makeScopeObject(imports, freeNames);
-        return wrapper.call(scopeObject).call(imports);
+        return callFn(callFn(wrapper, scopeObject), imports);
       };
-      Object.freeze(compiledCode.prototype);
+      freeze(compiledCode.prototype);
       return compiledCode;
     }
 
@@ -4061,7 +4140,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      */
     function compileExpr(exprSrc, opt_sourcePosition) {
       var result = internalCompileExpr(exprSrc, opt_sourcePosition);
-      return Object.freeze(result);
+      return freeze(result);
     }
 
 
@@ -4078,24 +4157,24 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      */
     function getRequirements(modSrc) {
       var result = [];
-      var stmts = modSrc.split(';');
+      var stmts = callFn(split, modSrc, ';');
       var stmt;
       var i = 0, ilen = stmts.length;
       for (; i < ilen; i++) {
-        stmt = stmts[i].trim();
+        stmt = callFn(trim, stmts[i]);
         if (stmt !== '') {
-          if (!directivePattern.test(stmt)) { break; }
+          if (!callFn(test, directivePattern, stmt)) { break; }
         }
       }
       for (; i < ilen; i++) {
-        stmt = stmts[i].trim();
+        stmt = callFn(trim, stmts[i]);
         if (stmt !== '') {
-          var m = requirePattern.exec(stmt);
+          var m = callFn(exec, requirePattern, stmt);
           if (!m) { break; }
-          result.push(m[1]);
+          callFn(push, result, m[1]);
         }
       }
-      return Object.freeze(result);
+      return freeze(result);
     }
 
     /**
@@ -4125,10 +4204,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      */
     function compileModule(modSrc, opt_sourcePosition) {
       var moduleMaker = internalCompileExpr(
-        '(function() {' + modSrc + '}).call(this)',
+        '(function() {' + modSrc + '}).call(this)', //TODO(erights): .call
         opt_sourcePosition);
       moduleMaker.requirements = getRequirements(modSrc);
-      return Object.freeze(moduleMaker);
+      return freeze(moduleMaker);
     }
 
     /**
@@ -4140,10 +4219,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * itself to be.
      */
     function FakeFunction(var_args) {
-      var params = [].slice.call(arguments, 0);
-      var body = params.pop();
+      var params = sliceFn(arguments, 0);
+      var body = callFn(pop, params);
       body = String(body || '');
-      params = params.join(',');
+      params = callFn(join, params, ',');
       var exprSrc = '(function(' + params + '\n){' + body + '})';
       return compileExpr(exprSrc)(sharedImports);
     }
@@ -4181,7 +4260,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       try {
         verifyStrictExpression(src);
       } catch (x) {
-        src = '(function() {' + src + '\n}).call(this)';
+        src = '(function() {' + src + '\n}).call(this)'; //TODO(erights): .call
       }
       return compileExpr(src)(sharedImports);
     }
@@ -4204,22 +4283,22 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           return;
         }
         defending.set(val, true);
-        defendingList.push(val);
-        Object.freeze(val);
-        recur(Object.getPrototypeOf(val));
-        Object.getOwnPropertyNames(val).forEach(function(p) {
+        callFn(push, defendingList, val);
+        freeze(val);
+        recur(getPrototypeOf(val));
+        forEachFn(gopn(val), function(p) {
           if (typeof val === 'function' &&
               (p === 'caller' || p === 'arguments')) {
             return;
           }
-          var desc = Object.getOwnPropertyDescriptor(val, p);
+          var desc = gopd(val, p);
           recur(desc.value);
           recur(desc.get);
           recur(desc.set);
         });
       }
       recur(node);
-      defendingList.forEach(function(obj) {
+      forEachFn(defendingList, function(obj) {
         defended.set(obj, true);
       });
       return node;
@@ -4248,9 +4327,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       copyToImports: copyToImports
     };
     var extensionsRecord = extensions();
-    Object.getOwnPropertyNames(extensionsRecord).forEach(function (p) {
-      Object.defineProperty(cajaVM, p,
-          Object.getOwnPropertyDescriptor(extensionsRecord, p));
+    forEachFn(gopn(extensionsRecord), function (p) {
+      defProp(cajaVM, p,
+          gopd(extensionsRecord, p));
     });
     // Move this down here so it is not available during the call to
     // extensions.
@@ -4269,7 +4348,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       severity: severity,
       list: []
     });
-    group.list.push(path);
+    callFn(push, group.list, path);
   }
 
   /**
@@ -4287,7 +4366,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * original property.
    */
   function read(base, name) {
-    var desc = Object.getOwnPropertyDescriptor(base, name);
+    var desc = gopd(base, name);
     if (!desc) { return undefined; }
     if ('value' in desc && !desc.writable && !desc.configurable) {
       return desc.value;
@@ -4295,7 +4374,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
     var result = base[name];
     try {
-      Object.defineProperty(base, name, {
+      defProp(base, name, {
         value: result, writable: false, configurable: false
       });
     } catch (ex) {
@@ -4316,13 +4395,13 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * these non-enumerable since ES5.1 specifies that all these
    * properties are non-enumerable on the global object.
    */
-  Object.keys(whitelist).forEach(function(name) {
-    var desc = Object.getOwnPropertyDescriptor(global, name);
+  forEachFn(keys(whitelist), function(name) {
+    var desc = gopd(global, name);
     if (desc) {
       var permit = whitelist[name];
       if (permit) {
         var value = read(global, name);
-        Object.defineProperty(sharedImports, name, {
+        defProp(sharedImports, name, {
           value: value,
           writable: true,
           enumerable: false,
@@ -4332,7 +4411,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
   });
   if (TAME_GLOBAL_EVAL) {
-    Object.defineProperty(sharedImports, 'eval', {
+    defProp(sharedImports, 'eval', {
       value: cajaVM.eval,
       writable: true,
       enumerable: false,
@@ -4364,7 +4443,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       fail('primordial reachable through multiple paths');
     }
     whiteTable.set(value, permit);
-    Object.keys(permit).forEach(function(name) {
+    forEachFn(keys(permit), function(name) {
       if (permit[name] !== 'skip') {
         var sub = read(value, name);
         register(sub, permit[name]);
@@ -4384,13 +4463,13 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   function getPermit(base, name) {
     var permit = whiteTable.get(base);
     if (permit) {
-      if (hop.call(permit, name)) { return permit[name]; }
+      if (hopFn(permit, name)) { return permit[name]; }
     }
     while (true) {
-      base = Object.getPrototypeOf(base);
+      base = getPrototypeOf(base);
       if (base === null) { return false; }
       permit = whiteTable.get(base);
-      if (permit && hop.call(permit, name)) {
+      if (permit && hopFn(permit, name)) {
         var result = permit[name];
         if (result === '*' || result === 'skip') {
           return result;
@@ -4440,7 +4519,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     try {
       deleted = delete base[name];
     } catch (er) { err = er; }
-    var exists = hop.call(base, name);
+    var exists = hopFn(base, name);
     if (deleted) {
       if (!exists) {
         reportProperty(ses.severities.SAFE,
@@ -4464,7 +4543,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
 
     try {
-      Object.defineProperty(base, name, {
+      defProp(base, name, {
         get: poison,
         set: poison,
         enumerable: false,
@@ -4474,8 +4553,8 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       try {
         // Perhaps it's writable non-configurable, it which case we
         // should still be able to freeze it in a harmless state.
-        var value = Object.getOwnPropertyDescriptor(base, name).value;
-        Object.defineProperty(base, name, {
+        var value = gopd(base, name).value;
+        defProp(base, name, {
           value: value === null ? null : void 0,
           writable: false,
           configurable: false
@@ -4486,7 +4565,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         return false;
       }
     }
-    var desc2 = Object.getOwnPropertyDescriptor(base, name);
+    var desc2 = gopd(base, name);
     if (desc2.get === poison &&
         desc2.set === poison &&
         !desc2.configurable) {
@@ -4519,7 +4598,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     if (value !== Object(value)) { return; }
     if (cleaning.get(value)) { return; }
     cleaning.set(value, true);
-    Object.getOwnPropertyNames(value).forEach(function(name) {
+    forEachFn(gopn(value), function(name) {
       var path = prefix + (prefix ? '.' : '') + name;
       var p = getPermit(value, name);
       if (p) {
@@ -4534,12 +4613,12 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         cleanProperty(value, name, path);
       }
     });
-    Object.freeze(value);
+    freeze(value);
   }
   clean(sharedImports, '');
 
 
-  Object.keys(propertyReports).sort().forEach(function(status) {
+  forEachFn(keys(propertyReports).sort(), function(status) {
     var group = propertyReports[status];
     ses.logger.reportDiagnosis(group.severity, status, group.list);
   });
@@ -4586,6 +4665,13 @@ var ses;
 (function(){
   "use strict";
 
+  var callFn = ses.callFn;
+  var freeze = Object.freeze;
+  var gopn = Object.getOwnPropertyNames;
+  var isFrozen = Object.isFrozen;
+  var forEach = Array.prototype.forEach;
+  var slice = Array.prototype.slice;
+
   ses.ejectorsGuardsTrademarks = function ejectorsGuardsTrademarks() {
 
     /**
@@ -4615,8 +4701,8 @@ var ses;
      * freeze a function and (if present) its prototype.
      */
     function freezeFunction(func) {
-      if (func.prototype) { Object.freeze(func.prototype); }
-      return Object.freeze(func);
+      if (func.prototype) { freeze(func.prototype); }
+      return freeze(func);
     }
 
     /**
@@ -4628,11 +4714,11 @@ var ses;
      * properties of that record.
      */
     function freezeObjectRecord(record) {
-      Object.getOwnPropertyNames(record).forEach(function(name) {
+      callFn(forEach, gopn(record), function(name) {
         var val = record[name];
         if (typeof val === 'function') { freezeFunction(val); }
       });
-      return Object.freeze(record);
+      return freeze(record);
     }
 
     ////////////////////////////////////////////////////////////////////////
@@ -4850,10 +4936,10 @@ var ses;
      */
     function stamp(stamps, record) {
       // TODO: Should nonextensible objects be stampable?
-      if (Object.isFrozen(record)) {
+      if (isFrozen(record)) {
         throw new TypeError("Can't stamp frozen objects: " + record);
       }
-      stamps = Array.prototype.slice.call(stamps, 0);
+      stamps = callFn(slice, stamps, 0);
       var numStamps = stamps.length;
       // First ensure that we will succeed before applying any stamps to
       // the record.
@@ -4868,7 +4954,7 @@ var ses;
         // user-implementable auditing protocol.
         stampers.get(stamps[i])(record);
       }
-      return Object.freeze(record);
+      return freeze(record);
     };
 
     ////////////////////////////////////////////////////////////////////////
@@ -4896,11 +4982,11 @@ var ses;
     function passesGuard(g, specimen) {
       g = GuardT.coerce(g); // failure throws rather than ejects
       return callWithEjector(
-        Object.freeze(function(opt_ejector) {
+        freeze(function(opt_ejector) {
           g.coerce(specimen, opt_ejector);
           return true;
         }),
-        Object.freeze(function(ignored) {
+        freeze(function(ignored) {
           return false;
         })
       );

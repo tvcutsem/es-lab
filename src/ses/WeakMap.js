@@ -101,6 +101,9 @@ var WeakMap;
   var hop = Object.prototype.hasOwnProperty;
   var gopn = Object.getOwnPropertyNames;
   var defProp = Object.defineProperty;
+  var random = Math.random;
+  var indexOf = Array.prototype.indexOf;
+  var splice = Array.prototype.splice;
 
   /**
    * Holds the orginal static properties of the Object constructor,
@@ -190,7 +193,7 @@ var WeakMap;
     if (desc) { return desc.get; }
     if (!originalProps.isExtensible(key)) { return NO_IDENT; }
 
-    name = 'hash:' + Math.random();
+    name = 'hash:' + random();
     // If the following two lines are swapped, Safari WebKit Nightly
     // Version 5.0.5 (5533.21.1, r87697) crashes.
     // See https://bugs.webkit.org/show_bug.cgi?id=61758
@@ -217,10 +220,11 @@ var WeakMap;
    */
   function identifyFirst(base, name) {
     var oldFunc = base[name];
+    oldFunc.reallyApply = Function.prototype.apply;
     defProp(base, name, {
       value: function(obj, var_args) {
         identity(obj);
-        return oldFunc.apply(this, arguments);
+        return oldFunc.reallyApply(this, arguments);
       }
     });
   }
@@ -233,8 +237,10 @@ var WeakMap;
   defProp(Object, 'getOwnPropertyNames', {
     value: function fakeGetOwnPropertyNames(obj) {
       var result = gopn(obj);
-      var i = result.indexOf('ident___');
-      if (i >= 0) { result.splice(i, 1); }
+      result.reallyIndexOf = indexOf;
+      var i = result.reallyIndexOf('ident___');
+      result.reallySplice = splice;
+      if (i >= 0) { result.reallySplice(i, 1); }
       return result;
     }
   });
@@ -251,8 +257,10 @@ var WeakMap;
     defProp(Object, 'getPropertyNames', {
       value: function fakeGetPropertyNames(obj) {
         var result = originalProps.getPropertyNames(obj);
-        var i = result.indexOf('ident___');
-        if (i >= 0) { result.splice(i, 1); }
+        result.reallyIndexOf = indexOf;
+        var i = result.reallyIndexOf('ident___');
+        result.reallySplice = splice;
+        if (i >= 0) { result.reallySplice(i, 1); }
         return result;
       }
     });
@@ -279,9 +287,12 @@ var WeakMap;
     }
   });
 
+  var freeze = Object.freeze;
+  var create = Object.create;
+
   function constFunc(func) {
-    Object.freeze(func.prototype);
-    return Object.freeze(func);
+    freeze(func.prototype);
+    return freeze(func);
   }
 
   WeakMap = function() {
@@ -298,7 +309,7 @@ var WeakMap;
         name = id();
       }
       var opt_ids = identities[name];
-      var i = opt_ids ? opt_ids.indexOf(id) : -1;
+      var i = opt_ids ? opt_ids.reallyIndexOf(id) : -1;
       // Using original freeze is safe since this record can't escape.
       return originalProps.freeze({
         name: name,
@@ -319,8 +330,20 @@ var WeakMap;
 
     function set___(key, value) {
       var f = find(key);
-      var ids = f.opt_ids || (identities[f.name] = []);
-      var vals = values[f.name] || (values[f.name] = []);
+      var ids = f.opt_ids;
+      if (!ids) {
+        ids = [];
+        ids.reallyIndexOf = indexOf;
+        ids.reallySplice = splice;
+        identities[f.name] = ids;
+      }
+      var vals = values[f.name];
+      if (!vals) {
+        vals = [];
+        vals.reallyIndexOf = indexOf;
+        vals.reallySplice = splice;
+        values[f.name] = vals;
+      }
       var i = (f.i >= 0) ? f.i : ids.length;
       ids[i] = f.id;
       vals[i] = value;
@@ -338,20 +361,20 @@ var WeakMap;
         var vals = values[f.name];
         ids[f.i] = ids[last];
         vals[f.i] = vals[last];
-        ids.splice(last);
-        vals.splice(last);
+        ids.reallySplice(last);
+        vals.reallySplice(last);
       }
       return true;
     }
 
-    return Object.create(WeakMap.prototype, {
+    return create(WeakMap.prototype, {
       get___: { value: constFunc(get___) },
       has___: { value: constFunc(has___) },
       set___: { value: constFunc(set___) },
       delete___: { value: constFunc(delete___) }
     });
   };
-  WeakMap.prototype = Object.create(Object.prototype, {
+  WeakMap.prototype = create(Object.prototype, {
     get: {
       /**
        * Return the value most recently associated with key, or

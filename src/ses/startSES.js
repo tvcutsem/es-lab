@@ -199,7 +199,6 @@ var cajaVM;
 ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   "use strict";
 
-
   /////////////// KLUDGE SWITCHES ///////////////
 
   /////////////////////////////////
@@ -229,7 +228,26 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
   var dirty = true;
 
-  var hop = Object.prototype.hasOwnProperty;
+  var callFn = ses.callFn;
+  var hopFn = ses.hopFn;
+  var sliceFn = ses.sliceFn;
+  var create = Object.create;
+  var gopn = Object.getOwnPropertyNames;
+  var gopd = Object.getOwnPropertyDescriptor;
+  var defProp = Object.defineProperty;
+  var keys = Object.keys;
+  var freeze = Object.freeze;
+  var getPrototypeOf = Object.getPrototypeOf;
+  var split = String.prototype.split;
+  var trim = String.prototype.trim;
+  var test = RegExp.prototype.test;
+  var exec = RegExp.prototype.exec;
+  var push = Array.prototype.push;
+  var pop = Array.prototype.pop;
+  var join = Array.prototype.join;
+
+  var method2Function = ses.method2Function;
+  var forEachFn = method2Function(Array.prototype.forEach);
 
   function fail(str) {
     debugger;
@@ -256,7 +274,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * this {@code imports} should first be initialized with a copy of the
    * properties of {@code sharedImports}, but nothing enforces this.
    */
-  var sharedImports = Object.create(null);
+  var sharedImports = create(null);
 
   (function() {
 
@@ -324,7 +342,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * property copying.
      */
     function makeImports() {
-      var imports = Object.create(null);
+      var imports = create(null);
       copyToImports(imports, sharedImports);
       return imports;
     }
@@ -353,11 +371,11 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * browser's {@code window} object.
      */
     function copyToImports(imports, from) {
-      Object.getOwnPropertyNames(from).forEach(function(name) {
-        var desc = Object.getOwnPropertyDescriptor(from, name);
+      forEachFn(gopn(from), function(name) {
+        var desc = gopd(from, name);
         desc.enumerable = false;
         desc.configurable = true;
-        Object.defineProperty(imports, name, desc);
+        defProp(imports, name, desc);
       });
       return imports;
     }
@@ -369,9 +387,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * {@code imports}.
      */
     function makeScopeObject(imports, freeNames) {
-      var scopeObject = Object.create(null);
-      Object.keys(freeNames).forEach(function(name) {
-        var desc = Object.getOwnPropertyDescriptor(imports, name);
+      var scopeObject = create(null);
+      forEachFn(keys(freeNames), function(name) {
+        var desc = gopd(imports, name);
         if (!desc || desc.writable !== false || desc.configurable) {
           // If there is no own property, or it isn't a non-writable
           // value property, or it is configurable. Note that this
@@ -409,9 +427,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           };
         }
         desc.enumerable = false;
-        Object.defineProperty(scopeObject, name, desc);
+        defProp(scopeObject, name, desc);
       });
-      return Object.freeze(scopeObject);
+      return freeze(scopeObject);
     }
 
 
@@ -452,9 +470,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
       function compiledCode(imports) {
         var scopeObject = makeScopeObject(imports, freeNames);
-        return wrapper.call(scopeObject).call(imports);
+        return callFn(callFn(wrapper, scopeObject), imports);
       };
-      Object.freeze(compiledCode.prototype);
+      freeze(compiledCode.prototype);
       return compiledCode;
     }
 
@@ -483,7 +501,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      */
     function compileExpr(exprSrc, opt_sourcePosition) {
       var result = internalCompileExpr(exprSrc, opt_sourcePosition);
-      return Object.freeze(result);
+      return freeze(result);
     }
 
 
@@ -500,24 +518,24 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      */
     function getRequirements(modSrc) {
       var result = [];
-      var stmts = modSrc.split(';');
+      var stmts = callFn(split, modSrc, ';');
       var stmt;
       var i = 0, ilen = stmts.length;
       for (; i < ilen; i++) {
-        stmt = stmts[i].trim();
+        stmt = callFn(trim, stmts[i]);
         if (stmt !== '') {
-          if (!directivePattern.test(stmt)) { break; }
+          if (!callFn(test, directivePattern, stmt)) { break; }
         }
       }
       for (; i < ilen; i++) {
-        stmt = stmts[i].trim();
+        stmt = callFn(trim, stmts[i]);
         if (stmt !== '') {
-          var m = requirePattern.exec(stmt);
+          var m = callFn(exec, requirePattern, stmt);
           if (!m) { break; }
-          result.push(m[1]);
+          callFn(push, result, m[1]);
         }
       }
-      return Object.freeze(result);
+      return freeze(result);
     }
 
     /**
@@ -547,10 +565,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      */
     function compileModule(modSrc, opt_sourcePosition) {
       var moduleMaker = internalCompileExpr(
-        '(function() {' + modSrc + '}).call(this)',
+        '(function() {' + modSrc + '}).call(this)', //TODO(erights): .call
         opt_sourcePosition);
       moduleMaker.requirements = getRequirements(modSrc);
-      return Object.freeze(moduleMaker);
+      return freeze(moduleMaker);
     }
 
     /**
@@ -562,10 +580,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * itself to be.
      */
     function FakeFunction(var_args) {
-      var params = [].slice.call(arguments, 0);
-      var body = params.pop();
+      var params = sliceFn(arguments, 0);
+      var body = callFn(pop, params);
       body = String(body || '');
-      params = params.join(',');
+      params = callFn(join, params, ',');
       var exprSrc = '(function(' + params + '\n){' + body + '})';
       return compileExpr(exprSrc)(sharedImports);
     }
@@ -603,7 +621,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       try {
         verifyStrictExpression(src);
       } catch (x) {
-        src = '(function() {' + src + '\n}).call(this)';
+        src = '(function() {' + src + '\n}).call(this)'; //TODO(erights): .call
       }
       return compileExpr(src)(sharedImports);
     }
@@ -626,22 +644,22 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           return;
         }
         defending.set(val, true);
-        defendingList.push(val);
-        Object.freeze(val);
-        recur(Object.getPrototypeOf(val));
-        Object.getOwnPropertyNames(val).forEach(function(p) {
+        callFn(push, defendingList, val);
+        freeze(val);
+        recur(getPrototypeOf(val));
+        forEachFn(gopn(val), function(p) {
           if (typeof val === 'function' &&
               (p === 'caller' || p === 'arguments')) {
             return;
           }
-          var desc = Object.getOwnPropertyDescriptor(val, p);
+          var desc = gopd(val, p);
           recur(desc.value);
           recur(desc.get);
           recur(desc.set);
         });
       }
       recur(node);
-      defendingList.forEach(function(obj) {
+      forEachFn(defendingList, function(obj) {
         defended.set(obj, true);
       });
       return node;
@@ -670,9 +688,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       copyToImports: copyToImports
     };
     var extensionsRecord = extensions();
-    Object.getOwnPropertyNames(extensionsRecord).forEach(function (p) {
-      Object.defineProperty(cajaVM, p,
-          Object.getOwnPropertyDescriptor(extensionsRecord, p));
+    forEachFn(gopn(extensionsRecord), function (p) {
+      defProp(cajaVM, p,
+          gopd(extensionsRecord, p));
     });
     // Move this down here so it is not available during the call to
     // extensions.
@@ -691,7 +709,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       severity: severity,
       list: []
     });
-    group.list.push(path);
+    callFn(push, group.list, path);
   }
 
   /**
@@ -709,7 +727,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * original property.
    */
   function read(base, name) {
-    var desc = Object.getOwnPropertyDescriptor(base, name);
+    var desc = gopd(base, name);
     if (!desc) { return undefined; }
     if ('value' in desc && !desc.writable && !desc.configurable) {
       return desc.value;
@@ -717,7 +735,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
     var result = base[name];
     try {
-      Object.defineProperty(base, name, {
+      defProp(base, name, {
         value: result, writable: false, configurable: false
       });
     } catch (ex) {
@@ -738,13 +756,13 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * these non-enumerable since ES5.1 specifies that all these
    * properties are non-enumerable on the global object.
    */
-  Object.keys(whitelist).forEach(function(name) {
-    var desc = Object.getOwnPropertyDescriptor(global, name);
+  forEachFn(keys(whitelist), function(name) {
+    var desc = gopd(global, name);
     if (desc) {
       var permit = whitelist[name];
       if (permit) {
         var value = read(global, name);
-        Object.defineProperty(sharedImports, name, {
+        defProp(sharedImports, name, {
           value: value,
           writable: true,
           enumerable: false,
@@ -754,7 +772,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
   });
   if (TAME_GLOBAL_EVAL) {
-    Object.defineProperty(sharedImports, 'eval', {
+    defProp(sharedImports, 'eval', {
       value: cajaVM.eval,
       writable: true,
       enumerable: false,
@@ -786,7 +804,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       fail('primordial reachable through multiple paths');
     }
     whiteTable.set(value, permit);
-    Object.keys(permit).forEach(function(name) {
+    forEachFn(keys(permit), function(name) {
       if (permit[name] !== 'skip') {
         var sub = read(value, name);
         register(sub, permit[name]);
@@ -806,13 +824,13 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   function getPermit(base, name) {
     var permit = whiteTable.get(base);
     if (permit) {
-      if (hop.call(permit, name)) { return permit[name]; }
+      if (hopFn(permit, name)) { return permit[name]; }
     }
     while (true) {
-      base = Object.getPrototypeOf(base);
+      base = getPrototypeOf(base);
       if (base === null) { return false; }
       permit = whiteTable.get(base);
-      if (permit && hop.call(permit, name)) {
+      if (permit && hopFn(permit, name)) {
         var result = permit[name];
         if (result === '*' || result === 'skip') {
           return result;
@@ -862,7 +880,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     try {
       deleted = delete base[name];
     } catch (er) { err = er; }
-    var exists = hop.call(base, name);
+    var exists = hopFn(base, name);
     if (deleted) {
       if (!exists) {
         reportProperty(ses.severities.SAFE,
@@ -886,7 +904,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
 
     try {
-      Object.defineProperty(base, name, {
+      defProp(base, name, {
         get: poison,
         set: poison,
         enumerable: false,
@@ -896,8 +914,8 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       try {
         // Perhaps it's writable non-configurable, it which case we
         // should still be able to freeze it in a harmless state.
-        var value = Object.getOwnPropertyDescriptor(base, name).value;
-        Object.defineProperty(base, name, {
+        var value = gopd(base, name).value;
+        defProp(base, name, {
           value: value === null ? null : void 0,
           writable: false,
           configurable: false
@@ -908,7 +926,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         return false;
       }
     }
-    var desc2 = Object.getOwnPropertyDescriptor(base, name);
+    var desc2 = gopd(base, name);
     if (desc2.get === poison &&
         desc2.set === poison &&
         !desc2.configurable) {
@@ -941,7 +959,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     if (value !== Object(value)) { return; }
     if (cleaning.get(value)) { return; }
     cleaning.set(value, true);
-    Object.getOwnPropertyNames(value).forEach(function(name) {
+    forEachFn(gopn(value), function(name) {
       var path = prefix + (prefix ? '.' : '') + name;
       var p = getPermit(value, name);
       if (p) {
@@ -956,12 +974,12 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         cleanProperty(value, name, path);
       }
     });
-    Object.freeze(value);
+    freeze(value);
   }
   clean(sharedImports, '');
 
 
-  Object.keys(propertyReports).sort().forEach(function(status) {
+  forEachFn(keys(propertyReports).sort(), function(status) {
     var group = propertyReports[status];
     ses.logger.reportDiagnosis(group.severity, status, group.list);
   });

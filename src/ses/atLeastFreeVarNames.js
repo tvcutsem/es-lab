@@ -46,7 +46,9 @@ var ses;
 (function() {
   "use strict";
 
-   if (!ses) { ses = {}; }
+  var callFn = ses.callFn;
+  var test = RegExp.prototype.test;
+  var exec = RegExp.prototype.exec;
 
   /////////////// KLUDGE SWITCHES ///////////////
 
@@ -58,10 +60,10 @@ var ses;
    * <p>This is only a temporary development hack. TODO(erights): fix.
    */
   function LIMIT_SRC(programSrc) {
-    if ((/[^\u0000-\u007f]/).test(programSrc)) {
+    if (callFn(test, (/[^\u0000-\u007f]/), programSrc)) {
       throw new EvalError('Non-ascii text not yet supported');
     }
-    if ((/\\u/).test(programSrc)) {
+    if (callFn(test, (/\\u/), programSrc)) {
       throw new EvalError('Backslash-u escape encoded text not yet supported');
     }
   }
@@ -93,7 +95,7 @@ var ses;
     // should say "... = Object.create(null);" rather than "... = {};"
     var result = {};
     var a;
-    while ((a = regexp.exec(programSrc))) {
+    while ((a = callFn(exec, regexp, programSrc))) {
       // Note that we could have avoided the while loop by doing
       // programSrc.match(regexp), except that then we'd need
       // temporary storage proportional to the total number of
