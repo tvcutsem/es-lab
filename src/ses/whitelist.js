@@ -118,7 +118,7 @@ var ses;
       compileProgram: t,             // Cannot be implemented in just ES5.1.
       eval: t,
       Function: t,
-      
+
       sharedImports: t,
       makeImports: t,
       copyToImports: t,
@@ -154,6 +154,11 @@ var ses;
     escape: t,                       // ES5 Appendix B
     unescape: t,                     // ES5 Appendix B
     Object: {
+      // As any new methods are added here that may reveal the
+      // HIDDEN_NAME within WeakMap.js, such as the proposed
+      // getOwnPropertyDescriptors or getPropertyDescriptors, extend
+      // WeakMap.js to monkey patch these to avoid revealing
+      // HIDDEN_NAME.
       getPropertyDescriptor: t,      // ES-Harmony proposal
       getPropertyNames: t,           // ES-Harmony proposal
       is: t,                         // ES-Harmony proposal

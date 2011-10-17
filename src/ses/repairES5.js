@@ -30,7 +30,7 @@
  * @author Mark S. Miller
  * @requires ___global_test_function___, ___global_valueOf_function___
  * @requires JSON, navigator, this, eval, document
- * @overrides ses, RegExp, WeakMap, Object, parseInt
+ * @overrides ses, RegExp, WeakMap, Object, parseInt, Function
  */
 var RegExp;
 var ses;
@@ -269,6 +269,8 @@ var ses;
    */
   var builtInMapMethod = Array.prototype.map;
 
+  var builtInForEach = Array.prototype.forEach;
+
   /**
    * By the time this module exits, either this is repaired to be a
    * function that is adequate to make the "caller" property of a
@@ -427,6 +429,21 @@ var ses;
 
 
   /**
+   * Detects http://code.google.com/p/v8/issues/detail?id=1530
+   *
+   * <p>Detects whether the value of a function's "prototype" property
+   * as seen by normal object operations might deviate from the value
+   * as seem by the reflective {@code Object.getOwnPropertyDescriptor}
+   */
+  function test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
+    function foo() {}
+    Object.defineProperty(foo, 'prototype', { value: {} });
+    return foo.prototype !==
+      Object.getOwnPropertyDescriptor(foo, 'prototype').value;
+  }
+
+
+  /**
    * Detects https://bugs.webkit.org/show_bug.cgi?id=55537
    *
    * This bug is fixed on the latest Safari beta 5.0.5 (5533.21.1,
@@ -506,21 +523,6 @@ var ses;
     if (match === 'undefined') { return false; }
     if (match === 'xfoox') { return true; }
     return 'regExp.exec() does not match against "undefined".';
-  }
-
-
-  /**
-   * Detects http://code.google.com/p/v8/issues/detail?id=1530
-   *
-   * <p>Detects whether the value of a function's "prototype" property
-   * as seen by normal object operations might deviate from the value
-   * as seem by the reflective {@code Object.getOwnPropertyDescriptor}
-   */
-  function test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
-    function foo() {}
-    Object.defineProperty(foo, 'prototype', { value: {} });
-    return foo.prototype !==
-      Object.getOwnPropertyDescriptor(foo, 'prototype').value;
   }
 
 
@@ -670,12 +672,22 @@ var ses;
    * Function.prototype.apply}, as inherited by original, obeying its
    * contract.
    *
-   * <p>This kludge is safety preserving.
+   * <p>This kludge is safety preserving but non-transparent, in that
+   * the real forEach is frozen even in the success case, since we
+   * have to freeze it in order to test for this failure. See the
+   * extra call to repair_NEED_TO_WRAP_FOREACH near the end of this
+   * file.
    */
   function test_NEED_TO_WRAP_FOREACH() {
     if (!('freeze' in Object)) {
       // Object.freeze is still absent on released Android and would
       // cause a bogus bug detection in the following try/catch code.
+      return false;
+    }
+    if (Array.prototype.forEach !== builtInForEach) {
+      // If it is already wrapped, we are confident the problem does
+      // not occur, and we need to skip the test to avoid freezing the
+      // wrapper.
       return false;
     }
     try {
@@ -1137,6 +1149,50 @@ var ses;
   }
 
   /**
+   * Tests for https://bugs.webkit.org/show_bug.cgi?id=70207
+   *
+   * <p>After deleting a built-in, the problem is that
+   * getOwnPropertyNames still lists the name as present, but it seems
+   * absent in all other ways.
+   */
+  function test_DELETED_BUILTINS_IN_OWN_NAMES() {
+    if (!('__defineSetter__' in Object.prototype)) { return false; }
+    var desc = Object.getOwnPropertyDescriptor(Object.prototype,
+                                               '__defineSetter__');
+    try {
+      try {
+        delete Object.prototype.__defineSetter__;
+      } catch (err1) {
+        return false;
+      }
+      var names = Object.getOwnPropertyNames(Object.prototype);
+      if (names.indexOf('__defineSetter__') === -1) { return false; }
+      if ('__defineSetter__' in Object.prototype) {
+        // If it's still there, it bounced back. Which is still a
+        // problem, but not the problem we're testing for here.
+        return false;
+      }
+      return true;
+    } finally {
+      Object.defineProperty(Object.prototype, '__defineSetter__', desc);
+    }
+  }
+
+  /**
+   * Tests for http://code.google.com/p/v8/issues/detail?id=1769
+   */
+  function test_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS() {
+    try {
+      Object.getOwnPropertyDescriptor(Object.getOwnPropertyDescriptor,
+                                      'caller');
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return 'getOwnPropertyDescriptor threw: ' + err;
+    }
+    return false;
+  }
+
+  /**
    * Detects http://code.google.com/p/v8/issues/detail?id=621
    *
    */
@@ -1209,7 +1265,6 @@ var ses;
     return false;
   }
 
-
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1645
    */
@@ -1233,9 +1288,17 @@ var ses;
   var builtInSliceMethod = Array.prototype.slice;
 
   builtInApplyMethod.reallyCall = builtInCallMethod;
-  Function.prototype.apply = function(thisArg, argArray) {
+  function applyWrapper(thisArg, argArray) {
     return builtInApplyMethod.reallyCall(this, thisArg, argArray);
-  };
+  }
+  if (Object.defineProperty) {
+    Object.defineProperty(Function.prototype, 'apply', {
+      value: applyWrapper
+    });
+  } else {
+    // So it still works well enough on ES3
+    Function.prototype.apply = applyWrapper;
+  }
 
   function applyFn(func, thisArg, argArray) {
     return builtInApplyMethod.reallyCall(func, thisArg, argArray);
@@ -1262,74 +1325,10 @@ var ses;
   var spliceFn = ses.spliceFn = method2Function(Array.prototype.splice);
   var concatFn = ses.concatFn = method2Function(Array.prototype.concat);
   var indexOfFn = ses.indexOfFn = method2Function(Array.prototype.indexOf);
+  var filterFn = ses.filterFn = method2Function(Array.prototype.filter);
 
   var getPrototypeOf = Object.getPrototypeOf;
 
-
-  function repair_MISSING_CALLEE_DESCRIPTOR() {
-    var realGOPN = Object.getOwnPropertyNames;
-    Object.getOwnPropertyNames = function calleeFix(base) {
-      var result = realGOPN(base);
-      if (typeof base === 'function') {
-        var i = indexOfFn(result, 'callee');
-        if (i >= 0 && !hopFn(base, 'callee')) {
-          spliceFn(result, i, 1);
-        }
-      }
-      return result;
-    };
-  }
-
-  function repair_REGEXP_CANT_BE_NEUTERED() {
-    var UnsafeRegExp = RegExp;
-    var FakeRegExp = function(pattern, flags) {
-      switch (arguments.length) {
-        case 0: {
-          return UnsafeRegExp();
-        }
-        case 1: {
-          return UnsafeRegExp(pattern);
-        }
-        default: {
-          return UnsafeRegExp(pattern, flags);
-        }
-      }
-    };
-    FakeRegExp.prototype = UnsafeRegExp.prototype;
-    FakeRegExp.prototype.constructor = FakeRegExp;
-    RegExp = FakeRegExp;
-  }
-
-  function repair_REGEXP_TEST_EXEC_UNSAFE() {
-    var unsafeRegExpExec = RegExp.prototype.exec;
-    var unsafeRegExpTest = RegExp.prototype.test;
-
-    RegExp.prototype.exec = function fakeExec(specimen) {
-      return callFn(unsafeRegExpExec, this, String(specimen));
-    };
-    RegExp.prototype.test = function fakeTest(specimen) {
-      return callFn(unsafeRegExpTest, this, String(specimen));
-    };
-  }
-
-  function repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
-    var unsafeDefProp = Object.defineProperty;
-    function repairedDefineProperty(base, name, desc) {
-      if (typeof base === 'function' &&
-          name === 'prototype' &&
-          'value' in desc) {
-        try {
-          base.prototype = desc.value;
-        } catch (x) {
-          logger.warn('prototype fixup failed');
-        }
-      }
-      return unsafeDefProp(base, name, desc);
-    }
-    Object.defineProperty(Object, 'defineProperty', {
-      value: repairedDefineProperty
-    });
-  }
 
   function patchMissingProp(base, name, missingFunc) {
     if (!(name in base)) {
@@ -1355,6 +1354,81 @@ var ses;
                      function fakeIsSealed(obj) { return false; });
     patchMissingProp(Object, 'isExtensible',
                      function fakeIsExtensible(obj) { return true; });
+  }
+
+  function repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
+    var unsafeDefProp = Object.defineProperty;
+    function repairedDefineProperty(base, name, desc) {
+      if (typeof base === 'function' &&
+          name === 'prototype' &&
+          'value' in desc) {
+        try {
+          base.prototype = desc.value;
+        } catch (x) {
+          logger.warn('prototype fixup failed');
+        }
+      }
+      return unsafeDefProp(base, name, desc);
+    }
+    Object.defineProperty(Object, 'defineProperty', {
+      value: repairedDefineProperty
+    });
+  }
+
+  function repair_MISSING_CALLEE_DESCRIPTOR() {
+    var realGOPN = Object.getOwnPropertyNames;
+    Object.defineProperty(Object, 'getOwnPropertyNames', {
+      value: function calleeFix(base) {
+        var result = realGOPN(base);
+        if (typeof base === 'function') {
+          var i = indexOfFn(result, 'callee');
+          if (i >= 0 && !hopFn(base, 'callee')) {
+            spliceFn(result, i, 1);
+          }
+        }
+        return result;
+      }
+    });
+  }
+
+  function repair_REGEXP_CANT_BE_NEUTERED() {
+    var UnsafeRegExp = RegExp;
+    var FakeRegExp = function(pattern, flags) {
+      switch (arguments.length) {
+        case 0: {
+          return UnsafeRegExp();
+        }
+        case 1: {
+          return UnsafeRegExp(pattern);
+        }
+        default: {
+          return UnsafeRegExp(pattern, flags);
+        }
+      }
+    };
+    Object.defineProperty(FakeRegExp, 'prototype', {
+      value: UnsafeRegExp.prototype
+    });
+    Object.defineProperty(FakeRegExp.prototype, 'constructor', {
+      value: FakeRegExp
+    });
+    RegExp = FakeRegExp;
+  }
+
+  function repair_REGEXP_TEST_EXEC_UNSAFE() {
+    var unsafeRegExpExec = RegExp.prototype.exec;
+    var unsafeRegExpTest = RegExp.prototype.test;
+
+    Object.defineProperty(RegExp.prototype, 'exec', {
+      value: function fakeExec(specimen) {
+        return callFn(unsafeRegExpExec, this, String(specimen));
+      }
+    });
+    Object.defineProperty(RegExp.prototype, 'test', {
+      value: function fakeTest(specimen) {
+        return callFn(unsafeRegExpTest, this, String(specimen));
+      }
+    });
   }
 
   /**
@@ -1519,31 +1593,11 @@ var ses;
 
       defProp(Object, 'defineProperty', {
         value: function(base, name, desc) {
-          function dummySetter(newValue) {
-            if (name === 'ident___') {
-              // The setter for ident___ seems to be called during
-              // the built-in freeze, which indicates an
-              // undiagnosed bug. By the logic of initSES, it should
-              // be impossible to call the ident___ setter.
-              // TODO(erights): isolate and report this.
-              if (!complained) {
-                logger.warn('Undiagnosed call to setter for ident___');
-                complained = true;
-              }
-              //
-              // If the following debugger line is uncommented, then
-              // under the Chrome debugger, this crashes the page.
-              // TODO(erights): isolate and report this.
-              //
-              //debugger;
-            } else {
-              throw new TypeError('Cannot set ".' + name + '"');
-            }
-          }
+          function dummySetter(newValue) {}
 
-          if (toStringFn(base) === '[object HTMLFormElement]' &&
-              typeof desc.get === 'function' &&
+          if (typeof desc.get === 'function' &&
               desc.set === undefined &&
+              toStringFn(base) === '[object HTMLFormElement]' &&
               gopd(base, name) === void 0) {
             // This repair was triggering bug
             // http://code.google.com/p/chromium/issues/detail?id=94666
@@ -1650,7 +1704,7 @@ var ses;
       });
 
       function ensureSealable(base) {
-        call(forEach, gopn(base), function(name) {
+        callFn(forEach, gopn(base), function(name) {
           var desc = gopd(base, name);
           if ('get' in desc && desc.enumerable) {
             if (!desc.configurable) {
@@ -1693,7 +1747,7 @@ var ses;
 
       defProp(Object, 'getOwnPropertyNames', {
         value: function getOwnPropertyNamesWrapper(base) {
-          return call(filter, gopn(base), function(name) {
+          return callFn(filter, gopn(base), function(name) {
             return !isBadAccessor(base, name);
           });
         }
@@ -1766,9 +1820,11 @@ var ses;
   }
 
   function repair_CANT_HASOWNPROPERTY_CALLER() {
-    Object.prototype.hasOwnProperty = function(name) {
-      return !!Object.getOwnPropertyDescriptor(this, name);
-    };
+    Object.defineProperty(Object.prototype, 'hasOwnProperty', {
+      value: function(name) {
+        return !!Object.getOwnPropertyDescriptor(this, name);
+      }
+    });
   }
 
   function makeHarmless(magicName, func, path) {
@@ -1833,6 +1889,29 @@ var ses;
     //logger.info(ses.makeArgumentsHarmless(builtInMapMethod));
   }
 
+  function repair_DELETED_BUILTINS_IN_OWN_NAMES() {
+    var realGOPN = Object.getOwnPropertyNames;
+    var repairedHop = Object.prototype.hasOwnProperty;
+    function getOnlyRealOwnPropertyNames(base) {
+      return filterFn(realGOPN(base), function(name) {
+        return callFn(repairedHop, base, name);
+      });
+    }
+    Object.defineProperty(Object, 'getOwnPropertyNames', {
+      value: getOnlyRealOwnPropertyNames
+    });
+  }
+
+  function repair_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS() {
+    var realGOPD = Object.getOwnPropertyDescriptor;
+    function GOPDWrapper(base, name) {
+      return realGOPD(base, name);
+    }
+    Object.defineProperty(Object, 'getOwnPropertyDescriptor', {
+      value: GOPDWrapper
+    });
+  }
+
   function repair_JSON_PARSE_PROTO_CONFUSION() {
     var unsafeParse = JSON.parse;
     var keys = Object.keys;
@@ -1854,7 +1933,7 @@ var ses;
           'Parse resulted in invalid JSON. ' +
             'See http://code.google.com/p/v8/issues/detail?id=621');
       }
-      call(forEach, keys(plainJSON), function(key) {
+      callFn(forEach, keys(plainJSON), function(key) {
         validate(plainJSON[key]);
       });
     }
@@ -2005,6 +2084,17 @@ var ses;
       tests: ['15.2.3.9-0-1']
     },
     {
+      description: 'A function.prototype\'s descriptor lies',
+      test: test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
+      repair: repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1530',
+             'http://code.google.com/p/v8/issues/detail?id=1570'],
+      sections: ['15.2.3.3', '15.2.3.6', '15.3.5.2'],
+      tests: ['S15.3.3.1_A4']
+    },
+    {
       description: 'Phantom callee on strict functions',
       test: test_MISSING_CALLEE_DESCRIPTOR,
       repair: repair_MISSING_CALLEE_DESCRIPTOR,
@@ -2054,17 +2144,6 @@ var ses;
              'http://code.google.com/p/google-caja/issues/detail?id=528'],
       sections: ['15.10.6.2'],
       tests: ['S15.10.6.2_A12']
-    },
-    {
-      description: 'A function.prototype\'s descriptor lies',
-      test: test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
-      repair: repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls: ['http://code.google.com/p/v8/issues/detail?id=1530',
-             'http://code.google.com/p/v8/issues/detail?id=1570'],
-      sections: ['15.2.3.3', '15.2.3.6', '15.3.5.2'],
-      tests: ['S15.3.3.1_A4']
     },
     {
       description: 'Function.prototype.bind is missing',
@@ -2295,6 +2374,26 @@ var ses;
       tests: ['S13.2.3_A1', 'S15.3.4.5_A2']
     },
     {
+      description: 'Deleting built-in leaves phantom behind',
+      test: test_DELETED_BUILTINS_IN_OWN_NAMES,
+      repair: repair_DELETED_BUILTINS_IN_OWN_NAMES,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=70207'],
+      sections: ['15.2.3.4'],
+      tests: []
+    },
+    {
+      description: 'getOwnPropertyDescriptor on its own "caller" fails',
+      test: test_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS,
+      repair: repair_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1769'],
+      sections: ['13.2', '15.2.3.3'],
+      tests: []
+    },
+    {
       description: 'JSON.parse confused by "__proto__"',
       test: test_JSON_PARSE_PROTO_CONFUSION,
       repair: repair_JSON_PARSE_PROTO_CONFUSION,
@@ -2366,6 +2465,13 @@ var ses;
     var afterFailures = strictMapFn(kludges, function(kludge) {
       return kludge.test();
     });
+
+    if (Object.isFrozen && Object.isFrozen(Array.prototype.forEach)) {
+      // Need to do it anyway, to repair the sacrificial freezing we
+      // needed to do to test. Once we can permanently retire this
+      // test, we can also retire the redundant repair.
+      repair_NEED_TO_WRAP_FOREACH();
+    }
 
     return strictMapFn(kludges, function(kludge, i) {
       var status = statuses.ALL_FINE;

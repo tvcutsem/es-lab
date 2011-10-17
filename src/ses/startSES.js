@@ -653,6 +653,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
             return;
           }
           var desc = gopd(val, p);
+          if (!desc) {
+            debugger;
+          }
           recur(desc.value);
           recur(desc.get);
           recur(desc.set);

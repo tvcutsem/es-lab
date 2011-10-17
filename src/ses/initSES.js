@@ -262,7 +262,7 @@ if (!ses) { ses = {}; }
  * @author Mark S. Miller
  * @requires ___global_test_function___, ___global_valueOf_function___
  * @requires JSON, navigator, this, eval, document
- * @overrides ses, RegExp, WeakMap, Object, parseInt
+ * @overrides ses, RegExp, WeakMap, Object, parseInt, Function
  */
 var RegExp;
 var ses;
@@ -501,6 +501,8 @@ var ses;
    */
   var builtInMapMethod = Array.prototype.map;
 
+  var builtInForEach = Array.prototype.forEach;
+
   /**
    * By the time this module exits, either this is repaired to be a
    * function that is adequate to make the "caller" property of a
@@ -659,6 +661,21 @@ var ses;
 
 
   /**
+   * Detects http://code.google.com/p/v8/issues/detail?id=1530
+   *
+   * <p>Detects whether the value of a function's "prototype" property
+   * as seen by normal object operations might deviate from the value
+   * as seem by the reflective {@code Object.getOwnPropertyDescriptor}
+   */
+  function test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
+    function foo() {}
+    Object.defineProperty(foo, 'prototype', { value: {} });
+    return foo.prototype !==
+      Object.getOwnPropertyDescriptor(foo, 'prototype').value;
+  }
+
+
+  /**
    * Detects https://bugs.webkit.org/show_bug.cgi?id=55537
    *
    * This bug is fixed on the latest Safari beta 5.0.5 (5533.21.1,
@@ -738,21 +755,6 @@ var ses;
     if (match === 'undefined') { return false; }
     if (match === 'xfoox') { return true; }
     return 'regExp.exec() does not match against "undefined".';
-  }
-
-
-  /**
-   * Detects http://code.google.com/p/v8/issues/detail?id=1530
-   *
-   * <p>Detects whether the value of a function's "prototype" property
-   * as seen by normal object operations might deviate from the value
-   * as seem by the reflective {@code Object.getOwnPropertyDescriptor}
-   */
-  function test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
-    function foo() {}
-    Object.defineProperty(foo, 'prototype', { value: {} });
-    return foo.prototype !==
-      Object.getOwnPropertyDescriptor(foo, 'prototype').value;
   }
 
 
@@ -902,12 +904,22 @@ var ses;
    * Function.prototype.apply}, as inherited by original, obeying its
    * contract.
    *
-   * <p>This kludge is safety preserving.
+   * <p>This kludge is safety preserving but non-transparent, in that
+   * the real forEach is frozen even in the success case, since we
+   * have to freeze it in order to test for this failure. See the
+   * extra call to repair_NEED_TO_WRAP_FOREACH near the end of this
+   * file.
    */
   function test_NEED_TO_WRAP_FOREACH() {
     if (!('freeze' in Object)) {
       // Object.freeze is still absent on released Android and would
       // cause a bogus bug detection in the following try/catch code.
+      return false;
+    }
+    if (Array.prototype.forEach !== builtInForEach) {
+      // If it is already wrapped, we are confident the problem does
+      // not occur, and we need to skip the test to avoid freezing the
+      // wrapper.
       return false;
     }
     try {
@@ -1369,6 +1381,50 @@ var ses;
   }
 
   /**
+   * Tests for https://bugs.webkit.org/show_bug.cgi?id=70207
+   *
+   * <p>After deleting a built-in, the problem is that
+   * getOwnPropertyNames still lists the name as present, but it seems
+   * absent in all other ways.
+   */
+  function test_DELETED_BUILTINS_IN_OWN_NAMES() {
+    if (!('__defineSetter__' in Object.prototype)) { return false; }
+    var desc = Object.getOwnPropertyDescriptor(Object.prototype,
+                                               '__defineSetter__');
+    try {
+      try {
+        delete Object.prototype.__defineSetter__;
+      } catch (err1) {
+        return false;
+      }
+      var names = Object.getOwnPropertyNames(Object.prototype);
+      if (names.indexOf('__defineSetter__') === -1) { return false; }
+      if ('__defineSetter__' in Object.prototype) {
+        // If it's still there, it bounced back. Which is still a
+        // problem, but not the problem we're testing for here.
+        return false;
+      }
+      return true;
+    } finally {
+      Object.defineProperty(Object.prototype, '__defineSetter__', desc);
+    }
+  }
+
+  /**
+   * Tests for http://code.google.com/p/v8/issues/detail?id=1769
+   */
+  function test_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS() {
+    try {
+      Object.getOwnPropertyDescriptor(Object.getOwnPropertyDescriptor,
+                                      'caller');
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return 'getOwnPropertyDescriptor threw: ' + err;
+    }
+    return false;
+  }
+
+  /**
    * Detects http://code.google.com/p/v8/issues/detail?id=621
    *
    */
@@ -1441,7 +1497,6 @@ var ses;
     return false;
   }
 
-
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1645
    */
@@ -1465,9 +1520,17 @@ var ses;
   var builtInSliceMethod = Array.prototype.slice;
 
   builtInApplyMethod.reallyCall = builtInCallMethod;
-  Function.prototype.apply = function(thisArg, argArray) {
+  function applyWrapper(thisArg, argArray) {
     return builtInApplyMethod.reallyCall(this, thisArg, argArray);
-  };
+  }
+  if (Object.defineProperty) {
+    Object.defineProperty(Function.prototype, 'apply', {
+      value: applyWrapper
+    });
+  } else {
+    // So it still works well enough on ES3
+    Function.prototype.apply = applyWrapper;
+  }
 
   function applyFn(func, thisArg, argArray) {
     return builtInApplyMethod.reallyCall(func, thisArg, argArray);
@@ -1494,74 +1557,10 @@ var ses;
   var spliceFn = ses.spliceFn = method2Function(Array.prototype.splice);
   var concatFn = ses.concatFn = method2Function(Array.prototype.concat);
   var indexOfFn = ses.indexOfFn = method2Function(Array.prototype.indexOf);
+  var filterFn = ses.filterFn = method2Function(Array.prototype.filter);
 
   var getPrototypeOf = Object.getPrototypeOf;
 
-
-  function repair_MISSING_CALLEE_DESCRIPTOR() {
-    var realGOPN = Object.getOwnPropertyNames;
-    Object.getOwnPropertyNames = function calleeFix(base) {
-      var result = realGOPN(base);
-      if (typeof base === 'function') {
-        var i = indexOfFn(result, 'callee');
-        if (i >= 0 && !hopFn(base, 'callee')) {
-          spliceFn(result, i, 1);
-        }
-      }
-      return result;
-    };
-  }
-
-  function repair_REGEXP_CANT_BE_NEUTERED() {
-    var UnsafeRegExp = RegExp;
-    var FakeRegExp = function(pattern, flags) {
-      switch (arguments.length) {
-        case 0: {
-          return UnsafeRegExp();
-        }
-        case 1: {
-          return UnsafeRegExp(pattern);
-        }
-        default: {
-          return UnsafeRegExp(pattern, flags);
-        }
-      }
-    };
-    FakeRegExp.prototype = UnsafeRegExp.prototype;
-    FakeRegExp.prototype.constructor = FakeRegExp;
-    RegExp = FakeRegExp;
-  }
-
-  function repair_REGEXP_TEST_EXEC_UNSAFE() {
-    var unsafeRegExpExec = RegExp.prototype.exec;
-    var unsafeRegExpTest = RegExp.prototype.test;
-
-    RegExp.prototype.exec = function fakeExec(specimen) {
-      return callFn(unsafeRegExpExec, this, String(specimen));
-    };
-    RegExp.prototype.test = function fakeTest(specimen) {
-      return callFn(unsafeRegExpTest, this, String(specimen));
-    };
-  }
-
-  function repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
-    var unsafeDefProp = Object.defineProperty;
-    function repairedDefineProperty(base, name, desc) {
-      if (typeof base === 'function' &&
-          name === 'prototype' &&
-          'value' in desc) {
-        try {
-          base.prototype = desc.value;
-        } catch (x) {
-          logger.warn('prototype fixup failed');
-        }
-      }
-      return unsafeDefProp(base, name, desc);
-    }
-    Object.defineProperty(Object, 'defineProperty', {
-      value: repairedDefineProperty
-    });
-  }
 
   function patchMissingProp(base, name, missingFunc) {
     if (!(name in base)) {
@@ -1587,6 +1586,81 @@ var ses;
                      function fakeIsSealed(obj) { return false; });
     patchMissingProp(Object, 'isExtensible',
                      function fakeIsExtensible(obj) { return true; });
+  }
+
+  function repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
+    var unsafeDefProp = Object.defineProperty;
+    function repairedDefineProperty(base, name, desc) {
+      if (typeof base === 'function' &&
+          name === 'prototype' &&
+          'value' in desc) {
+        try {
+          base.prototype = desc.value;
+        } catch (x) {
+          logger.warn('prototype fixup failed');
+        }
+      }
+      return unsafeDefProp(base, name, desc);
+    }
+    Object.defineProperty(Object, 'defineProperty', {
+      value: repairedDefineProperty
+    });
+  }
+
+  function repair_MISSING_CALLEE_DESCRIPTOR() {
+    var realGOPN = Object.getOwnPropertyNames;
+    Object.defineProperty(Object, 'getOwnPropertyNames', {
+      value: function calleeFix(base) {
+        var result = realGOPN(base);
+        if (typeof base === 'function') {
+          var i = indexOfFn(result, 'callee');
+          if (i >= 0 && !hopFn(base, 'callee')) {
+            spliceFn(result, i, 1);
+          }
+        }
+        return result;
+      }
+    });
+  }
+
+  function repair_REGEXP_CANT_BE_NEUTERED() {
+    var UnsafeRegExp = RegExp;
+    var FakeRegExp = function(pattern, flags) {
+      switch (arguments.length) {
+        case 0: {
+          return UnsafeRegExp();
+        }
+        case 1: {
+          return UnsafeRegExp(pattern);
+        }
+        default: {
+          return UnsafeRegExp(pattern, flags);
+        }
+      }
+    };
+    Object.defineProperty(FakeRegExp, 'prototype', {
+      value: UnsafeRegExp.prototype
+    });
+    Object.defineProperty(FakeRegExp.prototype, 'constructor', {
+      value: FakeRegExp
+    });
+    RegExp = FakeRegExp;
+  }
+
+  function repair_REGEXP_TEST_EXEC_UNSAFE() {
+    var unsafeRegExpExec = RegExp.prototype.exec;
+    var unsafeRegExpTest = RegExp.prototype.test;
+
+    Object.defineProperty(RegExp.prototype, 'exec', {
+      value: function fakeExec(specimen) {
+        return callFn(unsafeRegExpExec, this, String(specimen));
+      }
+    });
+    Object.defineProperty(RegExp.prototype, 'test', {
+      value: function fakeTest(specimen) {
+        return callFn(unsafeRegExpTest, this, String(specimen));
+      }
+    });
   }
 
   /**
@@ -1751,31 +1825,11 @@ var ses;
 
       defProp(Object, 'defineProperty', {
         value: function(base, name, desc) {
-          function dummySetter(newValue) {
-            if (name === 'ident___') {
-              // The setter for ident___ seems to be called during
-              // the built-in freeze, which indicates an
-              // undiagnosed bug. By the logic of initSES, it should
-              // be impossible to call the ident___ setter.
-              // TODO(erights): isolate and report this.
-              if (!complained) {
-                logger.warn('Undiagnosed call to setter for ident___');
-                complained = true;
-              }
-              //
-              // If the following debugger line is uncommented, then
-              // under the Chrome debugger, this crashes the page.
-              // TODO(erights): isolate and report this.
-              //
-              //debugger;
-            } else {
-              throw new TypeError('Cannot set ".' + name + '"');
-            }
-          }
+          function dummySetter(newValue) {}
 
-          if (toStringFn(base) === '[object HTMLFormElement]' &&
-              typeof desc.get === 'function' &&
+          if (typeof desc.get === 'function' &&
               desc.set === undefined &&
+              toStringFn(base) === '[object HTMLFormElement]' &&
               gopd(base, name) === void 0) {
             // This repair was triggering bug
             // http://code.google.com/p/chromium/issues/detail?id=94666
@@ -1882,7 +1936,7 @@ var ses;
       });
 
       function ensureSealable(base) {
-        call(forEach, gopn(base), function(name) {
+        callFn(forEach, gopn(base), function(name) {
           var desc = gopd(base, name);
           if ('get' in desc && desc.enumerable) {
             if (!desc.configurable) {
@@ -1925,7 +1979,7 @@ var ses;
 
       defProp(Object, 'getOwnPropertyNames', {
         value: function getOwnPropertyNamesWrapper(base) {
-          return call(filter, gopn(base), function(name) {
+          return callFn(filter, gopn(base), function(name) {
             return !isBadAccessor(base, name);
           });
         }
@@ -1998,9 +2052,11 @@ var ses;
   }
 
   function repair_CANT_HASOWNPROPERTY_CALLER() {
-    Object.prototype.hasOwnProperty = function(name) {
-      return !!Object.getOwnPropertyDescriptor(this, name);
-    };
+    Object.defineProperty(Object.prototype, 'hasOwnProperty', {
+      value: function(name) {
+        return !!Object.getOwnPropertyDescriptor(this, name);
+      }
+    });
   }
 
   function makeHarmless(magicName, func, path) {
@@ -2065,6 +2121,29 @@ var ses;
     //logger.info(ses.makeArgumentsHarmless(builtInMapMethod));
   }
 
+  function repair_DELETED_BUILTINS_IN_OWN_NAMES() {
+    var realGOPN = Object.getOwnPropertyNames;
+    var repairedHop = Object.prototype.hasOwnProperty;
+    function getOnlyRealOwnPropertyNames(base) {
+      return filterFn(realGOPN(base), function(name) {
+        return callFn(repairedHop, base, name);
+      });
+    }
+    Object.defineProperty(Object, 'getOwnPropertyNames', {
+      value: getOnlyRealOwnPropertyNames
+    });
+  }
+
+  function repair_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS() {
+    var realGOPD = Object.getOwnPropertyDescriptor;
+    function GOPDWrapper(base, name) {
+      return realGOPD(base, name);
+    }
+    Object.defineProperty(Object, 'getOwnPropertyDescriptor', {
+      value: GOPDWrapper
+    });
+  }
+
   function repair_JSON_PARSE_PROTO_CONFUSION() {
     var unsafeParse = JSON.parse;
     var keys = Object.keys;
@@ -2086,7 +2165,7 @@ var ses;
           'Parse resulted in invalid JSON. ' +
             'See http://code.google.com/p/v8/issues/detail?id=621');
       }
-      call(forEach, keys(plainJSON), function(key) {
+      callFn(forEach, keys(plainJSON), function(key) {
         validate(plainJSON[key]);
       });
     }
@@ -2237,6 +2316,17 @@ var ses;
       tests: ['15.2.3.9-0-1']
     },
     {
+      description: 'A function.prototype\'s descriptor lies',
+      test: test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
+      repair: repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1530',
+             'http://code.google.com/p/v8/issues/detail?id=1570'],
+      sections: ['15.2.3.3', '15.2.3.6', '15.3.5.2'],
+      tests: ['S15.3.3.1_A4']
+    },
+    {
       description: 'Phantom callee on strict functions',
       test: test_MISSING_CALLEE_DESCRIPTOR,
       repair: repair_MISSING_CALLEE_DESCRIPTOR,
@@ -2286,17 +2376,6 @@ var ses;
              'http://code.google.com/p/google-caja/issues/detail?id=528'],
       sections: ['15.10.6.2'],
       tests: ['S15.10.6.2_A12']
-    },
-    {
-      description: 'A function.prototype\'s descriptor lies',
-      test: test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
-      repair: repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls: ['http://code.google.com/p/v8/issues/detail?id=1530',
-             'http://code.google.com/p/v8/issues/detail?id=1570'],
-      sections: ['15.2.3.3', '15.2.3.6', '15.3.5.2'],
-      tests: ['S15.3.3.1_A4']
     },
     {
       description: 'Function.prototype.bind is missing',
@@ -2527,6 +2606,26 @@ var ses;
       tests: ['S13.2.3_A1', 'S15.3.4.5_A2']
     },
     {
+      description: 'Deleting built-in leaves phantom behind',
+      test: test_DELETED_BUILTINS_IN_OWN_NAMES,
+      repair: repair_DELETED_BUILTINS_IN_OWN_NAMES,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=70207'],
+      sections: ['15.2.3.4'],
+      tests: []
+    },
+    {
+      description: 'getOwnPropertyDescriptor on its own "caller" fails',
+      test: test_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS,
+      repair: repair_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1769'],
+      sections: ['13.2', '15.2.3.3'],
+      tests: []
+    },
+    {
       description: 'JSON.parse confused by "__proto__"',
       test: test_JSON_PARSE_PROTO_CONFUSION,
       repair: repair_JSON_PARSE_PROTO_CONFUSION,
@@ -2598,6 +2697,13 @@ var ses;
     var afterFailures = strictMapFn(kludges, function(kludge) {
       return kludge.test();
     });
+
+    if (Object.isFrozen && Object.isFrozen(Array.prototype.forEach)) {
+      // Need to do it anyway, to repair the sacrificial freezing we
+      // needed to do to test. Once we can permanently retire this
+      // test, we can also retire the redundant repair.
+      repair_NEED_TO_WRAP_FOREACH();
+    }
 
     return strictMapFn(kludges, function(kludge, i) {
       var status = statuses.ALL_FINE;
@@ -2711,15 +2817,18 @@ var ses;
  *
  * <p>As with true WeakMaps, in this emulation, a key does not
  * retain maps indexed by that key and (crucially) a map does not
- * retain the keys it indexes. A key by itself also does not retain
- * the values associated with that key.
+ * retain the keys it indexes. A map by itself also does not retain
+ * the values associated with that map.
  *
- * <p>However, the values placed in an emulated WeakMap are retained
- * so long as that map is retained and those associations are not
- * overridden. For example, when used to support membranes, all
+ * <p>However, the values associated with a key in some map are
+ * retained so long as that key is retained and those associations are
+ * not overridden. For example, when used to support membranes, all
  * values exported from a given membrane will live for the lifetime
- * of the membrane. But when the membrane is revoked, all objects
- * encapsulated within that membrane will still be collected. This
+ * they would have had in the absence of an interposed membrane. Even
+ * when the membrane is revoked, all objects that would have been
+ * reachable in the absence of revocation will still be reachable, as
+ * far as the GC can tell, but will no longer be relevant to ongoing
+ * computation. This (or its dual leak as documented up through r4693)
  * is the best we can do without VM support.
  *
  * <p>The API implemented here is approximately the API as implemented
@@ -2794,97 +2903,89 @@ var WeakMap;
     originalProps[name] = Object[name];
   });
 
-  var NO_IDENT = 'noident:0';
+  /**
+   * Security depends on HIDDEN_NAME being both <i>unguessable</i> and
+   * <i>undiscoverable</i> by untrusted code.
+   *
+   * <p>Given the known weaknesses of Math.random() on existing
+   * browsers, I don't know how to generate unguessability we can be
+   * confident of. TODO(erights): investigate practical
+   * unguessability.
+   *
+   * <p>It is the monkey patching logic in this file that is intended
+   * to ensure undiscoverability. The basic idea is that there are
+   * three fundamental means of discovering properties of an object:
+   * The for/in loop, Object.keys(), and Object.getOwnPropertyNames(),
+   * and some proposed ES6 extensions that appear on our
+   * whitelist. The first two only discover enumerable properties, and
+   * we only use HIDDEN_NAME to name a non-enumerable property, so the
+   * only remaining threat should be getOwnPropertyNames and and some
+   * proposed ES6 extensions that appear on our whitelist. We monkey
+   * patch them to remove HIDDEN_NAME from the list of properties they
+   * returns. TODO(erights): Do a code/security review with other
+   * cajadores to see if anyone can find a sneaky way to discover the
+   * HIDDEN_NAME anyway.
+   */
+  var HIDDEN_NAME = 'ident:' + Math.random() * Math.random() + '___';
 
   /**
-   * Gets a value which is either NO_IDENT or uniquely identifies the
-   * key object, for use in making maps keyed by this key object.
-   *
-   * <p>Two keys that are <a href=
-   * "http://wiki.ecmascript.org/doku.php?id=harmony:egal">egal</a>
-   * MUST have the same {@code identity}. Two keys that are not egal
-   * MUST either have different identities, or at least one of their
-   * identities MUST be {@code NO_IDENT}.
-   *
-   * An identity is either a string or a const function returning a
-   * mostly-unique string. The identity of an object is always either
-   * NO_IDENT or such a function. The egal-identity of the function
-   * itself is used to resolve collisions on the string returned by
-   * the function. If the key is not an object (i.e., a primitive,
-   * null, or undefined), then identity(key) throws a TypeError.
-   *
-   * <p>When a map stores a key's identity rather than the key itself,
-   * the map does not cause the key to be retained. See the emulated
-   * {@code WeakMap} below for the resulting gc properties.
-   *
-   * <p>To identify objects with reasonable efficiency on ES5 by
-   * itself (i.e., without any object-keyed collections), we need to
-   * add a reasonably hidden property to such key objects when we
-   * can. This raises three issues:
+   * <p>To treat objects as identity-keys with reasonable efficiency
+   * on ES5 by itself (i.e., without any object-keyed collections), we
+   * need to add a hidden property to such key objects when we
+   * can. This raises several issues:
    * <ul>
-   * <li>arranging to add this property to objects before we lose the
+   * <li>Arranging to add this property to objects before we lose the
    *     chance, and
-   * <li>reasonably hiding the existence of this new property from
+   * <li>Hiding the existence of this new property from
    *     most JavaScript code.
    * <li>Preventing <i>identity theft</i>, where one object is created
    *     falsely claiming to have the identity of another object.
+   * <li>Preventing <i>value theft</i>, where untrusted code with
+   *     access to a key object but not a weak map nevertheless
+   *     obtains access to the value associated with that key in that
+   *     weak map.
    * </ul>
    * We do so by
    * <ul>
+   * <li>Making the name of the hidden property unguessable, so "[]"
+   *     indexing, which we cannot intercept, cannot be used to access
+   *     a property without knowing the name.
    * <li>Making the hidden property non-enumerable, so we need not
    *     worry about for-in loops or {@code Object.keys},
-   * <li>Making the hidden property an accessor property,
-   *     where the hidden property's getter is the identity, and the
-   *     value the getter returns is the mostly unique string.
    * <li>monkey patching those reflective methods that would
    *     prevent extensions, to add this hidden property first,
    * <li>monkey patching those methods that would reveal this
-   *     hidden property, and
-   * <li>monkey patching those methods that would overwrite this
    *     hidden property.
    * </ul>
-   * Given our parser-less verification strategy, the remaining
-   * non-transparencies which are not easily fixed are
-   * <ul>
-   * <li>The {@code delete}, {@code in}, property access
-   *     ({@code []}, and {@code .}), and property assignment
-   *     operations each reveal the presence of the hidden
-   *     property. The property access operations also reveal the
-   *     randomness provided by {@code Math.random}. This is not
-   *     currently an issue but may become one if SES otherwise seeks
-   *     to hide {@code Math.random}.
-   * </ul>
-   * These are not easily fixed because they are primitive operations
-   * which cannot be monkey patched. However, because we're
-   * representing the precious identity by the identity of the
-   * property's getter rather than the value gotten, this identity
-   * itself cannot leak or be installed by the above non-transparent
-   * operations.
    */
-  function identity(key) {
-    var name;
-    function identGetter() { return name; }
+  function getHiddenRecord(key) {
     if (key !== Object(key)) {
       throw new TypeError('Not an object: ' + key);
     }
-    var desc = originalProps.getOwnPropertyDescriptor(key, 'ident___');
-    if (desc) { return desc.get; }
-    if (!originalProps.isExtensible(key)) { return NO_IDENT; }
-
-    name = 'hash:' + random();
-    // If the following two lines are swapped, Safari WebKit Nightly
-    // Version 5.0.5 (5533.21.1, r87697) crashes.
-    // See https://bugs.webkit.org/show_bug.cgi?id=61758
-    originalProps.freeze(identGetter.prototype);
-    originalProps.freeze(identGetter);
-
-    defProp(key, 'ident___', {
-      get: identGetter,
-      set: undefined,
+    var hiddenRecord = key[HIDDEN_NAME];
+    if (hiddenRecord && hiddenRecord.key === key) { return hiddenRecord; }
+    if (!originalProps.isExtensible(key)) {
+      throw new Error('Prematurely non-extensible: ' + key);
+    }
+    var gets = [];
+    gets.reallyIndexOf = indexOf;
+    gets.reallySplice = splice;
+    var vals = [];
+    vals.reallyIndexOf = indexOf;
+    vals.reallySplice = splice;
+    hiddenRecord = {
+      key: key,   // self pointer for quick own check above.
+      gets: gets, // get___ methods identifying weak maps
+      vals: vals  // values associated with this key in each
+                  // corresponding weak map.
+    };
+    defProp(key, HIDDEN_NAME, {
+      value: hiddenRecord,
+      writable: false,
       enumerable: false,
       configurable: false
     });
-    return identGetter;
+    return hiddenRecord;
   }
 
   /**
@@ -2901,7 +3002,7 @@ var WeakMap;
     oldFunc.reallyApply = Function.prototype.apply;
     defProp(base, name, {
       value: function(obj, var_args) {
-        identity(obj);
+        getHiddenRecord(obj);
         return oldFunc.reallyApply(this, arguments);
       }
     });
@@ -2909,61 +3010,50 @@ var WeakMap;
   identifyFirst(Object, 'freeze');
   identifyFirst(Object, 'seal');
   identifyFirst(Object, 'preventExtensions');
-  identifyFirst(Object, 'defineProperty');
-  identifyFirst(Object, 'defineProperties');
 
+  /**
+   * Monkey patch getOwnPropertyNames to avoid revealing the
+   * HIDDEN_NAME.
+   *
+   * <p>The ES5.1 spec requires each name to appear only once, but as
+   * of this writing, this requirement is controversial for ES6, so we
+   * made this code robust against this case. If the resulting extra
+   * search turns out to be expensive, we can probably relax this once
+   * ES6 is adequately supported on all major browsers, iff no browser
+   * versions we support at that time have relaxed this constraint
+   * without providing built-in ES6 WeakMaps.
+   */
   defProp(Object, 'getOwnPropertyNames', {
     value: function fakeGetOwnPropertyNames(obj) {
       var result = gopn(obj);
       result.reallyIndexOf = indexOf;
-      var i = result.reallyIndexOf('ident___');
       result.reallySplice = splice;
-      if (i >= 0) { result.reallySplice(i, 1); }
+      var i = 0;
+      while ((i = result.reallyIndexOf(HIDDEN_NAME, i)) >= 0) {
+        result.reallySplice(i, 1);
+      }
       return result;
     }
   });
 
-  defProp(Object, 'getOwnPropertyDescriptor', {
-    value: function fakeGetOwnPropertyDescriptor(obj, name) {
-      if (name === 'ident___') { return undefined; }
-      return originalProps.getOwnPropertyDescriptor(obj, name);
-    }
-  });
-
+  /**
+   * getPropertyNames is not in ES5 but it is proposed for ES6 and
+   * does appear in our whitelist, so we need to clean it too.
+   */
   if ('getPropertyNames' in Object) {
-    // Not in ES5 but in whitelist as expected for ES-Harmony
     defProp(Object, 'getPropertyNames', {
       value: function fakeGetPropertyNames(obj) {
         var result = originalProps.getPropertyNames(obj);
         result.reallyIndexOf = indexOf;
-        var i = result.reallyIndexOf('ident___');
         result.reallySplice = splice;
-        if (i >= 0) { result.reallySplice(i, 1); }
+        var i = 0;
+        while ((i = result.reallyIndexOf(HIDDEN_NAME, i)) >= 0) {
+          result.reallySplice(i, 1);
+        }
         return result;
       }
     });
   }
-
-  if ('getPropertyDescriptor' in Object) {
-    // Not in ES5 but in whitelist as expected for ES-Harmony
-    defProp(Object, 'getPropertyDescriptor', {
-      value: function fakeGetPropertyDescriptor(obj, name) {
-        if (name === 'ident___') { return undefined; }
-        return originalProps.getPropertyDescriptor(obj, name);
-      }
-    });
-  }
-
-  defProp(Object, 'create', {
-    value: function fakeCreate(parent, pdmap) {
-      var result = originalProps.create(parent);
-      identity(result);
-      if (pdmap) {
-        originalProps.defineProperties(result, pdmap);
-      }
-      return result;
-    }
-  });
 
   var freeze = Object.freeze;
   var create = Object.create;
@@ -2974,73 +3064,36 @@ var WeakMap;
   }
 
   WeakMap = function() {
-    var identities = {};
-    var values = {};
-
-    function find(key) {
-      var id = identity(key);
-      var name;
-      if (typeof id === 'string') {
-        name = id;
-        id = key;
-      } else {
-        name = id();
-      }
-      var opt_ids = identities[name];
-      var i = opt_ids ? opt_ids.reallyIndexOf(id) : -1;
-      // Using original freeze is safe since this record can't escape.
-      return originalProps.freeze({
-        name: name,
-        id: id,
-        opt_ids: opt_ids,
-        i: i
-      });
-    }
 
     function get___(key, opt_default) {
-      var f = find(key);
-      return (f.i >= 0) ? values[f.name][f.i] : opt_default;
+      var hr = getHiddenRecord(key);
+      var i = hr.gets.reallyIndexOf(get___);
+      return (i >= 0) ? hr.vals[i] : opt_default;
     }
 
     function has___(key) {
-      return find(key).i >= 0;
+      var hr = getHiddenRecord(key);
+      var i = hr.gets.reallyIndexOf(get___);
+      return i >= 0;
     }
 
     function set___(key, value) {
-      var f = find(key);
-      var ids = f.opt_ids;
-      if (!ids) {
-        ids = [];
-        ids.reallyIndexOf = indexOf;
-        ids.reallySplice = splice;
-        identities[f.name] = ids;
+      var hr = getHiddenRecord(key);
+      var i = hr.gets.reallyIndexOf(get___);
+      if (i >= 0) {
+        hr.vals[i] = value;
+      } else {
+        hr.gets.push(get___);
+        hr.vals.push(value);
       }
-      var vals = values[f.name];
-      if (!vals) {
-        vals = [];
-        vals.reallyIndexOf = indexOf;
-        vals.reallySplice = splice;
-        values[f.name] = vals;
-      }
-      var i = (f.i >= 0) ? f.i : ids.length;
-      ids[i] = f.id;
-      vals[i] = value;
     }
 
     function delete___(key) {
-      var f = find(key);
-      if (f.i < 0) { return false; }
-      var ids = f.opt_ids;
-      var last = ids.length - 1;
-      if (last === 0) {
-        delete identities[f.name];
-        delete values[f.name];
-      } else {
-        var vals = values[f.name];
-        ids[f.i] = ids[last];
-        vals[f.i] = vals[last];
-        ids.reallySplice(last);
-        vals.reallySplice(last);
+      var hr = getHiddenRecord(key);
+      var i = hr.gets.reallyIndexOf(get___);
+      if (i >= 0) {
+        hr.gets.reallySplice(i, 1);
+        hr.vals.reallySplice(i, 1);
       }
       return true;
     }
@@ -3231,7 +3284,7 @@ var ses;
       compileProgram: t,             // Cannot be implemented in just ES5.1.
       eval: t,
       Function: t,
-      
+
       sharedImports: t,
       makeImports: t,
       copyToImports: t,
@@ -3267,6 +3320,11 @@ var ses;
     escape: t,                       // ES5 Appendix B
     unescape: t,                     // ES5 Appendix B
     Object: {
+      // As any new methods are added here that may reveal the
+      // HIDDEN_NAME within WeakMap.js, such as the proposed
+      // getOwnPropertyDescriptors or getPropertyDescriptors, extend
+      // WeakMap.js to monkey patch these to avoid revealing
+      // HIDDEN_NAME.
       getPropertyDescriptor: t,      // ES-Harmony proposal
       getPropertyNames: t,           // ES-Harmony proposal
       is: t,                         // ES-Harmony proposal
@@ -4292,6 +4350,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
             return;
           }
           var desc = gopd(val, p);
+          if (!desc) {
+            debugger;
+          }
           recur(desc.value);
           recur(desc.get);
           recur(desc.set);
