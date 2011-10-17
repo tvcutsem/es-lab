@@ -167,8 +167,8 @@
 //    Additionally, any trap not defined on handler results in the operation
 //    being applied to the target. Hence, all traps are now optional.
 //    target may be a function (this replaces Proxy.createFunction)
-//    In that case, calling proxy() calls the function, while
-//    calling new proxy() triggers a handler trap called 'new'
+//    In that case, calling proxy() triggers a handler trap called 'call',
+//    while calling new proxy() triggers a handler trap called 'new'
 //
 // 2. The old 'fix' trap is renamed to the 'protect' trap, because the term
 //    'fix' is now ambiguous: we previously used the term "fixing" to refer
@@ -371,7 +371,7 @@ FixedHandler.prototype = {
     var trap = this.targetHandler.getOwnPropertyDescriptor;
     if (trap === undefined) {
       // default forwarding behavior
-      return Object.getOwnPropertyDescriptor(this.target, name);
+      return Proxy.forward.getOwnPropertyDescriptor(name, this.target);
     }
     
     name = String(name);
@@ -437,7 +437,7 @@ FixedHandler.prototype = {
     var trap = this.targetHandler.getPropertyDescriptor;
     if (trap === undefined) {
       // default forwarding behavior
-      return Object.getPropertyDescriptor(this.target, name);
+      return Proxy.forward.getPropertyDescriptor(name, this.target);
     }
     name = String(name);
     var desc = trap.call(this.targetHandler, name, this.target);
@@ -494,8 +494,7 @@ FixedHandler.prototype = {
     var trap = this.targetHandler.defineProperty;
     if (trap === undefined) {
       // default forwarding behavior
-      Object.defineProperty(this.target, name, desc);
-      return true;
+      return Proxy.forward.defineProperty(name, desc, this.target);
     }
 
     name = String(name);
@@ -552,7 +551,7 @@ FixedHandler.prototype = {
       var trap = this.targetHandler.protect;
       if (trap === undefined) {
         // default forwarding behavior
-        return Object[operation](this.target);
+        return Proxy.forward.protect(operation, this.target);
       }
 
       success = trap.call(this.targetHandler, operation, this.target);
@@ -590,8 +589,7 @@ FixedHandler.prototype = {
       var trap = this.targetHandler.stopTrapping;
       if (trap === undefined) {
         // default forwarding behavior
-        Proxy.stopTrapping(this.target);
-        return true;
+        return Proxy.forward.stopTrapping(this.target);
       }
       
       this.stopping = true;
@@ -614,7 +612,7 @@ FixedHandler.prototype = {
     var trap = this.targetHandler.delete;
     if (trap === undefined) {
       // default forwarding behavior
-      return delete this.target[name];
+      return Proxy.forward.delete(name, this.target);
     }
     
     name = String(name);
@@ -655,7 +653,7 @@ FixedHandler.prototype = {
     var trap = this.targetHandler.getOwnPropertyNames;
     if (trap === undefined) {
       // default forwarding behavior
-      return Object.getOwnPropertyNames(this.target);
+      return Proxy.forward.getOwnPropertyNames(this.target);
     }
     
     var trapResult = trap.call(this.targetHandler, this.target);
@@ -705,7 +703,7 @@ FixedHandler.prototype = {
     var trap = this.targetHandler.getPropertyNames;
     if (trap === undefined) {
       // default forwarding behavior
-      return Object.getPropertyNames(this.target);
+      return Proxy.forward.getPropertyNames(this.target);
     }
     
     var trapResult = trap.call(this.targetHandler, this.target);
@@ -736,10 +734,15 @@ FixedHandler.prototype = {
    */
   hasOwn: function(name) {
     "use strict";
-    name = String(name);
-    // simulate missing derived trap fall-back behavior
+
     var trap = this.targetHandler.hasOwn;
-    var res = (trap || TrapDefaults.hasOwn).call(this.targetHandler, name);
+    if (trap === undefined) {
+      // default forwarding behavior
+      return Proxy.forward.hasOwn(name, this.target);
+    }
+
+    name = String(name);
+    var res = trap.call(this.targetHandler, name, this.target);
     res = !!res; // coerce to Boolean
         
     if (res === false) {
@@ -781,10 +784,14 @@ FixedHandler.prototype = {
    */
   has: function(name) {
     "use strict";
-    name = String(name);
-    // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.has;
-    var res = (trap || TrapDefaults.has).call(this.targetHandler, name);
+    if (trap === undefined) {
+      // default forwarding behavior
+      return Proxy.forward.has(name, this.target);
+    }
+    
+    name = String(name);
+    var res = trap.call(this.targetHandler, name, this.target);
     res = !!res; // coerce to Boolean
     
     if (res === false) {
@@ -815,10 +822,14 @@ FixedHandler.prototype = {
    * fixed property.
    */
   get: function(rcvr, name) {
-    name = String(name);
-    // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.get;
-    var res = (trap || TrapDefaults.get).call(this.targetHandler, rcvr, name);
+    if (trap === undefined) {
+      // default forwarding behavior
+      return Proxy.forward.get(name, this.target, rcvr);
+    }
+
+    name = String(name);
+    var res = trap.call(this.targetHandler, name, this.target, rcvr);
     
     var fixedDesc = Object.getOwnPropertyDescriptor(this.target, name);
     // check consistency of the returned value
@@ -845,10 +856,14 @@ FixedHandler.prototype = {
    * check that the trap rejects the assignment.
    */
   set: function(rcvr, name, val) {
-    name = String(name);
-    // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.set;
-    var res = (trap || TrapDefaults.set).call(this.targetHandler, rcvr, name, val);
+    if (trap === undefined) {
+      // default forwarding behavior
+      return Proxy.forward.set(name, val, this.target, rcvr);
+    }
+        
+    name = String(name);
+    var res = trap.call(this.targetHandler, name, val, this.target, rcvr);
     res = !!res; // coerce to Boolean
          
     // if success is reported, check whether property is truly assignable
@@ -883,9 +898,13 @@ FixedHandler.prototype = {
    * at least contain the enumerable non-configurable fixed properties.
    */
   enumerate: function() {
-    // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.enumerate;
-    var trapResult = (trap || TrapDefaults.enumerate).call(this.targetHandler);
+    if (trap === undefined) {
+      // default forwarding behavior
+      return Proxy.forward.enumerate(this.target);
+    }
+    
+    var trapResult = trap.call(this.targetHandler, this.target);
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
@@ -920,9 +939,13 @@ FixedHandler.prototype = {
    * at least contain the enumerable non-configurable fixed properties.
    */
   keys: function() {
-    // simulate missing derived trap fall-back behavior
     var trap = this.targetHandler.keys;
-    var trapResult = (trap || TrapDefaults.keys).call(this.targetHandler);
+    if (trap === undefined) {
+      // default forwarding behavior
+      return Proxy.forward.keys(this.target);
+    }
+    
+    var trapResult = trap.call(this.targetHandler, this.target);
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
@@ -949,20 +972,40 @@ FixedHandler.prototype = {
   },
   
   /**
+   * New trap that reifies [[Call]].
+   * If the target is a function, then a call to
+   *   proxy(...args)
+   * Triggers this trap
+   */
+  call: function(receiver, args, target, proxy) {
+    var trap = this.targetHandler.call;
+    if (trap === undefined) {
+      return Proxy.forward.call(receiver, args, target, proxy);
+    }
+    
+    if (typeof this.target === "function") {
+      return trap.call(this.targetHandler, receiver, args, target, proxy);
+    } else {
+      throw new TypeError(""+ target + " is not a function");
+    }
+  },
+  
+  /**
    * New trap that reifies [[Construct]].
    * If the target is a function, then a call to
    *   new proxy(...args)
    * Triggers this trap
    */
-  new: function(args) {
+  new: function(args, target, proxy) {
     var trap = this.targetHandler.new;
-    if (trap !== undefined) {
-      return trap.call(this.targetHandler, args, this.target);
+    if (trap === undefined) {
+      return Proxy.forward.new(args, target, proxy);
+    }
+    
+    if (typeof this.target === "function") {
+      return trap.call(this.targetHandler, args, target, proxy);
     } else {
-      // TODO(tvcutsem): move to TrapDefaults
-      var instance = Object.create(target.prototype);
-      var res = target.apply(instance, args);
-      return (Object(res) === res) ? res : instance;
+      throw new TypeError(""+ target + " is not a function");
     }
   }
 };
@@ -1122,103 +1165,74 @@ Proxy.stopTrapping = function(target) {
   return target;
 };
 
-// ---- Trap Defaults ----
-
-// Adapted from <http://wiki.ecmascript.org/doku.php?id=harmony:proxies>
-// with added normalization checks. Call these with |this| bound to the
-// required handler
-var TrapDefaults = {
-  has: function(name) { return !!this.getPropertyDescriptor(name); },
-  hasOwn: function(name) { return !!this.getOwnPropertyDescriptor(name); },
-  get: function(receiver, name) {
-    var desc = this.getPropertyDescriptor(name);
-    desc = normalizeAndCompletePropertyDescriptor(desc);
-    if (desc === undefined) { return undefined; }
-    if ('value' in desc) {
-      return desc.value;
-    } else {
-      if (desc.get === undefined) { return undefined; }
-      // Note: assumes original Function.prototype.call
-      return desc.get.call(receiver);
-    }
+// ---- Default Forwarding Handler ----
+Proxy.forward = {
+  getOwnPropertyDescriptor: function(name, target) {
+    return Object.getOwnPropertyDescriptor(target, name);
   },
-  set: function(receiver, name, val) {
-    var desc = this.getOwnPropertyDescriptor(name);
-    desc = normalizeAndCompletePropertyDescriptor(desc);
-    if (desc) {
-      if ('writable' in desc) {
-        if (desc.writable) {
-          this.defineProperty(name, {value: val});
-          return true;
-        } else {
-          return false;
-        }
-      } else { // accessor
-        if (desc.set) {
-          // Note: assumes original Function.prototype.call
-          desc.set.call(receiver, val);
-          return true;
-        } else {
-          return false;
-        }
-      }
-    }
-    desc = this.getPropertyDescriptor(name);
-    desc = normalizeAndCompletePropertyDescriptor(desc);
-    if (desc) {
-      if ('writable' in desc) {
-        if (desc.writable) {
-          // fall through
-        } else {
-          return false;
-        }
-      } else { // accessor
-        if (desc.set) {
-          // Note: assumes original Function.prototype.call
-          desc.set.call(receiver, val);
-          return true;
-        } else {
-          return false;
-        }
-      }
-    }
-    this.defineProperty(name, {
-      value: val, 
-      writable: true, 
-      enumerable: true, 
-      configurable: true});
+  getPropertyDescriptor: function(name, target) {
+    return Object.getPropertyDescriptor(target, name);
+  },
+  getOwnPropertyNames: function(target) {
+    return Object.getOwnPropertyNames(target);
+  },
+  getPropertyNames: function(target) {
+    return Object.getPropertyNames(target);
+  },
+  defineProperty: function(name, desc, target) {
+    Object.defineProperty(target, name, desc);
     return true;
   },
-  enumerate: function() {
-    var trapResult = this.getPropertyNames();
-    var l = +trapResult.length;
+  delete: function(name, target) {
+    return delete target[name];
+  },
+  protect: function(operation, target) {
+    Object[operation](target);
+    return true;
+  },
+  has: function(name, target) {
+    return name in target;
+  },
+  hasOwn: function(name, target) {
+    return ({}).hasOwnProperty.call(target, name);
+  },
+  get: function(name, target, proxy) {
+    // Note: if target[name] is an accessor,
+    // will invoke that accessor with this === target,
+    // not this === proxy
+    return target[name];
+  },
+  set: function(name, value, target, proxy) {
+    // FIXME: to reliably forward set, would need to reproduce
+    // the built-in [[CanPut]] algorithm
+    target[name] = val;
+    // bad behavior when set fails in non-strict mode
+    return true;
+  },
+  enumerate: function(target) {
     var result = [];
-    for (var i = 0; i < l; i++) {
-      var name = String(trapResult[i]);
-      var desc = this.getPropertyDescriptor(name);
-      desc = normalizeAndCompletePropertyDescriptor(desc);
-      if (desc !== undefined && desc.enumerable) {
-        result.push(name);
-      }
-    }
+    for (var name in target) { result.push(name); };
     return result;
   },
-  keys: function() {
-    var trapResult = this.getOwnPropertyNames();
-    var l = +trapResult.length;
-    var result = [];
-    for (var i = 0; i < l; i++) {
-      var name = String(trapResult[i]);
-      var desc = this.getOwnPropertyDescriptor(name);
-      desc = normalizeAndCompletePropertyDescriptor(desc);
-      if (desc !== undefined && desc.enumerable) {
-        result.push(name);
-      }
-    }
-    return result;
+  keys: function(target) {
+    return Object.keys(target);
+  },
+  call: function(receiver, args, target, proxy) {
+    // target.apply(receiver, args)
+    return Function.prototype.apply.call(target, receiver, args)
+  },
+  new: function(args, target, proxy) {
+    // return new target(...args);
+    // FIXME: can't generically forward [[Construct]]
+    // if target is itself a proxym will not trigger its 'new' trap
+    var receiver = Object.create(target.prototype);
+    var result = Function.prototype.apply.call(target, receiver, args);
+    return Object(result) === result ? result : receiver;
+  },
+  stopTrapping: function(target) {
+    return false;
   }
-  
-}; // end TrapDefaults
+};
 
 if (typeof Proxy === "object") {
   var primCreate = Proxy.create,
@@ -1230,10 +1244,17 @@ if (typeof Proxy === "object") {
     if (typeof target === "function") {
       proxy = primCreate(fixedHandler, Object.getPrototypeOf(target));      
     } else {
-      proxy = primCreateFunction(fixedHandler, target, new function() {
-        var args = Array.prototype.slice.call(arguments);
-        return fixedHandler.new(args);
-      });
+      proxy = primCreateFunction(fixedHandler, target,
+        // call trap
+        function() {
+          var args = Array.prototype.slice.call(arguments);
+          return fixedHandler.call(this, args, target, proxy);
+        },
+        // construct trap
+        function() {
+          var args = Array.prototype.slice.call(arguments);
+          return fixedHandler.new(args, target, proxy);
+        });
     }
     fixableProxies.set(proxy, fixedHandler);
     return proxy;
@@ -1245,6 +1266,7 @@ if (typeof Proxy === "object") {
   };
   Proxy.createFunction = function(handler, call, opt_construct) {
     var extHandler = Object.create(handler);
+    extHandler.call = call;
     extHandler.new = opt_construct;
     return Proxy.for(call, extHandler);
   };
