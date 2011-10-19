@@ -29,13 +29,6 @@ var ses;
 (function(){
   "use strict";
 
-  var callFn = ses.callFn;
-  var freeze = Object.freeze;
-  var gopn = Object.getOwnPropertyNames;
-  var isFrozen = Object.isFrozen;
-  var forEach = Array.prototype.forEach;
-  var slice = Array.prototype.slice;
-
   ses.ejectorsGuardsTrademarks = function ejectorsGuardsTrademarks() {
 
     /**
@@ -65,8 +58,8 @@ var ses;
      * freeze a function and (if present) its prototype.
      */
     function freezeFunction(func) {
-      if (func.prototype) { freeze(func.prototype); }
-      return freeze(func);
+      if (func.prototype) { Object.freeze(func.prototype); }
+      return Object.freeze(func);
     }
 
     /**
@@ -78,11 +71,11 @@ var ses;
      * properties of that record.
      */
     function freezeObjectRecord(record) {
-      callFn(forEach, gopn(record), function(name) {
+      Object.getOwnPropertyNames(record).forEach(function(name) {
         var val = record[name];
         if (typeof val === 'function') { freezeFunction(val); }
       });
-      return freeze(record);
+      return Object.freeze(record);
     }
 
     ////////////////////////////////////////////////////////////////////////
@@ -300,10 +293,10 @@ var ses;
      */
     function stamp(stamps, record) {
       // TODO: Should nonextensible objects be stampable?
-      if (isFrozen(record)) {
+      if (Object.isFrozen(record)) {
         throw new TypeError("Can't stamp frozen objects: " + record);
       }
-      stamps = callFn(slice, stamps, 0);
+      stamps = Array.prototype.slice.call(stamps, 0);
       var numStamps = stamps.length;
       // First ensure that we will succeed before applying any stamps to
       // the record.
@@ -318,7 +311,7 @@ var ses;
         // user-implementable auditing protocol.
         stampers.get(stamps[i])(record);
       }
-      return freeze(record);
+      return Object.freeze(record);
     };
 
     ////////////////////////////////////////////////////////////////////////
@@ -346,11 +339,11 @@ var ses;
     function passesGuard(g, specimen) {
       g = GuardT.coerce(g); // failure throws rather than ejects
       return callWithEjector(
-        freeze(function(opt_ejector) {
+        Object.freeze(function(opt_ejector) {
           g.coerce(specimen, opt_ejector);
           return true;
         }),
-        freeze(function(ignored) {
+        Object.freeze(function(ignored) {
           return false;
         })
       );

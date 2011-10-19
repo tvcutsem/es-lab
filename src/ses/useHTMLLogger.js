@@ -213,9 +213,6 @@ function useHTMLLogger(reportsElement, consoleElement) {
         var linkElement = appendNew(linksBlock, 'p');
         if (i === 0) { appendText(linkElement, 'See '); }
         var link = appendNew(linkElement, 'a');
-
-        // TODO(erights): Only until we have a good way to index
-        // directly into hg.ecmascript.org
         link.href = linkToTest(test);
         link.target = '_blank';
         appendText(link, 'Test ' + test);

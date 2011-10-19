@@ -262,7 +262,7 @@ if (!ses) { ses = {}; }
  * @author Mark S. Miller
  * @requires ___global_test_function___, ___global_valueOf_function___
  * @requires JSON, navigator, this, eval, document
- * @overrides ses, RegExp, WeakMap, Object, parseInt, Function
+ * @overrides ses, RegExp, WeakMap, Object, parseInt
  */
 var RegExp;
 var ses;
@@ -298,10 +298,18 @@ var ses;
  * JavaScript context (i.e. a browser frame), as it relies on other
  * primordial objects and methods not yet being perturbed.
  *
- * <p>Code installed by the repairs protects itself from
- * post-initialization perturbation, by stashing the primordials it
- * needs for later use, so we can support Confined-ES5, as a variant
- * of SES in which the primordials are not frozen.
+ * <p>TODO(erights): This file tries to protects itself from some
+ * post-initialization perturbation, by stashing some of the
+ * primordials it needs for later use, but this attempt is currently
+ * incomplete. We need to revisit this when we support Confined-ES5,
+ * as a variant of SES in which the primordials are not frozen. See
+ * previous failed attempt at <a
+ * href="http://codereview.appspot.com/5278046/" >Speeds up
+ * WeakMap. Preparing to support unfrozen primordials.</a>. From
+ * analysis of this failed attempt, it seems that the only practical
+ * way to support CES is by use of two frames, where most of initSES
+ * runs in a SES frame, and so can avoid worrying about most of these
+ * perturbations.
  */
 (function(global) {
   "use strict";
@@ -576,7 +584,7 @@ var ses;
   }
 
   /**
-   * Tests for https://bugs.webkit.org/show_bug.cgi?id=64250
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=64250
    *
    * <p>No workaround attempted. Just reporting that this platform is
    * not SES-safe.
@@ -601,7 +609,7 @@ var ses;
   }
 
   /**
-   * Tests for
+   * Detects
    * https://bugs.webkit.org/show_bug.cgi?id=51097
    * https://bugs.webkit.org/show_bug.cgi?id=58338
    * http://code.google.com/p/v8/issues/detail?id=1437
@@ -640,7 +648,6 @@ var ses;
     return 'valueOf() leaked as: ' + that;
   }
 
-
   /**
    * Detects https://bugs.webkit.org/show_bug.cgi?id=55736
    *
@@ -659,7 +666,6 @@ var ses;
     return !('freeze' in Object);
   }
 
-
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1530
    *
@@ -673,7 +679,6 @@ var ses;
     return foo.prototype !==
       Object.getOwnPropertyDescriptor(foo, 'prototype').value;
   }
-
 
   /**
    * Detects https://bugs.webkit.org/show_bug.cgi?id=55537
@@ -692,7 +697,6 @@ var ses;
     }
     return true;
   }
-
 
   /**
    * A strict delete should either succeed, returning true, or it
@@ -713,7 +717,6 @@ var ses;
     if (deleted) { return false; }
     return true;
   }
-
 
   /**
    * Detects https://bugzilla.mozilla.org/show_bug.cgi?id=591846
@@ -743,7 +746,6 @@ var ses;
     }
   }
 
-
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1393
    *
@@ -756,7 +758,6 @@ var ses;
     if (match === 'xfoox') { return true; }
     return 'regExp.exec() does not match against "undefined".';
   }
-
 
   /**
    * Detects https://bugs.webkit.org/show_bug.cgi?id=26382
@@ -827,9 +828,8 @@ var ses;
     if (typeof d === 'string') { return true; } // Opera
     var str = objToString.call(d);
     if (str === '[object Date]') { return false; }
-    return 'Unexpected: ' + str + '(' + d + ')';
+    return 'Unexpected ' + str + ': ' + d;
   }
-
 
   /**
    * Detects http://code.google.com/p/google-caja/issues/detail?id=1362
@@ -861,7 +861,6 @@ var ses;
     return 'Mutating Date.prototype did not throw';
   }
 
-
   /**
    * Detects https://bugzilla.mozilla.org/show_bug.cgi?id=656828
    *
@@ -891,7 +890,6 @@ var ses;
     return 'Mutating WeakMap.prototype did not throw';
   }
 
-
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1447
    *
@@ -906,9 +904,11 @@ var ses;
    *
    * <p>This kludge is safety preserving but non-transparent, in that
    * the real forEach is frozen even in the success case, since we
-   * have to freeze it in order to test for this failure. See the
-   * extra call to repair_NEED_TO_WRAP_FOREACH near the end of this
-   * file.
+   * have to freeze it in order to test for this failure. We could
+   * repair this non-transparency by replacing it with a transparent
+   * wrapper (as http://codereview.appspot.com/5278046/ does), but
+   * since the SES use of this will freeze it anyway and the
+   * indirection is costly, we choose not to for now.
    */
   function test_NEED_TO_WRAP_FOREACH() {
     if (!('freeze' in Object)) {
@@ -919,7 +919,8 @@ var ses;
     if (Array.prototype.forEach !== builtInForEach) {
       // If it is already wrapped, we are confident the problem does
       // not occur, and we need to skip the test to avoid freezing the
-      // wrapper.
+      // wrapper, if we do decide to wrap as
+      // http://codereview.appspot.com/5278046/ did.
       return false;
     }
     try {
@@ -930,7 +931,6 @@ var ses;
       return 'freezing forEach failed with ' + err;
     }
   }
-
 
   /**
    * TODO(erights): isolate and report the V8 bug mentioned below.
@@ -954,7 +954,6 @@ var ses;
   /** we use this variable only because we haven't yet isolated a test
    * for the problem. */
   var NEEDS_DUMMY_SETTER_repaired = false;
-
 
   /**
    * Detects http://code.google.com/p/chromium/issues/detail?id=94666
@@ -982,7 +981,6 @@ var ses;
     if (desc.get === void 0) { return true; }
     return 'Getter became ' + desc.get;
   }
-
 
   /**
    * Detects https://bugzilla.mozilla.org/show_bug.cgi?id=637994
@@ -1019,7 +1017,7 @@ var ses;
     var base = {};
     var derived = Object.create(base);
     function getter() { return 'gotten'; }
-    Object.defineProperty(base, 'foo', {get: getter});
+    Object.defineProperty(base, 'foo', { get: getter });
     if (!derived.hasOwnProperty('foo') &&
         Object.getOwnPropertyDescriptor(derived, 'foo') === void 0 &&
         Object.getOwnPropertyNames(derived).indexOf('foo') < 0) {
@@ -1030,7 +1028,7 @@ var ses;
         Object.getOwnPropertyNames(derived).indexOf('foo') < 0) {
       return 'Accessor properties partially inherit as own properties.';
     }
-    Object.defineProperty(base, 'bar', {get: getter, configurable: true});
+    Object.defineProperty(base, 'bar', { get: getter, configurable: true });
     if (!derived.hasOwnProperty('bar') &&
         Object.getOwnPropertyDescriptor(derived, 'bar') === void 0 &&
         Object.getOwnPropertyNames(derived).indexOf('bar') < 0) {
@@ -1038,7 +1036,6 @@ var ses;
     }
     return 'Accessor properties inherit as own even if configurable.';
   }
-
 
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1360
@@ -1052,7 +1049,6 @@ var ses;
     if (that === global) { return true; }
     return 'sort called comparefn with "this" === ' + that;
   }
-
 
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1360
@@ -1178,7 +1174,7 @@ var ses;
   }
 
   /**
-   * Test for https://bugs.webkit.org/show_bug.cgi?id=63398
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
    *
    * <p>If this reports a problem in the absence of "New symptom (a)",
    * it means the error thrown by the "in" in {@code has} is skipping
@@ -1199,7 +1195,7 @@ var ses;
   }
 
   /**
-   * Test for https://bugs.webkit.org/show_bug.cgi?id=63398
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
    *
    * <p>If this reports a problem in the absence of "New symptom (a)",
    * it means the error thrown by the "in" in {@code has} is skipping
@@ -1381,7 +1377,7 @@ var ses;
   }
 
   /**
-   * Tests for https://bugs.webkit.org/show_bug.cgi?id=70207
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=70207
    *
    * <p>After deleting a built-in, the problem is that
    * getOwnPropertyNames still lists the name as present, but it seems
@@ -1411,7 +1407,7 @@ var ses;
   }
 
   /**
-   * Tests for http://code.google.com/p/v8/issues/detail?id=1769
+   * Detects http://code.google.com/p/v8/issues/detail?id=1769
    */
   function test_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS() {
     try {
@@ -1507,6 +1503,32 @@ var ses;
     return 'parseInt("010") returned ' + n;
   }
 
+  /**
+   * Detects https://bugzilla.mozilla.org/show_bug.cgi?id=695577
+   *
+   * <p>When E4X syntax is accepted in strict code, then without
+   * parsing, we cannot prevent untrusted code from expressing E4X
+   * literals and so obtaining access to shared E4X prototypes,
+   * despite the absence of these prototypes from our whitelist. While
+   * https://bugzilla.mozilla.org/show_bug.cgi?id=695579 is also
+   * open, we cannot even repair the situation, leading to unpluggable
+   * capability leaks. However, we do not test for this additional
+   * problem, since E4X is such a can of worms that 695577 is adequate
+   * by itself for us to judge this platform to be insecurable without
+   * parsing.
+   */
+  function test_STRICT_E4X_LITERALS_ALLOWED() {
+    var x;
+    try {
+      x = eval('"use strict";(<foo/>);');
+    } catch (err) {
+      if (err instanceof SyntaxError) { return false; }
+      return 'E4X test failed with: ' + err;
+    }
+    if (x !== void 0) { return true; }
+    return 'E4X literal expression had no value';
+  }
+
 
   ////////////////////// Repairs /////////////////////
   //
@@ -1515,52 +1537,13 @@ var ses;
   // failures can still trigger a given repair.
 
 
-  var builtInApplyMethod = Function.prototype.apply;
-  var builtInCallMethod = Function.prototype.call;
-  var builtInSliceMethod = Array.prototype.slice;
+  var call = Function.prototype.call;
+  var apply = Function.prototype.apply;
 
-  builtInApplyMethod.reallyCall = builtInCallMethod;
-  function applyWrapper(thisArg, argArray) {
-    return builtInApplyMethod.reallyCall(this, thisArg, argArray);
-  }
-  if (Object.defineProperty) {
-    Object.defineProperty(Function.prototype, 'apply', {
-      value: applyWrapper
-    });
-  } else {
-    // So it still works well enough on ES3
-    Function.prototype.apply = applyWrapper;
-  }
-
-  function applyFn(func, thisArg, argArray) {
-    return builtInApplyMethod.reallyCall(func, thisArg, argArray);
-  }
-  ses.applyFn = applyFn;
-  function callFn(func, thisArg, var_args) {
-    var args = builtInApplyMethod.reallyCall(builtInSliceMethod,
-                                             arguments, [2]);
-    return builtInApplyMethod.reallyCall(func, thisArg, args);
-  }
-  ses.callFn = callFn;
-  function method2Function(meth) {
-    return function(self, var_args) {
-      var args = builtInApplyMethod.reallyCall(builtInSliceMethod,
-                                               arguments, [1]);
-      return builtInApplyMethod.reallyCall(meth, self, args);
-    };
-  }
-  ses.method2Function = method2Function;
-
-  var hopFn = ses.hopFn = method2Function(Object.prototype.hasOwnProperty);
-  var toStringFn = ses.toStringFn = method2Function(objToString);
-  var sliceFn = ses.sliceFn = method2Function(builtInSliceMethod);
-  var spliceFn = ses.spliceFn = method2Function(Array.prototype.splice);
-  var concatFn = ses.concatFn = method2Function(Array.prototype.concat);
-  var indexOfFn = ses.indexOfFn = method2Function(Array.prototype.indexOf);
-  var filterFn = ses.filterFn = method2Function(Array.prototype.filter);
-
+  var hop = Object.prototype.hasOwnProperty;
+  var slice = Array.prototype.slice;
+  var concat = Array.prototype.concat;
   var getPrototypeOf = Object.getPrototypeOf;
-
 
   function patchMissingProp(base, name, missingFunc) {
     if (!(name in base)) {
@@ -1613,9 +1596,9 @@ var ses;
       value: function calleeFix(base) {
         var result = realGOPN(base);
         if (typeof base === 'function') {
-          var i = indexOfFn(result, 'callee');
-          if (i >= 0 && !hopFn(base, 'callee')) {
-            spliceFn(result, i, 1);
+          var i = result.indexOf('callee');
+          if (i >= 0 && !hop.call(base, 'callee')) {
+            result.splice(i, 1);
           }
         }
         return result;
@@ -1653,12 +1636,12 @@ var ses;
 
     Object.defineProperty(RegExp.prototype, 'exec', {
       value: function fakeExec(specimen) {
-        return callFn(unsafeRegExpExec, this, String(specimen));
+        return unsafeRegExpExec.call(this, String(specimen));
       }
     });
     Object.defineProperty(RegExp.prototype, 'test', {
       value: function fakeTest(specimen) {
-        return callFn(unsafeRegExpTest, this, String(specimen));
+        return unsafeRegExpTest.call(this, String(specimen));
       }
     });
   }
@@ -1705,15 +1688,15 @@ var ses;
     defProp(Function.prototype, 'bind', {
       value: function fakeBind(self, var_args) {
         var thisFunc = this;
-        var leftArgs = sliceFn(arguments, 1);
+        var leftArgs = slice.call(arguments, 1);
         function funcBound(var_args) {
           if (this === Object(this) &&
               getPrototypeOf(this) === BOGUS_BOUND_PROTOTYPE) {
             throw new TypeError(
               'Cannot emulate "new" on pseudo-bound function.');
           }
-          var args = concatFn(leftArgs, sliceFn(arguments, 0));
-          return applyFn(thisFunc, self, args);
+          var args = concat.call(leftArgs, slice.call(arguments, 0));
+          return apply.call(thisFunc, self, args);
         }
         defProp(funcBound, 'prototype', {
           value: BOGUS_BOUND_PROTOTYPE,
@@ -1732,7 +1715,7 @@ var ses;
    * Return a function suitable for using as a forEach argument on a
    * list of method names, where that function will monkey patch each
    * of these names methods on {@code constr.prototype} so that they
-   * can't be called on {@code constr.prototype} itself even across
+   * can't be called on a {@code constr.prototype} itself even across
    * frames.
    *
    * <p>This only works when {@code constr} corresponds to an internal
@@ -1743,12 +1726,12 @@ var ses;
    */
   function makeMutableProtoPatcher(constr, classString) {
     var proto = constr.prototype;
-    var baseToString = toStringFn(proto);
+    var baseToString = objToString.call(proto);
     if (baseToString !== '[object ' + classString + ']') {
       throw new TypeError('unexpected: ' + baseToString);
     }
     var grandProto = getPrototypeOf(proto);
-    var grandBaseToString = toStringFn(grandProto);
+    var grandBaseToString = objToString.call(grandProto);
     if (grandBaseToString === '[object ' + classString + ']') {
       throw new TypeError('malformed inheritance: ' + classString);
     }
@@ -1756,22 +1739,34 @@ var ses;
       logger.log('unexpected inheritance: ' + classString);
     }
     function mutableProtoPatcher(name) {
-      if (!hopFn(proto, name)) { return; }
+      if (!hop.call(proto, name)) { return; }
       var originalMethod = proto[name];
       function replacement(var_args) {
         var parent = getPrototypeOf(this);
-        if (toStringFn(parent) !== baseToString) {
-          var thisToString = toStringFn(this);
-          if (thisToString === baseToString) {
-            throw new TypeError('May not mutate internal state of a ' +
-                                classString + '.prototype');
-          } else {
-            throw new TypeError('Unexpected: ' + thisToString);
+        if (parent !== proto) {
+          // In the typical case, parent === proto, so the above test
+          // lets the typical case succeed quickly.
+          // Note that, even if parent === proto, that does not
+          // necessarily mean that the method application will
+          // succeed, since, for example, a non-Date can still inherit
+          // from Date.prototype. However, in such cases, the built-in
+          // method application will fail on its own without our help.
+          if (objToString.call(parent) !== baseToString) {
+            // As above, === baseToString does not necessarily mean
+            // success, but the built-in failure again would not need
+            // our help.
+            var thisToString = objToString.call(this);
+            if (thisToString === baseToString) {
+              throw new TypeError('May not mutate internal state of a ' +
+                                  classString + '.prototype');
+            } else {
+              throw new TypeError('Unexpected: ' + thisToString);
+            }
           }
         }
-        return applyFn(originalMethod, this, arguments);
+        return originalMethod.apply(this, arguments);
       }
-      Object.defineProperty(proto, name, {value: replacement});
+      Object.defineProperty(proto, name, { value: replacement });
     }
     return mutableProtoPatcher;
   }
@@ -1803,13 +1798,12 @@ var ses;
      'delete'].forEach(makeMutableProtoPatcher(WeakMap, 'WeakMap'));
   }
 
-
   function repair_NEED_TO_WRAP_FOREACH() {
     (function() {
       var forEach = Array.prototype.forEach;
       Object.defineProperty(Array.prototype, 'forEach', {
         value: function forEachWrapper(callbackfn, opt_thisArg) {
-          return applyFn(forEach, this, arguments);
+          return forEach.apply(this, arguments);
         }
       });
     })();
@@ -1821,7 +1815,6 @@ var ses;
       var defProp = Object.defineProperty;
       var gopd = Object.getOwnPropertyDescriptor;
       var freeze = Object.freeze;
-      var complained = false;
 
       defProp(Object, 'defineProperty', {
         value: function(base, name, desc) {
@@ -1829,7 +1822,7 @@ var ses;
 
           if (typeof desc.get === 'function' &&
               desc.set === undefined &&
-              toStringFn(base) === '[object HTMLFormElement]' &&
+              objToString.call(base) === '[object HTMLFormElement]' &&
               gopd(base, name) === void 0) {
             // This repair was triggering bug
             // http://code.google.com/p/chromium/issues/detail?id=94666
@@ -1846,7 +1839,7 @@ var ses;
             // the setter is absent. This is why we additionally
             // condition this special case on the absence of an own
             // name property on base.
-            var desc2 = {get: desc.get};
+            var desc2 = { get: desc.get };
             if ('enumerable' in desc) {
               desc2.enumerable = desc.enumerable;
             }
@@ -1884,9 +1877,6 @@ var ses;
 
   function repair_ACCESSORS_INHERIT_AS_OWN() {
     (function(){
-      var forEach = Array.prototype.forEach;
-      var filter = Array.prototype.filter;
-
       // restrict these
       var defProp = Object.defineProperty;
       var freeze = Object.freeze;
@@ -1936,7 +1926,7 @@ var ses;
       });
 
       function ensureSealable(base) {
-        callFn(forEach, gopn(base), function(name) {
+        gopn(base).forEach(function(name) {
           var desc = gopd(base, name);
           if ('get' in desc && desc.enumerable) {
             if (!desc.configurable) {
@@ -1966,7 +1956,7 @@ var ses;
 
       defProp(Object.prototype, 'hasOwnProperty', {
         value: function hasOwnPropertyWrapper(name) {
-          return hopFn(this, name) && !isBadAccessor(this, name);
+          return hop.call(this, name) && !isBadAccessor(this, name);
         }
       });
 
@@ -1979,7 +1969,7 @@ var ses;
 
       defProp(Object, 'getOwnPropertyNames', {
         value: function getOwnPropertyNamesWrapper(base) {
-          return callFn(filter, gopn(base), function(name) {
+          return gopn(base).filter(function(name) {
             return !isBadAccessor(base, name);
           });
         }
@@ -1996,12 +1986,14 @@ var ses;
           return opt_comparefn(x, y);
         }
         if (arguments.length === 0) {
-          return callFn(unsafeSort, this);
+          return unsafeSort.call(this);
         } else {
-          return callFn(unsafeSort, this, comparefnWrapper);
+          return unsafeSort.call(this, comparefnWrapper);
         }
       }
-      Object.defineProperty(Array.prototype, 'sort', { value: sortWrapper });
+      Object.defineProperty(Array.prototype, 'sort', {
+        value: sortWrapper
+      });
     })();
   }
 
@@ -2016,7 +2008,7 @@ var ses;
         if (typeof replaceValue === 'function') {
           safeReplaceValue = replaceValueWrapper;
         }
-        return callFn(unsafeReplace, this, searchValue, safeReplaceValue);
+        return unsafeReplace.call(this, searchValue, safeReplaceValue);
       }
       Object.defineProperty(String.prototype, 'replace', {
         value: replaceWrapper
@@ -2125,8 +2117,8 @@ var ses;
     var realGOPN = Object.getOwnPropertyNames;
     var repairedHop = Object.prototype.hasOwnProperty;
     function getOnlyRealOwnPropertyNames(base) {
-      return filterFn(realGOPN(base), function(name) {
-        return callFn(repairedHop, base, name);
+      return realGOPN(base).filter(function(name) {
+        return repairedHop.call(base, name);
       });
     }
     Object.defineProperty(Object, 'getOwnPropertyNames', {
@@ -2146,8 +2138,6 @@ var ses;
 
   function repair_JSON_PARSE_PROTO_CONFUSION() {
     var unsafeParse = JSON.parse;
-    var keys = Object.keys;
-    var forEach = Array.prototype.forEach;
     function validate(plainJSON) {
       if (plainJSON !== Object(plainJSON)) {
         // If we were trying to do a full validation, we would
@@ -2165,7 +2155,7 @@ var ses;
           'Parse resulted in invalid JSON. ' +
             'See http://code.google.com/p/v8/issues/detail?id=621');
       }
-      callFn(forEach, keys(plainJSON), function(key) {
+      Object.keys(plainJSON).forEach(function(key) {
         validate(plainJSON[key]);
       });
     }
@@ -2187,13 +2177,12 @@ var ses;
 
   function repair_PARSEINT_STILL_PARSING_OCTAL() {
     var badParseInt = parseInt;
-    var exec = RegExp.prototype.exec;
     function goodParseInt(n, radix) {
       n = '' + n;
       // This turns an undefined radix into a NaN but is ok since NaN
       // is treated as undefined by badParseInt
       radix = +radix;
-      var isHexOrOctal = callFn(exec, (/^\s*[+-]?\s*0(x?)/), n);
+      var isHexOrOctal = /^\s*[+-]?\s*0(x?)/.exec(n);
       var isOct = isHexOrOctal ? isHexOrOctal[1] !== 'x' : false;
 
       if (isOct && (radix !== radix || 0 === radix)) {
@@ -2646,7 +2635,7 @@ var ses;
       sections: ['8.6.2'],
       tests: ['S8.6.2_A8']
     },
-    /* Crashes Opera 12 pre-alpha build 1085
+    /* ****** Crashes Opera 12 pre-alpha build 1085
     {
       description: 'Strict eval function leaks variable definitions',
       test: test_STRICT_EVAL_LEAKS_GLOBALS,
@@ -2656,7 +2645,7 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
       sections: ['10.4.2.1'],
       tests: ['S10.4.2.1_A1']
-    },*/
+    }, ********* */
     {
       description: 'parseInt still parsing octal',
       test: test_PARSEINT_STILL_PARSING_OCTAL,
@@ -2666,6 +2655,17 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1645'],
       sections: ['15.1.2.2'],
       tests: ['S15.1.2.2_A5.1_T1']
+    },
+    {
+      description: 'E4X literals allowed in strict code',
+      test: test_STRICT_E4X_LITERALS_ALLOWED,
+      repair: void 0,
+      preSeverity: severities.NOT_ISOLATED,
+      canRepair: false,
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=695577',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=695579'],
+      sections: [],
+      tests: []
     }
   ];
 
@@ -2698,12 +2698,15 @@ var ses;
       return kludge.test();
     });
 
-    if (Object.isFrozen && Object.isFrozen(Array.prototype.forEach)) {
-      // Need to do it anyway, to repair the sacrificial freezing we
-      // needed to do to test. Once we can permanently retire this
-      // test, we can also retire the redundant repair.
-      repair_NEED_TO_WRAP_FOREACH();
-    }
+// Since we currently repair only on the way to freezing all
+// primordials for SES, the case below is commented out, as the
+// overhead from the extra level of indirection would be pointless.
+//    if (Object.isFrozen && Object.isFrozen(Array.prototype.forEach)) {
+//      // Need to do it anyway, to repair the sacrificial freezing we
+//      // needed to do to test. Once we can permanently retire this
+//      // test, we can also retire the redundant repair.
+//      repair_NEED_TO_WRAP_FOREACH();
+//    }
 
     return strictMapFn(kludges, function(kludge, i) {
       var status = statuses.ALL_FINE;
@@ -2817,18 +2820,15 @@ var ses;
  *
  * <p>As with true WeakMaps, in this emulation, a key does not
  * retain maps indexed by that key and (crucially) a map does not
- * retain the keys it indexes. A map by itself also does not retain
- * the values associated with that map.
+ * retain the keys it indexes. A key by itself also does not retain
+ * the values associated with that key.
  *
- * <p>However, the values associated with a key in some map are
- * retained so long as that key is retained and those associations are
- * not overridden. For example, when used to support membranes, all
+ * <p>However, the values placed in an emulated WeakMap are retained
+ * so long as that map is retained and those associations are not
+ * overridden. For example, when used to support membranes, all
  * values exported from a given membrane will live for the lifetime
- * they would have had in the absence of an interposed membrane. Even
- * when the membrane is revoked, all objects that would have been
- * reachable in the absence of revocation will still be reachable, as
- * far as the GC can tell, but will no longer be relevant to ongoing
- * computation. This (or its dual leak as documented up through r4693)
+ * of the membrane. But when the membrane is revoked, all objects
+ * encapsulated within that membrane will still be collected. This
  * is the best we can do without VM support.
  *
  * <p>The API implemented here is approximately the API as implemented
@@ -2888,9 +2888,6 @@ var WeakMap;
   var hop = Object.prototype.hasOwnProperty;
   var gopn = Object.getOwnPropertyNames;
   var defProp = Object.defineProperty;
-  var random = Math.random;
-  var indexOf = Array.prototype.indexOf;
-  var splice = Array.prototype.splice;
 
   /**
    * Holds the orginal static properties of the Object constructor,
@@ -2903,89 +2900,97 @@ var WeakMap;
     originalProps[name] = Object[name];
   });
 
-  /**
-   * Security depends on HIDDEN_NAME being both <i>unguessable</i> and
-   * <i>undiscoverable</i> by untrusted code.
-   *
-   * <p>Given the known weaknesses of Math.random() on existing
-   * browsers, I don't know how to generate unguessability we can be
-   * confident of. TODO(erights): investigate practical
-   * unguessability.
-   *
-   * <p>It is the monkey patching logic in this file that is intended
-   * to ensure undiscoverability. The basic idea is that there are
-   * three fundamental means of discovering properties of an object:
-   * The for/in loop, Object.keys(), and Object.getOwnPropertyNames(),
-   * and some proposed ES6 extensions that appear on our
-   * whitelist. The first two only discover enumerable properties, and
-   * we only use HIDDEN_NAME to name a non-enumerable property, so the
-   * only remaining threat should be getOwnPropertyNames and and some
-   * proposed ES6 extensions that appear on our whitelist. We monkey
-   * patch them to remove HIDDEN_NAME from the list of properties they
-   * returns. TODO(erights): Do a code/security review with other
-   * cajadores to see if anyone can find a sneaky way to discover the
-   * HIDDEN_NAME anyway.
-   */
-  var HIDDEN_NAME = 'ident:' + Math.random() * Math.random() + '___';
+  var NO_IDENT = 'noident:0';
 
   /**
-   * <p>To treat objects as identity-keys with reasonable efficiency
-   * on ES5 by itself (i.e., without any object-keyed collections), we
-   * need to add a hidden property to such key objects when we
-   * can. This raises several issues:
+   * Gets a value which is either NO_IDENT or uniquely identifies the
+   * key object, for use in making maps keyed by this key object.
+   *
+   * <p>Two keys that are <a href=
+   * "http://wiki.ecmascript.org/doku.php?id=harmony:egal">egal</a>
+   * MUST have the same {@code identity}. Two keys that are not egal
+   * MUST either have different identities, or at least one of their
+   * identities MUST be {@code NO_IDENT}.
+   *
+   * An identity is either a string or a const function returning a
+   * mostly-unique string. The identity of an object is always either
+   * NO_IDENT or such a function. The egal-identity of the function
+   * itself is used to resolve collisions on the string returned by
+   * the function. If the key is not an object (i.e., a primitive,
+   * null, or undefined), then identity(key) throws a TypeError.
+   *
+   * <p>When a map stores a key's identity rather than the key itself,
+   * the map does not cause the key to be retained. See the emulated
+   * {@code WeakMap} below for the resulting gc properties.
+   *
+   * <p>To identify objects with reasonable efficiency on ES5 by
+   * itself (i.e., without any object-keyed collections), we need to
+   * add a reasonably hidden property to such key objects when we
+   * can. This raises three issues:
    * <ul>
-   * <li>Arranging to add this property to objects before we lose the
+   * <li>arranging to add this property to objects before we lose the
    *     chance, and
-   * <li>Hiding the existence of this new property from
+   * <li>reasonably hiding the existence of this new property from
    *     most JavaScript code.
    * <li>Preventing <i>identity theft</i>, where one object is created
    *     falsely claiming to have the identity of another object.
-   * <li>Preventing <i>value theft</i>, where untrusted code with
-   *     access to a key object but not a weak map nevertheless
-   *     obtains access to the value associated with that key in that
-   *     weak map.
    * </ul>
    * We do so by
    * <ul>
-   * <li>Making the name of the hidden property unguessable, so "[]"
-   *     indexing, which we cannot intercept, cannot be used to access
-   *     a property without knowing the name.
    * <li>Making the hidden property non-enumerable, so we need not
    *     worry about for-in loops or {@code Object.keys},
+   * <li>Making the hidden property an accessor property,
+   *     where the hidden property's getter is the identity, and the
+   *     value the getter returns is the mostly unique string.
    * <li>monkey patching those reflective methods that would
    *     prevent extensions, to add this hidden property first,
    * <li>monkey patching those methods that would reveal this
+   *     hidden property, and
+   * <li>monkey patching those methods that would overwrite this
    *     hidden property.
    * </ul>
+   * Given our parser-less verification strategy, the remaining
+   * non-transparencies which are not easily fixed are
+   * <ul>
+   * <li>The {@code delete}, {@code in}, property access
+   *     ({@code []}, and {@code .}), and property assignment
+   *     operations each reveal the presence of the hidden
+   *     property. The property access operations also reveal the
+   *     randomness provided by {@code Math.random}. This is not
+   *     currently an issue but may become one if SES otherwise seeks
+   *     to hide {@code Math.random}.
+   * </ul>
+   * These are not easily fixed because they are primitive operations
+   * which cannot be monkey patched. However, because we're
+   * representing the precious identity by the identity of the
+   * property's getter rather than the value gotten, this identity
+   * itself cannot leak or be installed by the above non-transparent
+   * operations.
    */
-  function getHiddenRecord(key) {
+  function identity(key) {
+    var name;
+    function identGetter() { return name; }
     if (key !== Object(key)) {
       throw new TypeError('Not an object: ' + key);
     }
-    var hiddenRecord = key[HIDDEN_NAME];
-    if (hiddenRecord && hiddenRecord.key === key) { return hiddenRecord; }
-    if (!originalProps.isExtensible(key)) {
-      throw new Error('Prematurely non-extensible: ' + key);
-    }
-    var gets = [];
-    gets.reallyIndexOf = indexOf;
-    gets.reallySplice = splice;
-    var vals = [];
-    vals.reallyIndexOf = indexOf;
-    vals.reallySplice = splice;
-    hiddenRecord = {
-      key: key,   // self pointer for quick own check above.
-      gets: gets, // get___ methods identifying weak maps
-      vals: vals  // values associated with this key in each
-                  // corresponding weak map.
-    };
-    defProp(key, HIDDEN_NAME, {
-      value: hiddenRecord,
-      writable: false,
+    var desc = originalProps.getOwnPropertyDescriptor(key, 'ident___');
+    if (desc) { return desc.get; }
+    if (!originalProps.isExtensible(key)) { return NO_IDENT; }
+
+    name = 'hash:' + Math.random();
+    // If the following two lines are swapped, Safari WebKit Nightly
+    // Version 5.0.5 (5533.21.1, r87697) crashes.
+    // See https://bugs.webkit.org/show_bug.cgi?id=61758
+    originalProps.freeze(identGetter.prototype);
+    originalProps.freeze(identGetter);
+
+    defProp(key, 'ident___', {
+      get: identGetter,
+      set: undefined,
       enumerable: false,
       configurable: false
     });
-    return hiddenRecord;
+    return identGetter;
   }
 
   /**
@@ -2999,113 +3004,141 @@ var WeakMap;
    */
   function identifyFirst(base, name) {
     var oldFunc = base[name];
-    oldFunc.reallyApply = Function.prototype.apply;
     defProp(base, name, {
       value: function(obj, var_args) {
-        getHiddenRecord(obj);
-        return oldFunc.reallyApply(this, arguments);
+        identity(obj);
+        return oldFunc.apply(this, arguments);
       }
     });
   }
   identifyFirst(Object, 'freeze');
   identifyFirst(Object, 'seal');
   identifyFirst(Object, 'preventExtensions');
+  identifyFirst(Object, 'defineProperty');
+  identifyFirst(Object, 'defineProperties');
 
-  /**
-   * Monkey patch getOwnPropertyNames to avoid revealing the
-   * HIDDEN_NAME.
-   *
-   * <p>The ES5.1 spec requires each name to appear only once, but as
-   * of this writing, this requirement is controversial for ES6, so we
-   * made this code robust against this case. If the resulting extra
-   * search turns out to be expensive, we can probably relax this once
-   * ES6 is adequately supported on all major browsers, iff no browser
-   * versions we support at that time have relaxed this constraint
-   * without providing built-in ES6 WeakMaps.
-   */
   defProp(Object, 'getOwnPropertyNames', {
     value: function fakeGetOwnPropertyNames(obj) {
       var result = gopn(obj);
-      result.reallyIndexOf = indexOf;
-      result.reallySplice = splice;
-      var i = 0;
-      while ((i = result.reallyIndexOf(HIDDEN_NAME, i)) >= 0) {
-        result.reallySplice(i, 1);
-      }
+      var i = result.indexOf('ident___');
+      if (i >= 0) { result.splice(i, 1); }
       return result;
     }
   });
 
-  /**
-   * getPropertyNames is not in ES5 but it is proposed for ES6 and
-   * does appear in our whitelist, so we need to clean it too.
-   */
+  defProp(Object, 'getOwnPropertyDescriptor', {
+    value: function fakeGetOwnPropertyDescriptor(obj, name) {
+      if (name === 'ident___') { return undefined; }
+      return originalProps.getOwnPropertyDescriptor(obj, name);
+    }
+  });
+
   if ('getPropertyNames' in Object) {
+    // Not in ES5 but in whitelist as expected for ES-Harmony
     defProp(Object, 'getPropertyNames', {
       value: function fakeGetPropertyNames(obj) {
         var result = originalProps.getPropertyNames(obj);
-        result.reallyIndexOf = indexOf;
-        result.reallySplice = splice;
-        var i = 0;
-        while ((i = result.reallyIndexOf(HIDDEN_NAME, i)) >= 0) {
-          result.reallySplice(i, 1);
-        }
+        var i = result.indexOf('ident___');
+        if (i >= 0) { result.splice(i, 1); }
         return result;
       }
     });
   }
 
-  var freeze = Object.freeze;
-  var create = Object.create;
+  if ('getPropertyDescriptor' in Object) {
+    // Not in ES5 but in whitelist as expected for ES-Harmony
+    defProp(Object, 'getPropertyDescriptor', {
+      value: function fakeGetPropertyDescriptor(obj, name) {
+        if (name === 'ident___') { return undefined; }
+        return originalProps.getPropertyDescriptor(obj, name);
+      }
+    });
+  }
+
+  defProp(Object, 'create', {
+    value: function fakeCreate(parent, pdmap) {
+      var result = originalProps.create(parent);
+      identity(result);
+      if (pdmap) {
+        originalProps.defineProperties(result, pdmap);
+      }
+      return result;
+    }
+  });
 
   function constFunc(func) {
-    freeze(func.prototype);
-    return freeze(func);
+    Object.freeze(func.prototype);
+    return Object.freeze(func);
   }
 
   WeakMap = function() {
+    var identities = {};
+    var values = {};
+
+    function find(key) {
+      var id = identity(key);
+      var name;
+      if (typeof id === 'string') {
+        name = id;
+        id = key;
+      } else {
+        name = id();
+      }
+      var opt_ids = identities[name];
+      var i = opt_ids ? opt_ids.indexOf(id) : -1;
+      // Using original freeze is safe since this record can't escape.
+      return originalProps.freeze({
+        name: name,
+        id: id,
+        opt_ids: opt_ids,
+        i: i
+      });
+    }
 
     function get___(key, opt_default) {
-      var hr = getHiddenRecord(key);
-      var i = hr.gets.reallyIndexOf(get___);
-      return (i >= 0) ? hr.vals[i] : opt_default;
+      var f = find(key);
+      return (f.i >= 0) ? values[f.name][f.i] : opt_default;
     }
 
     function has___(key) {
-      var hr = getHiddenRecord(key);
-      var i = hr.gets.reallyIndexOf(get___);
-      return i >= 0;
+      return find(key).i >= 0;
     }
 
     function set___(key, value) {
-      var hr = getHiddenRecord(key);
-      var i = hr.gets.reallyIndexOf(get___);
-      if (i >= 0) {
-        hr.vals[i] = value;
-      } else {
-        hr.gets.push(get___);
-        hr.vals.push(value);
-      }
+      var f = find(key);
+      var ids = f.opt_ids || (identities[f.name] = []);
+      var vals = values[f.name] || (values[f.name] = []);
+      var i = (f.i >= 0) ? f.i : ids.length;
+      ids[i] = f.id;
+      vals[i] = value;
     }
 
     function delete___(key) {
-      var hr = getHiddenRecord(key);
-      var i = hr.gets.reallyIndexOf(get___);
-      if (i >= 0) {
-        hr.gets.reallySplice(i, 1);
-        hr.vals.reallySplice(i, 1);
+      var f = find(key);
+      if (f.i < 0) { return false; }
+      var ids = f.opt_ids;
+      var last = ids.length - 1;
+      if (last === 0) {
+        delete identities[f.name];
+        delete values[f.name];
+      } else {
+        var vals = values[f.name];
+        ids[f.i] = ids[last];
+        vals[f.i] = vals[last];
+        ids.splice(last);
+        vals.splice(last);
       }
       return true;
     }
 
-    return create(WeakMap.prototype, {
+    return Object.create(WeakMap.prototype, {
       get___: { value: constFunc(get___) },
       has___: { value: constFunc(has___) },
       set___: { value: constFunc(set___) },
       delete___: { value: constFunc(delete___) }
     });
   };
-  WeakMap.prototype = create(Object.prototype, {
+  WeakMap.prototype = Object.create(Object.prototype, {
     get: {
       /**
        * Return the value most recently associated with key, or
@@ -3632,9 +3665,7 @@ var ses;
 (function() {
   "use strict";
 
-  var callFn = ses.callFn;
-  var test = RegExp.prototype.test;
-  var exec = RegExp.prototype.exec;
+   if (!ses) { ses = {}; }
 
   /////////////// KLUDGE SWITCHES ///////////////
 
@@ -3646,10 +3677,10 @@ var ses;
    * <p>This is only a temporary development hack. TODO(erights): fix.
    */
   function LIMIT_SRC(programSrc) {
-    if (callFn(test, (/[^\u0000-\u007f]/), programSrc)) {
+    if ((/[^\u0000-\u007f]/).test(programSrc)) {
       throw new EvalError('Non-ascii text not yet supported');
     }
-    if (callFn(test, (/\\u/), programSrc)) {
+    if ((/\\u/).test(programSrc)) {
       throw new EvalError('Backslash-u escape encoded text not yet supported');
     }
   }
@@ -3681,7 +3712,7 @@ var ses;
     // should say "... = Object.create(null);" rather than "... = {};"
     var result = {};
     var a;
-    while ((a = callFn(exec, regexp, programSrc))) {
+    while ((a = regexp.exec(programSrc))) {
       // Note that we could have avoided the while loop by doing
       // programSrc.match(regexp), except that then we'd need
       // temporary storage proportional to the total number of
@@ -3896,6 +3927,7 @@ var cajaVM;
 ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   "use strict";
 
+
   /////////////// KLUDGE SWITCHES ///////////////
 
   /////////////////////////////////
@@ -3925,26 +3957,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
   var dirty = true;
 
-  var callFn = ses.callFn;
-  var hopFn = ses.hopFn;
-  var sliceFn = ses.sliceFn;
-  var create = Object.create;
-  var gopn = Object.getOwnPropertyNames;
-  var gopd = Object.getOwnPropertyDescriptor;
-  var defProp = Object.defineProperty;
-  var keys = Object.keys;
-  var freeze = Object.freeze;
-  var getPrototypeOf = Object.getPrototypeOf;
-  var split = String.prototype.split;
-  var trim = String.prototype.trim;
-  var test = RegExp.prototype.test;
-  var exec = RegExp.prototype.exec;
-  var push = Array.prototype.push;
-  var pop = Array.prototype.pop;
-  var join = Array.prototype.join;
-
-  var method2Function = ses.method2Function;
-  var forEachFn = method2Function(Array.prototype.forEach);
+  var hop = Object.prototype.hasOwnProperty;
 
   function fail(str) {
     debugger;
@@ -3971,7 +3984,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * this {@code imports} should first be initialized with a copy of the
    * properties of {@code sharedImports}, but nothing enforces this.
    */
-  var sharedImports = create(null);
+  var sharedImports = Object.create(null);
 
   (function() {
 
@@ -4039,7 +4052,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * property copying.
      */
     function makeImports() {
-      var imports = create(null);
+      var imports = Object.create(null);
       copyToImports(imports, sharedImports);
       return imports;
     }
@@ -4068,11 +4081,11 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * browser's {@code window} object.
      */
     function copyToImports(imports, from) {
-      forEachFn(gopn(from), function(name) {
-        var desc = gopd(from, name);
+      Object.getOwnPropertyNames(from).forEach(function(name) {
+        var desc = Object.getOwnPropertyDescriptor(from, name);
         desc.enumerable = false;
         desc.configurable = true;
-        defProp(imports, name, desc);
+        Object.defineProperty(imports, name, desc);
       });
       return imports;
     }
@@ -4084,9 +4097,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * {@code imports}.
      */
     function makeScopeObject(imports, freeNames) {
-      var scopeObject = create(null);
-      forEachFn(keys(freeNames), function(name) {
-        var desc = gopd(imports, name);
+      var scopeObject = Object.create(null);
+      Object.keys(freeNames).forEach(function(name) {
+        var desc = Object.getOwnPropertyDescriptor(imports, name);
         if (!desc || desc.writable !== false || desc.configurable) {
           // If there is no own property, or it isn't a non-writable
           // value property, or it is configurable. Note that this
@@ -4124,9 +4137,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           };
         }
         desc.enumerable = false;
-        defProp(scopeObject, name, desc);
+        Object.defineProperty(scopeObject, name, desc);
       });
-      return freeze(scopeObject);
+      return Object.freeze(scopeObject);
     }
 
 
@@ -4167,9 +4180,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
       function compiledCode(imports) {
         var scopeObject = makeScopeObject(imports, freeNames);
-        return callFn(callFn(wrapper, scopeObject), imports);
+        return wrapper.call(scopeObject).call(imports);
       };
-      freeze(compiledCode.prototype);
+      Object.freeze(compiledCode.prototype);
       return compiledCode;
     }
 
@@ -4198,7 +4211,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      */
     function compileExpr(exprSrc, opt_sourcePosition) {
       var result = internalCompileExpr(exprSrc, opt_sourcePosition);
-      return freeze(result);
+      return Object.freeze(result);
     }
 
 
@@ -4215,24 +4228,24 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      */
     function getRequirements(modSrc) {
       var result = [];
-      var stmts = callFn(split, modSrc, ';');
+      var stmts = modSrc.split(';');
       var stmt;
       var i = 0, ilen = stmts.length;
       for (; i < ilen; i++) {
-        stmt = callFn(trim, stmts[i]);
+        stmt = stmts[i].trim();
         if (stmt !== '') {
-          if (!callFn(test, directivePattern, stmt)) { break; }
+          if (!directivePattern.test(stmt)) { break; }
         }
       }
       for (; i < ilen; i++) {
-        stmt = callFn(trim, stmts[i]);
+        stmt = stmts[i].trim();
         if (stmt !== '') {
-          var m = callFn(exec, requirePattern, stmt);
+          var m = requirePattern.exec(stmt);
           if (!m) { break; }
-          callFn(push, result, m[1]);
+          result.push(m[1]);
         }
       }
-      return freeze(result);
+      return Object.freeze(result);
     }
 
     /**
@@ -4262,10 +4275,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      */
     function compileModule(modSrc, opt_sourcePosition) {
       var moduleMaker = internalCompileExpr(
-        '(function() {' + modSrc + '}).call(this)', //TODO(erights): .call
+        '(function() {' + modSrc + '}).call(this)',
         opt_sourcePosition);
       moduleMaker.requirements = getRequirements(modSrc);
-      return freeze(moduleMaker);
+      return Object.freeze(moduleMaker);
     }
 
     /**
@@ -4277,10 +4290,10 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
      * itself to be.
      */
     function FakeFunction(var_args) {
-      var params = sliceFn(arguments, 0);
-      var body = callFn(pop, params);
+      var params = [].slice.call(arguments, 0);
+      var body = params.pop();
       body = String(body || '');
-      params = callFn(join, params, ',');
+      params = params.join(',');
       var exprSrc = '(function(' + params + '\n){' + body + '})';
       return compileExpr(exprSrc)(sharedImports);
     }
@@ -4318,7 +4331,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       try {
         verifyStrictExpression(src);
       } catch (x) {
-        src = '(function() {' + src + '\n}).call(this)'; //TODO(erights): .call
+        src = '(function() {' + src + '\n}).call(this)';
       }
       return compileExpr(src)(sharedImports);
     }
@@ -4341,25 +4354,22 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           return;
         }
         defending.set(val, true);
-        callFn(push, defendingList, val);
-        freeze(val);
-        recur(getPrototypeOf(val));
-        forEachFn(gopn(val), function(p) {
+        defendingList.push(val);
+        Object.freeze(val);
+        recur(Object.getPrototypeOf(val));
+        Object.getOwnPropertyNames(val).forEach(function(p) {
           if (typeof val === 'function' &&
               (p === 'caller' || p === 'arguments')) {
             return;
           }
-          var desc = gopd(val, p);
-          if (!desc) {
-            debugger;
-          }
+          var desc = Object.getOwnPropertyDescriptor(val, p);
           recur(desc.value);
           recur(desc.get);
           recur(desc.set);
         });
       }
       recur(node);
-      forEachFn(defendingList, function(obj) {
+      defendingList.forEach(function(obj) {
         defended.set(obj, true);
       });
       return node;
@@ -4388,9 +4398,9 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       copyToImports: copyToImports
     };
     var extensionsRecord = extensions();
-    forEachFn(gopn(extensionsRecord), function (p) {
-      defProp(cajaVM, p,
-          gopd(extensionsRecord, p));
+    Object.getOwnPropertyNames(extensionsRecord).forEach(function (p) {
+      Object.defineProperty(cajaVM, p,
+          Object.getOwnPropertyDescriptor(extensionsRecord, p));
     });
     // Move this down here so it is not available during the call to
     // extensions.
@@ -4409,7 +4419,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       severity: severity,
       list: []
     });
-    callFn(push, group.list, path);
+    group.list.push(path);
   }
 
   /**
@@ -4427,7 +4437,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * original property.
    */
   function read(base, name) {
-    var desc = gopd(base, name);
+    var desc = Object.getOwnPropertyDescriptor(base, name);
     if (!desc) { return undefined; }
     if ('value' in desc && !desc.writable && !desc.configurable) {
       return desc.value;
@@ -4435,7 +4445,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
 
     var result = base[name];
     try {
-      defProp(base, name, {
+      Object.defineProperty(base, name, {
         value: result, writable: false, configurable: false
       });
     } catch (ex) {
@@ -4456,13 +4466,13 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    * these non-enumerable since ES5.1 specifies that all these
    * properties are non-enumerable on the global object.
    */
-  forEachFn(keys(whitelist), function(name) {
-    var desc = gopd(global, name);
+  Object.keys(whitelist).forEach(function(name) {
+    var desc = Object.getOwnPropertyDescriptor(global, name);
     if (desc) {
       var permit = whitelist[name];
       if (permit) {
         var value = read(global, name);
-        defProp(sharedImports, name, {
+        Object.defineProperty(sharedImports, name, {
           value: value,
           writable: true,
           enumerable: false,
@@ -4472,7 +4482,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
   });
   if (TAME_GLOBAL_EVAL) {
-    defProp(sharedImports, 'eval', {
+    Object.defineProperty(sharedImports, 'eval', {
       value: cajaVM.eval,
       writable: true,
       enumerable: false,
@@ -4504,7 +4514,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       fail('primordial reachable through multiple paths');
     }
     whiteTable.set(value, permit);
-    forEachFn(keys(permit), function(name) {
+    Object.keys(permit).forEach(function(name) {
       if (permit[name] !== 'skip') {
         var sub = read(value, name);
         register(sub, permit[name]);
@@ -4524,13 +4534,13 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   function getPermit(base, name) {
     var permit = whiteTable.get(base);
     if (permit) {
-      if (hopFn(permit, name)) { return permit[name]; }
+      if (hop.call(permit, name)) { return permit[name]; }
     }
     while (true) {
-      base = getPrototypeOf(base);
+      base = Object.getPrototypeOf(base);
       if (base === null) { return false; }
       permit = whiteTable.get(base);
-      if (permit && hopFn(permit, name)) {
+      if (permit && hop.call(permit, name)) {
         var result = permit[name];
         if (result === '*' || result === 'skip') {
           return result;
@@ -4580,7 +4590,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     try {
       deleted = delete base[name];
     } catch (er) { err = er; }
-    var exists = hopFn(base, name);
+    var exists = hop.call(base, name);
     if (deleted) {
       if (!exists) {
         reportProperty(ses.severities.SAFE,
@@ -4604,7 +4614,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
 
     try {
-      defProp(base, name, {
+      Object.defineProperty(base, name, {
         get: poison,
         set: poison,
         enumerable: false,
@@ -4614,8 +4624,8 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
       try {
         // Perhaps it's writable non-configurable, it which case we
         // should still be able to freeze it in a harmless state.
-        var value = gopd(base, name).value;
-        defProp(base, name, {
+        var value = Object.getOwnPropertyDescriptor(base, name).value;
+        Object.defineProperty(base, name, {
           value: value === null ? null : void 0,
           writable: false,
           configurable: false
@@ -4626,7 +4636,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         return false;
       }
     }
-    var desc2 = gopd(base, name);
+    var desc2 = Object.getOwnPropertyDescriptor(base, name);
     if (desc2.get === poison &&
         desc2.set === poison &&
         !desc2.configurable) {
@@ -4659,7 +4669,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     if (value !== Object(value)) { return; }
     if (cleaning.get(value)) { return; }
     cleaning.set(value, true);
-    forEachFn(gopn(value), function(name) {
+    Object.getOwnPropertyNames(value).forEach(function(name) {
       var path = prefix + (prefix ? '.' : '') + name;
       var p = getPermit(value, name);
       if (p) {
@@ -4674,12 +4684,12 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
         cleanProperty(value, name, path);
       }
     });
-    freeze(value);
+    Object.freeze(value);
   }
   clean(sharedImports, '');
 
 
-  forEachFn(keys(propertyReports).sort(), function(status) {
+  Object.keys(propertyReports).sort().forEach(function(status) {
     var group = propertyReports[status];
     ses.logger.reportDiagnosis(group.severity, status, group.list);
   });
