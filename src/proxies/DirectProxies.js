@@ -54,8 +54,6 @@
 //  - Harmony Proxies with non-standard support for passing through
 //    non-configurable properties
 //  - Harmony WeakMaps
-// Imports:
-//  - function Handler from Handler.js
 // Patches:
 //  - Object.{freeze,seal,preventExtensions}
 //  - Object.{isFrozen,isSealed,isExtensible}
@@ -67,19 +65,19 @@
 // Loading this file will automatically patch Proxy.create and
 // Proxy.createFunction such that they support direct proxies
 // This is done by automatically wrapping all user-defined proxy handlers
-// in a FixedHandler that checks and enforces ES5 invariants.
+// in a SyncHandler that checks and enforces ES5 invariants.
 
 // A direct proxy is a proxy for an existing object called the target object.
 
-// A FixedHandler is a wrapper for a target proxy handler H.
-// The FixedHandler forwards all operations to H, but additionally
+// A SyncHandler is a wrapper for a target proxy handler H.
+// The SyncHandler forwards all operations to H, but additionally
 // performs a number of integrity checks on the results of some traps,
 // to make sure H does not violate the ES5 invariants w.r.t. non-configurable
 // properties and non-extensible, sealed or frozen objects.
 
 // For each property that H exposes as own, non-configurable
 // (e.g. by returning a descriptor from a call to getOwnPropertyDescriptor)
-// the FixedHandler defines those properties on the target object.
+// the SyncHandler defines those properties on the target object.
 // When the proxy becomes non-extensible, also configurable own properties
 // are checked against the target.
 // We will call properties that are defined on the target object
@@ -89,7 +87,7 @@
 // We will name fixed non-configurable non-writable properties "frozen
 // properties".
 
-// The FixedHandler upholds the following invariants w.r.t. non-configurability:
+// The SyncHandler upholds the following invariants w.r.t. non-configurability:
 // - getOwnPropertyDescriptor cannot report sealed properties as non-existent
 // - getOwnPropertyDescriptor cannot report incompatible changes to the
 //   attributes of a sealed property (e.g. reporting a non-configurable
@@ -101,9 +99,6 @@
 //   to the attributes of non-own, inherited properties.
 // - defineProperty cannot make incompatible changes to the attributes of
 //   sealed properties
-// - properties returned by the fix() trap are merged with fixed properties,
-//   ensuring no incompatible changes can be made when calling freeze, seal,
-//   preventExtensions. This merging is as atomic as Object.defineProperties.
 // - delete cannot report a successful deletion of a sealed property
 // - hasOwn cannot report a sealed property as non-existent
 // - has cannot report a sealed property as non-existent
@@ -112,7 +107,6 @@
 //   undefined getter
 // - set cannot report a successful assignment for frozen data
 //   properties or sealed accessors with an undefined setter.
-
 // - if a property of a non-extensible proxy is reported as non-existent,
 //   then it must forever be reported as non-existent. This applies to
 //   own and inherited properties and is enforced in the
@@ -125,7 +119,7 @@
 // is invoked on the proxy, the set of own property names for the proxy is
 // fixed. Any property name that is not fixed is called a 'new' property.
 
-// The FixedHandler upholds the following invariants regarding extensibility:
+// The SyncHandler upholds the following invariants regarding extensibility:
 // - getOwnPropertyDescriptor cannot report new properties as existent
 //   (it must report them as non-existent by returning undefined)
 // - defineProperty cannot successfully add a new property (it must reject)
@@ -146,13 +140,12 @@
 // Invariants with regard to inheritance are currently not enforced.
 // - a non-configurable potentially inherited property on a proxy with
 //   non-mutable ancestry cannot be reported as non-existent
+// (An object with non-mutable ancestry is a non-extensible object whose
+// [[Prototype]] is either null or an object with non-mutable ancestry.)
 
-// An object with non-mutable ancestry is a non-extensible object whose
-// [[Prototype]] is either null or an object with non-mutable ancestry.
-
-// The FixedHandler is compatible with the existing ForwardingHandler.
-// Invariant: when a FixedHandler wraps a ForwardingHandler to an
-// ES5-compliant object, the FixedHandler will never throw a TypeError.
+// The SyncHandler is compatible with the existing ForwardingHandler.
+// Invariant: when a SyncHandler wraps a ForwardingHandler to an
+// ES5-compliant object, the SyncHandler will never throw a TypeError.
 
 // ==== Changes in Handler API compared to current Harmony:Proxies ====
 
@@ -325,35 +318,83 @@ var prim_preventExtensions = Object.preventExtensions,
     prim_isSealed = Object.isSealed,
     prim_isFrozen = Object.isFrozen;
 
-// ---- The FixedHandler wrapper ----
-
-function FixedHandler(target, targetHandler) {
-  // the handler that is "guarded"
-  this.targetHandler = targetHandler;
-  // the object wrapped by this proxy
-  // As long as the proxy is extensible, only non-configurable properties
-  // are checked against the target. Once the proxy becomes non-extensible,
-  // target stores all own properties, including configurable ones.
-  this.target = target;
+/**
+ * A property 'name' is fixed if it is an own property of the target.
+ */
+function isFixed(name, target) {
+  return ({}).hasOwnProperty.call(target, name);
 }
 
-FixedHandler.prototype = {
-  
+// ---- The SyncHandler wrapper around user handlers ----
+
+/**
+ * @param target the object wrapped by this proxy.
+ * As long as the proxy is extensible, only non-configurable properties
+ * are checked against the target. Once the proxy becomes non-extensible,
+ * all own properties are checked against the target, including configurable
+ * ones.
+ *
+ * @param handler the handler of the direct proxy. The object emulated by
+ * this handler is kept "in sync" with the target object of the direct proxy.
+ * In doing so, any violations that the handler makes against the invariants
+ * of the target will cause a TypeError to be thrown.
+ *
+ * Both target and handler must be proper Objects at initialization time.
+ * If this.targetHandler is set to 'null', that indicates that the
+ * direct proxy has become "fixed" and the handler is "switched off".
+ * At that point, the SyncHandler behaves like the default forwarding handler.
+ */
+function SyncHandler(target, handler) {
+  // this is a const reference, this.target should never change
+  this.target = target;
+  // this is a non-const reference, may be set to null once
+  // once set to null, forever remains null
+  this.targetHandler = handler;
+}
+
+SyncHandler.prototype = {
+
   /**
-   * Is this proxy still extensible?
-   *
-   * Extensibility of the proxy is derived from extensibility of its
-   * fixedProps object.
+   * If getTrap returns undefined, the caller should perform the
+   * default forwarding behavior.
+   * If getTrap returns normally otherwise, the return value
+   * will be a callable trap function with a proper |this|-binding.
    */
-  isExtensible: function() {
-    return prim_isExtensible(this.target);
-  },
-  
-  /**
-   * Is 'name' a fixed, own property of the proxy?
-   */
-  isFixed: function(name) {
-    return ({}).hasOwnProperty.call(this.target, name);
+  getTrap: function(trapName) {
+    if (this.targetHandler === null) {
+      // stopTrapping was called on this handler,
+      // perform the default forwarding behavior
+      return undefined;
+    }
+    
+    var trap = this.targetHandler[trapName];
+    
+    // if this.targetHandler[trapName] is a getter, and that getter directly or
+    // indirectly calls stopTrapping on this proxy, this proxy may now
+    // have been "fixed" (in which case this.targetHandler is now null).
+    // Therefore, we must recheck the state of the proxy.
+    // If the proxy is now fixed, default to the forwarding behavior.
+    
+    // TODO: could also opt not to recheck, and have the switched-off proxy
+    // trap anyway, which should be harmless as far as target invariants
+    // are concerned (although real implementations that perform clever
+    // tricks upon stopTrapping should tread carefully)
+    
+    if (trap === undefined || this.targetHandler === null) {
+      // either the trap was not defined or
+      // stopTrapping was called on this handler,
+      // perform the default forwarding behavior
+      return undefined;
+    }
+    
+    if (typeof trap !== "function") {
+      throw new TypeError(trapName + " trap is not callable: "+trap);
+    }
+    
+    // bind the trap's |this| to this.targetHandler
+    // this ensures that, if for any reason targetHandler is set to
+    // null later (ie. the proxy is switched off), we retain the proper binding
+    return Function.prototype.bind.call(trap, this.targetHandler);
   },
   
   // === fundamental traps ===
@@ -368,14 +409,14 @@ FixedHandler.prototype = {
    */
   getOwnPropertyDescriptor: function(name) {
     "use strict";
-    var trap = this.targetHandler.getOwnPropertyDescriptor;
+    
+    var trap = this.getTrap("getOwnPropertyDescriptor");
     if (trap === undefined) {
-      // default forwarding behavior
       return Proxy.forward.getOwnPropertyDescriptor(name, this.target);
     }
     
     name = String(name);
-    var desc = trap.call(this.targetHandler, name, this.target);
+    var desc = trap(name, this.target);
     desc = normalizeAndCompletePropertyDescriptor(desc);
     
     if (desc === undefined) {
@@ -399,7 +440,7 @@ FixedHandler.prototype = {
     // Note: we could collapse the following two if-tests into a single
     // test. Separating out the cases to improve error reporting.
     
-    if (!this.isExtensible()) {
+    if (!Object.isExtensible(this.target)) {
       // if name exists, should be a no-op as per ES5 8.12.9, step 5
       // if name does not exist, will raise an exception
       // as per ES5 8.12.9, step 3
@@ -412,7 +453,7 @@ FixedHandler.prototype = {
       }
     }
 
-    if (this.isFixed(name) || // if 'name' was previously fixed,
+    if (isFixed(name, this.target) || // if 'name' was previously fixed,
         !desc.configurable) { // or is reported as non-configurable
       // check and remember the returned desc
       // will throw if desc is not compatible with fixedDesc, if it exists
@@ -434,13 +475,18 @@ FixedHandler.prototype = {
    */
   getPropertyDescriptor: function(name) {
     "use strict";
-    var trap = this.targetHandler.getPropertyDescriptor;
+    var trap = this.getTrap("getPropertyDescriptor");
     if (trap === undefined) {
       // default forwarding behavior
       return Proxy.forward.getPropertyDescriptor(name, this.target);
     }
+    
     name = String(name);
-    var desc = trap.call(this.targetHandler, name, this.target);
+    // TODO: consider giving getPropertyDescriptor access to the proxy
+    // in addition to the handler. getPropertyDescriptor is called instead of
+    // 'get' when a proxy is located in the prototype chain. The handler may
+    // want to know via which proxy the property was requested.
+    var desc = trap(name, this.target);
     desc = normalizeAndCompletePropertyDescriptor(desc);
 
     if (desc === undefined) {
@@ -468,7 +514,7 @@ FixedHandler.prototype = {
     // if 'name' was previously fixed, check and remember the returned desc
     // Note: if name was not previously fixed,
     // we treat desc as an inherited property and perform no check
-    if (this.isFixed(name)) {
+    if (isFixed(name, this.target)) {
       // will throw if desc is not compatible with fixedDesc, if it exists
       Object.defineProperty(this.target, name, desc);
     }
@@ -491,7 +537,7 @@ FixedHandler.prototype = {
     // which is unexpected and different from [[DefineOwnProperty]].
     // Bug filed: https://bugzilla.mozilla.org/show_bug.cgi?id=601329
 
-    var trap = this.targetHandler.defineProperty;
+    var trap = this.getTrap("defineProperty");
     if (trap === undefined) {
       // default forwarding behavior
       return Proxy.forward.defineProperty(name, desc, this.target);
@@ -499,7 +545,7 @@ FixedHandler.prototype = {
 
     name = String(name);
     desc = normalizePropertyDescriptor(desc);
-    var success = trap.call(this.targetHandler, name, desc, this.target);
+    var success = trap(name, desc, this.target);
     success = !!success; // coerce to Boolean
 
 
@@ -508,7 +554,7 @@ FixedHandler.prototype = {
       // Note: we could collapse the following two if-tests into a single
       // test. Separating out the cases to improve error reporting.
       
-      if (!this.isExtensible()) {
+      if (!Object.isExtensible(this.target)) {
         // if name exists, should be a no-op as per ES5 8.12.9, step 5
         // if name does not exist, will raise an exception
         // as per ES5 8.12.9, step 3
@@ -521,7 +567,7 @@ FixedHandler.prototype = {
         }
       }
 
-      if (this.isFixed(name) || !desc.configurable) {
+      if (isFixed(name, this.target) || !desc.configurable) {
         // will throw if desc is not compatible with fixedDesc, if it exists
         Object.defineProperty(this.target, name, desc);
       }
@@ -532,75 +578,42 @@ FixedHandler.prototype = {
   },
   
   /**
+   * The 'operation' argument is one of 'freeze', 'seal' or 'preventExtensions'
+   *
    * Check whether all properties returned by the 'protect' trap are compatible
    * with the already fixed properties.
    *
-   * Note: the 'protect' trap is the earlier 'fix' trap.
+   * Note: the 'protect' trap is (one half of) the old 'fix' trap.
    */
   protect: function(operation) {
-    // guard against recursive protection
-    if (this.protecting) {
-      throw new TypeError("cannot recursively call the protect() trap "+
-                          "while protecting a proxy");
-    }
-    
-    var success = false;
-    try {
-      this.protecting = true;
-
-      var trap = this.targetHandler.protect;
-      if (trap === undefined) {
-        // default forwarding behavior
-        return Proxy.forward.protect(operation, this.target);
-      }
-
-      success = trap.call(this.targetHandler, operation, this.target);
-    } finally {
-      delete this.protecting;
+    var trap = this.getTrap("protect");
+    if (trap === undefined) {
+      // default forwarding behavior
+      return Proxy.forward.protect(operation, this.target);
     }
 
-    success = !!success; // coerce to Boolean
-    if (!success) {
-      throw new TypeError(operation + " was rejected");
-    }
-    
-    // the proxy is set to non-extensible by the caller of fix, by
-    // making this.target non-extensible, sealed or frozen
-    return success;
+    var success = trap(operation, this.target);
+    // the caller of protect, Object[operation], will make
+    // this.target non-extensible, sealed or frozen
+    return !!success;
   },
   
   /**
    * A new fundamental trap, triggered by Object.stopTrapping(aProxy)
+   * The other half of the old fix() trap.
    *
-   * Returns undefined | a property descriptor map
-   * The FixedHandler merges the returned properties with the fixedProps
-   * object.
+   * Returns a success boolean.
    */
   stopTrapping: function() {
-    // guard against recursive calls to stopTrapping
-    if (this.stopping) {
-      throw new TypeError("cannot recursively call stopTrapping() "+
-                          "on a proxy");
+    var trap = this.getTrap("stopTrapping");
+    if (trap === undefined) {
+      // default forwarding behavior
+      return Proxy.forward.stopTrapping(this.target);
     }
-
-    var success = false;
-    try {
-      
-      var trap = this.targetHandler.stopTrapping;
-      if (trap === undefined) {
-        // default forwarding behavior
-        return Proxy.forward.stopTrapping(this.target);
-      }
-      
-      this.stopping = true;
-      success = trap.call(this.targetHandler, this.target);
-    } finally {
-      delete this.stopping;
-    }
-        
-    // the FixedHandler proxy becomes disabled by the caller of
-    // the stopTrapping trap, by replacing the proxy's handler
-    // traps by default forwarding traps
+    
+    var success = trap(this.target);
+    // the SyncHandler proxy becomes disabled by the caller of
+    // the stopTrapping trap, if it returns true
     return !!success; // coerce to Boolean
   },
   
@@ -609,19 +622,19 @@ FixedHandler.prototype = {
    */
   'delete': function(name) { 
     "use strict";
-    var trap = this.targetHandler.delete;
+    var trap = this.getTrap("delete");
     if (trap === undefined) {
       // default forwarding behavior
       return Proxy.forward.delete(name, this.target);
     }
     
     name = String(name);
-    var res = trap.call(this.targetHandler, name, this.target);
+    var res = trap(name, this.target);
     res = !!res; // coerce to Boolean
     
     if (res === true) {
       //  if name was not previously fixed, this is a no-op
-      //  if name is fixed and configurable, delete it from fixedProps
+      //  if name is fixed and configurable, delete it from the target
       //  if name is fixed and non-configurable, delete will throw
       try {
         delete this.target[name];
@@ -650,13 +663,13 @@ FixedHandler.prototype = {
    * but this might require an unpleasant amount of bookkeeping.
    */
   getOwnPropertyNames: function() {
-    var trap = this.targetHandler.getOwnPropertyNames;
+    var trap = this.getTrap("getOwnPropertyNames");
     if (trap === undefined) {
       // default forwarding behavior
       return Proxy.forward.getOwnPropertyNames(this.target);
     }
     
-    var trapResult = trap.call(this.targetHandler, this.target);
+    var trapResult = trap(this.target);
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
@@ -670,7 +683,7 @@ FixedHandler.prototype = {
         throw new TypeError("getOwnPropertyNames cannot list a "+
                             "duplicate property '"+s+"'");
       }
-      if (!this.isExtensible() && !this.isFixed(s)) {
+      if (!Object.isExtensible(this.target) && !isFixed(s, this.target)) {
         // non-extensible proxies don't tolerate new own property names
         throw new TypeError("getOwnPropertyNames cannot list a new "+
                             "property '"+s+"' on a non-extensible object");
@@ -700,13 +713,13 @@ FixedHandler.prototype = {
    * but this might require an unpleasant amount of bookkeeping.
    */
   getPropertyNames: function() {
-    var trap = this.targetHandler.getPropertyNames;
+    var trap = this.getTrap("getPropertyNames");
     if (trap === undefined) {
       // default forwarding behavior
       return Proxy.forward.getPropertyNames(this.target);
     }
     
-    var trapResult = trap.call(this.targetHandler, this.target);
+    var trapResult = trap(this.target);
       
     // propNames is used as a set of strings
     var propNames = Object.create(null);
@@ -735,14 +748,14 @@ FixedHandler.prototype = {
   hasOwn: function(name) {
     "use strict";
 
-    var trap = this.targetHandler.hasOwn;
+    var trap = this.getTrap("hasOwn");
     if (trap === undefined) {
       // default forwarding behavior
       return Proxy.forward.hasOwn(name, this.target);
     }
 
     name = String(name);
-    var res = trap.call(this.targetHandler, name, this.target);
+    var res = trap(name, this.target);
     res = !!res; // coerce to Boolean
         
     if (res === false) {
@@ -762,7 +775,7 @@ FixedHandler.prototype = {
     } else {
       // res === true, if the proxy is non-extensible,
       // check that name is no new property
-      if (!this.isExtensible()) {
+      if (!Object.isExtensible(this.target)) {
         // if name exists, should be a no-op as per ES5 8.12.9, step 5
         // if name does not exist, will raise an exception
         // as per ES5 8.12.9, step 3
@@ -784,14 +797,14 @@ FixedHandler.prototype = {
    */
   has: function(name) {
     "use strict";
-    var trap = this.targetHandler.has;
+    var trap = this.getTrap("has");
     if (trap === undefined) {
       // default forwarding behavior
       return Proxy.forward.has(name, this.target);
     }
     
     name = String(name);
-    var res = trap.call(this.targetHandler, name, this.target);
+    var res = trap(name, this.target);
     res = !!res; // coerce to Boolean
     
     if (res === false) {
@@ -821,15 +834,15 @@ FixedHandler.prototype = {
    * check its return value against the previously asserted value of the
    * fixed property.
    */
-  get: function(rcvr, name) {
-    var trap = this.targetHandler.get;
+  get: function(proxy, name) {
+    var trap = this.getTrap("get");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.get(name, this.target, rcvr);
+      return Proxy.forward.get(name, this.target, proxy);
     }
 
     name = String(name);
-    var res = trap.call(this.targetHandler, name, this.target, rcvr);
+    var res = trap(name, this.target, proxy);
     
     var fixedDesc = Object.getOwnPropertyDescriptor(this.target, name);
     // check consistency of the returned value
@@ -855,15 +868,15 @@ FixedHandler.prototype = {
    * If name denotes a fixed non-configurable, non-writable data property,
    * check that the trap rejects the assignment.
    */
-  set: function(rcvr, name, val) {
-    var trap = this.targetHandler.set;
+  set: function(proxy, name, val) {
+    var trap = this.getTrap("set");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.set(name, val, this.target, rcvr);
+      return Proxy.forward.set(name, val, this.target, proxy);
     }
         
     name = String(name);
-    var res = trap.call(this.targetHandler, name, val, this.target, rcvr);
+    var res = trap(name, val, this.target, proxy);
     res = !!res; // coerce to Boolean
          
     // if success is reported, check whether property is truly assignable
@@ -898,13 +911,13 @@ FixedHandler.prototype = {
    * at least contain the enumerable non-configurable fixed properties.
    */
   enumerate: function() {
-    var trap = this.targetHandler.enumerate;
+    var trap = this.getTrap("enumerate");
     if (trap === undefined) {
       // default forwarding behavior
       return Proxy.forward.enumerate(this.target);
     }
     
-    var trapResult = trap.call(this.targetHandler, this.target);
+    var trapResult = trap(this.target);
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
@@ -939,13 +952,13 @@ FixedHandler.prototype = {
    * at least contain the enumerable non-configurable fixed properties.
    */
   keys: function() {
-    var trap = this.targetHandler.keys;
+    var trap = this.getTrap("keys");
     if (trap === undefined) {
       // default forwarding behavior
       return Proxy.forward.keys(this.target);
     }
     
-    var trapResult = trap.call(this.targetHandler, this.target);
+    var trapResult = trap(this.target);
 
     // propNames is used as a set of strings
     var propNames = Object.create(null);
@@ -958,7 +971,7 @@ FixedHandler.prototype = {
        throw new TypeError("keys trap cannot list a "+
                            "duplicate property '"+s+"'");
      }
-     if (!this.isExtensible() && !this.isFixed(s)) {
+     if (!Object.isExtensible(this.target) && !isFixed(s, this.target)) {
        // non-extensible proxies don't tolerate new own property names
        throw new TypeError("keys trap cannot list a new "+
                            "property '"+s+"' on a non-extensible object");
@@ -977,16 +990,16 @@ FixedHandler.prototype = {
    *   proxy(...args)
    * Triggers this trap
    */
-  call: function(receiver, args, target, proxy) {
-    var trap = this.targetHandler.call;
+  call: function(thisBinding, args, target, proxy) {
+    var trap = this.getTrap("call");
     if (trap === undefined) {
-      return Proxy.forward.call(receiver, args, target, proxy);
+      return Proxy.forward.call(thisBinding, args, target, proxy);
     }
     
     if (typeof this.target === "function") {
-      return trap.call(this.targetHandler, receiver, args, target, proxy);
+      return trap(thisBinding, args, target, proxy);
     } else {
-      throw new TypeError(""+ target + " is not a function");
+      throw new TypeError("call: "+ target + " is not a function");
     }
   },
   
@@ -997,125 +1010,138 @@ FixedHandler.prototype = {
    * Triggers this trap
    */
   new: function(args, target, proxy) {
-    var trap = this.targetHandler.new;
+    var trap = this.getTrap("new");
     if (trap === undefined) {
       return Proxy.forward.new(args, target, proxy);
     }
     
     if (typeof this.target === "function") {
-      return trap.call(this.targetHandler, args, target, proxy);
+      return trap(args, target, proxy);
     } else {
-      throw new TypeError(""+ target + " is not a function");
+      throw new TypeError("construct: "+ target + " is not a function");
     }
   }
 };
 
-// === end of the FixedHandler ===
+// ---- end of the SyncHandler wrapper handler ----
 
-// In what follows, a 'fixable proxy' is a proxy
-// whose handler is a FixedHandler. Such proxies can be made non-extensible,
+// In what follows, a 'direct proxy' is a proxy
+// whose handler is a SyncHandler. Such proxies can be made non-extensible,
 // sealed or frozen without losing the ability to trap.
 
-// maps fixable proxies to their FixedHandlers
-var fixableProxies = new WeakMap();
+// maps direct proxies to their SyncHandlers
+var directProxies = new WeakMap();
 
 // patch Object.{preventExtensions,seal,freeze} so that
 // they recognize fixable proxies and act accordingly
-Object.preventExtensions = function(target) {
-  var fixedHandler = fixableProxies.get(target);
-  if (fixedHandler !== undefined) {
-    fixedHandler.fix('preventExtensions');
-    // Note: this sets the fixedProp's [[Extensible]] bit to false
-    // thereby also making the proxy non-extensible
-    prim_preventExtensions(fixedHandler.fixedProps);
-    return target;
+Object.preventExtensions = function(subject) {
+  var syncHandler = directProxies.get(subject);
+  if (syncHandler !== undefined) {
+    if (syncHandler.protect('preventExtensions')) {
+      // Note: this sets the target's [[Extensible]] bit to false
+      // thereby also making the proxy non-extensible
+      Object.preventExtensions(syncHandler.target);
+      return subject;
+    } else {
+      throw new TypeError("preventExtensions on "+subject+" rejected");
+    }
   } else {
-    return prim_preventExtensions(target);
+    return prim_preventExtensions(subject);
   }
 };
-Object.seal = function(target) {
-  var fixedHandler = fixableProxies.get(target);
-  if (fixedHandler !== undefined) {
-    fixedHandler.fix('seal');
-    // Note: this makes all of the handler's fixed properties
-    // non-configurable. The handler will now enforce the
-    // invariants for non-configurability on all own properties.
-    prim_seal(fixedHandler.fixedProps);
-    return target;
+Object.seal = function(subject) {
+  var syncHandler = directProxies.get(subject);
+  if (syncHandler !== undefined) {
+    if (syncHandler.protect('seal')) {
+      // Note: this makes all of the target's fixed properties
+      // non-configurable. The handler will now enforce the
+      // invariants for non-configurability on all own properties.
+      Object.seal(syncHandler.target);      
+      return subject;
+    } else {
+      throw new TypeError("seal on "+subject+" rejected");
+    }
   } else {
-    return prim_seal(target);
+    return prim_seal(subject);
   }
 };
-Object.freeze = function(target) {
-  var fixedHandler = fixableProxies.get(target);
-  if (fixedHandler !== undefined) {
-    fixedHandler.fix('freeze');
-    // Note: this makes all of the handler's fixed properties
-    // non-configurable and non-writable. The handler will now
-    // enforce the invariants for non-configurability on all own properties.
-    prim_freeze(fixedHandler.fixedProps);
-    return target;
+Object.freeze = function(subject) {
+  var syncHandler = directProxies.get(subject);
+  if (syncHandler !== undefined) {
+    if (syncHandler.protect('freeze')) {
+      // Note: this makes all of the target's fixed properties
+      // non-configurable and non-writable. The handler will now
+      // enforce the invariants for non-configurability on all own properties.
+      Object.freeze(syncHandler.target);
+      return subject; 
+    } else {
+      throw new TypeError("freeze on "+subject+" rejected");
+    }
   } else {
-    return prim_freeze(target);
+    return prim_freeze(subject);
   }
 };
-Object.isExtensible = function(target) {
-  var fixedHandler = fixableProxies.get(target);
-  if (fixedHandler !== undefined) {
-    return prim_isExtensible(fixedHandler.fixedProps);
+Object.isExtensible = function(subject) {
+  var syncHandler = directProxies.get(subject);
+  if (syncHandler !== undefined) {
+    return Object.isExtensible(syncHandler.target);
   } else {
-    return prim_isExtensible(target);
+    return prim_isExtensible(subject);
   }
 };
-Object.isSealed = function(target) {
-  var fixedHandler = fixableProxies.get(target);
-  if (fixedHandler !== undefined) {
-    return prim_isSealed(fixedHandler.fixedProps);
+Object.isSealed = function(subject) {
+  var syncHandler = directProxies.get(subject);
+  if (syncHandler !== undefined) {
+    return Object.isSealed(syncHandler.target);
   } else {
-    return prim_isSealed(target);
+    return prim_isSealed(subject);
   }
 };
-Object.isFrozen = function(target) {
-  var fixedHandler = fixableProxies.get(target);
-  if (fixedHandler !== undefined) {
-    return prim_isFrozen(fixedHandler.fixedProps);
+Object.isFrozen = function(subject) {
+  var syncHandler = directProxies.get(subject);
+  if (syncHandler !== undefined) {
+    return Object.isFrozen(syncHandler.target);
   } else {
-    return prim_isFrozen(target);
+    return prim_isFrozen(subject);
   }
 };
 
 if (!Object.getPropertyDescriptor) {
-  Object.getPropertyDescriptor = function(target, name) {
-    var fixedHandler = fixableProxies.get(target);
-    if (fixedHandler !== undefined) {
-      return fixedHandler.getPropertyDescriptor(name);
+  Object.getPropertyDescriptor = function(subject, name) {
+    var syncHandler = directProxies.get(subject);
+    if (syncHandler !== undefined) {
+      return syncHandler.getPropertyDescriptor(name);
     } else {
       // fallback behavior for regular objects
-      var desc = Object.getOwnPropertyDescriptor(target, name);
-      var parent = Object.getPrototypeOf(target);
-      while (desc === undefined && parent !== null) {
-        desc = Object.getOwnPropertyDescriptor(parent, name);
-        parent = Object.getPrototypeOf(parent);
+      var desc = Object.getOwnPropertyDescriptor(subject, name);
+      if (desc !== undefined) {
+        return desc;
+      } else {
+        var parent = Object.getPrototypeOf(subject);
+        if (parent !== null) {
+          return Object.getPropertyDescriptor(parent, name);
+        } else {
+          return undefined;
+        }
       }
-      return desc;
     }
   }
 }
 if (!Object.getPropertyNames) {
-  Object.getPropertyNames = function(target) {
-    var fixedHandler = fixableProxies.get(target);
-    if (fixedHandler !== undefined) {
-      return fixedHandler.getPropertyNames(name);
+  Object.getPropertyNames = function(subject) {
+    var syncHandler = directProxies.get(subject);
+    if (syncHandler !== undefined) {
+      return syncHandler.getPropertyNames(name);
     } else {
       // fallback behavior for regular objects
-      var props = Object.getOwnPropertyNames(this.target);
-      var parent = Object.getPrototypeOf(this.target);
-      while (parent !== null) {
-        props = props.concat(Object.getOwnPropertyNames(parent));
-        parent = Object.getPrototypeOf(parent);
+      var props = Object.getOwnPropertyNames(subject);
+      var parent = Object.getPrototypeOf(subject);
+      if (parent === null) {
+        return props;
+      } else {
+        // TODO(tvcutsem): remove duplicates from props
+        return props.concat(Object.getPropertyNames(parent));
       }
-      // TODO(tvcutsem): remove duplicates from props
-      return props;
     }
   }
 }
@@ -1135,34 +1161,24 @@ if (!Object.getPropertyNames) {
  *     able to figure out whether an object is a proxy by calling
  *     Object.stopTrapping).
  */
-Proxy.stopTrapping = function(target) {
-  var fixedHandler = fixableProxies.get(target);
-  if (fixedHandler !== undefined) {
-    // replace the FixedHandler by a default Forwarding Handler
-    // This is done only if the fixedHandler still has a 'targetHandler'
-    // property. This property is deleted when the fixedHandler is
-    // turned into a forwarding handler
-    if (fixedHandler.targetHandler) {
+Proxy.stopTrapping = function(subject) {
+  var syncHandler = directProxies.get(subject);
+  if (syncHandler !== undefined) {
+    // switch off the SyncHandler, making all traps perform the default
+    // behavior instead. This is done by setting the SyncHandler's
+    // "targetHandler" property to null.
+    if (syncHandler.targetHandler !== null) {
       // call the 'stopTrapping' trap
-      var props = fixedHandler.stopTrapping();
-      if (props !== undefined) {
+      var success = syncHandler.stopTrapping();
+      if (success) {
         // if that trap returns successfully, the proxy now 'becomes'
-        // a simple forwarding proxy to the fixedProps object
-        for (var trapName in Handler.prototype) {
-          // override all of FixedHandler's traps to instead perform
-          // the default forwarding behavior on fixedProps
-          fixedHandler[trapName] = Handler.prototype[trapName];
-        }
-        // we can now release the targetHandler. This also unmarks the
-        // handler as a trapping FixedHandler.
-        delete fixedHandler.targetHandler;
-        // keep the fixedProps object on fixedHandler such that the patched
-        // freeze, seal, preventExtensions, isFrozen, isSealed, isExtensible
-        // functions continue to work
+        // a simple forwarding proxy to the target object
+        syncHandler.targetHandler = null;
       }
+      // else, if stopTrapping rejects, fail silently
     }
-  }
-  return target;
+  } // else, if subject is not a proxy, do nothing
+  return subject;
 };
 
 // ---- Default Forwarding Handler ----
@@ -1204,7 +1220,10 @@ Proxy.forward = {
   },
   set: function(name, value, target, proxy) {
     // FIXME: to reliably forward set, would need to reproduce
-    // the built-in [[CanPut]] algorithm
+    // the built-in [[CanPut]] algorithm. The downside of that
+    // is that if target is itself a proxy, it will trigger
+    // numerous traps. Better would be to have an
+    // Object.setProperty(target, name, val) function.
     target[name] = val;
     // bad behavior when set fails in non-strict mode
     return true;
@@ -1224,7 +1243,7 @@ Proxy.forward = {
   new: function(args, target, proxy) {
     // return new target(...args);
     // FIXME: can't generically forward [[Construct]]
-    // if target is itself a proxym will not trigger its 'new' trap
+    // if target is itself a proxy, will not trigger its 'new' trap
     var receiver = Object.create(target.prototype);
     var result = Function.prototype.apply.call(target, receiver, args);
     return Object(result) === result ? result : receiver;
@@ -1239,24 +1258,33 @@ if (typeof Proxy === "object") {
       primCreateFunction = Proxy.createFunction;
 
   Proxy.for = function(target, handler) {
-    var fixedHandler = new FixedHandler(target, handler);
+    // check that target is an Object
+    if (Object(target) !== target) {
+      throw new TypeError("Proxy target must be an Object, given "+target);
+    }
+    // check that handler is an Object
+    if (Object(handler) !== handler) {
+      throw new TypeError("Proxy handler must be an Object, given "+handler);
+    }
+    
+    var syncHandler = new SyncHandler(target, handler);
     var proxy;
     if (typeof target === "function") {
-      proxy = primCreate(fixedHandler, Object.getPrototypeOf(target));      
-    } else {
-      proxy = primCreateFunction(fixedHandler, target,
+      proxy = primCreateFunction(syncHandler, target,
         // call trap
         function() {
           var args = Array.prototype.slice.call(arguments);
-          return fixedHandler.call(this, args, target, proxy);
+          return syncHandler.call(this, args, target, proxy);
         },
         // construct trap
         function() {
           var args = Array.prototype.slice.call(arguments);
-          return fixedHandler.new(args, target, proxy);
+          return syncHandler.new(args, target, proxy);
         });
+    } else {
+      proxy = primCreate(syncHandler, Object.getPrototypeOf(target));
     }
-    fixableProxies.set(proxy, fixedHandler);
+    directProxies.set(proxy, syncHandler);
     return proxy;
   }
 
