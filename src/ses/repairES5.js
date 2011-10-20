@@ -414,7 +414,7 @@ var ses;
     if (that === global) { return true; }
     if (that === void 0) {
       // Should report as a safe spec violation
-      return false;
+//      return false;
     }
     return 'valueOf() leaked as: ' + that;
   }
@@ -436,7 +436,7 @@ var ses;
     if (that === global) { return true; }
     if (that === void 0) {
       // Should report as a safe spec violation
-      return false;
+//      return false;
     }
     return 'valueOf() leaked as: ' + that;
   }
