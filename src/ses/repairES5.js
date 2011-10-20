@@ -373,6 +373,9 @@ var ses;
    *
    * <p>No workaround attempted. Just reporting that this platform is
    * not SES-safe.
+   *
+   * <p>TODO(erights): Why is this not detecting the IE10preview2
+   * failures at tes262's 10.4.3-1-8-s and 10.4.3-1-8gs
    */
   function test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS() {
     global.___global_test_function___ = function() { return this; };

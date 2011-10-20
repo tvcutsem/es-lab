@@ -605,6 +605,9 @@ var ses;
    *
    * <p>No workaround attempted. Just reporting that this platform is
    * not SES-safe.
+   *
+   * <p>TODO(erights): Why is this not detecting the IE10preview2
+   * failures at tes262's 10.4.3-1-8-s and 10.4.3-1-8gs
    */
   function test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS() {
     global.___global_test_function___ = function() { return this; };
@@ -4372,13 +4375,13 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
 
     var defended = WeakMap();
+    var defending = WeakMap();
     /**
      * To define a defended object is to freeze it and all objects
      * transitively reachable from it via transitive reflective
      * property and prototype traversal.
      */
     function def(node) {
-      var defending = WeakMap();
       var defendingList = [];
       function recur(val) {
         if (val !== Object(val) || defended.get(val) || defending.get(val)) {
@@ -4399,7 +4402,12 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           recur(desc.set);
         });
       }
-      recur(node);
+      try {
+        recur(node);
+      } catch (err) {
+        defending = WeakMap();
+        throw err;
+      }
       defendingList.forEach(function(obj) {
         defended.set(obj, true);
       });

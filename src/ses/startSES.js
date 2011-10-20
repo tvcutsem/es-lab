@@ -618,13 +618,13 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
 
     var defended = WeakMap();
+    var defending = WeakMap();
     /**
      * To define a defended object is to freeze it and all objects
      * transitively reachable from it via transitive reflective
      * property and prototype traversal.
      */
     function def(node) {
-      var defending = WeakMap();
       var defendingList = [];
       function recur(val) {
         if (val !== Object(val) || defended.get(val) || defending.get(val)) {
@@ -645,7 +645,12 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           recur(desc.set);
         });
       }
-      recur(node);
+      try {
+        recur(node);
+      } catch (err) {
+        defending = WeakMap();
+        throw err;
+      }
       defendingList.forEach(function(obj) {
         defended.set(obj, true);
       });
