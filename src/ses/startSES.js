@@ -199,7 +199,6 @@ var cajaVM;
 ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   "use strict";
 
-
   /////////////// KLUDGE SWITCHES ///////////////
 
   /////////////////////////////////
@@ -239,6 +238,12 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
   if (typeof WeakMap === 'undefined') {
     fail('No built-in WeakMaps, so WeakMap.js must be loaded first');
   }
+
+  /**
+   * By this time, WeakMap has already monkey patched Object.freeze if
+   * necessary, so we can do the freezes delayed from repairES5.js
+   */
+  ses.freezeDelayed();
 
   /**
    * Code being eval'ed by {@code cajaVM.eval} sees {@code

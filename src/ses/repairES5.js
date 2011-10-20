@@ -321,6 +321,23 @@ var ses;
     return 'Apparently fine';
   };
 
+  /**
+   * Various repairs may expose non-standard objects that are not
+   * reachable from startSES's root, and therefore not freezable by
+   * startSES's normal whitelist traversal. However, freezing these
+   * during repairES5.js may be too early, as it is before WeakMap.js
+   * has had a chance to monkey patch Object.freeze if necessary, in
+   * order to install hidden properties for its own use before the
+   * object becomes non-extensible.
+   */
+  var needToFreeze = [];
+  function delayedFreeze(obj) {
+    needToFreeze.push(obj);
+  }
+  ses.freezeDelayed = function freezeDelayed() {
+    needToFreeze.forEach(Object.freeze);
+  };
+
   ////////////////////// Tests /////////////////////
   //
   // Each test is a function of no arguments that should not leave any
@@ -687,8 +704,7 @@ var ses;
     if (Array.prototype.forEach !== builtInForEach) {
       // If it is already wrapped, we are confident the problem does
       // not occur, and we need to skip the test to avoid freezing the
-      // wrapper, if we do decide to wrap as
-      // http://codereview.appspot.com/5278046/ did.
+      // wrapper.
       return false;
     }
     try {
@@ -1414,44 +1430,45 @@ var ses;
     });
   }
 
-  /**
-   * Actual bound functions are not supposed to have a prototype, and
-   * are supposed to curry over both the [[Call]] and [[Construct]]
-   * behavior of their original function. However, in ES5,
-   * functions written in JavaScript cannot avoid having a 'prototype'
-   * property, and cannot reliably distinguish between being called as
-   * a function vs as a constructor, i.e., by {@code new}.
-   *
-   * <p>Since the repair_MISSING_BIND emulation below produces a bound
-   * function written in JavaScript, it cannot faithfully emulate
-   * either the lack of a 'prototype' property nor the currying of the
-   * [[Construct]] behavior. So instead, we use BOGUS_BOUND_PROTOTYPE
-   * to reliably give an error for attempts to {@code new} a bound
-   * function. Since we cannot avoid exposing BOGUS_BOUND_PROTOTYPE
-   * itself, it is possible to pass in a this-binding which inherits
-   * from it without using {@code new}, which will also trigger our
-   * error case. Whether this latter error is appropriate or not, it
-   * still fails safe.
-   *
-   * <p>By making the 'prototype' of the bound function be the same as
-   * the current {@code thisFunc.prototype}, we could have emulated
-   * the [[HasInstance]] property of bound functions. But even this
-   * would have been inaccurate, since we would be unable to track
-   * changes to the original {@code thisFunc.prototype}. (We cannot
-   * make 'prototype' into an accessor to do this tracking, since
-   * 'prototype' on a function written in JavaScript is
-   * non-configurable.) And this one partially faithful emulation
-   * would have come at the cost of no longer being able to reasonably
-   * detect construction, in order to safely reject it.
-   */
-  var BOGUS_BOUND_PROTOTYPE = {
-    toString: function() { return 'bogus bound prototype'; }
-  };
-  if (Object.freeze) {
-    Object.freeze(BOGUS_BOUND_PROTOTYPE);
-  }
-
   function repair_MISSING_BIND() {
+
+    /**
+     * Actual bound functions are not supposed to have a prototype, and
+     * are supposed to curry over both the [[Call]] and [[Construct]]
+     * behavior of their original function. However, in ES5,
+     * functions written in JavaScript cannot avoid having a 'prototype'
+     * property, and cannot reliably distinguish between being called as
+     * a function vs as a constructor, i.e., by {@code new}.
+     *
+     * <p>Since the repair_MISSING_BIND emulation produces a bound
+     * function written in JavaScript, it cannot faithfully emulate
+     * either the lack of a 'prototype' property nor the currying of the
+     * [[Construct]] behavior. So instead, we use BOGUS_BOUND_PROTOTYPE
+     * to reliably give an error for attempts to {@code new} a bound
+     * function. Since we cannot avoid exposing BOGUS_BOUND_PROTOTYPE
+     * itself, it is possible to pass in a this-binding which inherits
+     * from it without using {@code new}, which will also trigger our
+     * error case. Whether this latter error is appropriate or not, it
+     * still fails safe.
+     *
+     * <p>By making the 'prototype' of the bound function be the same as
+     * the current {@code thisFunc.prototype}, we could have emulated
+     * the [[HasInstance]] property of bound functions. But even this
+     * would have been inaccurate, since we would be unable to track
+     * changes to the original {@code thisFunc.prototype}. (We cannot
+     * make 'prototype' into an accessor to do this tracking, since
+     * 'prototype' on a function written in JavaScript is
+     * non-configurable.) And this one partially faithful emulation
+     * would have come at the cost of no longer being able to reasonably
+     * detect construction, in order to safely reject it.
+     */
+    var BOGUS_BOUND_PROTOTYPE = {
+      toString: function() { return 'bogus bound prototype'; }
+    };
+    delayedFreeze(BOGUS_BOUND_PROTOTYPE);
+    delayedFreeze(BOGUS_BOUND_PROTOTYPE.toString);
+    delayedFreeze(BOGUS_BOUND_PROTOTYPE.toString.prototype);
+
     var defProp = Object.defineProperty;
     defProp(Function.prototype, 'bind', {
       value: function fakeBind(self, var_args) {
@@ -1579,67 +1596,62 @@ var ses;
 
 
   function repair_NEEDS_DUMMY_SETTER() {
-    (function() {
-      var defProp = Object.defineProperty;
-      var gopd = Object.getOwnPropertyDescriptor;
-      var freeze = Object.freeze;
+    var defProp = Object.defineProperty;
+    var gopd = Object.getOwnPropertyDescriptor;
+    var freeze = Object.freeze;
 
-      defProp(Object, 'defineProperty', {
-        value: function(base, name, desc) {
-          function dummySetter(newValue) {}
+    function dummySetter(newValue) {}
+    delayedFreeze(dummySetter.prototype);
+    delayedFreeze(dummySetter);
 
-          if (typeof desc.get === 'function' &&
-              desc.set === undefined &&
-              objToString.call(base) === '[object HTMLFormElement]' &&
-              gopd(base, name) === void 0) {
-            // This repair was triggering bug
-            // http://code.google.com/p/chromium/issues/detail?id=94666
-            // on Chrome, causing
-            // http://code.google.com/p/google-caja/issues/detail?id=1401
-            // so if base is an HTMLFormElement we skip this
-            // fix. Since this repair and this situation are both
-            // Chrome only, it is ok that we're conditioning this on
-            // the unspecified [[Class]] value of base.
-            //
-            // To avoid the further bug identified at Comment 2
-            // http://code.google.com/p/chromium/issues/detail?id=94666#c2
-            // We also have to reconstruct the requested desc so that
-            // the setter is absent. This is why we additionally
-            // condition this special case on the absence of an own
-            // name property on base.
-            var desc2 = { get: desc.get };
-            if ('enumerable' in desc) {
-              desc2.enumerable = desc.enumerable;
-            }
-            if ('configurable' in desc) {
-              desc2.configurable = desc.configurable;
-            }
-            var result = defProp(base, name, desc2);
-            var newDesc = gopd(base, name);
-            if (newDesc.get === desc.get) {
-              return result;
-            }
+    defProp(Object, 'defineProperty', {
+      value: function(base, name, desc) {
+        if (typeof desc.get === 'function' &&
+            desc.set === undefined &&
+            objToString.call(base) === '[object HTMLFormElement]' &&
+            gopd(base, name) === void 0) {
+          // This repair was triggering bug
+          // http://code.google.com/p/chromium/issues/detail?id=94666
+          // on Chrome, causing
+          // http://code.google.com/p/google-caja/issues/detail?id=1401
+          // so if base is an HTMLFormElement we skip this
+          // fix. Since this repair and this situation are both
+          // Chrome only, it is ok that we're conditioning this on
+          // the unspecified [[Class]] value of base.
+          //
+          // To avoid the further bug identified at Comment 2
+          // http://code.google.com/p/chromium/issues/detail?id=94666#c2
+          // We also have to reconstruct the requested desc so that
+          // the setter is absent. This is why we additionally
+          // condition this special case on the absence of an own
+          // name property on base.
+          var desc2 = { get: desc.get };
+          if ('enumerable' in desc) {
+            desc2.enumerable = desc.enumerable;
           }
-
-          freeze(dummySetter.prototype);
-          freeze(dummySetter);
-
-          var oldDesc = gopd(base, name);
-          var testBase = {};
-          if (oldDesc) {
-            defProp(testBase, name, oldDesc);
+          if ('configurable' in desc) {
+            desc2.configurable = desc.configurable;
           }
-          defProp(testBase, name, desc);
-          var fullDesc = gopd(testBase, name);
-
-          if ('get' in fullDesc && fullDesc.set === void 0) {
-            fullDesc.set = dummySetter;
+          var result = defProp(base, name, desc2);
+          var newDesc = gopd(base, name);
+          if (newDesc.get === desc.get) {
+            return result;
           }
-          return defProp(base, name, fullDesc);
         }
-      });
-      NEEDS_DUMMY_SETTER_repaired = true;
-    })();
+        var oldDesc = gopd(base, name);
+        var testBase = {};
+        if (oldDesc) {
+          defProp(testBase, name, oldDesc);
+        }
+        defProp(testBase, name, desc);
+        var fullDesc = gopd(testBase, name);
+         if ('get' in fullDesc && fullDesc.set === void 0) {
+          fullDesc.set = dummySetter;
+        }
+        return defProp(base, name, fullDesc);
+      }
+    });
+    NEEDS_DUMMY_SETTER_repaired = true;
   }
 
 
@@ -2466,15 +2478,12 @@ var ses;
       return kludge.test();
     });
 
-// Since we currently repair only on the way to freezing all
-// primordials for SES, the case below is commented out, as the
-// overhead from the extra level of indirection would be pointless.
-//    if (Object.isFrozen && Object.isFrozen(Array.prototype.forEach)) {
-//      // Need to do it anyway, to repair the sacrificial freezing we
-//      // needed to do to test. Once we can permanently retire this
-//      // test, we can also retire the redundant repair.
-//      repair_NEED_TO_WRAP_FOREACH();
-//    }
+    if (Object.isFrozen && Object.isFrozen(Array.prototype.forEach)) {
+      // Need to do it anyway, to repair the sacrificial freezing we
+      // needed to do to test. Once we can permanently retire this
+      // test, we can also retire the redundant repair.
+      repair_NEED_TO_WRAP_FOREACH();
+    }
 
     return strictMapFn(kludges, function(kludge, i) {
       var status = statuses.ALL_FINE;
