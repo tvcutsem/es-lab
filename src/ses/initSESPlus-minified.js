@@ -17,11 +17,12 @@ test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS(){var that;return global.___global_
 global.___global_test_function___,that===void 0?false:that===global?true:'This leaked as: '+that}function
 test_GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS(){var that=(function(){return this})();return that===void
 0?false:that===global?true:'This leaked as: '+that}function test_GLOBAL_LEAKS_FROM_BUILTINS(){var
-v=({}).valueOf,that='dummy';try{that=v()}catch(err){return err instanceof TypeError?false:'valueOf() threw: '+err}return that===global?true:'valueOf() leaked as: '+that}function
-test_GLOBAL_LEAKS_FROM_GLOBALLY_CALLED_BUILTINS(){var that;global.___global_valueOf_function___=({}).valueOf,that='dummy';try{that=___global_valueOf_function___()}catch(err){return err
-instanceof TypeError?false:'valueOf() threw: '+err}finally{delete global.___global_valueOf_function___}return that===global?true:'valueOf() leaked as: '+that}function
-test_MISSING_FREEZE_ETC(){return!('freeze'in Object)}function test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES(){function
-foo(){}return Object.defineProperty(foo,'prototype',{'value':{}}),foo.prototype!==Object.getOwnPropertyDescriptor(foo,'prototype').value}function
+v=({}).valueOf,that='dummy';try{that=v()}catch(err){return err instanceof TypeError?false:'valueOf() threw: '+err}return that===global?true:that===void
+0?false:'valueOf() leaked as: '+that}function test_GLOBAL_LEAKS_FROM_GLOBALLY_CALLED_BUILTINS(){var
+that;global.___global_valueOf_function___=({}).valueOf,that='dummy';try{that=___global_valueOf_function___()}catch(err){return err
+instanceof TypeError?false:'valueOf() threw: '+err}finally{delete global.___global_valueOf_function___}return that===global?true:that===void
+0?false:'valueOf() leaked as: '+that}function test_MISSING_FREEZE_ETC(){return!('freeze'in
+Object)}function test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES(){function foo(){}return Object.defineProperty(foo,'prototype',{'value':{}}),foo.prototype!==Object.getOwnPropertyDescriptor(foo,'prototype').value}function
 test_MISSING_CALLEE_DESCRIPTOR(){function foo(){}return Object.getOwnPropertyNames(foo).indexOf('callee')<0?false:foo.hasOwnProperty('callee')?'Empty strict function has own callee':true}function
 test_STRICT_DELETE_RETURNS_FALSE(){var deleted;if(!RegExp.hasOwnProperty('rightContext'))return false;try{deleted=delete
 RegExp.rightContext}catch(err){return err instanceof TypeError?false:'Deletion failed with: '+err}return!deleted}function

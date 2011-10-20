@@ -412,6 +412,10 @@ var ses;
       return 'valueOf() threw: ' + err;
     }
     if (that === global) { return true; }
+    if (that === void 0) {
+      // Should report as a safe spec violation
+      return false;
+    }
     return 'valueOf() leaked as: ' + that;
   }
 
@@ -430,6 +434,10 @@ var ses;
       delete global.___global_valueOf_function___;
     }
     if (that === global) { return true; }
+    if (that === void 0) {
+      // Should report as a safe spec violation
+      return false;
+    }
     return 'valueOf() leaked as: ' + that;
   }
 
