@@ -599,7 +599,7 @@ SyncHandler.prototype = {
   },
   
   /**
-   * A new fundamental trap, triggered by Object.stopTrapping(aProxy)
+   * A new fundamental trap, triggered by Proxy.stopTrapping(aProxy)
    * The other half of the old fix() trap.
    *
    * Returns a success boolean.
@@ -1159,7 +1159,7 @@ if (!Object.getPropertyNames) {
  *    If the trap returns undefined, Proxy.stopTrapping is a no-op.
  *    (rationale for the no-op behavior: we don't want clients to be
  *     able to figure out whether an object is a proxy by calling
- *     Object.stopTrapping).
+ *     Proxy.stopTrapping).
  */
 Proxy.stopTrapping = function(subject) {
   var syncHandler = directProxies.get(subject);
@@ -1290,6 +1290,7 @@ if (typeof Proxy === "object") {
 
   // Proxy.create{Function} can now be expressed in terms of Proxy.for
   Proxy.create = function(handler, proto) {
+    proto = proto || null;
     return Proxy.for(Object.create(proto), handler);
   };
   Proxy.createFunction = function(handler, call, opt_construct) {
