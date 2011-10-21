@@ -30,7 +30,7 @@
  * @author Mark S. Miller
  * @requires ___global_test_function___, ___global_valueOf_function___
  * @requires JSON, navigator, this, eval, document
- * @overrides ses, RegExp, WeakMap, Object, parseInt
+ * @overrides ses, RegExp, WeakMap, Object, parseInt, repairES5Module
  */
 var RegExp;
 var ses;
@@ -79,7 +79,7 @@ var ses;
  * runs in a SES frame, and so can avoid worrying about most of these
  * perturbations.
  */
-(function(global) {
+(function repairES5Module(global) {
   "use strict";
 
   /**
@@ -216,7 +216,7 @@ var ses;
    * Once this returns false, we can give up on the SES
    * verification-only strategy and fall back to ES5/3 translation.
    */
-  ses.ok = function() {
+  ses.ok = function ok() {
     return ses.maxSeverity.level <= ses.maxAcceptableSeverity.level;
   };
 
@@ -226,7 +226,7 @@ var ses;
    * <p>If the provided severity exceeds the max so far, update the
    * max to match.
    */
-  ses.updateMaxSeverity = function(severity) {
+  ses.updateMaxSeverity = function updateMaxSeverity(severity) {
     if (severity.level > ses.maxSeverity.level) {
       ses.maxSeverity = severity;
     }
@@ -304,7 +304,7 @@ var ses;
    * functions. {@code makeCallerHarmless} simply need not to complete
    * without breaking anything when given a strict function argument.
    */
-  ses.makeCallerHarmless = function(func, path) {
+  ses.makeCallerHarmless = function assumeCallerHarmless(func, path) {
     return 'Apparently fine';
   };
 
@@ -317,7 +317,7 @@ var ses;
    * Exactly analogous to {@code makeCallerHarmless}, but for
    * "arguments" rather than "caller".
    */
-  ses.makeArgumentsHarmless = function(func, path) {
+  ses.makeArgumentsHarmless = function assumeArgumentsHarmless(func, path) {
     return 'Apparently fine';
   };
 
@@ -590,7 +590,7 @@ var ses;
     if (!('bind' in Function.prototype)) { return false; }
     var applyCalled = false;
     function foo() { return [].slice.call(arguments,0).join(','); }
-    foo.apply = function(self, args) {
+    foo.apply = function fakeApply(self, args) {
       applyCalled = true;
       return Function.prototype.apply.call(this, self, args);
     };
@@ -1403,7 +1403,7 @@ var ses;
 
   function repair_REGEXP_CANT_BE_NEUTERED() {
     var UnsafeRegExp = RegExp;
-    var FakeRegExp = function(pattern, flags) {
+    var FakeRegExp = function RegExpWrapper(pattern, flags) {
       switch (arguments.length) {
         case 0: {
           return UnsafeRegExp();
@@ -1474,7 +1474,7 @@ var ses;
      * detect construction, in order to safely reject it.
      */
     var BOGUS_BOUND_PROTOTYPE = {
-      toString: function() { return 'bogus bound prototype'; }
+      toString: function BBPToString() { return 'bogus bound prototype'; }
     };
     delayedFreeze(BOGUS_BOUND_PROTOTYPE);
     delayedFreeze(BOGUS_BOUND_PROTOTYPE.toString);
@@ -1595,14 +1595,12 @@ var ses;
   }
 
   function repair_NEED_TO_WRAP_FOREACH() {
-    (function() {
-      var forEach = Array.prototype.forEach;
-      Object.defineProperty(Array.prototype, 'forEach', {
-        value: function forEachWrapper(callbackfn, opt_thisArg) {
-          return forEach.apply(this, arguments);
-        }
-      });
-    })();
+    var forEach = Array.prototype.forEach;
+    Object.defineProperty(Array.prototype, 'forEach', {
+      value: function forEachWrapper(callbackfn, opt_thisArg) {
+        return forEach.apply(this, arguments);
+      }
+    });
   }
 
 
@@ -1616,7 +1614,7 @@ var ses;
     delayedFreeze(dummySetter);
 
     defProp(Object, 'defineProperty', {
-      value: function(base, name, desc) {
+      value: function setSetterDefProp(base, name, desc) {
         if (typeof desc.get === 'function' &&
             desc.set === undefined &&
             objToString.call(base) === '[object HTMLFormElement]' &&
@@ -1667,144 +1665,136 @@ var ses;
 
 
   function repair_ACCESSORS_INHERIT_AS_OWN() {
-    (function(){
-      // restrict these
-      var defProp = Object.defineProperty;
-      var freeze = Object.freeze;
-      var seal = Object.seal;
+    // restrict these
+    var defProp = Object.defineProperty;
+    var freeze = Object.freeze;
+    var seal = Object.seal;
 
-      // preserve illusion
-      var gopn = Object.getOwnPropertyNames;
-      var gopd = Object.getOwnPropertyDescriptor;
+    // preserve illusion
+    var gopn = Object.getOwnPropertyNames;
+    var gopd = Object.getOwnPropertyDescriptor;
 
-      var complaint = 'Workaround for ' +
-        'https://bugzilla.mozilla.org/show_bug.cgi?id=637994 ' +
-        ' prohibits enumerable non-configurable accessor properties.';
+    var complaint = 'Workaround for ' +
+      'https://bugzilla.mozilla.org/show_bug.cgi?id=637994 ' +
+      ' prohibits enumerable non-configurable accessor properties.';
 
-      function isBadAccessor(derived, name) {
-        var desc = gopd(derived, name);
-        if (!desc || !('get' in desc)) { return false; }
-        var base = getPrototypeOf(derived);
-        if (!base) { return false; }
-        var superDesc = gopd(base, name);
-        if (!superDesc || !('get' in superDesc)) { return false; }
-        return (desc.get &&
-                !desc.configurable && !superDesc.configurable &&
-                desc.get === superDesc.get &&
-                desc.set === superDesc.set &&
-                desc.enumerable === superDesc.enumerable);
+    function isBadAccessor(derived, name) {
+      var desc = gopd(derived, name);
+      if (!desc || !('get' in desc)) { return false; }
+      var base = getPrototypeOf(derived);
+      if (!base) { return false; }
+      var superDesc = gopd(base, name);
+      if (!superDesc || !('get' in superDesc)) { return false; }
+      return (desc.get &&
+              !desc.configurable && !superDesc.configurable &&
+              desc.get === superDesc.get &&
+              desc.set === superDesc.set &&
+              desc.enumerable === superDesc.enumerable);
+    }
+
+    defProp(Object, 'defineProperty', {
+      value: function definePropertyWrapper(base, name, desc) {
+        var oldDesc = gopd(base, name);
+        var testBase = {};
+        if (oldDesc && !isBadAccessor(base, name)) {
+          defProp(testBase, name, oldDesc);
+        }
+        defProp(testBase, name, desc);
+        var fullDesc = gopd(testBase, name);
+         if ('get' in fullDesc &&
+            fullDesc.enumerable &&
+            !fullDesc.configurable) {
+          logger.warn(complaint);
+          throw new TypeError(complaint
+              + " (Object: " + base + " Property: " + name + ")");
+        }
+        return defProp(base, name, fullDesc);
       }
+    });
 
-      defProp(Object, 'defineProperty', {
-        value: function definePropertyWrapper(base, name, desc) {
-          var oldDesc = gopd(base, name);
-          var testBase = {};
-          if (oldDesc && !isBadAccessor(base, name)) {
-            defProp(testBase, name, oldDesc);
+    function ensureSealable(base) {
+      gopn(base).forEach(function(name) {
+        var desc = gopd(base, name);
+        if ('get' in desc && desc.enumerable) {
+          if (!desc.configurable) {
+            logger.error('New symptom: ' +
+                         '"' + name + '" already non-configurable');
           }
-          defProp(testBase, name, desc);
-          var fullDesc = gopd(testBase, name);
-
-          if ('get' in fullDesc &&
-              fullDesc.enumerable &&
-              !fullDesc.configurable) {
-            logger.warn(complaint);
-            throw new TypeError(complaint
-                + " (Object: " + base + " Property: " + name + ")");
-          }
-          return defProp(base, name, fullDesc);
+          logger.warn(complaint);
+          throw new TypeError(complaint + " (During sealing. Object: "
+              + base + " Property: " + name + ")");
         }
       });
+    }
 
-      function ensureSealable(base) {
-        gopn(base).forEach(function(name) {
-          var desc = gopd(base, name);
-          if ('get' in desc && desc.enumerable) {
-            if (!desc.configurable) {
-              logger.error('New symptom: ' +
-                           '"' + name + '" already non-configurable');
-            }
-            logger.warn(complaint);
-            throw new TypeError(complaint + " (During sealing. Object: "
-                + base + " Property: " + name + ")");
-          }
+    defProp(Object, 'freeze', {
+      value: function freezeWrapper(base) {
+        ensureSealable(base);
+        return freeze(base);
+      }
+    });
+
+    defProp(Object, 'seal', {
+      value: function sealWrapper(base) {
+        ensureSealable(base);
+        return seal(base);
+      }
+    });
+
+    defProp(Object.prototype, 'hasOwnProperty', {
+      value: function hasOwnPropertyWrapper(name) {
+        return hop.call(this, name) && !isBadAccessor(this, name);
+      }
+    });
+
+    defProp(Object, 'getOwnPropertyDescriptor', {
+      value: function getOwnPropertyDescriptorWrapper(base, name) {
+        if (isBadAccessor(base, name)) { return void 0; }
+        return gopd(base, name);
+      }
+    });
+
+    defProp(Object, 'getOwnPropertyNames', {
+      value: function getOwnPropertyNamesWrapper(base) {
+        return gopn(base).filter(function(name) {
+          return !isBadAccessor(base, name);
         });
       }
-
-      defProp(Object, 'freeze', {
-        value: function freezeWrapper(base) {
-          ensureSealable(base);
-          return freeze(base);
-        }
-      });
-
-      defProp(Object, 'seal', {
-        value: function sealWrapper(base) {
-          ensureSealable(base);
-          return seal(base);
-        }
-      });
-
-      defProp(Object.prototype, 'hasOwnProperty', {
-        value: function hasOwnPropertyWrapper(name) {
-          return hop.call(this, name) && !isBadAccessor(this, name);
-        }
-      });
-
-      defProp(Object, 'getOwnPropertyDescriptor', {
-        value: function getOwnPropertyDescriptorWrapper(base, name) {
-          if (isBadAccessor(base, name)) { return void 0; }
-          return gopd(base, name);
-        }
-      });
-
-      defProp(Object, 'getOwnPropertyNames', {
-        value: function getOwnPropertyNamesWrapper(base) {
-          return gopn(base).filter(function(name) {
-            return !isBadAccessor(base, name);
-          });
-        }
-      });
-
-    })();
+    });
   }
 
   function repair_SORT_LEAKS_GLOBAL() {
-   (function(){
-      var unsafeSort = Array.prototype.sort;
-      function sortWrapper(opt_comparefn) {
-        function comparefnWrapper(x, y) {
-          return opt_comparefn(x, y);
-        }
-        if (arguments.length === 0) {
-          return unsafeSort.call(this);
-        } else {
-          return unsafeSort.call(this, comparefnWrapper);
-        }
+    var unsafeSort = Array.prototype.sort;
+    function sortWrapper(opt_comparefn) {
+      function comparefnWrapper(x, y) {
+        return opt_comparefn(x, y);
       }
-      Object.defineProperty(Array.prototype, 'sort', {
-        value: sortWrapper
-      });
-    })();
+      if (arguments.length === 0) {
+        return unsafeSort.call(this);
+      } else {
+        return unsafeSort.call(this, comparefnWrapper);
+      }
+    }
+    Object.defineProperty(Array.prototype, 'sort', {
+      value: sortWrapper
+    });
   }
 
   function repair_REPLACE_LEAKS_GLOBAL() {
-    (function(){
-      var unsafeReplace = String.prototype.replace;
-      function replaceWrapper(searchValue, replaceValue) {
-        var safeReplaceValue = replaceValue;
-        function replaceValueWrapper(m1, m2, m3) {
-          return replaceValue(m1, m2, m3);
-        }
-        if (typeof replaceValue === 'function') {
-          safeReplaceValue = replaceValueWrapper;
-        }
-        return unsafeReplace.call(this, searchValue, safeReplaceValue);
+    var unsafeReplace = String.prototype.replace;
+    function replaceWrapper(searchValue, replaceValue) {
+      var safeReplaceValue = replaceValue;
+      function replaceValueWrapper(m1, m2, m3) {
+        return replaceValue(m1, m2, m3);
       }
-      Object.defineProperty(String.prototype, 'replace', {
-        value: replaceWrapper
-      });
-    })();
+      if (typeof replaceValue === 'function') {
+        safeReplaceValue = replaceValueWrapper;
+      }
+      return unsafeReplace.call(this, searchValue, safeReplaceValue);
+    }
+    Object.defineProperty(String.prototype, 'replace', {
+      value: replaceWrapper
+    });
   }
 
   function repair_CANT_GOPD_CALLER() {
@@ -1836,7 +1826,7 @@ var ses;
 
   function repair_CANT_HASOWNPROPERTY_CALLER() {
     Object.defineProperty(Object.prototype, 'hasOwnProperty', {
-      value: function(name) {
+      value: function hopWrapper(name) {
         return !!Object.getOwnPropertyDescriptor(this, name);
       }
     });
@@ -1951,7 +1941,7 @@ var ses;
       });
     }
     Object.defineProperty(JSON, 'parse', {
-      value: function(text, opt_reviver) {
+      value: function parseWrapper(text, opt_reviver) {
         var result = unsafeParse(text);
         validate(result);
         if (opt_reviver) {

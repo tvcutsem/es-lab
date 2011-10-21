@@ -22,7 +22,7 @@
  * anticipated ES6.
  *
  * @author Mark S. Miller,
- * @overrides ses
+ * @overrides ses, whitelistModule
  */
 var ses;
 
@@ -102,7 +102,7 @@ var ses;
  * <p>We factor out {@code true} into the variable {@code t} just to
  * get a bit better compression from simple minifiers.
  */
-(function() {
+(function whitelistModule() {
   "use strict";
 
   if (!ses) { ses = {}; }

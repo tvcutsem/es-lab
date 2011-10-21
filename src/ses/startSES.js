@@ -196,7 +196,10 @@ var cajaVM;
  *        {@code cajaVM}, since those methods will only be called once
  *        {@code startSES} finishes.
  */
-ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
+ses.startSES = function(global,
+                        whitelist,
+                        atLeastFreeVarNames,
+                        extensions) {
   "use strict";
 
   /////////////// KLUDGE SWITCHES ///////////////
@@ -263,7 +266,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
    */
   var sharedImports = Object.create(null);
 
-  (function() {
+  (function startSESPrelude() {
 
     /**
      * The unsafe* variables hold precious values that must not escape
@@ -385,7 +388,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
           // this-binding of the original getters and setters will be
           // the imports rather than the scopeObject.
           desc = {
-            get: function() {
+            get: function scopedGet() {
               if (name in imports) {
                 var result = imports[name];
                 if (typeof result === 'function') {
@@ -404,7 +407,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
               // parsing or proxies, that isn't possible.
               throw new ReferenceError('"' + name + '" not in scope');
             },
-            set: function(newValue) {
+            set: function scopedSet(newValue) {
               if (name in imports) {
                 imports[name] = newValue;
               }
@@ -658,7 +661,7 @@ ses.startSES = function(global, whitelist, atLeastFreeVarNames, extensions) {
     }
 
     global.cajaVM = {
-      log: function(str) {
+      log: function log(str) {
         if (typeof console !== 'undefined' && 'log' in console) {
           // We no longer test (typeof console.log === 'function') since,
           // on IE9 and IE10preview, in violation of the ES5 spec, it

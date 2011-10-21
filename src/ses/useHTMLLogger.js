@@ -155,7 +155,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
   /**
    * Logs a report suitable for display on a web page.
    */
-  logger.reportRepairs = function(reports) {
+  logger.reportRepairs = function reportRepairs(reports) {
     var numFineElement = appendNew(reportsElement, 'p');
     var ul = appendNew(reportsElement, 'ul');
 
@@ -225,7 +225,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
     }
   };
 
-  logger.reportMax = function() {
+  logger.reportMax = function reportMax() {
     if (!maxElement) {
       maxElement = appendNew(reportsElement, 'p');
     } else {
@@ -238,7 +238,9 @@ function useHTMLLogger(reportsElement, consoleElement) {
     }
   };
 
-  logger.reportDiagnosis = function(severity, status, problemList) {
+  logger.reportDiagnosis = function reportDiagnosis(severity,
+                                                    status,
+                                                    problemList) {
     var diagnosisElement = appendNew(reportsElement, 'p');
     var classification = ses.logger.classify(severity);
     var head = textAdder(diagnosisElement, classification.consoleLevel)(

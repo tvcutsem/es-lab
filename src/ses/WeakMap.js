@@ -23,8 +23,8 @@
  * quite conform, run <code>repairES5.js</code> first.
  *
  * @author Mark S. Miller
- * @requires ses
- * @overrides WeakMap
+ * @requires ses, crypto, ArrayBuffer, Uint8Array
+ * @overrides WeakMap, WeakMapModule
  */
 
 /**
@@ -87,7 +87,7 @@ var WeakMap;
  * <p>See {@code WeakMap} for documentation of the garbage collection
  * properties of this WeakMap emulation.
  */
-(function() {
+(function WeakMapModule() {
   "use strict";
 
   if (typeof ses !== 'undefined' && ses.ok && !ses.ok()) {
@@ -121,8 +121,7 @@ var WeakMap;
    *
    * <p>Given the known weaknesses of Math.random() on existing
    * browsers, it does not generate unguessability we can be confident
-   * of. TODO(erights): Detect crypto.getRandomValues and if there,
-   * use it instead.
+   * of.
    *
    * <p>It is the monkey patching logic in this file that is intended
    * to ensure undiscoverability. The basic idea is that there are
@@ -137,6 +136,19 @@ var WeakMap;
    * returns.
    */
   var HIDDEN_NAME = 'ident:' + Math.random() + '___';
+
+  if (typeof crypto !== 'undefined' &&
+      typeof crypto.getRandomValues === 'function' &&
+      typeof ArrayBuffer === 'function' &&
+      typeof Uint8Array === 'function') {
+    var ab = new ArrayBuffer(25);
+    var u8s = new Uint8Array(ab);
+    crypto.getRandomValues(u8s);
+    HIDDEN_NAME = 'rand:' +
+      Array.prototype.map.call(u8s, function(u8) {
+        return (u8 % 36).toString(36);
+      }).join('') + '___';
+  }
 
   /**
    * Monkey patch getOwnPropertyNames to avoid revealing the
