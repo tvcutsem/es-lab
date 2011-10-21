@@ -396,6 +396,18 @@ var ses;
     return 'This leaked as: ' + that;
   }
 
+  var strictThis = this;
+
+  /**
+   *
+   */
+  function test_GLOBAL_LEAKS_FROM_STRICT_THIS() {
+    if (strictThis === void 0) { return false; }
+    if (strictThis === global) { return true; }
+    if ({}.toString.call(strictThis) === '[object Window]') { return true; }
+    return 'Strict this leaked as: ' + strictThis;
+  }
+
   /**
    * Detects
    * https://bugs.webkit.org/show_bug.cgi?id=51097
@@ -417,7 +429,7 @@ var ses;
     if (that === global) { return true; }
     if (that === void 0) {
       // Should report as a safe spec violation
-//      return false;
+      return false;
     }
     return 'valueOf() leaked as: ' + that;
   }
@@ -439,7 +451,7 @@ var ses;
     if (that === global) { return true; }
     if (that === void 0) {
       // Should report as a safe spec violation
-//      return false;
+      return false;
     }
     return 'valueOf() leaked as: ' + that;
   }
@@ -2050,6 +2062,16 @@ var ses;
       urls: [],
       sections: ['10.4.3'],
       tests: ['S10.4.3_A1']
+    },
+    {
+	description: 'Global leaks through strict this',
+	test: test_GLOBAL_LEAKS_FROM_STRICT_THIS,
+	repair: void 0,
+	preSeverity: severities.NOT_ISOLATED,
+	canRepair: false,
+	urls: [],
+	sections: ['10.4.3'],
+	tests: ['10.4.3-1-8gs.js', '10.4.3-1-8-s.js']
     },
     {
       description: 'Global object leaks from built-in methods',
