@@ -147,10 +147,17 @@ var ses;
         'delete': t
       }
     },
-    Proxy: {                         // ES-Harmony proposal
-      create: t,
-      createFunction: t
-    },
+// As of this writing, the WeakMap emulation in WeakMap.js relies on
+// the unguessability and undiscoverability of HIDDEN_NAME, a
+// secret property name. However, on a platform with built-in
+// Proxies, if whitelisted but not properly monkey patched, proxies
+// could be used to trap and thereby discover HIDDEN_NAME. So until we
+// (TODO(erights)) write the needed monkey patching of proxies, we
+// omit them from our whitelist.
+//    Proxy: {                         // ES-Harmony proposal
+//      create: t,
+//      createFunction: t
+//    },
     escape: t,                       // ES5 Appendix B
     unescape: t,                     // ES5 Appendix B
     Object: {

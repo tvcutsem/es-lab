@@ -298,8 +298,8 @@ var ses;
  * JavaScript context (i.e. a browser frame), as it relies on other
  * primordial objects and methods not yet being perturbed.
  *
- * <p>TODO(erights): This file tries to protects itself from some
- * post-initialization perturbation, by stashing some of the
+ * <p>TODO(erights): This file tries to protect itself from some
+ * post-initialization perturbation by stashing some of the
  * primordials it needs for later use, but this attempt is currently
  * incomplete. We need to revisit this when we support Confined-ES5,
  * as a variant of SES in which the primordials are not frozen. See
@@ -605,9 +605,6 @@ var ses;
    *
    * <p>No workaround attempted. Just reporting that this platform is
    * not SES-safe.
-   *
-   * <p>TODO(erights): Why is this not detecting the IE10preview2
-   * failures at tes262's 10.4.3-1-8-s and 10.4.3-1-8gs
    */
   function test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS() {
     global.___global_test_function___ = function() { return this; };
@@ -626,6 +623,18 @@ var ses;
     if (that === void 0) { return false; }
     if (that === global) { return true; }
     return 'This leaked as: ' + that;
+  }
+
+  var strictThis = this;
+
+  /**
+   *
+   */
+  function test_GLOBAL_LEAKS_FROM_STRICT_THIS() {
+    if (strictThis === void 0) { return false; }
+    if (strictThis === global) { return true; }
+    if ({}.toString.call(strictThis) === '[object Window]') { return true; }
+    return 'Strict this leaked as: ' + strictThis;
   }
 
   /**
@@ -649,7 +658,7 @@ var ses;
     if (that === global) { return true; }
     if (that === void 0) {
       // Should report as a safe spec violation
-//      return false;
+      return false;
     }
     return 'valueOf() leaked as: ' + that;
   }
@@ -671,7 +680,7 @@ var ses;
     if (that === global) { return true; }
     if (that === void 0) {
       // Should report as a safe spec violation
-//      return false;
+      return false;
     }
     return 'valueOf() leaked as: ' + that;
   }
@@ -2284,6 +2293,16 @@ var ses;
       tests: ['S10.4.3_A1']
     },
     {
+	description: 'Global leaks through strict this',
+	test: test_GLOBAL_LEAKS_FROM_STRICT_THIS,
+	repair: void 0,
+	preSeverity: severities.NOT_ISOLATED,
+	canRepair: false,
+	urls: [],
+	sections: ['10.4.3'],
+	tests: ['10.4.3-1-8gs', '10.4.3-1-8-s']
+    },
+    {
       description: 'Global object leaks from built-in methods',
       test: test_GLOBAL_LEAKS_FROM_BUILTINS,
       repair: void 0,
@@ -2931,6 +2950,22 @@ var WeakMap;
    * proposed ES6 extensions that appear on our whitelist. We monkey
    * patch them to remove HIDDEN_NAME from the list of properties they
    * returns.
+   *
+   * <p>TODO(erights): On a platform with built-in Proxies, proxies
+   * could be used to trap and thereby discover the HIDDEN_NAME, so we
+   * need to monkey patch Proxy.create, Proxy.createFunction, etc, in
+   * order to wrap the provided handler with the real handler which
+   * filters out all traps using HIDDEN_NAME.
+   *
+   * <p>TODO(erights): Revisit Mike Stay's suggestion that we use an
+   * encapsulated function at a not-necessarily-secret name, which
+   * uses the Stiegler shared-state rights amplification pattern to
+   * reveal the associated value only to the WeakMap in which this key
+   * is associated with that value. Since only the key retains the
+   * function, the function can also remember the key without causing
+   * leakage of the key, so this doesn't violate our general gc
+   * goals. In addition, because the name need not be a guarded
+   * secret, we could efficiently handle cross-frame frozen keys.
    */
   var HIDDEN_NAME = 'ident:' + Math.random() + '___';
 
@@ -2961,12 +2996,9 @@ var WeakMap;
    */
   defProp(Object, 'getOwnPropertyNames', {
     value: function fakeGetOwnPropertyNames(obj) {
-      var result = gopn(obj);
-      var i = 0;
-      while ((i = result.indexOf(HIDDEN_NAME, i)) >= 0) {
-        result.splice(i, 1);
-      }
-      return result;
+      return gopn(obj).filter(function(name) {
+        return name !== HIDDEN_NAME;
+      });
     }
   });
 
@@ -2977,12 +3009,9 @@ var WeakMap;
   if ('getPropertyNames' in Object) {
     defProp(Object, 'getPropertyNames', {
       value: function fakeGetPropertyNames(obj) {
-        var result = originalProps.getPropertyNames(obj);
-        var i = 0;
-        while ((i = result.indexOf(HIDDEN_NAME, i)) >= 0) {
-          result.splice(i, 1);
-        }
-        return result;
+        return originalProps.getPropertyNames(obj).filter(function(name) {
+          return name !== HIDDEN_NAME;
+        });
       }
     });
   }
@@ -3377,10 +3406,17 @@ var ses;
         'delete': t
       }
     },
-    Proxy: {                         // ES-Harmony proposal
-      create: t,
-      createFunction: t
-    },
+// As of this writing, the WeakMap emulation in WeakMap.js relies on
+// the unguessability and undiscoverability of HIDDEN_NAME, a
+// secret property name. However, on a platform with built-in
+// Proxies, if whitelisted but not properly monkey patched, proxies
+// could be used to trap and thereby discover HIDDEN_NAME. So until we
+// (TODO(erights)) write the needed monkey patching of proxies, we
+// omit them from our whitelist.
+//    Proxy: {                         // ES-Harmony proposal
+//      create: t,
+//      createFunction: t
+//    },
     escape: t,                       // ES5 Appendix B
     unescape: t,                     // ES5 Appendix B
     Object: {

@@ -66,8 +66,8 @@ var ses;
  * JavaScript context (i.e. a browser frame), as it relies on other
  * primordial objects and methods not yet being perturbed.
  *
- * <p>TODO(erights): This file tries to protects itself from some
- * post-initialization perturbation, by stashing some of the
+ * <p>TODO(erights): This file tries to protect itself from some
+ * post-initialization perturbation by stashing some of the
  * primordials it needs for later use, but this attempt is currently
  * incomplete. We need to revisit this when we support Confined-ES5,
  * as a variant of SES in which the primordials are not frozen. See
@@ -396,7 +396,7 @@ var ses;
   var strictThis = this;
 
   /**
-   * 
+   *
    */
   function test_GLOBAL_LEAKS_FROM_STRICT_THIS() {
     if (strictThis === void 0) { return false; }

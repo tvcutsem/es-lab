@@ -134,6 +134,22 @@ var WeakMap;
    * proposed ES6 extensions that appear on our whitelist. We monkey
    * patch them to remove HIDDEN_NAME from the list of properties they
    * returns.
+   *
+   * <p>TODO(erights): On a platform with built-in Proxies, proxies
+   * could be used to trap and thereby discover the HIDDEN_NAME, so we
+   * need to monkey patch Proxy.create, Proxy.createFunction, etc, in
+   * order to wrap the provided handler with the real handler which
+   * filters out all traps using HIDDEN_NAME.
+   *
+   * <p>TODO(erights): Revisit Mike Stay's suggestion that we use an
+   * encapsulated function at a not-necessarily-secret name, which
+   * uses the Stiegler shared-state rights amplification pattern to
+   * reveal the associated value only to the WeakMap in which this key
+   * is associated with that value. Since only the key retains the
+   * function, the function can also remember the key without causing
+   * leakage of the key, so this doesn't violate our general gc
+   * goals. In addition, because the name need not be a guarded
+   * secret, we could efficiently handle cross-frame frozen keys.
    */
   var HIDDEN_NAME = 'ident:' + Math.random() + '___';
 
@@ -164,12 +180,9 @@ var WeakMap;
    */
   defProp(Object, 'getOwnPropertyNames', {
     value: function fakeGetOwnPropertyNames(obj) {
-      var result = gopn(obj);
-      var i = 0;
-      while ((i = result.indexOf(HIDDEN_NAME, i)) >= 0) {
-        result.splice(i, 1);
-      }
-      return result;
+      return gopn(obj).filter(function(name) {
+        return name !== HIDDEN_NAME;
+      });
     }
   });
 
@@ -180,12 +193,9 @@ var WeakMap;
   if ('getPropertyNames' in Object) {
     defProp(Object, 'getPropertyNames', {
       value: function fakeGetPropertyNames(obj) {
-        var result = originalProps.getPropertyNames(obj);
-        var i = 0;
-        while ((i = result.indexOf(HIDDEN_NAME, i)) >= 0) {
-          result.splice(i, 1);
-        }
-        return result;
+        return originalProps.getPropertyNames(obj).filter(function(name) {
+          return name !== HIDDEN_NAME;
+        });
       }
     });
   }
