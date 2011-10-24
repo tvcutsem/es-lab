@@ -262,6 +262,7 @@ var Trait = (function(){
         pd = makeRequiredPropDesc(name);
       } else if (typeof pd.value === 'function') {
         pd.method = true;
+        pd.enumerable = false;
         if ('prototype' in pd.value) {
           freeze(pd.value.prototype);
         }
