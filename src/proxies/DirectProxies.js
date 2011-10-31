@@ -1219,11 +1219,15 @@ Proxy.forward = {
     return target[name];
   },
   set: function(name, value, target, proxy) {
+    // Note: if target[name] is an accessor,
+    // will invoke that accessor with this === target,
+    // not this === proxy
+    
     // FIXME: to reliably forward set, would need to reproduce
     // the built-in [[CanPut]] algorithm. The downside of that
     // is that if target is itself a proxy, it will trigger
-    // numerous traps. Better would be to have an
-    // Object.setProperty(target, name, val) function.
+    // numerous traps. Better would be to have a built-in function:
+    // Object.setProperty(target, name, val) -> boolean.
     target[name] = val;
     // bad behavior when set fails in non-strict mode
     return true;
