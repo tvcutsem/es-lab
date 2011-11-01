@@ -1288,6 +1288,30 @@ var ses;
   }
 
   /**
+   * Like test_PROTO_NOT_FROZEN but using defineProperty rather than
+   * assignment.
+   */
+  function test_PROTO_REDEFINABLE() {
+    if (!('freeze' in Object)) {
+      // Object.freeze and its ilk (including preventExtensions) are
+      // still absent on released Android and would
+      // cause a bogus bug detection in the following try/catch code.
+      return false;
+    }
+    var x = Object.preventExtensions({});
+    if (x.__proto__ === void 0 && !('__proto__' in x)) { return false; }
+    var y = {};
+    try {
+      Object.defineProperty(x, '__proto__', { value: y });
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      return 'Defining __proto__ failed with: ' + err;
+    }
+    if (y.isPrototypeOf(x)) { return true; }
+    return 'Defining __proto__ neither failed nor succeeded';
+  }
+
+  /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1624
    *
    * <p>Both a direct strict eval operator and an indirect strict eval
@@ -2434,6 +2458,16 @@ var ses;
     {
       description: 'Prototype still mutable on non-extensible object',
       test: test_PROTO_NOT_FROZEN,
+      repair: void 0,
+      preSeverity: severities.NOT_OCAP_SAFE,
+      canRepair: false,
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832'],
+      sections: ['8.6.2'],
+      tests: ['S8.6.2_A8']
+    },
+    {
+      description: 'Prototype still redefinable on non-extensible object',
+      test: test_PROTO_REDEFINABLE,
       repair: void 0,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: false,

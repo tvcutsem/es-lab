@@ -570,6 +570,21 @@ var ses;
     needToFreeze.forEach(Object.freeze);
   };
 
+  /**
+   * Where the "that" parameter represents a "this" that should have
+   * been bound to "undefined" but may be bound to a global or
+   * globaloid object.
+   *
+   * <p>The "desc" parameter is a string to describe the "that" if it
+   * is something unexpected.
+   */
+  function testGlobalLeak(desc, that) {
+    if (that === void 0) { return false; }
+    if (that === global) { return true; }
+    if ({}.toString.call(that) === '[object Window]') { return true; }
+    return desc + ' leaked as: ' + that;
+  }
+
   ////////////////////// Tests /////////////////////
   //
   // Each test is a function of no arguments that should not leave any
@@ -610,9 +625,7 @@ var ses;
     global.___global_test_function___ = function() { return this; };
     var that = ___global_test_function___();
     delete global.___global_test_function___;
-    if (that === void 0) { return false; }
-    if (that === global) { return true; }
-    return 'This leaked as: ' + that;
+    return testGlobalLeak('Global func "this"', that);
   }
 
   /**
@@ -620,9 +633,7 @@ var ses;
    */
   function test_GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS() {
     var that = (function(){ return this; })();
-    if (that === void 0) { return false; }
-    if (that === global) { return true; }
-    return 'This leaked as: ' + that;
+    return testGlobalLeak('Anon func "this"', that);
   }
 
   var strictThis = this;
@@ -631,10 +642,7 @@ var ses;
    *
    */
   function test_GLOBAL_LEAKS_FROM_STRICT_THIS() {
-    if (strictThis === void 0) { return false; }
-    if (strictThis === global) { return true; }
-    if ({}.toString.call(strictThis) === '[object Window]') { return true; }
-    return 'Strict this leaked as: ' + strictThis;
+    return testGlobalLeak('Strict "this"', strictThis);
   }
 
   /**
@@ -655,12 +663,11 @@ var ses;
       if (err instanceof TypeError) { return false; }
       return 'valueOf() threw: ' + err;
     }
-    if (that === global) { return true; }
     if (that === void 0) {
       // Should report as a safe spec violation
       return false;
     }
-    return 'valueOf() leaked as: ' + that;
+    return testGlobalLeak('valueOf()', that);
   }
 
   /**
@@ -677,12 +684,11 @@ var ses;
     } finally {
       delete global.___global_valueOf_function___;
     }
-    if (that === global) { return true; }
     if (that === void 0) {
       // Should report as a safe spec violation
       return false;
     }
-    return 'valueOf() leaked as: ' + that;
+    return testGlobalLeak('Global valueOf()', that);
   }
 
   /**
@@ -1511,6 +1517,30 @@ var ses;
     }
     if (y.isPrototypeOf(x)) { return true; }
     return 'Mutating __proto__ neither failed nor succeeded';
+  }
+
+  /**
+   * Like test_PROTO_NOT_FROZEN but using defineProperty rather than
+   * assignment.
+   */
+  function test_PROTO_REDEFINABLE() {
+    if (!('freeze' in Object)) {
+      // Object.freeze and its ilk (including preventExtensions) are
+      // still absent on released Android and would
+      // cause a bogus bug detection in the following try/catch code.
+      return false;
+    }
+    var x = Object.preventExtensions({});
+    if (x.__proto__ === void 0 && !('__proto__' in x)) { return false; }
+    var y = {};
+    try {
+      Object.defineProperty(x, '__proto__', { value: y });
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      return 'Defining __proto__ failed with: ' + err;
+    }
+    if (y.isPrototypeOf(x)) { return true; }
+    return 'Defining __proto__ neither failed nor succeeded';
   }
 
   /**
@@ -2660,6 +2690,16 @@ var ses;
     {
       description: 'Prototype still mutable on non-extensible object',
       test: test_PROTO_NOT_FROZEN,
+      repair: void 0,
+      preSeverity: severities.NOT_OCAP_SAFE,
+      canRepair: false,
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832'],
+      sections: ['8.6.2'],
+      tests: ['S8.6.2_A8']
+    },
+    {
+      description: 'Prototype still redefinable on non-extensible object',
+      test: test_PROTO_REDEFINABLE,
       repair: void 0,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: false,
