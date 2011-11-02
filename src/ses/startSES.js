@@ -225,6 +225,13 @@ ses.startSES = function(global,
   //var TAME_GLOBAL_EVAL = true;
   var TAME_GLOBAL_EVAL = false;
 
+  /**
+   * If this is true, then we redefine these to work around a
+   * stratification bug in the Chrome debugger. To allow this, we have
+   * also whitelisted these four properties in whitelist.js
+   */
+  //var EMULATE_LEGACY_GETTERS_SETTERS = false;
+  var EMULATE_LEGACY_GETTERS_SETTERS = true;
 
   //////////////// END KLUDGE SWITCHES ///////////
 
@@ -232,6 +239,14 @@ ses.startSES = function(global,
   var dirty = true;
 
   var hop = Object.prototype.hasOwnProperty;
+
+  var getProto = Object.getPrototypeOf;
+  var defProp = Object.defineProperty;
+  var gopd = Object.getOwnPropertyDescriptor;
+  var gopn = Object.getOwnPropertyNames;
+  var keys = Object.keys;
+  var freeze = Object.freeze;
+  var create = Object.create;
 
   function fail(str) {
     debugger;
@@ -241,6 +256,74 @@ ses.startSES = function(global,
   if (typeof WeakMap === 'undefined') {
     fail('No built-in WeakMaps, so WeakMap.js must be loaded first');
   }
+
+
+  if (EMULATE_LEGACY_GETTERS_SETTERS) {
+    defProp(Object.prototype, '__defineGetter__', {
+      value: function(sprop, getter) {
+        sprop = ''+sprop;
+        if (hop.call(this, sprop)) {
+          defProp(this, sprop, { get: getter });
+        } else {
+          defProp(this, sprop, {
+            get: getter,
+            set: undefined,
+            enumerable: true,
+            configurable: true
+          });
+        }
+      },
+      writable: false,
+      enumerable: false,
+      configurable: false
+    });
+    defProp(Object.prototype, '__defineSetter__', {
+      value: function(sprop, setter) {
+        sprop = ''+sprop;
+        if (hop.call(this, sprop)) {
+          defProp(this, sprop, { set: setter });
+        } else {
+          defProp(this, sprop, {
+            get: undefined,
+            set: setter,
+            enumerable: true,
+            configurable: true
+          });
+        }
+      },
+      writable: false,
+      enumerable: false,
+      configurable: false
+    });
+    defProp(Object.prototype, '__lookupGetter__', {
+      value: function(sprop) {
+        sprop = ''+sprop;
+        var base = this, desc = void 0;
+        while (base && !(desc = gopd(base, sprop))) { base = getProto(base); }
+        return desc && desc.get;
+      },
+      writable: false,
+      enumerable: false,
+      configurable: false
+    });
+    defProp(Object.prototype, '__lookupSetter__', {
+      value: function(sprop) {
+        sprop = ''+sprop;
+        var base = this, desc = void 0;
+        while (base && !(desc = gopd(base, sprop))) { base = getProto(base); }
+        return desc && desc.set;
+      },
+      writable: false,
+      enumerable: false,
+      configurable: false
+    });
+  } else {
+    delete Object.prototype.__defineGetter__;
+    delete Object.prototype.__defineSetter__;
+    delete Object.prototype.__lookupGetter__;
+    delete Object.prototype.__lookupSetter__;
+  }
+
 
   /**
    * By this time, WeakMap has already monkey patched Object.freeze if
@@ -264,7 +347,7 @@ ses.startSES = function(global,
    * this {@code imports} should first be initialized with a copy of the
    * properties of {@code sharedImports}, but nothing enforces this.
    */
-  var sharedImports = Object.create(null);
+  var sharedImports = create(null);
 
   (function startSESPrelude() {
 
@@ -332,7 +415,7 @@ ses.startSES = function(global,
      * property copying.
      */
     function makeImports() {
-      var imports = Object.create(null);
+      var imports = create(null);
       copyToImports(imports, sharedImports);
       return imports;
     }
@@ -361,11 +444,11 @@ ses.startSES = function(global,
      * browser's {@code window} object.
      */
     function copyToImports(imports, from) {
-      Object.getOwnPropertyNames(from).forEach(function(name) {
-        var desc = Object.getOwnPropertyDescriptor(from, name);
+      gopn(from).forEach(function(name) {
+        var desc = gopd(from, name);
         desc.enumerable = false;
         desc.configurable = true;
-        Object.defineProperty(imports, name, desc);
+        defProp(imports, name, desc);
       });
       return imports;
     }
@@ -377,9 +460,9 @@ ses.startSES = function(global,
      * {@code imports}.
      */
     function makeScopeObject(imports, freeNames) {
-      var scopeObject = Object.create(null);
-      Object.keys(freeNames).forEach(function(name) {
-        var desc = Object.getOwnPropertyDescriptor(imports, name);
+      var scopeObject = create(null);
+      keys(freeNames).forEach(function(name) {
+        var desc = gopd(imports, name);
         if (!desc || desc.writable !== false || desc.configurable) {
           // If there is no own property, or it isn't a non-writable
           // value property, or it is configurable. Note that this
@@ -417,9 +500,9 @@ ses.startSES = function(global,
           };
         }
         desc.enumerable = false;
-        Object.defineProperty(scopeObject, name, desc);
+        defProp(scopeObject, name, desc);
       });
-      return Object.freeze(scopeObject);
+      return freeze(scopeObject);
     }
 
 
@@ -462,7 +545,7 @@ ses.startSES = function(global,
         var scopeObject = makeScopeObject(imports, freeNames);
         return wrapper.call(scopeObject).call(imports);
       };
-      Object.freeze(compiledCode.prototype);
+      freeze(compiledCode.prototype);
       return compiledCode;
     }
 
@@ -491,7 +574,7 @@ ses.startSES = function(global,
      */
     function compileExpr(exprSrc, opt_sourcePosition) {
       var result = internalCompileExpr(exprSrc, opt_sourcePosition);
-      return Object.freeze(result);
+      return freeze(result);
     }
 
 
@@ -525,7 +608,7 @@ ses.startSES = function(global,
           result.push(m[1]);
         }
       }
-      return Object.freeze(result);
+      return freeze(result);
     }
 
     /**
@@ -558,7 +641,7 @@ ses.startSES = function(global,
         '(function() {' + modSrc + '}).call(this)',
         opt_sourcePosition);
       moduleMaker.requirements = getRequirements(modSrc);
-      return Object.freeze(moduleMaker);
+      return freeze(moduleMaker);
     }
 
     /**
@@ -635,14 +718,14 @@ ses.startSES = function(global,
         }
         defending.set(val, true);
         defendingList.push(val);
-        Object.freeze(val);
-        recur(Object.getPrototypeOf(val));
-        Object.getOwnPropertyNames(val).forEach(function(p) {
+        freeze(val);
+        recur(getProto(val));
+        gopn(val).forEach(function(p) {
           if (typeof val === 'function' &&
               (p === 'caller' || p === 'arguments')) {
             return;
           }
-          var desc = Object.getOwnPropertyDescriptor(val, p);
+          var desc = gopd(val, p);
           recur(desc.value);
           recur(desc.get);
           recur(desc.set);
@@ -683,9 +766,9 @@ ses.startSES = function(global,
       copyToImports: copyToImports
     };
     var extensionsRecord = extensions();
-    Object.getOwnPropertyNames(extensionsRecord).forEach(function (p) {
-      Object.defineProperty(cajaVM, p,
-          Object.getOwnPropertyDescriptor(extensionsRecord, p));
+    gopn(extensionsRecord).forEach(function (p) {
+      defProp(cajaVM, p,
+          gopd(extensionsRecord, p));
     });
     // Move this down here so it is not available during the call to
     // extensions.
@@ -722,7 +805,7 @@ ses.startSES = function(global,
    * original property.
    */
   function read(base, name) {
-    var desc = Object.getOwnPropertyDescriptor(base, name);
+    var desc = gopd(base, name);
     if (!desc) { return undefined; }
     if ('value' in desc && !desc.writable && !desc.configurable) {
       return desc.value;
@@ -730,7 +813,7 @@ ses.startSES = function(global,
 
     var result = base[name];
     try {
-      Object.defineProperty(base, name, {
+      defProp(base, name, {
         value: result, writable: false, configurable: false
       });
     } catch (ex) {
@@ -751,13 +834,13 @@ ses.startSES = function(global,
    * these non-enumerable since ES5.1 specifies that all these
    * properties are non-enumerable on the global object.
    */
-  Object.keys(whitelist).forEach(function(name) {
-    var desc = Object.getOwnPropertyDescriptor(global, name);
+  keys(whitelist).forEach(function(name) {
+    var desc = gopd(global, name);
     if (desc) {
       var permit = whitelist[name];
       if (permit) {
         var value = read(global, name);
-        Object.defineProperty(sharedImports, name, {
+        defProp(sharedImports, name, {
           value: value,
           writable: true,
           enumerable: false,
@@ -767,7 +850,7 @@ ses.startSES = function(global,
     }
   });
   if (TAME_GLOBAL_EVAL) {
-    Object.defineProperty(sharedImports, 'eval', {
+    defProp(sharedImports, 'eval', {
       value: cajaVM.eval,
       writable: true,
       enumerable: false,
@@ -799,7 +882,7 @@ ses.startSES = function(global,
       fail('primordial reachable through multiple paths');
     }
     whiteTable.set(value, permit);
-    Object.keys(permit).forEach(function(name) {
+    keys(permit).forEach(function(name) {
       if (permit[name] !== 'skip') {
         var sub = read(value, name);
         register(sub, permit[name]);
@@ -822,7 +905,7 @@ ses.startSES = function(global,
       if (hop.call(permit, name)) { return permit[name]; }
     }
     while (true) {
-      base = Object.getPrototypeOf(base);
+      base = getProto(base);
       if (base === null) { return false; }
       permit = whiteTable.get(base);
       if (permit && hop.call(permit, name)) {
@@ -899,7 +982,7 @@ ses.startSES = function(global,
     }
 
     try {
-      Object.defineProperty(base, name, {
+      defProp(base, name, {
         get: poison,
         set: poison,
         enumerable: false,
@@ -909,8 +992,8 @@ ses.startSES = function(global,
       try {
         // Perhaps it's writable non-configurable, it which case we
         // should still be able to freeze it in a harmless state.
-        var value = Object.getOwnPropertyDescriptor(base, name).value;
-        Object.defineProperty(base, name, {
+        var value = gopd(base, name).value;
+        defProp(base, name, {
           value: value === null ? null : void 0,
           writable: false,
           configurable: false
@@ -921,7 +1004,7 @@ ses.startSES = function(global,
         return false;
       }
     }
-    var desc2 = Object.getOwnPropertyDescriptor(base, name);
+    var desc2 = gopd(base, name);
     if (desc2.get === poison &&
         desc2.set === poison &&
         !desc2.configurable) {
@@ -954,7 +1037,7 @@ ses.startSES = function(global,
     if (value !== Object(value)) { return; }
     if (cleaning.get(value)) { return; }
     cleaning.set(value, true);
-    Object.getOwnPropertyNames(value).forEach(function(name) {
+    gopn(value).forEach(function(name) {
       var path = prefix + (prefix ? '.' : '') + name;
       var p = getPermit(value, name);
       if (p) {
@@ -969,12 +1052,12 @@ ses.startSES = function(global,
         cleanProperty(value, name, path);
       }
     });
-    Object.freeze(value);
+    freeze(value);
   }
   clean(sharedImports, '');
 
 
-  Object.keys(propertyReports).sort().forEach(function(status) {
+  keys(propertyReports).sort().forEach(function(status) {
     var group = propertyReports[status];
     ses.logger.reportDiagnosis(group.severity, status, group.list);
   });
