@@ -36,11 +36,13 @@
  *
  */
 
-// Auxiliary predictates and built-ins
+// Auxiliary predictates and definitions
 
+// assumes 'desc' is a proper property descriptor
 function isAccessorDescriptor(desc) {
   return desc !== undefined && 'set' in desc;
 }
+// assumes 'desc' is a proper property descriptor
 function isDataDescriptor(desc) {
   return desc !== undefined && 'writable' in desc;
 }
@@ -55,21 +57,21 @@ Object.getPropertyDescriptor = function(subject, name) {
 };
 
 // Proposed alternative to ES5 [[Put]]:
-//  Object.setProperty ( R, P, V, O)
+//  Object.setProperty ( R, P, V, O )
 //    Return the result of calling the built-in [[SetP]] method of O
 //    passing R, P and V as arguments.
+// The below function implements the built-in [[SetP]] algorithm of Objects.
 //
-// receiver = the object on which the assignment is being performed
-// parent = the receiver or one of its prototypes, on which we are searching for
-// shadowed properties
+// @param receiver the object on which the assignment is initially performed
+// @param parent the receiver or one of its prototypes, which we need to check
+// for shadowed accessor or non-writable data properties
 Object.setProperty = function(receiver, name, value, parent) {
-  parent = parent || receiver; // parent defaults to receiver
+  parent = parent || receiver; // start lookup in receiver
 
-  // first, check whether parent has a non-writable property shadowing name on receiver
+  // first, check whether parent has a non-writable property shadowing
+  // name on receiver
   var ownDesc = Object.getOwnPropertyDescriptor(parent, name);
   if (isDataDescriptor(ownDesc)) {
-    // if (!Object.isExtensible(receiver)) return false;
-      // 8.12.4 [[CanPut]] 8.a, not strictly necessary, caught below
     if (!ownDesc.writable) return false;
   }
   if (isAccessorDescriptor(ownDesc)) {
@@ -81,9 +83,9 @@ Object.setProperty = function(receiver, name, value, parent) {
   // search parent's prototype
   var proto = Object.getPrototypeOf(parent);
   if (proto === null) {
-    // parent was the last prototype, now we know that 'name' is not shadowed by
-    // an accessor or a non-writable data property, so we can update or add the
-    // property to the initial receiver object
+    // parent was the last prototype, now we know that 'name' is not shadowed
+    // by an accessor or a non-writable data property, so we can update or
+    // add the property to the initial receiver object
     var receiverDesc = Object.getOwnPropertyDescriptor(receiver, name);
     if (isAccessorDescriptor(receiverDesc)) {
       if(receiverDesc.set === undefined) return false;
@@ -95,7 +97,7 @@ Object.setProperty = function(receiver, name, value, parent) {
       Object.defineProperty(receiver, name, {value: value});
       return true;
     }
-    // property doesn't exist yet, add it
+    // property doesn't exist yet on the receiver, add it
     if (!Object.isExtensible(receiver)) return false;
     Object.defineProperty(receiver, name,
       { value: value,
@@ -158,12 +160,24 @@ Object.setPropertyES5 = function(receiver, name, val) {
   return true;
 };
 
+// generates a series of tests to check whether the above definitions
+// return equivalent results. Also tests whether the above definitions
+// are both equivalent to the built-in [[Put]] algorithm of this JS engine
 function runTests() {
   var child = null;
   var parent = null;
   var name = 'x';
   var val = 0;
   
+  /**
+   * Sets up the property 'name = val' on child and/or parent, depending
+   * on the 'place' parameter.
+   *
+   * @param place one of "own", "inherited", "both" or "none"
+   * @param writability a boolean indicating whether the property is writable
+   * @param type one of "data" or "accessor"
+   * @param extensibility a boolean indicating whether child is extensible
+   */
   function setup(place, writability, type, extensibility) {
     parent = Object.create(null);
     child = Object.create(parent);
@@ -208,27 +222,32 @@ function runTests() {
         [true, false].forEach(function (extensibility) {
         
           setup(place, writability, type, extensibility);
-          var oldSetPropertyResult = Object.setPropertyES5(child, name, val + 1);
+          var oldSetPropertyResult = Object.setPropertyES5(child, name, val+1);
           var oldPropValueResult = child[name];
           
           setup(place, writability, type, extensibility);
-          var newSetPropertyResult = Object.setProperty(child, name, val + 1);
+          var newSetPropertyResult = Object.setProperty(child, name, val+1);
           var newPropValueResult = child[name];
 
           setup(place, writability, type, extensibility);
-          child[name] = val + 1;
+          try {
+            child[name] = val+1;
+          } catch(e) {
+            print("! exception setting child[name]: "+e);
+          }
           var builtinPropValueResult = child[name];
           
-          print("== " + [place, writability,type,extensibility].join(" ") + " ==");
+          print("== " + [place, writability,type,extensibility].join(" "));
           if (oldSetPropertyResult !== newSetPropertyResult) {
-            print("! setProperty results don't match. old: " + oldSetPropertyResult +
-                  " new: " + newSetPropertyResult); 
+            print("! setProperty results don't match. old: " +
+                  oldSetPropertyResult + " new: " + newSetPropertyResult);
           }
           if (oldPropValueResult !== newPropValueResult ||
               oldPropValueResult !== builtinPropValueResult ||
               newPropValueResult !== builtinPropValueResult) {
             print("! new values don't match. old: " + oldPropValueResult +
-                  " new: " + newPropValueResult + " builtin: " + builtinPropValueResult);     
+                  " new: " + newPropValueResult +
+                  " builtin: " + builtinPropValueResult);
           }
         })
       })
@@ -236,4 +255,7 @@ function runTests() {
   });
 }
 
-runTests();
+// when headless, automatically run the tests
+if (typeof window === "undefined") {
+  runTests(); 
+}
