@@ -2766,7 +2766,7 @@ var ses;
              'https://mail.mozilla.org/pipermail/es-discuss/' +
                '2011-November/017997.html'],
       sections: ['8.12.4'],
-      tests: []
+      tests: ['15.2.3.6-4-405']
     }
   ];
 
