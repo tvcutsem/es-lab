@@ -1595,6 +1595,23 @@ var ses;
     return 'E4X literal expression had no value';
   }
 
+  /**
+   *
+   */
+  function test_ASSIGN_CAN_OVERRIDE_FROZEN() {
+    var x = Object.freeze({foo: 88});
+    var y = Object.create(x);
+    try {
+      y.foo = 99;
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      return 'Override failed with: ' + err;
+    }
+    if (y.foo === 99) { return true; }
+    if (y.foo === 88) { return 'Override failed silently'; }
+    return 'Unexpected override outcome: ' + y.foo;
+  }
+
 
   ////////////////////// Repairs /////////////////////
   //
@@ -2737,6 +2754,18 @@ var ses;
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=695577',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=695579'],
       sections: [],
+      tests: []
+    },
+    {
+      description: 'Assignment can override frozen inherited property',
+      test: test_ASSIGN_CAN_OVERRIDE_FROZEN,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1169',
+             'https://mail.mozilla.org/pipermail/es-discuss/' +
+               '2011-November/017997.html'],
+      sections: ['8.12.4'],
       tests: []
     }
   ];
