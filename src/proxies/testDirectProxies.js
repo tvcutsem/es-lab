@@ -142,7 +142,7 @@ function createEmulatedObject(emulatedProps, emulatedProto, success) {
     },
     enumerate: function() {
       return Object.getOwnPropertyNames(emulatedProps).filter(function (name) {
-        emulatedProps[name].enumerable;
+        return emulatedProps[name].enumerable;
       });
     }
   }, emulatedProto);
@@ -331,6 +331,81 @@ TESTS.testKeysCannotListNewProperties =
       function() {
         Object.keys(brokenProxy);  
       });
+  };
+  
+TESTS.testGOPNMustListNonConfigurableProperties =
+  function(brokenProxy, emulatedProps, emulatedProto, success) {
+    emulatedProps.x = {value:1, enumerable:true, configurable:false};
+    emulatedProps.y = {value:2, enumerable:true, configurable:true};
+    Object.preventExtensions(brokenProxy);
+    delete emulatedProps.x;
+    assertThrows("getOwnPropertyNames trap failed to include "+
+                 "non-configurable property 'x'",
+      function() {
+        Object.getOwnPropertyNames(brokenProxy);
+      });
+  };
+
+TESTS.testGPNMustListNonConfigurableProperties =
+  function(brokenProxy, emulatedProps, emulatedProto, success) {
+    emulatedProps.x = {value:1, enumerable:true, configurable:false};
+    emulatedProps.y = {value:2, enumerable:true, configurable:true};
+    Object.preventExtensions(brokenProxy);
+    delete emulatedProps.x;
+    assertThrows("getPropertyNames trap failed to include "+
+                 "non-configurable property 'x'",
+      function() {
+        Object.getPropertyNames(brokenProxy);
+      });
+  };
+
+TESTS.testEnumerateMustListNonConfigurableEnumerableProperties =
+  function(brokenProxy, emulatedProps, emulatedProto, success) {
+    emulatedProps.x = {value:1, enumerable:true, configurable:false};
+    emulatedProps.y = {value:2, enumerable:true, configurable:true};
+    Object.preventExtensions(brokenProxy);
+    delete emulatedProps.x;
+    assertThrows("enumerate trap failed to include "+
+                 "non-configurable enumerable property 'x'",
+      function() {
+        for (var name in brokenProxy) { }
+      });
+  };
+
+TESTS.testEnumerateMaySkipNonConfigurableNonEnumerableProperties =
+  function(brokenProxy, emulatedProps, emulatedProto, success) {
+    emulatedProps.x = {value:1, enumerable:false, configurable:false};
+    emulatedProps.y = {value:2, enumerable:true, configurable:false};
+    Object.preventExtensions(brokenProxy);
+    delete emulatedProps.x;
+    var res = [];
+    for (var name in brokenProxy) { res.push(name); }
+    assert(res.length === 1,
+      "ok to drop non-configurable non-enumerable props in enumerate trap");
+  };
+
+TESTS.testKeysMustListNonConfigurableEnumerableProperties =
+  function(brokenProxy, emulatedProps, emulatedProto, success) {
+    emulatedProps.x = {value:1, enumerable:true, configurable:false};
+    emulatedProps.y = {value:2, enumerable:true, configurable:true};
+    Object.preventExtensions(brokenProxy);
+    delete emulatedProps.x;
+    assertThrows("keys trap failed to include "+
+                 "non-configurable enumerable property 'x'",
+      function() {
+        Object.keys(brokenProxy);
+      });
+  };
+
+TESTS.testKeysMaySkipNonConfigurableNonEnumerableProperties =
+  function(brokenProxy, emulatedProps, emulatedProto, success) {
+    emulatedProps.x = {value:1, enumerable:false, configurable:false};
+    emulatedProps.y = {value:2, enumerable:true, configurable:false};
+    Object.preventExtensions(brokenProxy);
+    delete emulatedProps.x;
+    var res = Object.keys(brokenProxy);
+    assert(res.length === 1,
+      "ok to drop non-configurable non-enumerable props in keys trap");
   };
 
 /**

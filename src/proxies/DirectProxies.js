@@ -107,10 +107,15 @@
 //   undefined getter
 // - set cannot report a successful assignment for frozen data
 //   properties or sealed accessors with an undefined setter.
+// - get{Own}PropertyNames lists all sealed properties of the target.
+// - keys lists all enumerable sealed properties of the target.
+// - enumerate lists all enumerable sealed properties of the target.
 // - if a property of a non-extensible proxy is reported as non-existent,
 //   then it must forever be reported as non-existent. This applies to
 //   own and inherited properties and is enforced in the
-//   delete, fix, get{Own}PropertyDescriptor and has{Own} traps.
+//   delete, fix, get{Own}PropertyDescriptor, has{Own},
+//   get{Own}PropertyNames, keys and enumerate traps (by deleting the
+//   property reported as "non-existent" from the target)
 
 // Violation of any of these invariants by H will result in TypeError being
 // thrown.
@@ -129,13 +134,9 @@
 
 // Invariants currently not enforced:
 // - getOwnPropertyNames lists only own property names
-// - getOwnPropertyNames lists all own property names
 // - keys lists only enumerable own property names
-// - keys lists all enumerable own property names
-// - enumerate lists all enumerable own property names
-// - if any of the enumerating traps reports a property as non-existent,
-//   we do not enforce that such properties cannot later be reported
-//   as existent
+// Both traps may list more property names than are actually defined on the
+// target.
 
 // Invariants with regard to inheritance are currently not enforced.
 // - a non-configurable potentially inherited property on a proxy with
@@ -482,10 +483,6 @@ SyncHandler.prototype = {
     }
     
     name = String(name);
-    // TODO: consider giving getPropertyDescriptor access to the proxy
-    // in addition to the handler. getPropertyDescriptor is called instead of
-    // 'get' when a proxy is located in the prototype chain. The handler may
-    // want to know via which proxy the property was requested.
     var desc = trap(name, this.target);
     desc = normalizeAndCompletePropertyDescriptor(desc);
 
@@ -652,15 +649,17 @@ SyncHandler.prototype = {
    * Checks whether the trap result does not contain any new properties
    * if the proxy is non-extensible.
    *
+   * Any own properties of the target that are not included in the
+   * 'getPropertyNames' result are deleted from the target. This causes a
+   * TypeError if non-configurable properties are not included in the keys
+   * result. As such, we check whether the returned result contains at least
+   * all sealed properties of the target object.
+   *
    * Additionally, the trap result is normalized.
    * Instead of returning the trap result directly:
    *  - create and return a fresh Array,
    *  - of which each element is coerced to String,
    *  - which does not contain duplicates.
-   *
-   * TODO(tvcutsem): strictly speaking, the returned result should
-   * at least contain the non-configurable properties from this.target,
-   * but this might require an unpleasant amount of bookkeeping.
    */
   getOwnPropertyNames: function() {
     var trap = this.getTrap("getOwnPropertyNames");
@@ -693,6 +692,21 @@ SyncHandler.prototype = {
       result[i] = s;
     }
     
+    var ownProps = Object.getOwnPropertyNames(this.target);
+    ownProps.forEach(function (ownProp) {
+      if (!propNames[ownProp]) {
+        //  if ownProp is configurable, delete it from the target
+        //  if ownProp is non-configurable, delete will throw
+        try {
+          delete this.target[ownProp];
+        } catch (e) {
+          // rethrow solely to improve the error message
+          throw new TypeError("getOwnPropertyNames trap failed to include "+
+                              "non-configurable property '"+ownProp+"'");
+        }
+      }
+    });
+    
     return result;
   },
   
@@ -702,15 +716,17 @@ SyncHandler.prototype = {
    * non-extensible: the proxy may still inherit from extensible prototypes
    * that add new properties later.
    *
+   * Any own properties of the target that are not included in the
+   * 'getPropertyNames' result are deleted from the target. This causes a
+   * TypeError if non-configurable properties are not included in the keys
+   * result. As such, we check whether the returned result contains at least
+   * all sealed properties of the target object.
+   *
    * The trap result is normalized.
    * Instead of returning the trap result directly:
    *  - create and return a fresh Array,
    *  - of which each element is coerced to String,
    *  - which does not contain duplicates.
-   *
-   * TODO(tvcutsem): strictly speaking, the returned result should
-   * at least contain the non-configurable properties from this.target
-   * but this might require an unpleasant amount of bookkeeping.
    */
   getPropertyNames: function() {
     var trap = this.getTrap("getPropertyNames");
@@ -735,6 +751,22 @@ SyncHandler.prototype = {
       propNames[s] = true;
       result[i] = s;
     }
+    
+    var ownProps = Object.getOwnPropertyNames(this.target);
+    ownProps.forEach(function (ownProp) {
+      if (!propNames[ownProp]) {
+        //  if ownProp is configurable, delete it from the target
+        //  if ownProp is non-configurable, delete will throw
+        try {
+          delete this.target[ownProp];
+        } catch (e) {
+          // rethrow solely to improve the error message
+          throw new TypeError("getPropertyNames trap failed to include "+
+                              "non-configurable property '"+ownProp+"'");
+        }
+      }
+    });
+    
     return result;
   },
   
@@ -901,14 +933,16 @@ SyncHandler.prototype = {
   },
   
   /**
+   * Any enumerable own properties of the target that are not included in
+   * the 'enumerate' result are deleted from the target. This causes a
+   * TypeError if non-configurable properties are not included in the keys
+   * result.
+   *
    * The trap result is normalized.
    * The trap result is not returned directly. Instead:
    *  - create and return a fresh Array,
    *  - of which each element is coerced to String,
    *  - which does not contain duplicates
-   *
-   * TODO(tvcutsem): strictly speaking, the returned result should
-   * at least contain the enumerable non-configurable fixed properties.
    */
   enumerate: function() {
     var trap = this.getTrap("enumerate");
@@ -935,21 +969,37 @@ SyncHandler.prototype = {
       result[i] = s;
     }
 
+    var ownEnumerableProps = Object.keys(this.target);
+    ownEnumerableProps.forEach(function (ownEnumerableProp) {
+      if (!propNames[ownEnumerableProp]) {
+        //  if ownEnumerableProp is configurable, delete it from the target
+        //  if ownEnumerableProp is non-configurable, delete will throw
+        try {
+          delete this.target[ownEnumerableProp];
+        } catch (e) {
+          // rethrow solely to improve the error message
+          throw new TypeError("enumerate trap failed to include "+
+                              "non-configurable enumerable property '"+
+                              ownEnumerableProp+"'");
+        }
+      }
+    });
+
     return result;
   },
   
   /**
    * Checks whether the trap result does not contain any new properties
-   * if the proxy is non-extensible.
+   * if the proxy is non-extensible. Any enumerable own properties of the
+   * target that are not included in the 'keys' result are deleted from
+   * the target. This causes a TypeError if non-configurable properties
+   * are not included in the keys result.
    *
    * The trap result is normalized.
    * The trap result is not returned directly. Instead:
    *  - create and return a fresh Array,
    *  - of which each element is coerced to String,
    *  - which does not contain duplicates
-   *
-   * TODO(tvcutsem): strictly speaking, the returned result should
-   * at least contain the enumerable non-configurable fixed properties.
    */
   keys: function() {
     var trap = this.getTrap("keys");
@@ -980,6 +1030,22 @@ SyncHandler.prototype = {
      propNames[s] = true;
      result[i] = s;
     }
+    
+    var ownEnumerableProps = Object.keys(this.target);
+    ownEnumerableProps.forEach(function (ownEnumerableProp) {
+      if (!propNames[ownEnumerableProp]) {
+        //  if ownEnumerableProp is configurable, delete it from the target
+        //  if ownEnumerableProp is non-configurable, delete will throw
+        try {
+          delete this.target[ownEnumerableProp];
+        } catch (e) {
+          // rethrow solely to improve the error message
+          throw new TypeError("keys trap failed to include "+
+                              "non-configurable enumerable property '"+
+                              ownEnumerableProp+"'");
+        }
+      }
+    });
     
     return result;
   },
@@ -1228,6 +1294,7 @@ Proxy.forward = {
     // is that if target is itself a proxy, it will trigger
     // numerous traps. Better would be to have a built-in function:
     // Object.setProperty(target, name, val) -> boolean.
+    // see http://wiki.ecmascript.org/doku.php?id=strawman:refactoring_put
     target[name] = val;
     // bad behavior when set fails in non-strict mode
     return true;
