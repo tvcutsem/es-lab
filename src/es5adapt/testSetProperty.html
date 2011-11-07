@@ -38,6 +38,28 @@ function print(text) {
 </script>
 <script src="setProperty.js"></script>
 <body onload="runTests()">
+  <div style="border: 1px solid grey; padding: 5px">
+  <p>
+    This file tests whether the <a href="http://wiki.ecmascript.org/doku.php?id=strawman:refactoring_put">proposed refactoring for [[Put]]</a> (i.e. property assignment) is semantically equivalent to the existing ES5 semantics for [[Put]]. Below, you should see all generated test cases. If the behavior of ES5 [[Put]] and proposed ES.next [[Put]] deviates, output is shown in red. Also, if any of these two behaviors deviates from your browser's built-in [[Put]] algorithm, output is shown in red.
+  </p>
+  <p>The test setup is as follows:
+    <code>
+<pre>
+var parent = Object.create(null);
+var child = Object.create(parent);
+// setup child.x = 0 and/or parent.x = 0
+child.x = 1
+</pre>
+    </code>The setup phase is parameterized with the following variables:
+    <ul>
+      <li>exists: one of "own", "inherited", "both" or "none". Describes whether <tt>x</tt> is already defined on the child (own), the parent (inherited), on both, or on neither (none).</li>
+      <li>writable: a boolean indicating whether <tt>x</tt> is writable</li>
+      <li>type: whether <tt>x</tt> is already defined as a "data" or "accessor" property</li>
+      <li>extensible: a boolean indicating whether child is extensible</li>
+    </ul>
+  </p>
+  </div>
+  <p>Test results:</p>
   <div id="report"></div>
 </body>
 </html>
