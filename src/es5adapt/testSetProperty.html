@@ -27,13 +27,15 @@
 <script>
 function load(){} // stub
 function print(text) {
-  var div = document.createElement("div");
+  var tt = document.createElement("tt");
   var txt = document.createTextNode(text);
-  div.appendChild(txt);
+  tt.appendChild(txt);
   if (/^!.*/.test(text)) {
-    div.style.color = 'red';
+    tt.style.color = "red";
   }
-  document.getElementById('report').appendChild(div);
+  var report = document.getElementById("report");
+  report.appendChild(tt);
+  report.appendChild(document.createElement("br"));
 }
 </script>
 <script src="setProperty.js"></script>
@@ -57,6 +59,7 @@ child.x = 1
       <li>type: whether <tt>x</tt> is already defined as a "data" or "accessor" property</li>
       <li>extensible: a boolean indicating whether child is extensible</li>
     </ul>
+    Each test case below shows the above parameters used to setup the test, then prints the value of <tt>child.x</tt> after the ES5 assignment, the ES.next assignment and the built-in assignment on this browser.
   </p>
   </div>
   <p>Test results:</p>

@@ -237,18 +237,20 @@ function runTests() {
           var builtinPropValueResult = child[name];
           
           print("{exists: "+place+", writable: "+writability+
-                ", type: "+type+ ", extensible: "+extensibility+"}");
-          
+                ", type: "+type+ ", extensible: "+extensibility+"} "+
+                " => ES5: " + oldPropValueResult +
+                ", ES.next: " + newPropValueResult +
+                ", this browser: " + builtinPropValueResult);
           if (oldSetPropertyResult !== newSetPropertyResult) {
-            print("! setProperty results don't match. old: " +
-                  oldSetPropertyResult + " new: " + newSetPropertyResult);
+            print("! setProperty results don't match. ES5: " +
+                  oldSetPropertyResult + " ES.next: " + newSetPropertyResult);
           }
           if (oldPropValueResult !== newPropValueResult ||
               oldPropValueResult !== builtinPropValueResult ||
               newPropValueResult !== builtinPropValueResult) {
-            print("! new values don't match. old: " + oldPropValueResult +
-                  " new: " + newPropValueResult +
-                  " builtin: " + builtinPropValueResult);
+            print("! new values for x don't match. ES5: " + oldPropValueResult +
+                  ", ES.next: " + newPropValueResult +
+                  ", this browser: " + builtinPropValueResult);
           }
         })
       })
