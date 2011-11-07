@@ -151,7 +151,7 @@ Object.setPropertyES5 = function(receiver, name, val) {
       }
     }
   }
-  if (!Object.isExtensible(receiver)) return false; // INSERTED
+  if (!Object.isExtensible(receiver)) return false;
   Object.defineProperty(receiver, name, {
     value: val, 
     writable: true, 
@@ -195,8 +195,7 @@ function runTests() {
       propdesc.get =  function() { return name_slot; },
       propdesc.set = writability ? function(nv) {
         if (this !== child) {
-          throw new TypeError("accessor receiver does not match for case "+
-                              [place,writability,type,extensibility].join(" "));
+          print("! receiver in accessor does not match");
         }
         name_slot = nv;
       } : undefined;
@@ -237,7 +236,9 @@ function runTests() {
           }
           var builtinPropValueResult = child[name];
           
-          print("== " + [place, writability,type,extensibility].join(" "));
+          print("{exists: "+place+", writable: "+writability+
+                ", type: "+type+ ", extensible: "+extensibility+"}");
+          
           if (oldSetPropertyResult !== newSetPropertyResult) {
             print("! setProperty results don't match. old: " +
                   oldSetPropertyResult + " new: " + newSetPropertyResult);
