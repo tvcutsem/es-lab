@@ -1279,6 +1279,8 @@ Proxy.forward = {
     return ({}).hasOwnProperty.call(target, name);
   },
   get: function(name, target, proxy) {
+    // FIXME: replace by Object.getProperty(receiver, name, target);
+    
     // Note: if target[name] is an accessor,
     // will invoke that accessor with this === target,
     // not this === proxy
@@ -1288,8 +1290,9 @@ Proxy.forward = {
     // Note: if target[name] is an accessor,
     // will invoke that accessor with this === target,
     // not this === proxy
-    
-    // FIXME: to reliably forward set, would need to reproduce
+
+    // FIXME: replace by Object.setProperty(receiver, name, value, target);    
+    // To reliably forward set, would need to reproduce
     // the built-in [[CanPut]] algorithm. The downside of that
     // is that if target is itself a proxy, it will trigger
     // numerous traps. Better would be to have a built-in function:
