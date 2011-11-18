@@ -25,8 +25,7 @@
  * for the specific language governing rights and limitations under the
  * License.
  *
- * The Original Code is a prototype implementation of the fixed Harmony
- * Proxies strawman.
+ * The Original Code is a prototype implementation of Harmony Direct Proxies.
  *
  * The Initial Developer of the Original Code is
  * Tom Van Cutsem, Vrije Universiteit Brussel.
@@ -37,7 +36,7 @@
  *
  */
 
-(function(){ // function-as-module pattern
+(function(global){ // function-as-module pattern
 "use strict";
 
 // ----------------------------------------------------------------------------
@@ -45,39 +44,40 @@
 // http://wiki.ecmascript.org/doku.php?id=strawman:direct_proxies
 
 // This code was tested on tracemonkey / Firefox 7
-// The code also loads correctly on v8 --harmony_proxies --harmony_weakmaps (v3.6.5.1)
-// but does not work entirely as intended, since v8 proxies don't allow
-// proxy handlers to return non-configurable property descriptors
+// The code also loads correctly on
+//   v8 --harmony_proxies --harmony_weakmaps (v3.6.5.1)
+// but does not work entirely as intended, since v8 proxies, as specified,
+// don't allow proxy handlers to return non-configurable property descriptors
 
 // Language Dependencies:
-//  - ECMAScript 5, ES5 strict mode
+//  - ECMAScript 5/strict
 //  - Harmony Proxies with non-standard support for passing through
 //    non-configurable properties
 //  - Harmony WeakMaps
 // Patches:
 //  - Object.{freeze,seal,preventExtensions}
 //  - Object.{isFrozen,isSealed,isExtensible}
-//  - Object.{getPropertyDescriptor,getPropertyNames}
 //  - Proxy.stopTrapping
 //  - Proxy.create{Function}
 //  - Proxy.for
+//  - Reflect
 
 // Loading this file will automatically patch Proxy.create and
 // Proxy.createFunction such that they support direct proxies
 // This is done by automatically wrapping all user-defined proxy handlers
-// in a SyncHandler that checks and enforces ES5 invariants.
+// in a Validator handler that checks and enforces ES5 invariants.
 
 // A direct proxy is a proxy for an existing object called the target object.
 
-// A SyncHandler is a wrapper for a target proxy handler H.
-// The SyncHandler forwards all operations to H, but additionally
+// A Validator handler is a wrapper for a target proxy handler H.
+// The Validator forwards all operations to H, but additionally
 // performs a number of integrity checks on the results of some traps,
 // to make sure H does not violate the ES5 invariants w.r.t. non-configurable
 // properties and non-extensible, sealed or frozen objects.
 
 // For each property that H exposes as own, non-configurable
 // (e.g. by returning a descriptor from a call to getOwnPropertyDescriptor)
-// the SyncHandler defines those properties on the target object.
+// the Validator handler defines those properties on the target object.
 // When the proxy becomes non-extensible, also configurable own properties
 // are checked against the target.
 // We will call properties that are defined on the target object
@@ -87,7 +87,7 @@
 // We will name fixed non-configurable non-writable properties "frozen
 // properties".
 
-// The SyncHandler upholds the following invariants w.r.t. non-configurability:
+// The Validator handler upholds the following invariants w.r.t. non-configurability:
 // - getOwnPropertyDescriptor cannot report sealed properties as non-existent
 // - getOwnPropertyDescriptor cannot report incompatible changes to the
 //   attributes of a sealed property (e.g. reporting a non-configurable
@@ -113,9 +113,8 @@
 // - if a property of a non-extensible proxy is reported as non-existent,
 //   then it must forever be reported as non-existent. This applies to
 //   own and inherited properties and is enforced in the
-//   delete, fix, get{Own}PropertyDescriptor, has{Own},
-//   get{Own}PropertyNames, keys and enumerate traps (by deleting the
-//   property reported as "non-existent" from the target)
+//   delete, get{Own}PropertyDescriptor, has{Own},
+//   get{Own}PropertyNames, keys and enumerate traps
 
 // Violation of any of these invariants by H will result in TypeError being
 // thrown.
@@ -124,7 +123,7 @@
 // is invoked on the proxy, the set of own property names for the proxy is
 // fixed. Any property name that is not fixed is called a 'new' property.
 
-// The SyncHandler upholds the following invariants regarding extensibility:
+// The Validator upholds the following invariants regarding extensibility:
 // - getOwnPropertyDescriptor cannot report new properties as existent
 //   (it must report them as non-existent by returning undefined)
 // - defineProperty cannot successfully add a new property (it must reject)
@@ -144,9 +143,9 @@
 // (An object with non-mutable ancestry is a non-extensible object whose
 // [[Prototype]] is either null or an object with non-mutable ancestry.)
 
-// The SyncHandler is compatible with the existing ForwardingHandler.
-// Invariant: when a SyncHandler wraps a ForwardingHandler to an
-// ES5-compliant object, the SyncHandler will never throw a TypeError.
+// The Validator is compatible with the existing ForwardingHandler.
+// Invariant: when a Validator wraps a ForwardingHandler to an
+// ES5-compliant object, the Validator will never throw a TypeError.
 
 // ==== Changes in Handler API compared to current Harmony:Proxies ====
 
@@ -186,6 +185,17 @@
 //
 // 5. All traps now receive an additional, "optional" argument referring to
 //    the 'target' object that they're serving.
+
+// TODO:
+// - refactoring the prototype chain: add unit tests
+// - rename call to apply
+// - Proxy.for -> Proxy (function)
+// - receiver arg last in get/set, not in call
+// - put the |target| up front in all traps
+// - get rid of Proxy.stopTrapping
+// - default semantics for missing "construct" trap?
+// - add BaseHandler with default implementation of derived traps
+// - add singleton "non-committal" target object
 
 // ----------------------------------------------------------------------------
 
@@ -258,6 +268,39 @@ function toCompletePropertyDescriptor(desc) {
   return internalDesc;
 }
 
+function isEmptyDescriptor(desc) {
+  return !('get' in desc) &&
+         !('set' in desc) &&
+         !('value' in desc) &&
+         !('writable' in desc) &&
+         !('enumerable' in desc) &&
+         !('configurable' in desc);
+}
+
+function isEquivalentDescriptor(desc1, desc2) {
+  return sameValue(desc1.get, desc2.get) &&
+         sameValue(desc1.set, desc2.set) &&
+         sameValue(desc1.value, desc2.value) &&
+         sameValue(desc1.writable, desc2.writable) &&
+         sameValue(desc1.enumerable, desc2.enumerable) &&
+         sameValue(desc1.configurable, desc2.configurable);
+}
+
+// copied from http://wiki.ecmascript.org/doku.php?id=harmony:egal
+function sameValue(x, y) {
+  if (x === y) {
+    // 0 === -0, but they are not identical
+    return x !== 0 || 1 / x === 1 / y;
+  }
+
+  // NaN !== NaN, but they are identical.
+  // NaNs are the only non-reflexive value, i.e., if x !== x,
+  // then x is a NaN.
+  // isNaN is broken: it converts its argument to number, so
+  // isNaN("foo") => true
+  return x !== x && y !== y;
+}
+
 /**
  * Returns a fresh property descriptor that is guaranteed
  * to be complete (i.e. contain all the standard attributes).
@@ -325,8 +368,78 @@ var prim_preventExtensions = Object.preventExtensions,
 function isFixed(name, target) {
   return ({}).hasOwnProperty.call(target, name);
 }
+function isSealed(name, target) {
+  var desc = Object.getOwnPropertyDescriptor(target, name);
+  if (desc === undefined) { return false; }
+  return !desc.configurable;
+}
 
-// ---- The SyncHandler wrapper around user handlers ----
+/**
+ * Performs all validation that Object.defineProperty performs,
+ * without actually defining the property. Returns a boolean
+ * indicating whether validation succeeded.
+ *
+ * Implementation transliterated from ES5.1 section 8.12.9
+ */
+function validateProperty(target, name, desc) {
+  var current = Object.getOwnPropertyDescriptor(target, name);
+  var extensible = Object.isExtensible(target);
+  if (current === undefined && extensible === false) {
+    return false;
+  }
+  if (current === undefined && extensible === true) {
+    return true;
+  }
+  if (isEmptyDescriptor(desc)) {
+    return true;
+  }
+  if (isEquivalentDescriptor(current, desc)) {
+    return true;
+  }
+  if (current.configurable === false) {
+    if (desc.configurable === true) {
+      return false;
+    }
+    if ('enumerable' in desc && desc.enumerable !== current.enumerable) {
+      return false;
+    }
+  }
+  if (isGenericDescriptor(desc)) {
+    return true;
+  }
+  if (isDataDescriptor(current) !== isDataDescriptor(desc)) {
+    if (current.configurable === false) {
+      return false;
+    }
+    return true;
+  }
+  if (isDataDescriptor(current) && isDataDescriptor(desc)) {
+    if (current.configurable === false) {
+      if (current.writable === false && desc.writable === true) {
+        return false;
+      }
+      if (current.writable === false) {
+        if ('value' in desc && !sameValue(desc.value, current.value)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+  if (isAccessorDescriptor(current) && isAccessorDescriptor(desc)) {
+    if (current.configurable === false) {
+      if ('set' in desc && !sameValue(desc.set, current.set)) {
+        return false;
+      }
+      if ('get' in desc && !sameValue(desc.get, current.get)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// ---- The Validator handler wrapper around user handlers ----
 
 /**
  * @param target the object wrapped by this proxy.
@@ -336,16 +449,16 @@ function isFixed(name, target) {
  * ones.
  *
  * @param handler the handler of the direct proxy. The object emulated by
- * this handler is kept "in sync" with the target object of the direct proxy.
- * In doing so, any violations that the handler makes against the invariants
+ * this handler is validated against the target object of the direct proxy.
+ * Any violations that the handler makes against the invariants
  * of the target will cause a TypeError to be thrown.
  *
  * Both target and handler must be proper Objects at initialization time.
  * If this.targetHandler is set to 'null', that indicates that the
  * direct proxy has become "fixed" and the handler is "switched off".
- * At that point, the SyncHandler behaves like the default forwarding handler.
+ * At that point, the Validator behaves like the default forwarding handler.
  */
-function SyncHandler(target, handler) {
+function Validator(target, handler) {
   // this is a const reference, this.target should never change
   this.target = target;
   // this is a non-const reference, may be set to null once
@@ -353,7 +466,7 @@ function SyncHandler(target, handler) {
   this.targetHandler = handler;
 }
 
-SyncHandler.prototype = {
+Validator.prototype = {
 
   /**
    * If getTrap returns undefined, the caller should perform the
@@ -413,24 +526,25 @@ SyncHandler.prototype = {
     
     var trap = this.getTrap("getOwnPropertyDescriptor");
     if (trap === undefined) {
-      return Proxy.forward.getOwnPropertyDescriptor(name, this.target);
+      return Reflect.getOwnPropertyDescriptor(this.target, name);
     }
     
     name = String(name);
     var desc = trap(name, this.target);
     desc = normalizeAndCompletePropertyDescriptor(desc);
-    
-    if (desc === undefined) {
-      // if name exists and is non-configurable, delete will throw
-      //   (can't report a non-configurable own property as non-existent)
-      // if name does not exist, will be a no-op
-      // if name is configurable, will delete the property      
-      try {
-        delete this.target[name];
-      } catch (e) {
-        // re-throw solely to improve the error message
+    if (desc === undefined) {      
+      if (isSealed(name, this.target)) {
         throw new TypeError("cannot report non-configurable property '"+name+
-                            "' as non-existent");
+                            "' as non-existent");        
+      }
+      if (!Object.isExtensible(this.target) &&
+          isFixed(name, this.target)) {
+          // if handler is allowed to return undefined, we cannot guarantee
+          // that it will not return a descriptor for this property later.
+          // Once a property has been reported as non-existent on a non-extensible
+          // object, it should forever be reported as non-existent
+          throw new TypeError("cannot report existing own property '"+name+
+                              "' as non-existent on a non-extensible object");
       }
       return undefined;
     }
@@ -442,81 +556,59 @@ SyncHandler.prototype = {
     // test. Separating out the cases to improve error reporting.
     
     if (!Object.isExtensible(this.target)) {
-      // if name exists, should be a no-op as per ES5 8.12.9, step 5
-      // if name does not exist, will raise an exception
-      // as per ES5 8.12.9, step 3
-      try {
-        Object.defineProperty(this.target, name, {});
-      } catch (e) {
-        // rethrowing solely to improve error message
+      if (!isFixed(name, this.target)) {
         throw new TypeError("cannot report a new own property '"+
-                            name + "' on a non-extensible object");
+                            name + "' on a non-extensible object");        
       }
     }
 
-    if (isFixed(name, this.target) || // if 'name' was previously fixed,
-        !desc.configurable) { // or is reported as non-configurable
-      // check and remember the returned desc
-      // will throw if desc is not compatible with fixedDesc, if it exists
-      Object.defineProperty(this.target, name, desc);
+    if (isFixed(name, this.target)) {
+      if (!validateProperty(this.target, name, desc)) {
+        throw new TypeError("cannot report incompatible property descriptor "+
+                            "for property '"+name+"'");
+      }
+    }
+    
+    if (!desc.configurable && !isFixed(name, this.target)) {
+      // if the property is non-existent on the target, but is reported
+      // as a non-configurable property, it may later be reported as
+      // non-existent, which violates the invariant that if the property
+      // might disappear, the configurable attribute must be true.
+      throw new TypeError("cannot report a non-configurable descriptor "+
+                          "for non-existent property '"+name+"'");
     }
     
     return desc;
   },
   
   /**
-   * If name denotes a fixed property, check:
-   *   - whether targetHandler reports it as existent
-   *   - whether the returned descriptor is compatible with the fixed property
-   * Additionally, the returned descriptor is normalized and completed.
-   * If name does not denote a fixed property, we assume the returned property
-   * is inherited. In that case, no further checks are required, since an
-   * inherited property, even if non-configurable, can always be shadowed later
-   * by an incompatible property further down the inheritance chain
+   * In the direct proxies design with refactored prototype climbing,
+   * this trap is deprecated. For proxies-as-prototypes, instead
+   * of calling this trap, the get, set, has or enumerate traps are
+   * called instead.
+   *
+   * In this implementation, we "abuse" getPropertyDescriptor to
+   * support trapping the get or set traps for proxies-as-prototypes.
+   * We do this by returning a getter/setter pair that invokes
+   * the corresponding traps.
+   *
+   * This is an imperfect implementation, since getPropertyDescriptor
+   * will always return a descriptor, even if the property does not
+   * exist. Hence, the emulation of "name in Object.create(aProxy)"
+   * is broken, and will always return true. The only way to fix this
+   * is to have getPropertyDescriptor always invoke the |has()| trap
+   * and only return a getter/setter descriptor if has() returns true.
+   * However, then both the has() and get/set() traps would be called
+   * for property access/assignment on a proxy-as-prototype.
    */
   getPropertyDescriptor: function(name) {
-    "use strict";
-    var trap = this.getTrap("getPropertyDescriptor");
-    if (trap === undefined) {
-      // default forwarding behavior
-      return Proxy.forward.getPropertyDescriptor(name, this.target);
-    }
-    
-    name = String(name);
-    var desc = trap(name, this.target);
-    desc = normalizeAndCompletePropertyDescriptor(desc);
-
-    if (desc === undefined) {
-      // if name exists and is non-configurable, delete will throw
-      //   (can't report a non-configurable own property as non-existent)
-      // if name does not exist, will be a no-op
-      // if name is configurable, will delete the property      
-      try {
-        delete this.target[name];        
-      } catch (e) {
-        // re-throw solely to improve the error message
-        throw new TypeError("cannot report non-configurable property '"+name+
-                            "' as non-existent");
-      }
-      return undefined;
-    }
-    
-    // at this point, we know (desc !== undefined), i.e.
-    // targetHandler reports 'name' as an existing property
-    
-    // even if proxy is non-extensible and does not define 'name',
-    // [[GetProperty]] may return a descriptor ('name' may have been
-    // defined on an extensible [[Prototype]])
-    
-    // if 'name' was previously fixed, check and remember the returned desc
-    // Note: if name was not previously fixed,
-    // we treat desc as an inherited property and perform no check
-    if (isFixed(name, this.target)) {
-      // will throw if desc is not compatible with fixedDesc, if it exists
-      Object.defineProperty(this.target, name, desc);
-    }
-    
-    return desc;
+    var handler = this;
+    return {
+      get: function() { return handler.get(this, name); },
+      set: function(val) { return handler.set(this, name, val); },
+      enumerable: true,
+      configurable: true
+    };
   },
   
   /**
@@ -537,7 +629,7 @@ SyncHandler.prototype = {
     var trap = this.getTrap("defineProperty");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.defineProperty(name, desc, this.target);
+      return Reflect.defineProperty(this.target, name, desc);
     }
 
     name = String(name);
@@ -552,21 +644,23 @@ SyncHandler.prototype = {
       // test. Separating out the cases to improve error reporting.
       
       if (!Object.isExtensible(this.target)) {
-        // if name exists, should be a no-op as per ES5 8.12.9, step 5
-        // if name does not exist, will raise an exception
-        // as per ES5 8.12.9, step 3
-        try {
-          Object.defineProperty(this.target, name, {});
-        } catch (e) {
-          // rethrowing solely to improve error message
+        if (!isFixed(name, this.target)) {
           throw new TypeError("cannot successfully add a new property '"+
-                              name + "' to a non-extensible object");
+                              name + "' to a non-extensible object");          
         }
       }
 
-      if (isFixed(name, this.target) || !desc.configurable) {
-        // will throw if desc is not compatible with fixedDesc, if it exists
-        Object.defineProperty(this.target, name, desc);
+      if (isFixed(name, this.target)) {
+        if (!validateProperty(this.target, name, desc)) {
+          throw new TypeError("cannot define incompatible property "+
+                              "descriptor for property '"+name+"'");
+        }
+      }
+      
+      if (!desc.configurable && !isFixed(name, this.target)) {
+        throw new TypeError("cannot successfully define a non-configurable "+
+                            "descriptor for non-existent property '"+
+                            name+"'");
       }
       
     }
@@ -586,7 +680,7 @@ SyncHandler.prototype = {
     var trap = this.getTrap("protect");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.protect(operation, this.target);
+      return Reflect.protect(this.target, operation);
     }
 
     var success = trap(operation, this.target);
@@ -605,24 +699,24 @@ SyncHandler.prototype = {
     var trap = this.getTrap("stopTrapping");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.stopTrapping(this.target);
+      return Reflect.stopTrapping(this.target);
     }
     
     var success = trap(this.target);
-    // the SyncHandler proxy becomes disabled by the caller of
+    // the proxy becomes disabled by the caller of
     // the stopTrapping trap, if it returns true
     return !!success; // coerce to Boolean
   },
   
   /**
-   * If name denotes a fixed property, check whether handler rejects.
+   * If name denotes a sealed property, check whether handler rejects.
    */
-  'delete': function(name) { 
+  delete: function(name) { 
     "use strict";
     var trap = this.getTrap("delete");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.delete(name, this.target);
+      return Reflect.delete(this.target, name);
     }
     
     name = String(name);
@@ -630,13 +724,7 @@ SyncHandler.prototype = {
     res = !!res; // coerce to Boolean
     
     if (res === true) {
-      //  if name was not previously fixed, this is a no-op
-      //  if name is fixed and configurable, delete it from the target
-      //  if name is fixed and non-configurable, delete will throw
-      try {
-        delete this.target[name];
-      } catch (e) {
-        // rethrow solely to improve the error message
+      if (isSealed(name, this.target)) {
         throw new TypeError("property '"+name+"' is non-configurable "+
                             "and can't be deleted");        
       }
@@ -665,7 +753,7 @@ SyncHandler.prototype = {
     var trap = this.getTrap("getOwnPropertyNames");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.getOwnPropertyNames(this.target);
+      return Reflect.getOwnPropertyNames(this.target);
     }
     
     var trapResult = trap(this.target);
@@ -693,16 +781,22 @@ SyncHandler.prototype = {
     }
     
     var ownProps = Object.getOwnPropertyNames(this.target);
+    var target = this.target;
     ownProps.forEach(function (ownProp) {
       if (!propNames[ownProp]) {
-        //  if ownProp is configurable, delete it from the target
-        //  if ownProp is non-configurable, delete will throw
-        try {
-          delete this.target[ownProp];
-        } catch (e) {
-          // rethrow solely to improve the error message
+        if (isSealed(ownProp, target)) {
           throw new TypeError("getOwnPropertyNames trap failed to include "+
-                              "non-configurable property '"+ownProp+"'");
+                              "non-configurable property '"+ownProp+"'");          
+        }
+        if (!Object.isExtensible(target) &&
+            isFixed(ownProp, target)) {
+            // if handler is allowed to report ownProp as non-existent,
+            // we cannot guarantee that it will never later report it as
+            // existent. Once a property has been reported as non-existent
+            // on a non-extensible object, it should forever be reported as
+            // non-existent
+            throw new TypeError("cannot report existing own property '"+ownProp+
+                                "' as non-existent on a non-extensible object");
         }
       }
     });
@@ -711,63 +805,14 @@ SyncHandler.prototype = {
   },
   
   /**
-   * Contrary to getOwnPropertyNames, this trap does not check whether the
-   * trap result does not contain any new properties if the proxy is
-   * non-extensible: the proxy may still inherit from extensible prototypes
-   * that add new properties later.
-   *
-   * Any own properties of the target that are not included in the
-   * 'getPropertyNames' result are deleted from the target. This causes a
-   * TypeError if non-configurable properties are not included in the keys
-   * result. As such, we check whether the returned result contains at least
-   * all sealed properties of the target object.
-   *
-   * The trap result is normalized.
-   * Instead of returning the trap result directly:
-   *  - create and return a fresh Array,
-   *  - of which each element is coerced to String,
-   *  - which does not contain duplicates.
+   * In the direct proxies design with refactored prototype climbing,
+   * this trap is deprecated. For proxies-as-prototypes, for-in will
+   * call the enumerate() trap. If that trap is not defined, the
+   * operation is forwarded to the target, no more fallback on this
+   * fundamental trap.
    */
   getPropertyNames: function() {
-    var trap = this.getTrap("getPropertyNames");
-    if (trap === undefined) {
-      // default forwarding behavior
-      return Proxy.forward.getPropertyNames(this.target);
-    }
-    
-    var trapResult = trap(this.target);
-      
-    // propNames is used as a set of strings
-    var propNames = Object.create(null);
-    var numProps = +trapResult.length;
-    var result = new Array(numProps);
-    
-    for (var i = 0; i < numProps; i++) {
-      var s = String(trapResult[i]);
-      if (propNames[s]) {
-        throw new TypeError("getPropertyNames cannot list a "+
-                            "duplicate property '"+s+"'");
-      }
-      propNames[s] = true;
-      result[i] = s;
-    }
-    
-    var ownProps = Object.getOwnPropertyNames(this.target);
-    ownProps.forEach(function (ownProp) {
-      if (!propNames[ownProp]) {
-        //  if ownProp is configurable, delete it from the target
-        //  if ownProp is non-configurable, delete will throw
-        try {
-          delete this.target[ownProp];
-        } catch (e) {
-          // rethrow solely to improve the error message
-          throw new TypeError("getPropertyNames trap failed to include "+
-                              "non-configurable property '"+ownProp+"'");
-        }
-      }
-    });
-    
-    return result;
+    throw new TypeError("getPropertyNames trap is deprecated");
   },
   
   // === derived traps ===
@@ -783,7 +828,7 @@ SyncHandler.prototype = {
     var trap = this.getTrap("hasOwn");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.hasOwn(name, this.target);
+      return Reflect.hasOwn(this.target, name);
     }
 
     name = String(name);
@@ -791,32 +836,27 @@ SyncHandler.prototype = {
     res = !!res; // coerce to Boolean
         
     if (res === false) {
-      try {
-        // if name exists and is non-configurable, delete will throw
-        //   (can't report a non-configurable own property as non-existent)
-        // if name does not exist, will be a no-op
-        // if name is configurable, will delete the property (this also
-        // ensures that on a non-extensible proxy it cannot be added later)         
-        delete this.target[name];
-      } catch (e) {
-        // re-throw solely to improve the error message
+      if (isSealed(name, this.target)) {
         throw new TypeError("cannot report existing non-configurable own "+
                             "property '"+name + "' as a non-existent own "+
                             "property");
+      }
+      if (!Object.isExtensible(this.target) &&
+          isFixed(name, this.target)) {
+          // if handler is allowed to return false, we cannot guarantee
+          // that it will return true for this property later.
+          // Once a property has been reported as non-existent on a non-extensible
+          // object, it should forever be reported as non-existent
+          throw new TypeError("cannot report existing own property '"+name+
+                              "' as non-existent on a non-extensible object");
       }
     } else {
       // res === true, if the proxy is non-extensible,
       // check that name is no new property
       if (!Object.isExtensible(this.target)) {
-        // if name exists, should be a no-op as per ES5 8.12.9, step 5
-        // if name does not exist, will raise an exception
-        // as per ES5 8.12.9, step 3
-        try {
-          Object.defineProperty(this.target, name, {});
-        } catch (e) {
-          // rethrowing solely to improve error message
+        if (!isFixed(name, this.target)) {
           throw new TypeError("cannot report a new own property '"+
-                              name + "' on a non-extensible object");
+                              name + "' on a non-extensible object");          
         }
       }
     }
@@ -832,7 +872,7 @@ SyncHandler.prototype = {
     var trap = this.getTrap("has");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.has(name, this.target);
+      return Reflect.has(this.target, name);
     }
     
     name = String(name);
@@ -840,17 +880,19 @@ SyncHandler.prototype = {
     res = !!res; // coerce to Boolean
     
     if (res === false) {
-      try {
-        // if name exists and is non-configurable, delete will throw
-        //   (can't report a non-configurable own property as non-existent)
-        // if name does not exist, will be a no-op
-        // if name is configurable, will delete the property          
-        delete this.target[name];
-      } catch (e) {
-        // re-throw solely to improve the error message
+      if (isSealed(name, this.target)) {
         throw new TypeError("cannot report existing non-configurable own "+
                             "property '"+ name + "' as a non-existent "+
-                            "property");
+                            "property");        
+      }
+      if (!Object.isExtensible(this.target) &&
+          isFixed(name, this.target)) {
+          // if handler is allowed to return false, we cannot guarantee
+          // that it will not return true for this property later.
+          // Once a property has been reported as non-existent on a non-extensible
+          // object, it should forever be reported as non-existent
+          throw new TypeError("cannot report existing own property '"+name+
+                              "' as non-existent on a non-extensible object");
       }
     }
     
@@ -866,29 +908,35 @@ SyncHandler.prototype = {
    * check its return value against the previously asserted value of the
    * fixed property.
    */
-  get: function(proxy, name) {
+  get: function(receiver, name) {
     var trap = this.getTrap("get");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.get(name, this.target, proxy);
+      return Reflect.get(this.target, receiver, name);
     }
 
     name = String(name);
-    var res = trap(name, this.target, proxy);
+    var res = trap(receiver, name, this.target);
     
     var fixedDesc = Object.getOwnPropertyDescriptor(this.target, name);
     // check consistency of the returned value
     if (fixedDesc !== undefined) { // getting an existing property
-      if (isDataDescriptor(fixedDesc)) { // own data property
-        // if name is a fixed non-configurable, non-writable property,
-        // this call will throw unless SameValue(res, this.target[name])
-        Object.defineProperty(this.target, name, {value: res}); 
+      if (isDataDescriptor(fixedDesc) &&
+          fixedDesc.configurable === false &&
+          fixedDesc.writable === false) { // own frozen data property
+        if (!sameValue(res, fixedDesc.value)) {
+          throw new TypeError("cannot report inconsistent value for "+
+                              "non-writable, non-configurable property '"+
+                              name+"'");
+        }
       } else { // it's an accessor property
-        if (fixedDesc.configurable === false && // non-configurable
-            fixedDesc.get === undefined &&      // accessor with undefined getter
-            res !== undefined) {                // that does not return undefined
-          throw new TypeError("must report undefined for non-configurable "+
-                              "accessor property '"+name+"' without getter");
+        if (isAccessorDescriptor(fixedDesc) &&
+            fixedDesc.configurable === false &&
+            fixedDesc.get === undefined) {
+          if (res !== undefined) {
+            throw new TypeError("must report undefined for non-configurable "+
+                                "accessor property '"+name+"' without getter");            
+          }
         }
       }
     }
@@ -900,27 +948,32 @@ SyncHandler.prototype = {
    * If name denotes a fixed non-configurable, non-writable data property,
    * check that the trap rejects the assignment.
    */
-  set: function(proxy, name, val) {
+  set: function(receiver, name, val) {
     var trap = this.getTrap("set");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.set(name, val, this.target, proxy);
+      return Reflect.set(this.target, receiver, name, val);
     }
         
     name = String(name);
-    var res = trap(name, val, this.target, proxy);
+    var res = trap(receiver, name, val, this.target);
     res = !!res; // coerce to Boolean
          
     // if success is reported, check whether property is truly assignable
     if (res === true) {
       var fixedDesc = Object.getOwnPropertyDescriptor(this.target, name);
       if (fixedDesc !== undefined) { // setting an existing property
-        if (isDataDescriptor(fixedDesc)) { // own data property
-          // if name is a fixed non-configurable, non-writable property,
-          // this call will throw unless SameValue(val, this.target[name])
-          Object.defineProperty(this.target, name, {value: val});
-        } else { // it's an accessor property
-          if (fixedDesc.configurable === false && // non-configurable
+        if (isDataDescriptor(fixedDesc) &&
+            fixedDesc.configurable === false &&
+            fixedDesc.writable === false) {
+          if (!sameValue(val, fixedDesc.value)) {
+            throw new TypeError("cannot successfully assign to a "+
+                                "non-writable, non-configurable property '"+
+                                name+"'");
+          }
+        } else {
+          if (isAccessorDescriptor(fixedDesc) &&
+              fixedDesc.configurable === false && // non-configurable
               fixedDesc.set === undefined) {      // accessor with undefined setter
             throw new TypeError("setting a property '"+name+"' that has "+
                                 " only a getter");
@@ -948,7 +1001,7 @@ SyncHandler.prototype = {
     var trap = this.getTrap("enumerate");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.enumerate(this.target);
+      return Reflect.enumerate(this.target);
     }
     
     var trapResult = trap(this.target);
@@ -970,17 +1023,24 @@ SyncHandler.prototype = {
     }
 
     var ownEnumerableProps = Object.keys(this.target);
+    var target = this.target;
     ownEnumerableProps.forEach(function (ownEnumerableProp) {
       if (!propNames[ownEnumerableProp]) {
-        //  if ownEnumerableProp is configurable, delete it from the target
-        //  if ownEnumerableProp is non-configurable, delete will throw
-        try {
-          delete this.target[ownEnumerableProp];
-        } catch (e) {
-          // rethrow solely to improve the error message
+        if (isSealed(ownEnumerableProp, target)) {
           throw new TypeError("enumerate trap failed to include "+
                               "non-configurable enumerable property '"+
-                              ownEnumerableProp+"'");
+                              ownEnumerableProp+"'");          
+        }
+        if (!Object.isExtensible(target) &&
+            isFixed(ownEnumerableProp, target)) {
+            // if handler is allowed not to report ownEnumerableProp as an own
+            // property, we cannot guarantee that it will never report it as
+            // an own property later. Once a property has been reported as
+            // non-existent on a non-extensible object, it should forever be
+            // reported as non-existent
+            throw new TypeError("cannot report existing own property '"+
+                                ownEnumerableProp+"' as non-existent on a "+
+                                "non-extensible object");
         }
       }
     });
@@ -1005,7 +1065,7 @@ SyncHandler.prototype = {
     var trap = this.getTrap("keys");
     if (trap === undefined) {
       // default forwarding behavior
-      return Proxy.forward.keys(this.target);
+      return Reflect.keys(this.target);
     }
     
     var trapResult = trap(this.target);
@@ -1032,17 +1092,24 @@ SyncHandler.prototype = {
     }
     
     var ownEnumerableProps = Object.keys(this.target);
+    var target = this.target;
     ownEnumerableProps.forEach(function (ownEnumerableProp) {
       if (!propNames[ownEnumerableProp]) {
-        //  if ownEnumerableProp is configurable, delete it from the target
-        //  if ownEnumerableProp is non-configurable, delete will throw
-        try {
-          delete this.target[ownEnumerableProp];
-        } catch (e) {
-          // rethrow solely to improve the error message
+        if (isSealed(ownEnumerableProp, target)) {
           throw new TypeError("keys trap failed to include "+
                               "non-configurable enumerable property '"+
-                              ownEnumerableProp+"'");
+                              ownEnumerableProp+"'");          
+        }
+        if (!Object.isExtensible(target) &&
+            isFixed(ownEnumerableProp, target)) {
+            // if handler is allowed not to report ownEnumerableProp as an own
+            // property, we cannot guarantee that it will never report it as
+            // an own property later. Once a property has been reported as
+            // non-existent on a non-extensible object, it should forever be
+            // reported as non-existent
+            throw new TypeError("cannot report existing own property '"+
+                                ownEnumerableProp+"' as non-existent on a "+
+                                "non-extensible object");
         }
       }
     });
@@ -1059,7 +1126,7 @@ SyncHandler.prototype = {
   call: function(thisBinding, args, target, proxy) {
     var trap = this.getTrap("call");
     if (trap === undefined) {
-      return Proxy.forward.call(thisBinding, args, target, proxy);
+      return Reflect.call(target, thisBinding, args);
     }
     
     if (typeof this.target === "function") {
@@ -1078,7 +1145,24 @@ SyncHandler.prototype = {
   new: function(args, target, proxy) {
     var trap = this.getTrap("new");
     if (trap === undefined) {
-      return Proxy.forward.new(args, target, proxy);
+      // TODO: consider falling back on Function.[[Construct]]
+      // instead
+      /*
+      var proto = this.get(proxy, 'prototype');
+      var obj;
+      if (Object(proto) === proto) {
+        obj = Object.create(proto);        
+      } else {
+        obj = {};
+      }
+      var res = this.call(obj, args, target, proxy);
+      if (Object(res) === res) {
+        return res;
+      } else {
+        return obj;
+      }
+      */
+      return Reflect.new(target, args);
     }
     
     if (typeof this.target === "function") {
@@ -1089,24 +1173,24 @@ SyncHandler.prototype = {
   }
 };
 
-// ---- end of the SyncHandler wrapper handler ----
+// ---- end of the Validator handler wrapper handler ----
 
 // In what follows, a 'direct proxy' is a proxy
-// whose handler is a SyncHandler. Such proxies can be made non-extensible,
+// whose handler is a Validator. Such proxies can be made non-extensible,
 // sealed or frozen without losing the ability to trap.
 
-// maps direct proxies to their SyncHandlers
+// maps direct proxies to their Validator handlers
 var directProxies = new WeakMap();
 
 // patch Object.{preventExtensions,seal,freeze} so that
 // they recognize fixable proxies and act accordingly
 Object.preventExtensions = function(subject) {
-  var syncHandler = directProxies.get(subject);
-  if (syncHandler !== undefined) {
-    if (syncHandler.protect('preventExtensions')) {
+  var vhandler = directProxies.get(subject);
+  if (vhandler !== undefined) {
+    if (vhandler.protect('preventExtensions')) {
       // Note: this sets the target's [[Extensible]] bit to false
       // thereby also making the proxy non-extensible
-      Object.preventExtensions(syncHandler.target);
+      Object.preventExtensions(vhandler.target);
       return subject;
     } else {
       throw new TypeError("preventExtensions on "+subject+" rejected");
@@ -1116,13 +1200,13 @@ Object.preventExtensions = function(subject) {
   }
 };
 Object.seal = function(subject) {
-  var syncHandler = directProxies.get(subject);
-  if (syncHandler !== undefined) {
-    if (syncHandler.protect('seal')) {
+  var vHandler = directProxies.get(subject);
+  if (vHandler !== undefined) {
+    if (vHandler.protect('seal')) {
       // Note: this makes all of the target's fixed properties
       // non-configurable. The handler will now enforce the
       // invariants for non-configurability on all own properties.
-      Object.seal(syncHandler.target);      
+      Object.seal(vHandler.target);      
       return subject;
     } else {
       throw new TypeError("seal on "+subject+" rejected");
@@ -1132,13 +1216,13 @@ Object.seal = function(subject) {
   }
 };
 Object.freeze = function(subject) {
-  var syncHandler = directProxies.get(subject);
-  if (syncHandler !== undefined) {
-    if (syncHandler.protect('freeze')) {
+  var vHandler = directProxies.get(subject);
+  if (vHandler !== undefined) {
+    if (vHandler.protect('freeze')) {
       // Note: this makes all of the target's fixed properties
       // non-configurable and non-writable. The handler will now
       // enforce the invariants for non-configurability on all own properties.
-      Object.freeze(syncHandler.target);
+      Object.freeze(vHandler.target);
       return subject; 
     } else {
       throw new TypeError("freeze on "+subject+" rejected");
@@ -1148,69 +1232,29 @@ Object.freeze = function(subject) {
   }
 };
 Object.isExtensible = function(subject) {
-  var syncHandler = directProxies.get(subject);
-  if (syncHandler !== undefined) {
-    return Object.isExtensible(syncHandler.target);
+  var vHandler = directProxies.get(subject);
+  if (vHandler !== undefined) {
+    return Object.isExtensible(vHandler.target);
   } else {
     return prim_isExtensible(subject);
   }
 };
 Object.isSealed = function(subject) {
-  var syncHandler = directProxies.get(subject);
-  if (syncHandler !== undefined) {
-    return Object.isSealed(syncHandler.target);
+  var vHandler = directProxies.get(subject);
+  if (vHandler !== undefined) {
+    return Object.isSealed(vHandler.target);
   } else {
     return prim_isSealed(subject);
   }
 };
 Object.isFrozen = function(subject) {
-  var syncHandler = directProxies.get(subject);
-  if (syncHandler !== undefined) {
-    return Object.isFrozen(syncHandler.target);
+  var vHandler = directProxies.get(subject);
+  if (vHandler !== undefined) {
+    return Object.isFrozen(vHandler.target);
   } else {
     return prim_isFrozen(subject);
   }
 };
-
-if (!Object.getPropertyDescriptor) {
-  Object.getPropertyDescriptor = function(subject, name) {
-    var syncHandler = directProxies.get(subject);
-    if (syncHandler !== undefined) {
-      return syncHandler.getPropertyDescriptor(name);
-    } else {
-      // fallback behavior for regular objects
-      var desc = Object.getOwnPropertyDescriptor(subject, name);
-      if (desc !== undefined) {
-        return desc;
-      } else {
-        var parent = Object.getPrototypeOf(subject);
-        if (parent !== null) {
-          return Object.getPropertyDescriptor(parent, name);
-        } else {
-          return undefined;
-        }
-      }
-    }
-  }
-}
-if (!Object.getPropertyNames) {
-  Object.getPropertyNames = function(subject) {
-    var syncHandler = directProxies.get(subject);
-    if (syncHandler !== undefined) {
-      return syncHandler.getPropertyNames(name);
-    } else {
-      // fallback behavior for regular objects
-      var props = Object.getOwnPropertyNames(subject);
-      var parent = Object.getPrototypeOf(subject);
-      if (parent === null) {
-        return props;
-      } else {
-        // TODO(tvcutsem): remove duplicates from props
-        return props.concat(Object.getPropertyNames(parent));
-      }
-    }
-  }
-}
 
 /**
  * Proxy.stopTrapping(obj)
@@ -1228,18 +1272,18 @@ if (!Object.getPropertyNames) {
  *     Proxy.stopTrapping).
  */
 Proxy.stopTrapping = function(subject) {
-  var syncHandler = directProxies.get(subject);
-  if (syncHandler !== undefined) {
-    // switch off the SyncHandler, making all traps perform the default
-    // behavior instead. This is done by setting the SyncHandler's
+  var vHandler = directProxies.get(subject);
+  if (vHandler !== undefined) {
+    // switch off the Validator, making all traps perform the default
+    // behavior instead. This is done by setting the Validator's
     // "targetHandler" property to null.
-    if (syncHandler.targetHandler !== null) {
+    if (vHandler.targetHandler !== null) {
       // call the 'stopTrapping' trap
-      var success = syncHandler.stopTrapping();
+      var success = vHandler.stopTrapping();
       if (success) {
         // if that trap returns successfully, the proxy now 'becomes'
         // a simple forwarding proxy to the target object
-        syncHandler.targetHandler = null;
+        vHandler.targetHandler = null;
       }
       // else, if stopTrapping rejects, fail silently
     }
@@ -1247,60 +1291,103 @@ Proxy.stopTrapping = function(subject) {
   return subject;
 };
 
-// ---- Default Forwarding Handler ----
-Proxy.forward = {
-  getOwnPropertyDescriptor: function(name, target) {
+// ---- Reflection module ----
+global.Reflect = {
+  getOwnPropertyDescriptor: function(target, name) {
     return Object.getOwnPropertyDescriptor(target, name);
-  },
-  getPropertyDescriptor: function(name, target) {
-    return Object.getPropertyDescriptor(target, name);
   },
   getOwnPropertyNames: function(target) {
     return Object.getOwnPropertyNames(target);
   },
-  getPropertyNames: function(target) {
-    return Object.getPropertyNames(target);
-  },
-  defineProperty: function(name, desc, target) {
+  defineProperty: function(target, name, desc) {
     Object.defineProperty(target, name, desc);
     return true;
   },
-  delete: function(name, target) {
+  delete: function(target, name) {
     return delete target[name];
   },
-  protect: function(operation, target) {
+  protect: function(target, operation) {
     Object[operation](target);
     return true;
   },
-  has: function(name, target) {
+  has: function(target, name) {
     return name in target;
   },
-  hasOwn: function(name, target) {
+  hasOwn: function(target, name) {
     return ({}).hasOwnProperty.call(target, name);
   },
-  get: function(name, target, proxy) {
-    // FIXME: replace by Object.getProperty(receiver, name, target);
+  get: function(target, receiver, name) {
+    // if target is a proxy, invoke its "get" trap
+    var handler = directProxies.get(target);
+    if (handler !== undefined) {
+      return handler.get(receiver, name);
+    }
     
-    // Note: if target[name] is an accessor,
-    // will invoke that accessor with this === target,
-    // not this === proxy
-    return target[name];
+    var desc = Object.getOwnPropertyDescriptor(target, name);
+    if (desc === undefined) {
+      var proto = Object.getPrototypeOf(target);
+      if (proto === null) {
+        return undefined;
+      }
+      return Reflect.get(proto, receiver, name);
+    }
+    if (isDataDescriptor(desc)) {
+      return desc.value;
+    }
+    var getter = desc.get;
+    if (getter === undefined) {
+      return undefined;
+    }
+    return desc.get.call(receiver);
   },
-  set: function(name, value, target, proxy) {
-    // Note: if target[name] is an accessor,
-    // will invoke that accessor with this === target,
-    // not this === proxy
-
-    // FIXME: replace by Object.setProperty(receiver, name, value, target);    
-    // To reliably forward set, would need to reproduce
-    // the built-in [[CanPut]] algorithm. The downside of that
-    // is that if target is itself a proxy, it will trigger
-    // numerous traps. Better would be to have a built-in function:
-    // Object.setProperty(target, name, val) -> boolean.
-    // see http://wiki.ecmascript.org/doku.php?id=strawman:refactoring_put
-    target[name] = val;
-    // bad behavior when set fails in non-strict mode
-    return true;
+  set: function(target, receiver, name, value) {
+    // if target is a proxy, invoke its "set" trap
+    var handler = directProxies.get(target);
+    if (handler !== undefined) {
+      return handler.set(receiver, name, value);
+    }
+    
+    // first, check whether target has a non-writable property
+    // shadowing name on receiver
+    var ownDesc = Object.getOwnPropertyDescriptor(target, name);
+    if (isDataDescriptor(ownDesc)) {
+      if (!ownDesc.writable) return false;
+    }
+    if (isAccessorDescriptor(ownDesc)) {
+      if(ownDesc.set === undefined) return false;
+      ownDesc.set.call(receiver, value);
+      return true;
+    }
+    // name is undefined or a writable data property in target,
+    // search target's prototype
+    var proto = Object.getPrototypeOf(target);
+    if (proto === null) {
+      // target was the last prototype, now we know that 'name' is not shadowed
+      // by an accessor or a non-writable data property, so we can update or add
+      // the property to the initial receiver object
+      var receiverDesc = Object.getOwnPropertyDescriptor(receiver, name);
+      if (isAccessorDescriptor(receiverDesc)) {
+        if(receiverDesc.set === undefined) return false;
+        receiverDesc.set.call(receiver, value);
+        return true;
+      }
+      if (isDataDescriptor(receiverDesc)) {
+        if (!receiverDesc.writable) return false;
+        Object.defineProperty(receiver, name, {value: value});
+        return true;
+      }
+      // property doesn't exist yet, add it
+      if (!Object.isExtensible(receiver)) return false;
+      Object.defineProperty(receiver, name,
+        { value: v,
+          writable: true,
+          enumerable: true,
+          configurable: true });
+      return true;
+    } else {
+      // continue the search in target's prototype
+      return Reflect.set(proto, receiver, name, value);
+    }
   },
   enumerate: function(target) {
     var result = [];
@@ -1310,14 +1397,19 @@ Proxy.forward = {
   keys: function(target) {
     return Object.keys(target);
   },
-  call: function(receiver, args, target, proxy) {
+  call: function(target, receiver, args) {
     // target.apply(receiver, args)
-    return Function.prototype.apply.call(target, receiver, args)
+    return Function.prototype.apply.call(target, receiver, args);
   },
-  new: function(args, target, proxy) {
+  new: function(target, args) {
     // return new target(...args);
-    // FIXME: can't generically forward [[Construct]]
-    // if target is itself a proxy, will not trigger its 'new' trap
+
+    // if target is a proxy, invoke its "new" trap
+    var handler = directProxies.get(target);
+    if (handler !== undefined) {
+      return handler.new(args, handler.target, target);
+    }
+    
     var receiver = Object.create(target.prototype);
     var result = Function.prototype.apply.call(target, receiver, args);
     return Object(result) === result ? result : receiver;
@@ -1341,24 +1433,24 @@ if (typeof Proxy === "object") {
       throw new TypeError("Proxy handler must be an Object, given "+handler);
     }
     
-    var syncHandler = new SyncHandler(target, handler);
+    var vHandler = new Validator(target, handler);
     var proxy;
     if (typeof target === "function") {
-      proxy = primCreateFunction(syncHandler, target,
+      proxy = primCreateFunction(vHandler, target,
         // call trap
         function() {
           var args = Array.prototype.slice.call(arguments);
-          return syncHandler.call(this, args, target, proxy);
+          return vHandler.call(this, args, target, proxy);
         },
         // construct trap
         function() {
           var args = Array.prototype.slice.call(arguments);
-          return syncHandler.new(args, target, proxy);
+          return vHandler.new(args, target, proxy);
         });
     } else {
-      proxy = primCreate(syncHandler, Object.getPrototypeOf(target));
+      proxy = primCreate(vHandler, Object.getPrototypeOf(target));
     }
-    directProxies.set(proxy, syncHandler);
+    directProxies.set(proxy, vHandler);
     return proxy;
   }
 
@@ -1375,4 +1467,4 @@ if (typeof Proxy === "object") {
   };
 } 
 
-})(); // function-as-module pattern
+})(this); // function-as-module pattern

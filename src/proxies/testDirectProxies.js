@@ -39,7 +39,7 @@
 
 // once this file is loaded, Proxy.create{Function} is patched to
 // support direct proxies
-load('DirectProxies.js');
+load('DirectProxies_fixes.js');
 
 function assert(b, msg) {
   print((b ? 'success: ' : 'fail: ') + msg);
@@ -60,6 +60,7 @@ function test() {
       emulatedProto,
       success,
       brokenProxy,
+      target,
       result;
   
   try {
@@ -70,10 +71,12 @@ function test() {
     for (var testName in TESTS) {
       emulatedProps = {};
       emulatedProto = {};
+      target = Object.create(emulatedProto);
       success = {};
-      brokenProxy = createEmulatedObject(emulatedProps, emulatedProto, success);
+      brokenProxy = createEmulatedObject(target, emulatedProps, success);
       print('>>> '+testName);
-      TESTS[testName](brokenProxy, emulatedProps, emulatedProto, success);
+      TESTS[testName](brokenProxy, emulatedProps, emulatedProto, success,
+                      target);
     }
   } catch (e) {
     print('fail: unexpected exception: '+ e);
@@ -86,22 +89,20 @@ function test() {
  * The intent is that the test suite can freely modify the emulatedProps,
  * in order to provoke erroneous behavior on the returned proxy.
  *
- * The proxy will inherit from emulatedProto, which is a plain object
+ * The proxy wraps the given target object.
+ *
+ * Both target and proxy inherit from emulatedProto, which is a plain object
  * (not a mapping from property names to property descriptors.)
  *
  * success is a mapping from names to booleans. The test suite should
  * use it to indicate what the return value should be for the
  * 'defineProperty', 'set' and 'delete' traps.
  */
-function createEmulatedObject(emulatedProps, emulatedProto, success) {
-  return Proxy.create({
+function createEmulatedObject(target, emulatedProps, success) {
+  var emulatedProto = Object.getPrototypeOf(target);
+  var handler = {
     getOwnPropertyDescriptor: function(name) {
       return emulatedProps[name];
-    },
-    getPropertyDescriptor: function(name) {
-      var desc = emulatedProps[name];
-      if (desc) return desc;
-      return Object.getPropertyDescriptor(emulatedProto, name);
     },
     defineProperty: function(name, desc) {
       emulatedProps[name] = desc;
@@ -119,16 +120,13 @@ function createEmulatedObject(emulatedProps, emulatedProto, success) {
     getOwnPropertyNames: function() {
       return Object.keys(emulatedProps);
     },
-    getPropertyNames: function() {
-      return Object.keys(emulatedProps).concat(Object.keys(emulatedProto));
-    },
-    get: function(name, target, proxy) {
+    get: function(receiver, name, target) {
       var desc = emulatedProps[name];
       if (desc === undefined) { return emulatedProto[name]; }
       if ('value' in desc) return desc.value;
       if ('get' in desc) return desc.get.call(target);
     },
-    set: function(name, value, target, proxy) {
+    set: function(receiver, name, value, target) {
       return success[name];
     },
     has: function(name) {
@@ -145,7 +143,8 @@ function createEmulatedObject(emulatedProps, emulatedProto, success) {
         return emulatedProps[name].enumerable;
       });
     }
-  }, emulatedProto);
+  };
+  return Proxy.for(target, handler);
 }
 
 /**
@@ -155,8 +154,10 @@ function createEmulatedObject(emulatedProps, emulatedProto, success) {
 var TESTS = Object.create(null);
 
 TESTS.testNonConfigurableExists =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
+  function(brokenProxy, emulatedProps, emulatedProto, success, target) {
     emulatedProps.x = {value:1,configurable:false};
+    // to emulate non-configurable props, must make sure they exist on target
+    Object.defineProperty(target, 'x', emulatedProps.x);
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
@@ -164,27 +165,42 @@ TESTS.testNonConfigurableExists =
     assertThrows("cannot report non-configurable property 'x' as non-existent",
       function() { Object.getOwnPropertyDescriptor(brokenProxy, 'x'); });
   };
-  
-TESTS.testNonConfigurableRedefinition =
+
+TESTS.testCantEmulateNonExistentNonConfigurableProps =
   function(brokenProxy, emulatedProps, emulatedProto, success) {
     emulatedProps.x = {value:1,configurable:false};
+    assertThrows("cannot report a non-configurable descriptor for "+
+                 "non-existent property 'x'",
+      function() { Object.getOwnPropertyDescriptor(brokenProxy, 'x'); });
+  };
+
+TESTS.testCantDefineNonExistentNonConfigurableProp =
+  function(brokenProxy, emulatedProps, emulatedProto, success) {
+    success.x = true;
+    assertThrows("cannot successfully define a non-configurable "+
+                 "descriptor for non-existent property 'x'",
+      function() { Object.defineProperty(brokenProxy, 'x',
+                                         {value:1,configurable:false}); });
+  };
+
+TESTS.testNonConfigurableRedefinition =
+  function(brokenProxy, emulatedProps, emulatedProto, success, target) {
+    emulatedProps.x = {value:1,configurable:false};
+    // to emulate non-configurable props, must make sure they exist on target
+    Object.defineProperty(target, 'x', emulatedProps.x);
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
     emulatedProps.x = {value:1,configurable:true}
-    assertThrows("can't redefine non-configurable property 'x'",
+    assertThrows("cannot report incompatible property descriptor for property 'x'",
       function() { Object.getOwnPropertyDescriptor(brokenProxy, 'x'); });
   };
   
-TESTS.testInheritedNonConfigurableRedefinition =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
-    // FIXME: can't test getPropertyDescriptor invariants until
-    // Object.getPropertyDescriptor is defined
-  };
-  
 TESTS.testNonExtensibleReportNoNewProps =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
+  function(brokenProxy, emulatedProps, emulatedProto, success, target) {
     emulatedProps.x = {value:1,configurable:false};
+    // to emulate non-configurable props, must make sure they exist on target
+    Object.defineProperty(target, 'x', emulatedProps.x);
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
@@ -217,9 +233,11 @@ TESTS.testNonExtensibleDefineNoNewProps =
       });
   };
   
-TESTS.testNonConfigurableMergeOnFix =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
+TESTS.testNonConfigurableMergeOnProtect =
+  function(brokenProxy, emulatedProps, emulatedProto, success, target) {
     emulatedProps.x = {value:1,configurable:false};
+    // to emulate non-configurable props, must make sure they exist on target
+    Object.defineProperty(target, 'x', emulatedProps.x);
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
@@ -231,8 +249,10 @@ TESTS.testNonConfigurableMergeOnFix =
   };
   
 TESTS.testNonConfigurableNoDelete =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
+  function(brokenProxy, emulatedProps, emulatedProto, success, target) {
     emulatedProps.x = {value:1, configurable:false};
+    // to emulate non-configurable props, must make sure they exist on target
+    Object.defineProperty(target, 'x', emulatedProps.x);
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
@@ -256,8 +276,10 @@ TESTS.testGOPNCannotListNewProperties =
   };
 
 TESTS.testNonConfigurableMustBeReportedByHasOwn =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
+  function(brokenProxy, emulatedProps, emulatedProto, success, target) {
     emulatedProps.x = {value:1, configurable:false};
+    // to emulate non-configurable props, must make sure they exist on target
+    Object.defineProperty(target, 'x', emulatedProps.x);
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
@@ -282,8 +304,10 @@ TESTS.testNewPropertyCantBeReportedByHasOwn =
   };
 
 TESTS.testNonConfigurableMustBeReportedByHas =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
+  function(brokenProxy, emulatedProps, emulatedProto, success, target) {
     emulatedProps.x = {value:1, configurable:false};
+    // to emulate non-configurable props, must make sure they exist on target
+    Object.defineProperty(target, 'x', emulatedProps.x);
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
@@ -296,25 +320,31 @@ TESTS.testNonConfigurableMustBeReportedByHas =
   };
 
 TESTS.testNonConfigurableNonWritableHasStableValue =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
+  function(brokenProxy, emulatedProps, emulatedProto, success, target) {
     emulatedProps.x = {value:1, writable:false,configurable:false};
+    // to emulate non-configurable props, must make sure they exist on target
+    Object.defineProperty(target, 'x', emulatedProps.x);
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
     emulatedProps.x = {value:2, writable:false,configurable:false};
-    assertThrows("can't redefine non-configurable property 'x'",
+    assertThrows("cannot report inconsistent value for non-writable, "+
+                 "non-configurable property 'x'",
       function() {
         brokenProxy.x;
       });
   };
   
 TESTS.testNonConfigurableNonWritableCantBeAssigned =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
+  function(brokenProxy, emulatedProps, emulatedProto, success, target) {
     emulatedProps.x = {value:1, writable:false,configurable:false};
+    // to emulate non-configurable props, must make sure they exist on target
+    Object.defineProperty(target, 'x', emulatedProps.x);
     var result = Object.getOwnPropertyDescriptor(brokenProxy, 'x');
     assert(result.value === 1 && result.configurable === false,
            'x was observed as non-configurable');
-    assertThrows("can't redefine non-configurable property 'x'",
+    assertThrows("cannot successfully assign to a non-writable, "+
+                 "non-configurable property 'x'",
       function() {
         success.x = true;
         brokenProxy.x = 2;
@@ -343,19 +373,6 @@ TESTS.testGOPNMustListNonConfigurableProperties =
                  "non-configurable property 'x'",
       function() {
         Object.getOwnPropertyNames(brokenProxy);
-      });
-  };
-
-TESTS.testGPNMustListNonConfigurableProperties =
-  function(brokenProxy, emulatedProps, emulatedProto, success) {
-    emulatedProps.x = {value:1, enumerable:true, configurable:false};
-    emulatedProps.y = {value:2, enumerable:true, configurable:true};
-    Object.preventExtensions(brokenProxy);
-    delete emulatedProps.x;
-    assertThrows("getPropertyNames trap failed to include "+
-                 "non-configurable property 'x'",
-      function() {
-        Object.getPropertyNames(brokenProxy);
       });
   };
 
@@ -443,7 +460,7 @@ function testTrapEvenWhenFrozen() {
   assert(Object.isFrozen(proxy), "proxy is frozen");
   
   var wasIntercepted = false;
-  forwarder.get = function(name, target, proxy) {
+  forwarder.get = function(receiver, name, target) {
     wasIntercepted = true;
     return target[name];
   };
@@ -493,12 +510,6 @@ function testForwardingHandler() {
   // now, the nwncdp value should be stored in the fixed props,
   // try accessing nwncdp again
   result = Object.getOwnPropertyDescriptor(proxy, 'nwncdp');
-  assert(result !== undefined, 'FWD: nwncdp is still not undefined');
-  assert(result.value === 2,
-         'FWD: nwncdp value is still correct');
-
-  // getPropertyDescriptor
-  result = Object.getPropertyDescriptor(proxy, 'nwncdp');
   assert(result !== undefined, 'FWD: nwncdp is still not undefined');
   assert(result.value === 2,
          'FWD: nwncdp value is still correct');
