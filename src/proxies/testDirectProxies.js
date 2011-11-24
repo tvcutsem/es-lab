@@ -39,7 +39,7 @@
 
 // once this file is loaded, Proxy.create{Function} is patched to
 // support direct proxies
-load('DirectProxies_fixes.js');
+load('DirectProxies.js');
 
 function assert(b, msg) {
   print((b ? 'success: ' : 'fail: ') + msg);
@@ -66,7 +66,8 @@ function test() {
   try {
     testTrapEvenWhenFrozen();
     testForwardingHandler();
-    testStopTrapping();
+    testInheritance();
+    testFunctions();
     
     for (var testName in TESTS) {
       emulatedProps = {};
@@ -101,50 +102,60 @@ function test() {
 function createEmulatedObject(target, emulatedProps, success) {
   var emulatedProto = Object.getPrototypeOf(target);
   var handler = {
-    getOwnPropertyDescriptor: function(name) {
+    getOwnPropertyDescriptor: function(target, name) {
       return emulatedProps[name];
     },
-    defineProperty: function(name, desc) {
+    defineProperty: function(target, name, desc) {
       emulatedProps[name] = desc;
       return success[name];
     },
-    protect: function(operation, target) {
+    freeze: function(target) {
       Object.defineProperties(target, emulatedProps);
+      Object.freeze(target);
       return true;
     },
-    stopTrapping: function() { return true; },
-    delete: function(name) {
+    seal: function(target) {
+      Object.defineProperties(target, emulatedProps);
+      Object.seal(target);
+      return true;
+    },
+    preventExtensions: function(target) {
+      Object.defineProperties(target, emulatedProps);
+      Object.preventExtensions(target);
+      return true;
+    },
+    delete: function(target, name) {
       delete emulatedProps[name];
       return success[name];
     },
-    getOwnPropertyNames: function() {
+    getOwnPropertyNames: function(target) {
       return Object.keys(emulatedProps);
     },
-    get: function(receiver, name, target) {
+    get: function(target, name, receiver) {
       var desc = emulatedProps[name];
       if (desc === undefined) { return emulatedProto[name]; }
       if ('value' in desc) return desc.value;
       if ('get' in desc) return desc.get.call(target);
     },
-    set: function(receiver, name, value, target) {
+    set: function(target, name, value, receiver) {
       return success[name];
     },
-    has: function(name) {
+    has: function(target, name) {
       return !!emulatedProps[name];
     },
-    hasOwn: function(name) {
+    hasOwn: function(target, name) {
       return !!emulatedProps[name];
     },
-    keys: function() {
+    keys: function(target) {
       return Object.keys(emulatedProps);
     },
-    enumerate: function() {
+    enumerate: function(target) {
       return Object.getOwnPropertyNames(emulatedProps).filter(function (name) {
         return emulatedProps[name].enumerable;
       });
     }
   };
-  return Proxy.for(target, handler);
+  return Proxy(target, handler);
 }
 
 /**
@@ -432,7 +443,7 @@ TESTS.testKeysMaySkipNonConfigurableNonEnumerableProperties =
 function testTrapEvenWhenFrozen() {
   var target = {};
   var forwarder = {};
-  var proxy = Proxy.for(target, forwarder);
+  var proxy = Proxy(target, forwarder);
   assert(proxy.x === undefined, 'proxy.x === undefined');
 
   Object.defineProperty(proxy,'x',
@@ -448,19 +459,20 @@ function testTrapEvenWhenFrozen() {
 
   assert(proxy.x === 1, "proxy.x === 1");
   
-  forwarder.protect = function(operation, target) {
+  forwarder.freeze = function(target) {
     Object.defineProperty(target, 'x', 
       {value:1,
        configurable:false,
        writable:false,
        enumerable:false });
+    Object.freeze(target);
     return true;
   }
   Object.freeze(proxy);
   assert(Object.isFrozen(proxy), "proxy is frozen");
   
   var wasIntercepted = false;
-  forwarder.get = function(receiver, name, target) {
+  forwarder.get = function(target, name, receiver) {
     wasIntercepted = true;
     return target[name];
   };
@@ -493,7 +505,7 @@ function testForwardingHandler() {
     configurable: false
   });
   
-  var proxy = Proxy.for(target, {});
+  var proxy = Proxy(target, {});
   
   result = Object.getOwnPropertyDescriptor(proxy, 'non-existent-prop');
   assert(result === undefined,
@@ -577,41 +589,46 @@ function testForwardingHandler() {
          'FWD: keys returned correct #names');
 }
 
-function testStopTrapping() {
-  var proxy = Proxy.create({
-    getOwnPropertyDescriptor: function(name) {
-      return { value: 42, configurable: true }
+function testInheritance() {
+  var child;
+  var proxy = Proxy({}, {
+    get: function(tgt, name, rcvr) {
+      assert(rcvr === child, 'get: receiver is child');
+      return name;
     },
-    stopTrapping: function(target) {
-      Object.defineProperty(target, 'x', {value:1, configurable:false});
-      return true;
+    set: function(tgt, name, val, rcvr) {
+      assert(rcvr === child, 'set: receiver is child');
+      return true;      
+    },
+    enumerate: function(tgt) {
+      return ['a'];
     }
   });
-  
-  // while proxy is trapping, it knows all properties:
-  assert(42 === Object.getOwnPropertyDescriptor(proxy, "x").value,
-         'stopTrapping: proxy knows x');
-  assert(42 === Object.getOwnPropertyDescriptor(proxy, "y").value,
-         'stopTrapping: proxy knows y');
+  child = Object.create(proxy);
+  assert(child['foo'] === 'foo', 'invoking inherited get');
+  assert((child['foo'] = 42) === 42, 'invoking inherited set');
+  var props = [];
+  for (var p in child) { props.push(p); }
+  assert(props.length === 1 && props[0] === 'a', 'invoking inherited enumerate');
+}
 
-  // stop trapping
-  assert(proxy === Proxy.stopTrapping(proxy),
-         'stopTrapping returns the proxy');
-  
-  // now, proxy only knows 'x'
-  var desc = Object.getOwnPropertyDescriptor(proxy, "x");
-  assert(1 === desc.value && false === desc.configurable,
-         'stopTrapping: proxy knows a non-configurable x');
-  assert(undefined === Object.getOwnPropertyDescriptor(proxy, "y"),
-         'stopTrapping: proxy no longer knows y');
-  
-  assert(proxy === Proxy.stopTrapping(proxy),
-         'calling stopTrapping again should have no effect');
-           
-  // stopTrapping is a no-op for objects
-  var obj = {};
-  assert(obj === Proxy.stopTrapping(obj),
-         'stopTrapping is a no-op for non-proxy objects');
+function testFunctions() {
+  var fun = function(){};
+  var proxy = Proxy(fun, {
+    apply: function(tgt, thisBinding, args) {
+      assert(tgt === fun, 'apply: target is correct');
+      assert(thisBinding === undefined, 'apply: thisBinding is correct');
+      assert(args.length === 3, 'apply: args is correct');
+      return 'apply';
+    },
+    new: function(tgt, args) {
+      assert(tgt === fun, 'new: target is correct');
+      assert(args.length === 3, 'new: args is correct');
+      return 'new';
+    }
+  });
+  assert(proxy(1,2,3) === 'apply', 'calling apply');
+  assert(new proxy(1,2,3) === 'new', 'calling new');
 }
 
 if (typeof window === "undefined") {

@@ -41,9 +41,9 @@
 
 // ----------------------------------------------------------------------------
 // this is a prototype implementation of
-// http://wiki.ecmascript.org/doku.php?id=strawman:direct_proxies
+// http://wiki.ecmascript.org/doku.php?id=harmony:direct_proxies
 
-// This code was tested on tracemonkey / Firefox 7
+// This code was tested on tracemonkey / Firefox 7 / Firefox 8
 // The code also loads correctly on
 //   v8 --harmony_proxies --harmony_weakmaps (v3.6.5.1)
 // but does not work entirely as intended, since v8 proxies, as specified,
@@ -57,9 +57,9 @@
 // Patches:
 //  - Object.{freeze,seal,preventExtensions}
 //  - Object.{isFrozen,isSealed,isExtensible}
-//  - Proxy.stopTrapping
+//  - Object.getPrototypeOf
+//  - Proxy
 //  - Proxy.create{Function}
-//  - Proxy.for
 //  - Reflect
 
 // Loading this file will automatically patch Proxy.create and
@@ -143,59 +143,9 @@
 // (An object with non-mutable ancestry is a non-extensible object whose
 // [[Prototype]] is either null or an object with non-mutable ancestry.)
 
-// The Validator is compatible with the existing ForwardingHandler.
-// Invariant: when a Validator wraps a ForwardingHandler to an
-// ES5-compliant object, the Validator will never throw a TypeError.
-
-// ==== Changes in Handler API compared to current Harmony:Proxies ====
-
-// 1. Proxy.create and Proxy.createFunction have both been replaced by
-//    a new primitive:
-//      Proxy.for(target, handler)
-//    This creates a new proxy that derives from the target object:
-//    - its typeof type
-//    - all internal properties, including:
-//      - [[Class]], used in Object.prototype.toString
-//      - [[Prototype]], returned by Object.getPrototypeOf
-//    Additionally, any trap not defined on handler results in the operation
-//    being applied to the target. Hence, all traps are now optional.
-//    target may be a function (this replaces Proxy.createFunction)
-//    In that case, calling proxy() triggers a handler trap called 'call',
-//    while calling new proxy() triggers a handler trap called 'new'
-//
-// 2. The old 'fix' trap is renamed to the 'protect' trap, because the term
-//    'fix' is now ambiguous: we previously used the term "fixing" to refer
-//    to a proxy that was no longer trapping. For direct proxies, this becomes
-//    totally independent of "protecting" an object using preventExtensions,
-//    seal or freeze.
-//
-// 3. The protect() trap is parameterized with the name of the operation that
-//    caused the trap invocation, either one of the Strings 'freeze', 'seal',
-//    or 'preventExtensions'. The idea is that a forwarding handler can
-//    now easily forward this operation generically by performing:
-//    protect: function(op, target) { Object[op](target); return true; }
-//    The 'protect' trap takes as an extra argument the 'target' to protect.
-//    Rather than returning undefined or a pdmap, the 'protect' trap simply
-//    returns a boolean indicating success.
-//
-// 4. The protect() (formerly known as fix) trap no longer "fixes" the proxy.
-//    A protected proxy can remain fully trapping. There is a new
-//    Proxy.stopTrapping(obj) operation that can control this aspect of a proxy
-//    separately.
-//
-// 5. All traps now receive an additional, "optional" argument referring to
-//    the 'target' object that they're serving.
-
-// TODO:
-// - refactoring the prototype chain: add unit tests
-// - rename call to apply
-// - Proxy.for -> Proxy (function)
-// - receiver arg last in get/set, not in call
-// - put the |target| up front in all traps
-// - get rid of Proxy.stopTrapping
-// - default semantics for missing "construct" trap?
-// - add BaseHandler with default implementation of derived traps
-// - add singleton "non-committal" target object
+// Changes in Handler API compared to previous harmony:proxies, see:
+// http://wiki.ecmascript.org/doku.php?id=strawman:direct_proxies
+// http://wiki.ecmascript.org/doku.php?id=harmony:direct_proxies
 
 // ----------------------------------------------------------------------------
 
@@ -360,7 +310,8 @@ var prim_preventExtensions = Object.preventExtensions,
     prim_freeze = Object.freeze,
     prim_isExtensible = Object.isExtensible,
     prim_isSealed = Object.isSealed,
-    prim_isFrozen = Object.isFrozen;
+    prim_isFrozen = Object.isFrozen,
+    prim_getPrototypeOf = Object.getPrototypeOf;
 
 /**
  * A property 'name' is fixed if it is an own property of the target.
@@ -445,8 +396,7 @@ function validateProperty(target, name, desc) {
  * @param target the object wrapped by this proxy.
  * As long as the proxy is extensible, only non-configurable properties
  * are checked against the target. Once the proxy becomes non-extensible,
- * all own properties are checked against the target, including configurable
- * ones.
+ * invariants w.r.t. non-extensibility are also enforced.
  *
  * @param handler the handler of the direct proxy. The object emulated by
  * this handler is validated against the target object of the direct proxy.
@@ -454,16 +404,12 @@ function validateProperty(target, name, desc) {
  * of the target will cause a TypeError to be thrown.
  *
  * Both target and handler must be proper Objects at initialization time.
- * If this.targetHandler is set to 'null', that indicates that the
- * direct proxy has become "fixed" and the handler is "switched off".
- * At that point, the Validator behaves like the default forwarding handler.
  */
 function Validator(target, handler) {
   // this is a const reference, this.target should never change
   this.target = target;
-  // this is a non-const reference, may be set to null once
-  // once set to null, forever remains null
-  this.targetHandler = handler;
+  // this is a const reference, this.handler should never change
+  this.handler = handler;
 }
 
 Validator.prototype = {
@@ -472,31 +418,13 @@ Validator.prototype = {
    * If getTrap returns undefined, the caller should perform the
    * default forwarding behavior.
    * If getTrap returns normally otherwise, the return value
-   * will be a callable trap function with a proper |this|-binding.
+   * will be a callable trap function whose |this| binding is
+   * pre-bound to this.handler (for convenience in the rest of the code)
    */
-  getTrap: function(trapName) {
-    if (this.targetHandler === null) {
-      // stopTrapping was called on this handler,
-      // perform the default forwarding behavior
-      return undefined;
-    }
-    
-    var trap = this.targetHandler[trapName];
-    
-    // if this.targetHandler[trapName] is a getter, and that getter directly or
-    // indirectly calls stopTrapping on this proxy, this proxy may now
-    // have been "fixed" (in which case this.targetHandler is now null).
-    // Therefore, we must recheck the state of the proxy.
-    // If the proxy is now fixed, default to the forwarding behavior.
-    
-    // TODO: could also opt not to recheck, and have the switched-off proxy
-    // trap anyway, which should be harmless as far as target invariants
-    // are concerned (although real implementations that perform clever
-    // tricks upon stopTrapping should tread carefully)
-    
-    if (trap === undefined || this.targetHandler === null) {
-      // either the trap was not defined or
-      // stopTrapping was called on this handler,
+  getTrap: function(trapName) {    
+    var trap = this.handler[trapName];
+    if (trap === undefined) {
+      // the trap was not defined,
       // perform the default forwarding behavior
       return undefined;
     }
@@ -505,10 +433,8 @@ Validator.prototype = {
       throw new TypeError(trapName + " trap is not callable: "+trap);
     }
     
-    // bind the trap's |this| to this.targetHandler
-    // this ensures that, if for any reason targetHandler is set to
-    // null later (ie. the proxy is switched off), we retain the proper binding
-    return Function.prototype.bind.call(trap, this.targetHandler);
+    // bind the trap's |this| to this.handler, for convenience
+    return Function.prototype.bind.call(trap, this.handler);
   },
   
   // === fundamental traps ===
@@ -530,7 +456,7 @@ Validator.prototype = {
     }
     
     name = String(name);
-    var desc = trap(name, this.target);
+    var desc = trap(this.target, name);
     desc = normalizeAndCompletePropertyDescriptor(desc);
     if (desc === undefined) {      
       if (isSealed(name, this.target)) {
@@ -602,10 +528,17 @@ Validator.prototype = {
    * for property access/assignment on a proxy-as-prototype.
    */
   getPropertyDescriptor: function(name) {
+    print("GETPROPERTYDESCRIPTOR INVOKED FOR "+name);
     var handler = this;
     return {
       get: function() { return handler.get(this, name); },
-      set: function(val) { return handler.set(this, name, val); },
+      set: function(val) {
+        if (handler.set(this, name, val)) {
+          return val;
+        } else {
+          throw new TypeError("failed assignment to "+name);
+        }
+      },
       enumerable: true,
       configurable: true
     };
@@ -634,7 +567,7 @@ Validator.prototype = {
 
     name = String(name);
     desc = normalizePropertyDescriptor(desc);
-    var success = trap(name, desc, this.target);
+    var success = trap(this.target, name, desc);
     success = !!success; // coerce to Boolean
 
 
@@ -669,43 +602,66 @@ Validator.prototype = {
   },
   
   /**
-   * The 'operation' argument is one of 'freeze', 'seal' or 'preventExtensions'
-   *
-   * Check whether all properties returned by the 'protect' trap are compatible
-   * with the already fixed properties.
-   *
-   * Note: the 'protect' trap is (one half of) the old 'fix' trap.
+   * On success, check whether the target object is indeed frozen.
    */
-  protect: function(operation) {
-    var trap = this.getTrap("protect");
+  freeze: function() {
+    var trap = this.getTrap("freeze");
     if (trap === undefined) {
       // default forwarding behavior
-      return Reflect.protect(this.target, operation);
+      return Reflect.freeze(this.target);
     }
 
-    var success = trap(operation, this.target);
-    // the caller of protect, Object[operation], will make
-    // this.target non-extensible, sealed or frozen
-    return !!success;
+    var success = trap(this.target);
+    success = !!success; // coerce to Boolean
+    if (success) {
+      if (!prim_isFrozen(this.target)) {
+        throw new TypeError("can't report non-frozen object as frozen: "+
+                            this.target);
+      }      
+    }
+    return success;
   },
   
   /**
-   * A new fundamental trap, triggered by Proxy.stopTrapping(aProxy)
-   * The other half of the old fix() trap.
-   *
-   * Returns a success boolean.
+   * On success, check whether the target object is indeed sealed.
    */
-  stopTrapping: function() {
-    var trap = this.getTrap("stopTrapping");
+  seal: function() {
+    var trap = this.getTrap("seal");
     if (trap === undefined) {
       // default forwarding behavior
-      return Reflect.stopTrapping(this.target);
+      return Reflect.seal(this.target);
     }
-    
+
     var success = trap(this.target);
-    // the proxy becomes disabled by the caller of
-    // the stopTrapping trap, if it returns true
-    return !!success; // coerce to Boolean
+    success = !!success; // coerce to Boolean
+    if (success) {
+      if (!prim_isSealed(this.target)) {
+        throw new TypeError("can't report non-sealed object as sealed: "+
+                            this.target);
+      }      
+    }
+    return success;
+  },
+  
+  /**
+   * On success, check whether the target object is indeed non-extensible.
+   */
+  preventExtensions: function() {
+    var trap = this.getTrap("preventExtensions");
+    if (trap === undefined) {
+      // default forwarding behavior
+      return Reflect.preventExtensions(this.target);
+    }
+
+    var success = trap(this.target);
+    success = !!success; // coerce to Boolean
+    if (success) {
+      if (prim_isExtensible(this.target)) {
+        throw new TypeError("can't report extensible object as non-extensible: "+
+                            this.target);
+      }      
+    }
+    return success;
   },
   
   /**
@@ -720,7 +676,7 @@ Validator.prototype = {
     }
     
     name = String(name);
-    var res = trap(name, this.target);
+    var res = trap(this.target, name);
     res = !!res; // coerce to Boolean
     
     if (res === true) {
@@ -832,7 +788,7 @@ Validator.prototype = {
     }
 
     name = String(name);
-    var res = trap(name, this.target);
+    var res = trap(this.target, name);
     res = !!res; // coerce to Boolean
         
     if (res === false) {
@@ -876,7 +832,7 @@ Validator.prototype = {
     }
     
     name = String(name);
-    var res = trap(name, this.target);
+    var res = trap(this.target, name);
     res = !!res; // coerce to Boolean
     
     if (res === false) {
@@ -912,11 +868,11 @@ Validator.prototype = {
     var trap = this.getTrap("get");
     if (trap === undefined) {
       // default forwarding behavior
-      return Reflect.get(this.target, receiver, name);
+      return Reflect.get(this.target, name, receiver);
     }
 
     name = String(name);
-    var res = trap(receiver, name, this.target);
+    var res = trap(this.target, name, receiver);
     
     var fixedDesc = Object.getOwnPropertyDescriptor(this.target, name);
     // check consistency of the returned value
@@ -952,11 +908,11 @@ Validator.prototype = {
     var trap = this.getTrap("set");
     if (trap === undefined) {
       // default forwarding behavior
-      return Reflect.set(this.target, receiver, name, val);
+      return Reflect.set(this.target, name, val, receiver);
     }
         
     name = String(name);
-    var res = trap(receiver, name, val, this.target);
+    var res = trap(this.target, name, val, receiver);
     res = !!res; // coerce to Boolean
          
     // if success is reported, check whether property is truly assignable
@@ -1123,16 +1079,16 @@ Validator.prototype = {
    *   proxy(...args)
    * Triggers this trap
    */
-  call: function(thisBinding, args, target, proxy) {
-    var trap = this.getTrap("call");
+  apply: function(target, thisBinding, args) {
+    var trap = this.getTrap("apply");
     if (trap === undefined) {
-      return Reflect.call(target, thisBinding, args);
+      return Reflect.apply(target, thisBinding, args);
     }
     
     if (typeof this.target === "function") {
-      return trap(thisBinding, args, target, proxy);
+      return trap(target, thisBinding, args);
     } else {
-      throw new TypeError("call: "+ target + " is not a function");
+      throw new TypeError("apply: "+ target + " is not a function");
     }
   },
   
@@ -1142,33 +1098,16 @@ Validator.prototype = {
    *   new proxy(...args)
    * Triggers this trap
    */
-  new: function(args, target, proxy) {
+  new: function(target, args) {
     var trap = this.getTrap("new");
     if (trap === undefined) {
-      // TODO: consider falling back on Function.[[Construct]]
-      // instead
-      /*
-      var proto = this.get(proxy, 'prototype');
-      var obj;
-      if (Object(proto) === proto) {
-        obj = Object.create(proto);        
-      } else {
-        obj = {};
-      }
-      var res = this.call(obj, args, target, proxy);
-      if (Object(res) === res) {
-        return res;
-      } else {
-        return obj;
-      }
-      */
       return Reflect.new(target, args);
     }
     
     if (typeof this.target === "function") {
-      return trap(args, target, proxy);
+      return trap(target, args);
     } else {
-      throw new TypeError("construct: "+ target + " is not a function");
+      throw new TypeError("new: "+ target + " is not a function");
     }
   }
 };
@@ -1187,10 +1126,7 @@ var directProxies = new WeakMap();
 Object.preventExtensions = function(subject) {
   var vhandler = directProxies.get(subject);
   if (vhandler !== undefined) {
-    if (vhandler.protect('preventExtensions')) {
-      // Note: this sets the target's [[Extensible]] bit to false
-      // thereby also making the proxy non-extensible
-      Object.preventExtensions(vhandler.target);
+    if (vhandler.preventExtensions()) {
       return subject;
     } else {
       throw new TypeError("preventExtensions on "+subject+" rejected");
@@ -1202,11 +1138,7 @@ Object.preventExtensions = function(subject) {
 Object.seal = function(subject) {
   var vHandler = directProxies.get(subject);
   if (vHandler !== undefined) {
-    if (vHandler.protect('seal')) {
-      // Note: this makes all of the target's fixed properties
-      // non-configurable. The handler will now enforce the
-      // invariants for non-configurability on all own properties.
-      Object.seal(vHandler.target);      
+    if (vHandler.seal()) {
       return subject;
     } else {
       throw new TypeError("seal on "+subject+" rejected");
@@ -1218,11 +1150,7 @@ Object.seal = function(subject) {
 Object.freeze = function(subject) {
   var vHandler = directProxies.get(subject);
   if (vHandler !== undefined) {
-    if (vHandler.protect('freeze')) {
-      // Note: this makes all of the target's fixed properties
-      // non-configurable and non-writable. The handler will now
-      // enforce the invariants for non-configurability on all own properties.
-      Object.freeze(vHandler.target);
+    if (vHandler.freeze()) {
       return subject; 
     } else {
       throw new TypeError("freeze on "+subject+" rejected");
@@ -1255,43 +1183,18 @@ Object.isFrozen = function(subject) {
     return prim_isFrozen(subject);
   }
 };
-
-/**
- * Proxy.stopTrapping(obj)
- *  - expects an Object, and always returns obj
- *  - if obj is a non-proxy object, this is a no-op
- *  - if obj is a proxy, calls the proxy's new "stopTrapping" trap.
- *
- *    The 'stopTrapping' trap either returns undefined | pdmap.
- *    If the trap returns a pdmap, the proxy henceforth 'becomes'
- *    an object that contains the props in the pdmap.
- *
- *    If the trap returns undefined, Proxy.stopTrapping is a no-op.
- *    (rationale for the no-op behavior: we don't want clients to be
- *     able to figure out whether an object is a proxy by calling
- *     Proxy.stopTrapping).
- */
-Proxy.stopTrapping = function(subject) {
+Object.getPrototypeOf = function(subject) {
   var vHandler = directProxies.get(subject);
   if (vHandler !== undefined) {
-    // switch off the Validator, making all traps perform the default
-    // behavior instead. This is done by setting the Validator's
-    // "targetHandler" property to null.
-    if (vHandler.targetHandler !== null) {
-      // call the 'stopTrapping' trap
-      var success = vHandler.stopTrapping();
-      if (success) {
-        // if that trap returns successfully, the proxy now 'becomes'
-        // a simple forwarding proxy to the target object
-        vHandler.targetHandler = null;
-      }
-      // else, if stopTrapping rejects, fail silently
-    }
-  } // else, if subject is not a proxy, do nothing
-  return subject;
+    return Object.getPrototypeOf(vHandler.target);
+  } else {
+    return prim_getPrototypeOf(subject);
+  }
 };
 
-// ---- Reflection module ----
+// ============= Reflection module =============
+// see http://wiki.ecmascript.org/doku.php?id=harmony:reflect_api
+
 global.Reflect = {
   getOwnPropertyDescriptor: function(target, name) {
     return Object.getOwnPropertyDescriptor(target, name);
@@ -1306,8 +1209,16 @@ global.Reflect = {
   delete: function(target, name) {
     return delete target[name];
   },
-  protect: function(target, operation) {
-    Object[operation](target);
+  freeze: function(target) {
+    Object.freeze(target);
+    return true;
+  },
+  seal: function(target) {
+    Object.seal(target);
+    return true;
+  },
+  preventExtensions: function(target) {
+    Object.preventExtensions(target);
     return true;
   },
   has: function(target, name) {
@@ -1316,7 +1227,7 @@ global.Reflect = {
   hasOwn: function(target, name) {
     return ({}).hasOwnProperty.call(target, name);
   },
-  get: function(target, receiver, name) {
+  get: function(target, name, receiver) {
     // if target is a proxy, invoke its "get" trap
     var handler = directProxies.get(target);
     if (handler !== undefined) {
@@ -1329,7 +1240,7 @@ global.Reflect = {
       if (proto === null) {
         return undefined;
       }
-      return Reflect.get(proto, receiver, name);
+      return Reflect.get(proto, name, receiver);
     }
     if (isDataDescriptor(desc)) {
       return desc.value;
@@ -1340,7 +1251,7 @@ global.Reflect = {
     }
     return desc.get.call(receiver);
   },
-  set: function(target, receiver, name, value) {
+  set: function(target, name, value, receiver) {
     // if target is a proxy, invoke its "set" trap
     var handler = directProxies.get(target);
     if (handler !== undefined) {
@@ -1386,7 +1297,7 @@ global.Reflect = {
       return true;
     } else {
       // continue the search in target's prototype
-      return Reflect.set(proto, receiver, name, value);
+      return Reflect.set(proto, name, value, receiver);
     }
   },
   enumerate: function(target) {
@@ -1397,7 +1308,7 @@ global.Reflect = {
   keys: function(target) {
     return Object.keys(target);
   },
-  call: function(target, receiver, args) {
+  apply: function(target, receiver, args) {
     // target.apply(receiver, args)
     return Function.prototype.apply.call(target, receiver, args);
   },
@@ -1407,64 +1318,248 @@ global.Reflect = {
     // if target is a proxy, invoke its "new" trap
     var handler = directProxies.get(target);
     if (handler !== undefined) {
-      return handler.new(args, handler.target, target);
+      return handler.new(handler.target, args);
     }
     
     var receiver = Object.create(target.prototype);
     var result = Function.prototype.apply.call(target, receiver, args);
     return Object(result) === result ? result : receiver;
-  },
-  stopTrapping: function(target) {
-    return false;
   }
 };
 
-if (typeof Proxy === "object") {
-  var primCreate = Proxy.create,
-      primCreateFunction = Proxy.createFunction;
+// ============= Virtual Object API =============
+// see http://wiki.ecmascript.org/doku.php?id=harmony:virtual_object_api
 
-  Proxy.for = function(target, handler) {
-    // check that target is an Object
-    if (Object(target) !== target) {
-      throw new TypeError("Proxy target must be an Object, given "+target);
+function abstract(name) {
+  return function() {
+    throw new TypeError("Missing fundamental trap: "+name);
+  };
+}
+ 
+function VirtualHandler() { };
+global.Reflect.VirtualHandler = VirtualHandler;
+VirtualHandler.prototype = {
+  // fundamental traps
+  getOwnPropertyDescriptor: abstract("getOwnPropertyDescriptor"),
+  getOwnPropertyNames: abstract("getOwnPropertyNames"),
+  defineProperty: abstract("defineProperty"),
+  delete: abstract("delete"),
+  preventExtensions: abstract("preventExtensions"),
+  apply: abstract("apply"),
+ 
+  // derived traps
+  seal: function(target) {
+    var success = this.preventExtensions(target);
+    if (success) {
+      var props = this.getOwnPropertyNames(target);
+      var l = +props.length;
+      for (var i = 0; i < l; i++) {
+        var name = props[i];
+        success = success &&
+          this.defineProperty(target,name,{configurable:false});
+      }
     }
-    // check that handler is an Object
-    if (Object(handler) !== handler) {
-      throw new TypeError("Proxy handler must be an Object, given "+handler);
+    return success;
+  },
+  freeze: function(target) {
+    var success = this.preventExtensions(target);
+    if (success) {
+      var props = this.getOwnPropertyNames(target);
+      var l = +props.length;
+      for (var i = 0; i < l; i++) {
+        var name = props[i];
+        var desc = this.getOwnPropertyDescriptor(target,name);
+        if (desc === undefined) {
+          continue; // or return false?
+        }
+        if ('value' in desc) {
+          success = success &&
+            this.defineProperty(target,name,{writable:false,
+                                             configurable:false});
+        }
+      }
     }
-    
-    var vHandler = new Validator(target, handler);
-    var proxy;
-    if (typeof target === "function") {
-      proxy = primCreateFunction(vHandler, target,
-        // call trap
-        function() {
-          var args = Array.prototype.slice.call(arguments);
-          return vHandler.call(this, args, target, proxy);
-        },
-        // construct trap
-        function() {
-          var args = Array.prototype.slice.call(arguments);
-          return vHandler.new(args, target, proxy);
-        });
+    return success;
+  },
+  has: function(target, name) {
+    var desc = this.getOwnPropertyDescriptor(target, name);
+    if (desc !== undefined) {
+      return desc;
+    }
+    var proto = Object.getPrototypeOf(target);
+    return Object.getPropertyDescriptor(proto, name);
+  },
+  hasOwn: function(target,name) {
+    return this.getOwnPropertyDescriptor(target,name) !== undefined;
+  },
+  get: function(target, name, receiver) {
+    var desc = this.getOwnPropertyDescriptor(target, name);
+    if (desc === undefined) {
+      var proto = Object.getPrototypeOf(target);
+      if (proto === null) {
+        return undefined;
+      }
+      return Reflect.get(proto, name, receiver);
+    }
+    if (isDataDescriptor(desc)) {
+      return desc.value;
+    }
+    var getter = desc.get;
+    if (getter === undefined) {
+      return undefined;
+    }
+    return desc.get.call(receiver);
+  },
+  set: function(target, name, val, receiver) {
+    var ownDesc = this.getOwnPropertyDescriptor(target, name);
+    if (isDataDescriptor(ownDesc)) {
+      if (!ownDesc.writable) return false;
+    }
+    if (isAccessorDescriptor(ownDesc)) {
+      if(ownDesc.set === undefined) return false;
+      ownDesc.set.call(receiver, value);
+      return true;
+    }
+    var proto = Object.getPrototypeOf(target);
+    if (proto === null) {
+      var receiverDesc = Object.getOwnPropertyDescriptor(receiver, name);
+      if (isAccessorDescriptor(receiverDesc)) {
+        if(receiverDesc.set === undefined) return false;
+        receiverDesc.set.call(receiver, value);
+        return true;
+      }
+      if (isDataDescriptor(receiverDesc)) {
+        if (!receiverDesc.writable) return false;
+        Object.defineProperty(receiver, name, {value: value});
+        return true;
+      }
+      if (!Object.isExtensible(receiver)) return false;
+      Object.defineProperty(receiver, name,
+        { value: v,
+          writable: true,
+          enumerable: true,
+          configurable: true });
+      return true;
     } else {
-      proxy = primCreate(vHandler, Object.getPrototypeOf(target));
+      return Reflect.set(proto, name, value, receiver);
     }
-    directProxies.set(proxy, vHandler);
-    return proxy;
+  },
+  enumerate: function(target) {
+    var trapResult = this.getOwnPropertyNames(target);
+    var proto = Object.getPrototypeOf(target);
+    var inherited = Object.getPropertyNames(proto);
+    var enumerableProps = trapResult.concat(inherited);
+    // FIXME: filter duplicates from enumerableProps
+ 
+    var l = +enumerableProps.length;
+    var result = [];
+    for (var i = 0; i < l; i++) {
+      var name = String(enumerableProps[i]);
+      var desc = this.getPropertyDescriptor(name);
+      desc = normalizeAndCompletePropertyDescriptor(desc);
+      if (desc !== undefined && desc.enumerable) {
+        result.push(name);
+      }
+    }
+    return result;
+  },
+  keys: function(target) {
+    var trapResult = this.getOwnPropertyNames(target);
+    var l = +trapResult.length;
+    var result = [];
+    for (var i = 0; i < l; i++) {
+      var name = String(trapResult[i]);
+      var desc = this.getOwnPropertyDescriptor(name);
+      desc = normalizeAndCompletePropertyDescriptor(desc);
+      if (desc !== undefined && desc.enumerable) {
+        result.push(name);
+      }
+    }
+    return result;
+  },
+  new: function(target, args) {
+    var proto = this.get(target, 'prototype', target);
+    var instance;
+    if (Object(proto) === proto) {
+      instance = Object.create(proto);        
+    } else {
+      instance = {};
+    }
+    var res = this.apply(target, instance, args);
+    if (Object(res) === res) {
+      return res;
+    }
+    return instance;
   }
+};
 
-  // Proxy.create{Function} can now be expressed in terms of Proxy.for
-  Proxy.create = function(handler, proto) {
-    proto = proto || null;
-    return Proxy.for(Object.create(proto), handler);
-  };
-  Proxy.createFunction = function(handler, call, opt_construct) {
-    var extHandler = Object.create(handler);
-    extHandler.call = call;
-    extHandler.new = opt_construct;
-    return Proxy.for(call, extHandler);
-  };
-} 
+var primCreate = Proxy.create,
+    primCreateFunction = Proxy.createFunction;
+
+global.Proxy = function(target, handler) {
+  // check that target is an Object
+  if (Object(target) !== target) {
+    throw new TypeError("Proxy target must be an Object, given "+target);
+  }
+  // check that handler is an Object
+  if (Object(handler) !== handler) {
+    throw new TypeError("Proxy handler must be an Object, given "+handler);
+  }
+  
+  var vHandler = new Validator(target, handler);
+  var proxy;
+  if (typeof target === "function") {
+    proxy = primCreateFunction(vHandler,
+      // call trap
+      function() {
+        var args = Array.prototype.slice.call(arguments);
+        return vHandler.apply(target, this, args);
+      },
+      // construct trap
+      function() {
+        var args = Array.prototype.slice.call(arguments);
+        return vHandler.new(target, args);
+      });
+  } else {
+    proxy = primCreate(vHandler, Object.getPrototypeOf(target));
+  }
+  directProxies.set(proxy, vHandler);
+  return proxy;
+};
+
+// Proxy.create{Function} can now be expressed in terms of the new Proxy API
+
+Proxy.create = function(handler, proto) {
+  var fakeTarget = Object.create(proto || null);
+  var fakeHandler = Proxy(fakeTarget, {
+    get: function(target, trapName, rcvr) {
+      if (handler[trapName] === undefined) {
+        return VirtualHandler.prototype[trapName];
+      }
+      return handler[trapName];
+    }
+  });
+
+  return Proxy(fakeTarget, fakeHandler);
+};
+Proxy.createFunction = function(handler, call, opt_construct) {
+  var fakeTarget = call;
+  var fakeHandler = Proxy(fakeTarget, {
+    get: function(target, trapName, rcvr) {
+      if (trapName === "apply") return call;
+      if (trapName === "new") {
+        if (opt_construct !== undefined) {
+          return opt_construct;
+        }
+      }
+      if (handler[trapName] === undefined) {
+        return VirtualHandler.prototype[trapName];
+      }
+      return handler[trapName];
+    }
+  });
+
+  return Proxy(fakeTarget, fakeHandler);
+};
 
 })(this); // function-as-module pattern
