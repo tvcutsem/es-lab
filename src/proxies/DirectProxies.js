@@ -1348,6 +1348,7 @@ VirtualHandler.prototype = {
   // derived traps
   seal: function(target) {
     var success = this.preventExtensions(target);
+    success = !!success; // coerce to Boolean
     if (success) {
       var props = this.getOwnPropertyNames(target);
       var l = +props.length;
@@ -1361,16 +1362,15 @@ VirtualHandler.prototype = {
   },
   freeze: function(target) {
     var success = this.preventExtensions(target);
+    success = !!success; // coerce to Boolean
     if (success) {
       var props = this.getOwnPropertyNames(target);
       var l = +props.length;
       for (var i = 0; i < l; i++) {
         var name = props[i];
         var desc = this.getOwnPropertyDescriptor(target,name);
-        if (desc === undefined) {
-          continue; // or return false?
-        }
-        if ('value' in desc) {
+        desc = normalizeAndCompletePropertyDescriptor(desc);
+        if (desc !== undefined && 'value' in desc) {
           success = success &&
             this.defineProperty(target,name,{writable:false,
                                              configurable:false});
@@ -1381,17 +1381,21 @@ VirtualHandler.prototype = {
   },
   has: function(target, name) {
     var desc = this.getOwnPropertyDescriptor(target, name);
+    desc = normalizeAndCompletePropertyDescriptor(desc);
     if (desc !== undefined) {
-      return desc;
+      return true;
     }
     var proto = Object.getPrototypeOf(target);
-    return Object.getPropertyDescriptor(proto, name);
+    return Reflect.has(proto, name);
   },
   hasOwn: function(target,name) {
-    return this.getOwnPropertyDescriptor(target,name) !== undefined;
+    var desc = this.getOwnPropertyDescriptor(target,name);
+    desc = normalizeAndCompletePropertyDescriptor(desc);
+    return desc !== undefined;
   },
   get: function(target, name, receiver) {
     var desc = this.getOwnPropertyDescriptor(target, name);
+    desc = normalizeAndCompletePropertyDescriptor(desc);
     if (desc === undefined) {
       var proto = Object.getPrototypeOf(target);
       if (proto === null) {
@@ -1410,6 +1414,7 @@ VirtualHandler.prototype = {
   },
   set: function(target, name, val, receiver) {
     var ownDesc = this.getOwnPropertyDescriptor(target, name);
+    ownDesc = normalizeAndCompletePropertyDescriptor(ownDesc);
     if (isDataDescriptor(ownDesc)) {
       if (!ownDesc.writable) return false;
     }
@@ -1444,22 +1449,20 @@ VirtualHandler.prototype = {
   },
   enumerate: function(target) {
     var trapResult = this.getOwnPropertyNames(target);
-    var proto = Object.getPrototypeOf(target);
-    var inherited = Object.getPropertyNames(proto);
-    var enumerableProps = trapResult.concat(inherited);
-    // FIXME: filter duplicates from enumerableProps
- 
-    var l = +enumerableProps.length;
+    var l = +trapResult.length;
     var result = [];
     for (var i = 0; i < l; i++) {
       var name = String(enumerableProps[i]);
-      var desc = this.getPropertyDescriptor(name);
+      var desc = this.getOwnPropertyDescriptor(name);
       desc = normalizeAndCompletePropertyDescriptor(desc);
       if (desc !== undefined && desc.enumerable) {
         result.push(name);
       }
     }
-    return result;
+    var proto = Object.getPrototypeOf(target);
+    var inherited = Reflect.enumerate(proto);
+    // FIXME: filter duplicates
+    return result.concat(inherited);
   },
   keys: function(target) {
     var trapResult = this.getOwnPropertyNames(target);
