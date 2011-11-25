@@ -518,17 +518,16 @@ Validator.prototype = {
    * We do this by returning a getter/setter pair that invokes
    * the corresponding traps.
    *
-   * This is an imperfect implementation, since getPropertyDescriptor
-   * will always return a descriptor, even if the property does not
-   * exist. Hence, the emulation of "name in Object.create(aProxy)"
-   * is broken, and will always return true. The only way to fix this
-   * is to have getPropertyDescriptor always invoke the |has()| trap
-   * and only return a getter/setter descriptor if has() returns true.
-   * However, then both the has() and get/set() traps would be called
-   * for property access/assignment on a proxy-as-prototype.
+   * In Firefox, this trap is only called after a prior invocation
+   * of the 'has' trap has returned true. Hence, expect the following
+   * behavior:
+   * <code>
+   * var child = Object.create(Proxy(target, handler));
+   * child[name] // triggers handler.has(target, name)
+   * // if that returns true, triggers handler.get(target, name, child)
+   * </code>
    */
   getPropertyDescriptor: function(name) {
-    print("GETPROPERTYDESCRIPTOR INVOKED FOR "+name);
     var handler = this;
     return {
       get: function() { return handler.get(this, name); },
@@ -823,8 +822,7 @@ Validator.prototype = {
   /**
    * If name denotes a fixed property, check whether the trap returns true.
    */
-  has: function(name) {
-    "use strict";
+  has: function(name) {    
     var trap = this.getTrap("has");
     if (trap === undefined) {
       // default forwarding behavior
@@ -864,7 +862,7 @@ Validator.prototype = {
    * check its return value against the previously asserted value of the
    * fixed property.
    */
-  get: function(receiver, name) {
+  get: function(receiver, name) {    
     var trap = this.getTrap("get");
     if (trap === undefined) {
       // default forwarding behavior
@@ -1496,7 +1494,7 @@ VirtualHandler.prototype = {
 var primCreate = Proxy.create,
     primCreateFunction = Proxy.createFunction;
 
-global.Proxy = function(target, handler) {
+Proxy = function(target, handler) {
   // check that target is an Object
   if (Object(target) !== target) {
     throw new TypeError("Proxy target must be an Object, given "+target);
@@ -1528,7 +1526,6 @@ global.Proxy = function(target, handler) {
 };
 
 // Proxy.create{Function} can now be expressed in terms of the new Proxy API
-
 Proxy.create = function(handler, proto) {
   var fakeTarget = Object.create(proto || null);
   var fakeHandler = Proxy(fakeTarget, {
@@ -1562,4 +1559,4 @@ Proxy.createFunction = function(handler, call, opt_construct) {
   return Proxy(fakeTarget, fakeHandler);
 };
 
-})(this); // function-as-module pattern
+}(this)); // function-as-module pattern

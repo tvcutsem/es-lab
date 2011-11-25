@@ -65,7 +65,7 @@ function test() {
   
   try {
     testTrapEvenWhenFrozen();
-    testForwardingHandler();
+    testForwarding();
     testInheritance();
     testFunctions();
     
@@ -482,10 +482,11 @@ function testTrapEvenWhenFrozen() {
 }
 
 /**
- * This function tests whether wrapping a forwarding handler
- * in a FixedHandler does not raise any unexpected TypeErrors.
+ * This function tests whether wrapping a regular object
+ * with an empty handler forwards to the target, without
+ * raising any unexpected TypeErrors.
  */
-function testForwardingHandler() {
+function testForwarding() {
   var result;
   
   var proto = { inherited: 3 };
@@ -592,6 +593,9 @@ function testForwardingHandler() {
 function testInheritance() {
   var child;
   var proxy = Proxy({}, {
+    has: function(tgt, name) {
+      return name === 'foo';
+    },
     get: function(tgt, name, rcvr) {
       assert(rcvr === child, 'get: receiver is child');
       return name;
@@ -605,6 +609,8 @@ function testInheritance() {
     }
   });
   child = Object.create(proxy);
+  assert('foo' in child, 'invoking inherited has');
+  assert(!('bar' in child), 'invoking inherited has on non-existent prop');
   assert(child['foo'] === 'foo', 'invoking inherited get');
   assert((child['foo'] = 42) === 42, 'invoking inherited set');
   var props = [];
