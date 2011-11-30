@@ -58,6 +58,7 @@
 //  - Object.{freeze,seal,preventExtensions}
 //  - Object.{isFrozen,isSealed,isExtensible}
 //  - Object.getPrototypeOf
+//  - Object.prototype.valueOf
 //  - Proxy
 //  - Proxy.create{Function}
 //  - Reflect
@@ -311,7 +312,8 @@ var prim_preventExtensions = Object.preventExtensions,
     prim_isExtensible = Object.isExtensible,
     prim_isSealed = Object.isSealed,
     prim_isFrozen = Object.isFrozen,
-    prim_getPrototypeOf = Object.getPrototypeOf;
+    prim_getPrototypeOf = Object.getPrototypeOf,
+    prim_valueOf = Object.prototype.valueOf;
 
 /**
  * A property 'name' is fixed if it is an own property of the target.
@@ -1189,6 +1191,14 @@ Object.getPrototypeOf = function(subject) {
     return prim_getPrototypeOf(subject);
   }
 };
+Object.prototype.valueOf = function() {
+  var vHandler = directProxies.get(this);
+  if (vHandler !== undefined) {
+    return Object.prototype.valueOf.call(vHandler.target);
+  } else {
+    return prim_valueOf.call(this);
+  }
+};
 
 // ============= Reflection module =============
 // see http://wiki.ecmascript.org/doku.php?id=harmony:reflect_api
@@ -1288,7 +1298,7 @@ global.Reflect = {
       // property doesn't exist yet, add it
       if (!Object.isExtensible(receiver)) return false;
       Object.defineProperty(receiver, name,
-        { value: v,
+        { value: value,
           writable: true,
           enumerable: true,
           configurable: true });
