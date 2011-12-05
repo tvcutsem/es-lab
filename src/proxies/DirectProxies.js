@@ -1543,10 +1543,11 @@ Proxy.create = function(handler, proto) {
   var fakeTarget = Object.create(proto || null);
   var fakeHandler = Proxy(fakeTarget, {
     get: function(target, trapName, rcvr) {
-      if (handler[trapName] === undefined) {
+      var trap = handler[trapName];
+      if (trap === undefined) {
         return VirtualHandler.prototype[trapName];
       }
-      return handler[trapName];
+      return trap;
     }
   });
 
@@ -1554,18 +1555,25 @@ Proxy.create = function(handler, proto) {
 };
 Proxy.createFunction = function(handler, call, opt_construct) {
   var fakeTarget = call;
+  var applyTrap = function(tgt, thisBinding, args) {
+    return call.apply(thisBinding, args);
+  };
+  var newTrap = function(tgt, args) {
+    return opt_construct.apply(undefined, args);
+  };
   var fakeHandler = Proxy(fakeTarget, {
     get: function(target, trapName, rcvr) {
-      if (trapName === "apply") return call;
+      if (trapName === "apply") return applyTrap;
       if (trapName === "new") {
         if (opt_construct !== undefined) {
-          return opt_construct;
+          return newTrap;
         }
       }
-      if (handler[trapName] === undefined) {
+      var trap = handler[trapName];
+      if (trap === undefined) {
         return VirtualHandler.prototype[trapName];
       }
-      return handler[trapName];
+      return trap;
     }
   });
 
