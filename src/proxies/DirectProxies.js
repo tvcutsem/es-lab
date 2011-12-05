@@ -1368,9 +1368,10 @@ global.Reflect = {
       return handler.new(handler.target, args);
     }
     
-    var receiver = Object.create(target.prototype);
-    var result = Function.prototype.apply.call(target, receiver, args);
-    return Object(result) === result ? result : receiver;
+    var proto = target.prototype;
+    var instance = (Object(proto) === proto) ? Object.create(proto) : {};
+    var result = Function.prototype.apply.call(target, instance, args);
+    return Object(result) === result ? result : instance;
   }
 };
 
