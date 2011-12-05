@@ -1005,6 +1005,25 @@ Validator.prototype = {
   },
   
   /**
+   * The iterate trap should return an iterator object.
+   */
+  iterate: function() {
+    var trap = this.getTrap("iterate");
+    if (trap === undefined) {
+      // default forwarding behavior
+      return Reflect.iterate(this.target);
+    }
+    
+    var trapResult = trap(this.target);
+
+    if (Object(trapResult) !== trapResult) {
+      throw new TypeError("iterate trap should return an iterator object, "+
+                          "got: "+ trapResult);
+    }
+    return trapResult;
+  },
+  
+  /**
    * Checks whether the trap result does not contain any new properties
    * if the proxy is non-extensible. Any enumerable own properties of the
    * target that are not included in the 'keys' result are deleted from
@@ -1313,6 +1332,26 @@ global.Reflect = {
     for (var name in target) { result.push(name); };
     return result;
   },
+  iterate: function(target) {
+    // in ES-next: for (var name of target) { ... }
+    var handler = directProxies.get(target);
+    if (handler !== undefined) {
+      return handler.iterate(handler.target);
+    }
+    
+    // non-standard iterator support, used today
+    if ('__iterator__' in target) return target.__iterator__;
+    
+    var result = Reflect.enumerate(target);
+    var l = +result.length;
+    var idx = 0;
+    return {
+      next: function() {
+        if (idx === l) throw StopIteration;
+        return result[idx++];
+      }
+    };
+  },
   keys: function(target) {
     return Object.keys(target);
   },
@@ -1462,7 +1501,7 @@ VirtualHandler.prototype = {
     var l = +trapResult.length;
     var result = [];
     for (var i = 0; i < l; i++) {
-      var name = String(enumerableProps[i]);
+      var name = String(trapResult[i]);
       var desc = this.getOwnPropertyDescriptor(name);
       desc = normalizeAndCompletePropertyDescriptor(desc);
       if (desc !== undefined && desc.enumerable) {
@@ -1473,6 +1512,20 @@ VirtualHandler.prototype = {
     var inherited = Reflect.enumerate(proto);
     // FIXME: filter duplicates
     return result.concat(inherited);
+  },
+  iterate: function(target) {
+    var trapResult = this.enumerate(target);
+    var l = +trapResult.length;
+    var idx = 0;
+    return {
+      next: function() {
+        if (idx === l) {
+          throw StopIteration;
+        } else {
+          return trapResult[idx++];
+        }
+      }
+    };
   },
   keys: function(target) {
     var trapResult = this.getOwnPropertyNames(target);
