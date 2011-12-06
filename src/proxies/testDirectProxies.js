@@ -68,6 +68,7 @@ function test() {
     testForwarding();
     testInheritance();
     testFunctions();
+    testSet();
     
     for (var testName in TESTS) {
       emulatedProps = {};
@@ -396,7 +397,7 @@ TESTS.testEnumerateMustListNonConfigurableEnumerableProperties =
     assertThrows("enumerate trap failed to include "+
                  "non-configurable enumerable property 'x'",
       function() {
-        for (var name in brokenProxy) { }
+        for (var name in Object.create(brokenProxy)) { }
       });
   };
 
@@ -407,7 +408,7 @@ TESTS.testEnumerateMaySkipNonConfigurableNonEnumerableProperties =
     Object.preventExtensions(brokenProxy);
     delete emulatedProps.x;
     var res = [];
-    for (var name in brokenProxy) { res.push(name); }
+    for (var name in Object.create(brokenProxy)) { res.push(name); }
     assert(res.length === 1,
       "ok to drop non-configurable non-enumerable props in enumerate trap");
   };
@@ -635,6 +636,27 @@ function testFunctions() {
   });
   assert(proxy(1,2,3) === 'apply', 'calling apply');
   assert(new proxy(1,2,3) === 'new', 'calling new');
+}
+
+function testSet() {
+  var t = {};
+  var p = Proxy(t, {
+    defineProperty: function(tgt,name,desc) {
+      assert(name === 'x', 'testSet defineProperty name === x');
+      assert(desc.value === 1, 'testSet defineProperty value === 1');
+      t.xWasSet = true;
+      return true;
+    }
+  });
+  // p has no "set" trap, so default behavior is to invoke:
+  // Reflect.set(t, 'x', 1, p)
+  // which will not find 'x', so will call Object.defineProperty(p,'x',{value:1,...})
+  p.x = 1;
+  assert(t.xWasSet, 'default set triggers defineProperty');
+  var child = Object.create(p);
+  child.y = 1; // should also trigger p's set trap, but Reflect.set will now
+               // define the property on the child
+  assert(child.y === 1, 'default set on inherited object');
 }
 
 if (typeof window === "undefined") {
