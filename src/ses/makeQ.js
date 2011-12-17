@@ -608,7 +608,7 @@
        var answerPs = sliceFn(arguments, 0);
        var countDown = answerPs.length;
        var answers = [];
-       if (countDown === 0) { return answers; }
+       if (countDown === 0) { return Q(answers); }
        var result = Q.defer();
        answerPs.forEach(function(answerP, index) {
          Q(answerP).when(function(answer) {

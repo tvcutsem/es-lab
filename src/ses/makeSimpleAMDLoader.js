@@ -44,7 +44,12 @@
      def = Object.freeze;
    }
 
-   var defineNotCalledP = Q.reject(new Error('define not called'));
+   /**
+    * A pumpkin is a unique value that must never escape, and so may
+    * safely be used to test for the absence of any possible
+    * user-provided value.
+    */
+   var defineNotCalledPumpkin = {};
 
    /**
     * Makes a loader for a simple subset of the Asynchronous Module
@@ -64,16 +69,25 @@
     * subset of) AMD format. When run under Caja/SES, the module
     * source is executed in a scope consisting of only the whitelisted
     * globals and the "define" function from our subset of the AMD
-    * API. Our "define" function always takes exactly two arguments: A
-    * "dependencies" array of module name strings, and a factory
-    * function. The factory function should have one parameter for
-    * accepting each module instance corresponding to each of these
-    * module names. Whatever the factory function reveals is taken to
-    * be the instance of this module.
+    * API. Our "define" function always takes at least the following
+    * two arguments: <ul>
+    * <li>"deps" --- a "dependencies" array of module name strings,
+    * <li>and a factory function.
+    * </ul>
+    * The factory function should have one parameter for accepting
+    * each module instance corresponding to each of these module
+    * names. Whatever the factory function reveals is taken to be the
+    * instance of this module.
     *
     * <p>Note that in this subset, a module's source does not get to
-    * state (or even know) its own module name. Rather, this naming is
-    * only according to the mapping provided by the "fetch" function.
+    * determine its own module name. Rather, this naming is only
+    * according to the mapping provided by the "fetch"
+    * function. However, in a concession to jQuery, the module can
+    * provide the "define" function's first optional argument, in
+    * which it declares its own module name. The "define" function
+    * will then check whether this agrees with the module name as
+    * determined by the "fetch" function, and if not, break the
+    * promise for the module instance.
     *
     * <p>The opt_moduleMap, if provided, should be a mapping from
     * module names to module instances. To endow a subsystem with the
@@ -88,16 +102,30 @@
 
      function rawLoad(id) {
        return Q(fetch(id)).when(function(src) {
-         var result = defineNotCalledP;
-         function define(deps, factory) {
-           result = Q.all(mapFn(deps, loader)).when(function(imports) {
+         var result = defineNotCalledPumpkin;
+         function define(opt_id, deps, factory) {
+           if (typeof opt_id === 'string') {
+             if (opt_id !== id) {
+               result = Q.reject(new Error('module "' + id +
+                                           '" thinks it is "' + opt_id + '"'));
+               return;
+             }
+           } else {
+             factory = deps;
+             deps = opt_id;
+           }
+           var importPs = mapFn(deps, loader);
+           result = applyFn(Q.all, void 0, importPs).when(function(imports) {
              return applyFn(factory, void 0, imports);
            });
          }
-         define.amd = { lite: true, caja: true };
+         define.amd = { lite: true, caja: true, jQuery: true };
          def(define);
 
          Function('define', src)(define);
+         if (result === defineNotCalledPumpkin) {
+           result = Q.reject(new Error('"define" not called by: ' + id));
+         }
          return result;
        });
      }

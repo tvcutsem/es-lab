@@ -14,11 +14,10 @@
 
 /**
  * @fileoverview Trivial test of simple AMD loader.
- * Tests anon case. Tests importing other modules.
+ * Tests simple named case. No dependencies.
  * @requires define
  */
 
-define(['amdTest1', 'amdTestDir/amdTest2', 'amdTest3'],
-function(amdTest1,              amdTest2,   amdTest3) {
-  return amdTest1 + amdTest2 + amdTest3;
+define('amdTest1', [], function() {
+  return 'this';
 });
