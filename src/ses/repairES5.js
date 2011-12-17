@@ -322,6 +322,64 @@ var ses;
   };
 
   /**
+   *
+   */
+  ses.defendOne = function(obj) {
+    var gopd = Object.getOwnPropertyDescriptor;
+    var gopn = Object.getOwnPropertyNames;
+    var getProtoOf = Object.getPrototypeOf;
+    var isFrozen = Object.isFrozen;
+    var defProp = Object.defineProperty;
+
+    if (obj !== Object(obj)) { return obj; }
+    var func;
+    if (typeof obj === 'object' &&
+        !!gopd(obj, 'constructor') &&
+        typeof (func = obj.constructor) === 'function' &&
+        func.prototype === obj &&
+        !isFrozen(obj)) {
+      gopn(obj).forEach(function(name) {
+        var value;
+        function getter() {
+          if (obj === this) { return value; }
+          if (!this) { return void 0; }
+          if (!!gopd(this, name)) { return this[name]; }
+          return getter.call(getProtoOf(this));
+        }
+        function setter(newValue) {
+          if (obj === this) {
+            throw new TypeError('Cannot set virtually frozen property: ' +
+                                name);
+          }
+          if (!!gopd(this, name)) {
+            this[name] = newValue;
+          }
+          // TODO(erights): Do all the inherited property checks
+          defProp(this, name, {
+            value: newValue,
+            writable: true,
+            enumerable: true,
+            configurable: true
+          });
+        }
+        var desc = gopd(obj, name);
+        if (desc.configurable && 'value' in desc) {
+          value = desc.value;
+          defProp(obj, name, {
+            get: getter,
+            set: setter,
+            // We should be able to omit the enumerable line, since it
+            // should default to its existing setting.
+            enumerable: desc.enumerable,
+            configurable: false
+          });
+        }
+      });
+    }
+    return Object.freeze(obj);
+  };
+
+  /**
    * Various repairs may expose non-standard objects that are not
    * reachable from startSES's root, and therefore not freezable by
    * startSES's normal whitelist traversal. However, freezing these
@@ -335,7 +393,7 @@ var ses;
     needToFreeze.push(obj);
   }
   ses.freezeDelayed = function freezeDelayed() {
-    needToFreeze.forEach(Object.freeze);
+    needToFreeze.forEach(ses.defendOne);
   };
 
   /**
@@ -983,48 +1041,6 @@ var ses;
     return !!result;
   }
 
-  /**
-   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
-   *
-   * <p>If this reports a problem in the absence of "New symptom (a)",
-   * it means the error thrown by the "in" in {@code has} is skipping
-   * past the first layer of "catch" surrounding that "in". This is in
-   * fact what we're currently seeing on Safari WebKit Nightly Version
-   * 5.0.5 (5533.21.1, r91108).
-   */
-  function test_CANT_IN_CALLER() {
-    var answer = void 0;
-    try {
-      answer = has(function(){}, 'caller', 'strict_function');
-    } catch (err) {
-      if (err instanceof TypeError) { return true; }
-      return '("caller" in strict_func) failed with: ' + err;
-    } finally {}
-    if (answer) { return false; }
-    return '("caller" in strict_func) was false.';
-  }
-
-  /**
-   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
-   *
-   * <p>If this reports a problem in the absence of "New symptom (a)",
-   * it means the error thrown by the "in" in {@code has} is skipping
-   * past the first layer of "catch" surrounding that "in". This is in
-   * fact what we're currently seeing on Safari WebKit Nightly Version
-   * 5.0.5 (5533.21.1, r91108).
-   */
-  function test_CANT_IN_ARGUMENTS() {
-    var answer = void 0;
-    try {
-      answer = has(function(){}, 'arguments', 'strict_function');
-    } catch (err) {
-      if (err instanceof TypeError) { return true; }
-      return '("arguments" in strict_func) failed with: ' + err;
-    } finally {}
-    if (answer) { return false; }
-    return '("arguments" in strict_func) was false.';
-  }
-
   function has2(base, name, baseDesc) {
     var result = void 0;
     var finallySkipped = true;
@@ -1052,6 +1068,48 @@ var ses;
                    '>) finally outer finally skipped');
     }
     return !!result;
+  }
+
+  /**
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
+   *
+   * <p>If this reports a problem in the absence of "New symptom (a)",
+   * it means the error thrown by the "in" in {@code has} is skipping
+   * past the first layer of "catch" surrounding that "in". This is in
+   * fact what we're currently seeing on Safari WebKit Nightly Version
+   * 5.0.5 (5533.21.1, r91108).
+   */
+  function test_CANT_IN_CALLER() {
+    var answer = void 0;
+    try {
+      answer = has2(function(){}, 'caller', 'strict_function');
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return '("caller" in strict_func) failed with: ' + err;
+    } finally {}
+    if (answer) { return false; }
+    return '("caller" in strict_func) was false.';
+  }
+
+  /**
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
+   *
+   * <p>If this reports a problem in the absence of "New symptom (a)",
+   * it means the error thrown by the "in" in {@code has} is skipping
+   * past the first layer of "catch" surrounding that "in". This is in
+   * fact what we're currently seeing on Safari WebKit Nightly Version
+   * 5.0.5 (5533.21.1, r91108).
+   */
+  function test_CANT_IN_ARGUMENTS() {
+    var answer = void 0;
+    try {
+      answer = has2(function(){}, 'arguments', 'strict_function');
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return '("arguments" in strict_func) failed with: ' + err;
+    } finally {}
+    if (answer) { return false; }
+    return '("arguments" in strict_func) was false.';
   }
 
   /**
@@ -1103,7 +1161,7 @@ var ses;
    * applied to "caller"
    */
   function test_BUILTIN_LEAKS_CALLER() {
-    if (!has(builtInMapMethod, 'caller', 'a builtin')) { return false; }
+    if (!has2(builtInMapMethod, 'caller', 'a builtin')) { return false; }
     function foo(m) { return m.caller; }
     // using Function so it'll be non-strict
     var testfn = Function('a', 'f', 'return a.map(f)[0];');
@@ -1126,7 +1184,7 @@ var ses;
    * applied to "arguments"
    */
   function test_BUILTIN_LEAKS_ARGUMENTS() {
-    if (!has(builtInMapMethod, 'arguments', 'a builtin')) { return false; }
+    if (!has2(builtInMapMethod, 'arguments', 'a builtin')) { return false; }
     function foo(m) { return m.arguments; }
     // using Function so it'll be non-strict
     var testfn = Function('a', 'f', 'return a.map(f)[0];');
@@ -1663,9 +1721,10 @@ var ses;
   function repair_NEEDS_DUMMY_SETTER() {
     var defProp = Object.defineProperty;
     var gopd = Object.getOwnPropertyDescriptor;
-    var freeze = Object.freeze;
 
-    function dummySetter(newValue) {}
+    function dummySetter(newValue) {
+      throw new TypeError('no setter for assigning: ' + newValue);
+    }
     delayedFreeze(dummySetter.prototype);
     delayedFreeze(dummySetter);
 
@@ -2028,6 +2087,10 @@ var ses;
       return badParseInt(n, radix);
     }
     parseInt = goodParseInt;
+  }
+
+  function repair_ASSIGN_CAN_OVERRIDE_FROZEN() {
+    ses.defendOne = Object.freeze;
   }
 
 
@@ -2492,7 +2555,6 @@ var ses;
       sections: ['8.6.2'],
       tests: ['S8.6.2_A8']
     },
-    /* ****** Crashes Opera 12 pre-alpha build 1085
     {
       description: 'Strict eval function leaks variable definitions',
       test: test_STRICT_EVAL_LEAKS_GLOBALS,
@@ -2502,7 +2564,7 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
       sections: ['10.4.2.1'],
       tests: ['S10.4.2.1_A1']
-    }, ********* */
+    },
     {
       description: 'parseInt still parsing octal',
       test: test_PARSEINT_STILL_PARSING_OCTAL,
@@ -2527,7 +2589,7 @@ var ses;
     {
       description: 'Assignment can override frozen inherited property',
       test: test_ASSIGN_CAN_OVERRIDE_FROZEN,
-      repair: void 0,
+      repair: repair_ASSIGN_CAN_OVERRIDE_FROZEN,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1169',

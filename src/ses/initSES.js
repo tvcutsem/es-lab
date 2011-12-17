@@ -554,6 +554,64 @@ var ses;
   };
 
   /**
+   *
+   */
+  ses.defendOne = function(obj) {
+    var gopd = Object.getOwnPropertyDescriptor;
+    var gopn = Object.getOwnPropertyNames;
+    var getProtoOf = Object.getPrototypeOf;
+    var isFrozen = Object.isFrozen;
+    var defProp = Object.defineProperty;
+
+    if (obj !== Object(obj)) { return obj; }
+    var func;
+    if (typeof obj === 'object' &&
+        !!gopd(obj, 'constructor') &&
+        typeof (func = obj.constructor) === 'function' &&
+        func.prototype === obj &&
+        !isFrozen(obj)) {
+      gopn(obj).forEach(function(name) {
+        var value;
+        function getter() {
+          if (obj === this) { return value; }
+          if (!this) { return void 0; }
+          if (!!gopd(this, name)) { return this[name]; }
+          return getter.call(getProtoOf(this));
+        }
+        function setter(newValue) {
+          if (obj === this) {
+            throw new TypeError('Cannot set virtually frozen property: ' +
+                                name);
+          }
+          if (!!gopd(this, name)) {
+            this[name] = newValue;
+          }
+          // TODO(erights): Do all the inherited property checks
+          defProp(this, name, {
+            value: newValue,
+            writable: true,
+            enumerable: true,
+            configurable: true
+          });
+        }
+        var desc = gopd(obj, name);
+        if (desc.configurable && 'value' in desc) {
+          value = desc.value;
+          defProp(obj, name, {
+            get: getter,
+            set: setter,
+            // We should be able to omit the enumerable line, since it
+            // should default to its existing setting.
+            enumerable: desc.enumerable,
+            configurable: false
+          });
+        }
+      });
+    }
+    return Object.freeze(obj);
+  };
+
+  /**
    * Various repairs may expose non-standard objects that are not
    * reachable from startSES's root, and therefore not freezable by
    * startSES's normal whitelist traversal. However, freezing these
@@ -567,7 +625,7 @@ var ses;
     needToFreeze.push(obj);
   }
   ses.freezeDelayed = function freezeDelayed() {
-    needToFreeze.forEach(Object.freeze);
+    needToFreeze.forEach(ses.defendOne);
   };
 
   /**
@@ -1215,48 +1273,6 @@ var ses;
     return !!result;
   }
 
-  /**
-   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
-   *
-   * <p>If this reports a problem in the absence of "New symptom (a)",
-   * it means the error thrown by the "in" in {@code has} is skipping
-   * past the first layer of "catch" surrounding that "in". This is in
-   * fact what we're currently seeing on Safari WebKit Nightly Version
-   * 5.0.5 (5533.21.1, r91108).
-   */
-  function test_CANT_IN_CALLER() {
-    var answer = void 0;
-    try {
-      answer = has(function(){}, 'caller', 'strict_function');
-    } catch (err) {
-      if (err instanceof TypeError) { return true; }
-      return '("caller" in strict_func) failed with: ' + err;
-    } finally {}
-    if (answer) { return false; }
-    return '("caller" in strict_func) was false.';
-  }
-
-  /**
-   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
-   *
-   * <p>If this reports a problem in the absence of "New symptom (a)",
-   * it means the error thrown by the "in" in {@code has} is skipping
-   * past the first layer of "catch" surrounding that "in". This is in
-   * fact what we're currently seeing on Safari WebKit Nightly Version
-   * 5.0.5 (5533.21.1, r91108).
-   */
-  function test_CANT_IN_ARGUMENTS() {
-    var answer = void 0;
-    try {
-      answer = has(function(){}, 'arguments', 'strict_function');
-    } catch (err) {
-      if (err instanceof TypeError) { return true; }
-      return '("arguments" in strict_func) failed with: ' + err;
-    } finally {}
-    if (answer) { return false; }
-    return '("arguments" in strict_func) was false.';
-  }
-
   function has2(base, name, baseDesc) {
     var result = void 0;
     var finallySkipped = true;
@@ -1284,6 +1300,48 @@ var ses;
                    '>) finally outer finally skipped');
     }
     return !!result;
+  }
+
+  /**
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
+   *
+   * <p>If this reports a problem in the absence of "New symptom (a)",
+   * it means the error thrown by the "in" in {@code has} is skipping
+   * past the first layer of "catch" surrounding that "in". This is in
+   * fact what we're currently seeing on Safari WebKit Nightly Version
+   * 5.0.5 (5533.21.1, r91108).
+   */
+  function test_CANT_IN_CALLER() {
+    var answer = void 0;
+    try {
+      answer = has2(function(){}, 'caller', 'strict_function');
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return '("caller" in strict_func) failed with: ' + err;
+    } finally {}
+    if (answer) { return false; }
+    return '("caller" in strict_func) was false.';
+  }
+
+  /**
+   * Detects https://bugs.webkit.org/show_bug.cgi?id=63398
+   *
+   * <p>If this reports a problem in the absence of "New symptom (a)",
+   * it means the error thrown by the "in" in {@code has} is skipping
+   * past the first layer of "catch" surrounding that "in". This is in
+   * fact what we're currently seeing on Safari WebKit Nightly Version
+   * 5.0.5 (5533.21.1, r91108).
+   */
+  function test_CANT_IN_ARGUMENTS() {
+    var answer = void 0;
+    try {
+      answer = has2(function(){}, 'arguments', 'strict_function');
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return '("arguments" in strict_func) failed with: ' + err;
+    } finally {}
+    if (answer) { return false; }
+    return '("arguments" in strict_func) was false.';
   }
 
   /**
@@ -1335,7 +1393,7 @@ var ses;
    * applied to "caller"
    */
   function test_BUILTIN_LEAKS_CALLER() {
-    if (!has(builtInMapMethod, 'caller', 'a builtin')) { return false; }
+    if (!has2(builtInMapMethod, 'caller', 'a builtin')) { return false; }
     function foo(m) { return m.caller; }
     // using Function so it'll be non-strict
     var testfn = Function('a', 'f', 'return a.map(f)[0];');
@@ -1358,7 +1416,7 @@ var ses;
    * applied to "arguments"
    */
   function test_BUILTIN_LEAKS_ARGUMENTS() {
-    if (!has(builtInMapMethod, 'arguments', 'a builtin')) { return false; }
+    if (!has2(builtInMapMethod, 'arguments', 'a builtin')) { return false; }
     function foo(m) { return m.arguments; }
     // using Function so it'll be non-strict
     var testfn = Function('a', 'f', 'return a.map(f)[0];');
@@ -1895,9 +1953,10 @@ var ses;
   function repair_NEEDS_DUMMY_SETTER() {
     var defProp = Object.defineProperty;
     var gopd = Object.getOwnPropertyDescriptor;
-    var freeze = Object.freeze;
 
-    function dummySetter(newValue) {}
+    function dummySetter(newValue) {
+      throw new TypeError('no setter for assigning: ' + newValue);
+    }
     delayedFreeze(dummySetter.prototype);
     delayedFreeze(dummySetter);
 
@@ -2260,6 +2319,10 @@ var ses;
       return badParseInt(n, radix);
     }
     parseInt = goodParseInt;
+  }
+
+  function repair_ASSIGN_CAN_OVERRIDE_FROZEN() {
+    ses.defendOne = Object.freeze;
   }
 
 
@@ -2724,7 +2787,6 @@ var ses;
       sections: ['8.6.2'],
       tests: ['S8.6.2_A8']
     },
-    /* ****** Crashes Opera 12 pre-alpha build 1085
     {
       description: 'Strict eval function leaks variable definitions',
       test: test_STRICT_EVAL_LEAKS_GLOBALS,
@@ -2734,7 +2796,7 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
       sections: ['10.4.2.1'],
       tests: ['S10.4.2.1_A1']
-    }, ********* */
+    },
     {
       description: 'parseInt still parsing octal',
       test: test_PARSEINT_STILL_PARSING_OCTAL,
@@ -2759,7 +2821,7 @@ var ses;
     {
       description: 'Assignment can override frozen inherited property',
       test: test_ASSIGN_CAN_OVERRIDE_FROZEN,
-      repair: void 0,
+      repair: repair_ASSIGN_CAN_OVERRIDE_FROZEN,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1169',
@@ -3341,6 +3403,62 @@ var WeakMap;
 // limitations under the License.
 
 /**
+ * @fileoverview Implements StringMap - a map api for strings.
+ *
+ * @author Mark S. Miller
+ * @author Jasvir Nagra
+ * @requires cajaVM
+ * @provides StringMap
+ */
+
+function StringMap() {
+
+  function assertString(x) {
+    if ('string' !== typeof(x)) {
+      throw new TypeError('Not a string: ' + String(x));
+    }
+    return x;
+  }
+
+  var def;
+  if ('undefined' !== typeof cajaVM) {
+    def = cajaVM.def;
+  } else {
+    def = Object.freeze;
+  }
+
+  var objAsMap = Object.create(null);
+  return def({
+    get: function(key) {
+        return objAsMap[assertString(key) + '$']; 
+      },
+    set: function(key, value) {
+        objAsMap[assertString(key) + '$'] = value;
+      },
+    has: function(key) {
+        return (assertString(key) + '$') in objAsMap;
+      },
+    'delete': function(key) {
+        return delete objAsMap[assertString(key) + '$']; 
+      }
+  });
+}
+;
+// Copyright (C) 2011 Google Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
  * @fileoverview Exports {@code ses.whitelist}, a recursively defined
  * JSON record enumerating all the naming paths in the ES5.1 spec,
  * those de-facto extensions that we judge to be safe, and SES and
@@ -3463,8 +3581,9 @@ var ses;
       guard: t,
       passesGuard: t,
       stamp: t,
-      makeSealerUnsealerPair: t
+      makeSealerUnsealerPair: t,
 
+      makeArrayLike: {}
     },
     WeakMap: {       // ES-Harmony proposal as currently implemented by FF6.0a1
       prototype: {
@@ -3474,6 +3593,11 @@ var ses;
         has: t,
         'delete': t
       }
+    },
+    StringMap: {  // A specialized approximation of ES-Harmony's Map.
+      prototype: {} // Technically, the methods should be on the prototype,
+                    // but doing so while preserving encapsulation will be
+                    // needlessly expensive for current usage.
     },
 // As of this writing, the WeakMap emulation in WeakMap.js relies on
 // the unguessability and undiscoverability of HIDDEN_NAME, a
@@ -3787,6 +3911,7 @@ var ses;
  * anticipated ES6.
  *
  * @author Mark S. Miller
+ * @requires StringMap
  * @overrides ses, atLeastFreeVarNamesModule
  */
 var ses;
@@ -3857,7 +3982,8 @@ var ses;
     var regexp = SHOULD_MATCH_IDENTIFIER();
     // Once we decide this file can depends on ES5, the following line
     // should say "... = Object.create(null);" rather than "... = {};"
-    var result = {};
+    var result = [];
+    var found = StringMap();
     var a;
     while ((a = regexp.exec(programSrc))) {
       // Note that we could have avoided the while loop by doing
@@ -3866,7 +3992,11 @@ var ses;
       // apparent identifiers, rather than the total number of
       // apparently unique identifiers.
       var name = a[0];
-      result[name] = true;
+      
+      if (!found.has(name)) {
+        result.push(name);
+        found.set(name, true);
+      }
     }
     return result;
   };
@@ -4136,7 +4266,7 @@ ses.startSES = function(global,
   if (EMULATE_LEGACY_GETTERS_SETTERS) {
     defProp(Object.prototype, '__defineGetter__', {
       value: function(sprop, getter) {
-        sprop = ''+sprop;
+        sprop = '' + sprop;
         if (hop.call(this, sprop)) {
           defProp(this, sprop, { get: getter });
         } else {
@@ -4154,7 +4284,7 @@ ses.startSES = function(global,
     });
     defProp(Object.prototype, '__defineSetter__', {
       value: function(sprop, setter) {
-        sprop = ''+sprop;
+        sprop = '' + sprop;
         if (hop.call(this, sprop)) {
           defProp(this, sprop, { set: setter });
         } else {
@@ -4172,7 +4302,7 @@ ses.startSES = function(global,
     });
     defProp(Object.prototype, '__lookupGetter__', {
       value: function(sprop) {
-        sprop = ''+sprop;
+        sprop = '' + sprop;
         var base = this, desc = void 0;
         while (base && !(desc = gopd(base, sprop))) { base = getProto(base); }
         return desc && desc.get;
@@ -4183,7 +4313,7 @@ ses.startSES = function(global,
     });
     defProp(Object.prototype, '__lookupSetter__', {
       value: function(sprop) {
-        sprop = ''+sprop;
+        sprop = '' + sprop;
         var base = this, desc = void 0;
         while (base && !(desc = gopd(base, sprop))) { base = getProto(base); }
         return desc && desc.set;
@@ -4336,7 +4466,7 @@ ses.startSES = function(global,
      */
     function makeScopeObject(imports, freeNames) {
       var scopeObject = create(null);
-      keys(freeNames).forEach(function(name) {
+      freeNames.forEach(function(name) {
         var desc = gopd(imports, name);
         if (!desc || desc.writable !== false || desc.configurable) {
           // If there is no own property, or it isn't a non-writable
@@ -4618,6 +4748,192 @@ ses.startSES = function(global,
       return node;
     }
 
+
+    /**
+     * makeArrayLike() produces a constructor for the purpose of
+     * taming things like nodeLists.  The result, ArrayLike, takes an
+     * instance of ArrayLike and two functions, getItem and getLength,
+     * which put it in a position to do taming on demand.
+     *
+     * <p>The constructor returns a new object that inherits from the
+     * {@code proto} passed in.
+     */
+    var makeArrayLike;
+    (function() {
+      var itemMap = WeakMap(), lengthMap = WeakMap();
+      function lengthGetter() {
+        var getter = lengthMap.get(this);
+        return getter ? getter() : void 0;
+      }
+      freeze(lengthGetter);
+      freeze(lengthGetter.prototype);
+
+      var nativeProxies = global.Proxy && (function () {
+        var obj = {0: 'hi'};
+        var p = global.Proxy.create({
+          get: function () {
+            var P = arguments[0];
+            if (typeof P !== 'string') { P = arguments[1]; }
+            return obj[P];
+          }
+        });
+        return p[0] === 'hi';
+      })();
+      if (nativeProxies) {
+        (function () {
+          function ArrayLike(proto, getItem, getLength) {
+            if (typeof proto !== 'object') {
+              throw new TypeError('Expected proto to be an object.');
+            }
+            if (!(proto instanceof ArrayLike)) {
+              throw new TypeError('Expected proto to be instanceof ArrayLike.');
+            }
+            var obj = create(proto);
+            itemMap.set(obj, getItem);
+            lengthMap.set(obj, getLength);
+            return obj;
+          }
+
+          function ownPropDesc(P) {
+            P = '' + P;
+            if (P === 'length') {
+              return { get: lengthGetter };
+            } else if (typeof P === 'number' || P === '' + (+P)) {
+              var get = freeze(function () {
+                var getter = itemMap.get(this);
+                return getter ? getter(+P) : void 0;
+              });
+              freeze(get.prototype);
+              return {
+                get: get,
+                enumerable: true,
+                configurable: true
+              };
+            }
+            return void 0;
+          }
+          function propDesc(P) {
+            var opd = ownPropDesc(P);
+            if (opd) {
+              return opd;
+            } else {
+              return gopd(Object.prototype, P);
+            }
+          }
+          function has(P) {
+            P = '' + P;
+            return (P === 'length') ||
+                (typeof P === 'number') ||
+                (P === '' + +P) ||
+                (P in Object.prototype);
+          }
+          function hasOwn(P) {
+            P = '' + P;
+            return (P === 'length') ||
+                (typeof P === 'number') ||
+                (P === '' + +P);
+          }
+          function getPN() {
+            var result = getOwnPN ();
+            var objPropNames = gopn(Object.prototype);
+            result.push.apply(result, objPropNames);
+            return result;
+          }
+          function getOwnPN() {
+            var lenGetter = lengthMap.get(this);
+            if (!lenGetter) { return void 0; }
+            var len = lenGetter();
+            var result = ['length'];
+            for (var i = 0; i < len; ++i) {
+              result.push('' + i);
+            }
+            return result;
+          };
+          function del(P) {
+            P = '' + P;
+            if ((P === 'length') || ('' + +P === P)) { return false; }
+            return true;
+          }
+
+          ArrayLike.prototype = global.Proxy.create({
+            getPropertyDescriptor: propDesc,
+            getOwnPropertyDescriptor: ownPropDesc,
+            has: has,
+            hasOwn: hasOwn,
+            getPropertyNames: getPN,
+            getOwnPropertyNames: getOwnPN,
+            'delete': del,
+            fix: function() { return void 0; }
+          }, Object.prototype);
+          freeze(ArrayLike);
+          makeArrayLike = function() { return ArrayLike; };
+        })();
+      } else {
+        (function() {
+          // Make BiggestArrayLike.prototype be an object with a fixed
+          // set of numeric getters.  To tame larger lists, replace
+          // BiggestArrayLike and its prototype using
+          // makeArrayLike(newLength).
+
+          // See
+          // http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+          function nextUInt31PowerOf2(v) {
+            v &= 0x7fffffff;
+            v |= v >> 1;
+            v |= v >> 2;
+            v |= v >> 4;
+            v |= v >> 8;
+            v |= v >> 16;
+            return v + 1;
+          }
+
+          // The current function whose prototype has the most numeric getters.
+          var BiggestArrayLike = void 0;
+          var maxLen = 0;
+          makeArrayLike = function(length) {
+            if (!BiggestArrayLike || length > maxLen) {
+              var len = nextUInt31PowerOf2(length);
+              // Create a new ArrayLike constructor to replace the old one.
+              var BAL = function(proto, getItem, getLength) {
+                if (typeof(proto) !== 'object') {
+                  throw new TypeError('Expected proto to be an object.');
+                }
+                if (!(proto instanceof BAL)) {
+                  throw new TypeError(
+                      'Expected proto to be instanceof ArrayLike.');
+                }
+                var obj = create(proto);
+                itemMap.set(obj, getItem);
+                lengthMap.set(obj, getLength);
+                return obj;
+              };
+              // Install native numeric getters.
+              for (var i = 0; i < len; i++) {
+                (function(j) {
+                  var get = freeze(function() {
+                    return itemMap.get(this)(j);
+                  });
+                  freeze(get.prototype);
+                  defProp(BAL.prototype, j, {
+                    get: get,
+                    enumerable: true
+                  });
+                })(i);
+              }
+              // Install native length getter.
+              defProp(BAL.prototype, 'length', { get: lengthGetter });
+              // Freeze and cache the result
+              freeze(BAL);
+              freeze(BAL.prototype);
+              BiggestArrayLike = BAL;
+              maxLen = len;
+            }
+            return BiggestArrayLike;
+          };
+        })();
+      }
+    })();
+
     global.cajaVM = {
       log: function log(str) {
         if (typeof console !== 'undefined' && 'log' in console) {
@@ -4638,7 +4954,9 @@ ses.startSES = function(global,
 
       sharedImports: sharedImports,
       makeImports: makeImports,
-      copyToImports: copyToImports
+      copyToImports: copyToImports,
+
+      makeArrayLike: makeArrayLike
     };
     var extensionsRecord = extensions();
     gopn(extensionsRecord).forEach(function (p) {

@@ -135,8 +135,9 @@ var ses;
       guard: t,
       passesGuard: t,
       stamp: t,
-      makeSealerUnsealerPair: t
+      makeSealerUnsealerPair: t,
 
+      makeArrayLike: {}
     },
     WeakMap: {       // ES-Harmony proposal as currently implemented by FF6.0a1
       prototype: {
@@ -146,6 +147,11 @@ var ses;
         has: t,
         'delete': t
       }
+    },
+    StringMap: {  // A specialized approximation of ES-Harmony's Map.
+      prototype: {} // Technically, the methods should be on the prototype,
+                    // but doing so while preserving encapsulation will be
+                    // needlessly expensive for current usage.
     },
 // As of this writing, the WeakMap emulation in WeakMap.js relies on
 // the unguessability and undiscoverability of HIDDEN_NAME, a
