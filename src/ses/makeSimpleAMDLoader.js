@@ -20,7 +20,7 @@
  *
  * @author Mark S. Miller
  * //provides makeSimpleAMDLoader
- * @requires Q, StringMap, cajaVM, this
+ * @requires Q, StringMap, cajaVM, this, compileExprLater
  */
 
 
@@ -102,6 +102,7 @@
 
      function rawLoad(id) {
        return Q(fetch(id)).when(function(src) {
+
          var result = defineNotCalledPumpkin;
          function define(opt_id, deps, factory) {
            if (typeof opt_id === 'string') {
@@ -120,13 +121,20 @@
            });
          }
          define.amd = { lite: true, caja: true, jQuery: true };
-         def(define);
 
-         Function('define', src)(define);
-         if (result === defineNotCalledPumpkin) {
-           result = Q.reject(new Error('"define" not called by: ' + id));
-         }
-         return result;
+         var imports = cajaVM.makeImports();
+         cajaVM.copyToImports(imports, {define: def(define)});
+
+         var compiledExprP = compileExprLater(
+           '(function(){' + src + '})()', id);
+         return Q(compiledExprP).when(function(compiledExpr) {
+
+           compiledExpr(imports);
+           if (result === defineNotCalledPumpkin) {
+             result = Q.reject(new Error('"define" not called by: ' + id));
+           }
+           return result;
+         });
        });
      }
      return loader = Q.memoize(rawLoad, moduleMap);

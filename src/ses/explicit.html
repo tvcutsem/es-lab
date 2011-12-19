@@ -128,46 +128,68 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
 
 <script src="makeQ.js"></script>
 <script src="makeFarResourceMaker.js"></script>
+<script src="compileExprLater.js"></script>
 <script>
-  function mySetTimeout(func, millis) {
-    return setTimeout(function() {
-      try {
-        func();
-      } catch (reason) {
-        console.log('uncaught: ', reason);
-      }
-    }, millis);
-  }
-  var Q = makeQ(mySetTimeout);
+  var Q;
+  (function() {
+    "use strict";
 
-  var makeTextResource = makeFarResourceMaker();
+    /* TODO(erights): Extract the reusable boilerplate below into a
+       reusable abstraction. */
 
-  var makeSimpleAMDLoaderFileP = makeTextResource('./makeSimpleAMDLoader.js');
-  var makeSimpleAMDLoaderSrcP = makeSimpleAMDLoaderFileP.get();
-  var imports = cajaVM.makeImports();
-  imports.Q = Q;
-  var makeSimpleAMDLoaderP = Q(makeSimpleAMDLoaderSrcP).when(function(src) {
-    cajaVM.compileModule(src)(imports);
-    return imports.makeSimpleAMDLoader;
-  });
+    function mySetTimeout(func, millis) {
+      return setTimeout(function() {
+        try {
+          func();
+        } catch (reason) {
+          console.log('uncaught: ', reason);
+        }
+      }, millis);
+    }
+    Q = makeQ(mySetTimeout);
+  
+    var makeTextResource = makeFarResourceMaker();
+  
+    var url = './makeSimpleAMDLoader.js';
+    var makeSimpleAMDLoaderFileP = makeTextResource(url);
+    var makeSimpleAMDLoaderSrcP = makeSimpleAMDLoaderFileP.get();
 
-  function fetch(id) {
-    /* SECURITY TODO(erights): what encoding do we need on the "id"? */
-    return makeTextResource('./' + id + '.js').get();
-  }
+    /* We really are evaluating makeSimpleAMDModuleLoader with least
+       authority. Even though there's a global compileExprLater, if
+       you don't provide it here, makeSimpleAMDModuleLoader will
+       fail. */
+    var imports = cajaVM.makeImports();
+    cajaVM.copyToImports(imports, {
+      Q: Q,
+      compileExprLater: compileExprLater
+    });
 
-  var moduleMap = StringMap();
-  moduleMap.set('Q', Q);
-  var loaderP = Q(makeSimpleAMDLoaderP).send(void 0, fetch, moduleMap);
-  var amdTestP = Q(loaderP).send(void 0, 'amdTest');
-  Q(amdTestP).when(function(amdTest) {
-    var amdTestStatus = amdTest === 'this is a test' ?
-      'succeeded' : 'failed, unexpected: ' + amdTest;
-    appendText(amdLoaderTest, amdTestStatus);
-  }, function(reason) {
-    appendText(amdLoaderTest, 'failed: ' + reason);
-  }).end();
-
+    var makeSimpleAMDLoaderP = Q(makeSimpleAMDLoaderSrcP).when(function(src) {
+      var exprSrc = '(function() {' + src + '}).call(this)';
+      var compiledExprP = compileExprLater(exprSrc, url);
+      return Q(compiledExprP).when(function(compiledExpr) {
+        compiledExpr(imports);
+        return imports.makeSimpleAMDLoader;
+      });
+    });
+  
+    function fetch(id) {
+      /* SECURITY TODO(erights): what encoding do we need on the "id"? */
+      return makeTextResource('./' + id + '.js').get();
+    }
+  
+    var moduleMap = StringMap();
+    moduleMap.set('Q', Q);
+    var loaderP = Q(makeSimpleAMDLoaderP).send(void 0, fetch, moduleMap);
+    var amdTestP = Q(loaderP).send(void 0, 'amdTest');
+    Q(amdTestP).when(function(amdTest) {
+      var amdTestStatus = amdTest === 'this is a test' ?
+        'succeeded' : 'failed, unexpected: ' + amdTest;
+      appendText(amdLoaderTest, amdTestStatus);
+    }, function(reason) {
+      appendText(amdLoaderTest, 'failed: ' + reason);
+    }).end();
+  })();
 </script>
 
 <p>

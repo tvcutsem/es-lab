@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /**
- * @fileoverview Makes a makeFarResource function using a given
+ * @fileoverview Makes a "makeFarResource" function using a given
  * serializer/unserializer pair. A makeFarResource function makes a
  * farPromise for an (assumed remote) resource for a given URL.
  *

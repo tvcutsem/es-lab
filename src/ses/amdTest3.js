@@ -19,5 +19,7 @@
  */
 
 define([], function() {
-  return 'test';
+  return function() {
+    return 'test';
+  };
 });

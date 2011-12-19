@@ -376,7 +376,12 @@ ses.startSES = function(global,
      * trick executes over 100x faster on V8.
      */
     function verifyStrictProgram(programSrc) {
-      UnsafeFunction('"use strict";' + programSrc);
+      try {
+        UnsafeFunction('"use strict";' + programSrc);
+      } catch (err) {
+        // debugger; Useful for debugging -- to look at programSrc
+        throw err;
+      }
     }
 
     /**
@@ -507,27 +512,35 @@ ses.startSES = function(global,
 
 
     /**
-     * Like {@code compileExpr} but does not freeze the function it
-     * returns.
+     * Given SES source text that must not be run directly using any
+     * of the built-in unsafe evaluators on this platform, we instead
+     * surround it with a prelude and postlude.
+     *
+     * <p>Evaluating the resulting expression return a function that
+     * <i>can</i>be called to execute the original expression safely,
+     * in a controlled scope. See "makeCompiledExpr" for precisely the
+     * pattern that must be followed to call the resulting function
+     * safely.
+     *
+     * Notice that the source text placed around {@code exprSrc}
+     * <ul>
+     * <li>brings no variable names into scope, avoiding any
+     *     non-hygienic name capture issues, and
+     * <li>does not introduce any newlines preceding exprSrc, so
+     *     that all line number which a debugger might report are
+     *     accurate wrt the original source text. And except for the
+     *     first line, all the column numbers are accurate too.
+     * </ul>
+     *
+     * <p>TODO(erights): Find out if any platforms have any way to
+     * associate a file name and line number with eval'ed text, so
+     * that we can do something useful with the optional {@code
+     * opt_sourcePosition} to better support debugging.
      */
-    function internalCompileExpr(exprSrc, opt_sourcePosition) {
-      if (dirty) { fail('Initial cleaning failed'); }
+    function securableWrapperSrc(exprSrc, opt_sourcePosition) {
       verifyStrictExpression(exprSrc);
-      var freeNames = atLeastFreeVarNames(exprSrc);
 
-      /**
-       * Notice that the source text placed around {@code exprSrc}
-       * <ul>
-       * <li>brings no variable names into scope, avoiding any
-       *     non-hygienic name capture issues, and
-       * <li>does not introduce any newlines preceding exprSrc, so
-       *     that all line number which a debugger might report are
-       *     accurate wrt the original source text. And except for the
-       *     first line, all the column numbers are accurate too.
-       * </ul>
-       */
-      var wrapperSrc =
-        '(function() { ' +
+      return '(function() { ' +
         // non-strict code, where this === scopeObject
         '  with (this) { ' +
         '    return function() { ' +
@@ -539,7 +552,23 @@ ses.startSES = function(global,
         '    };\n' +
         '  }\n' +
         '})';
-      var wrapper = unsafeEval(wrapperSrc);
+    }
+    ses.securableWrapperSrc = securableWrapperSrc;
+
+
+    /**
+     * Given a wrapper function, such as the result of evaluating the
+     * source that securableWrapperSrc returns, and a list of all the
+     * names that we want to intercept to redirect to the imports,
+     * return a corresponding <i>compiled expr</i> function.
+     *
+     * <p>A compiled expr function, when called on an imports
+     * object, evaluates the original expression in a context where
+     * all its free variable references that appear in freeNames are
+     * redirected to the corresponding property of imports.
+     */
+    function makeCompiledExpr(wrapper, freeNames) {
+      if (dirty) { fail('Initial cleaning failed'); }
 
       function compiledCode(imports) {
         var scopeObject = makeScopeObject(imports, freeNames);
@@ -548,6 +577,7 @@ ses.startSES = function(global,
       freeze(compiledCode.prototype);
       return compiledCode;
     }
+    ses.makeCompiledExpr = makeCompiledExpr;
 
     /**
      * Compiles {@code exprSrc} as a strict expression into a function
@@ -566,14 +596,12 @@ ses.startSES = function(global,
      * <p>Thanks to Mike Samuel and Ankur Taly for this trick of using
      * {@code with} together with RegExp matching to intercept free
      * variable access without parsing.
-     *
-     * <p>TODO(erights): Find out if any platforms have any way to
-     * associate a file name and line number with eval'ed text, so
-     * that we can do something useful with the optional {@code
-     * opt_sourcePosition} to better support debugging.
      */
     function compileExpr(exprSrc, opt_sourcePosition) {
-      var result = internalCompileExpr(exprSrc, opt_sourcePosition);
+      var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
+      var wrapper = unsafeEval(wrapperSrc);
+      var freeNames = atLeastFreeVarNames(exprSrc);
+      var result = makeCompiledExpr(wrapper, freeNames);
       return freeze(result);
     }
 
@@ -637,9 +665,14 @@ ses.startSES = function(global,
      * from the text to be compiled.
      */
     function compileModule(modSrc, opt_sourcePosition) {
-      var moduleMaker = internalCompileExpr(
-        '(function() {' + modSrc + '}).call(this)',
-        opt_sourcePosition);
+      var exprSrc = '(function() {' + modSrc + '}).call(this)';
+
+      // Follow the pattern in compileExpr
+      var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
+      var wrapper = unsafeEval(wrapperSrc);
+      var freeNames = atLeastFreeVarNames(exprSrc);
+      var moduleMaker = makeCompiledExpr(wrapper, freeNames);
+
       moduleMaker.requirements = getRequirements(modSrc);
       return freeze(moduleMaker);
     }
