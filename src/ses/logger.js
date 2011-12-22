@@ -110,6 +110,7 @@
  * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
  * anticipated ES6.
  *
+ * //provides ses.logger
  * @author Mark S. Miller
  * @requires console
  * @overrides ses, loggerModule

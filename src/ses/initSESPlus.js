@@ -110,6 +110,7 @@
  * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
  * anticipated ES6.
  *
+ * //provides ses.logger
  * @author Mark S. Miller
  * @requires console
  * @overrides ses, loggerModule
@@ -258,6 +259,11 @@ if (!ses) { ses = {}; }
  * <p>Ignore the "...requires ___global_test_function___" below. We
  * create it, use it, and delete it all within this module. But we
  * need to lie to the linter since it can't tell.
+ *
+ * //provides ses.statuses, ses.ok, ses.makeDelayedTamperProof
+ * //provides ses.makeCallerHarmless, ses.makeArgumentsHarmless
+ * //provides ses.severities, ses.maxSeverity, ses.updateMaxSeverity
+ * //provides ses.maxAcceptableSeverityName, ses.maxAcceptableSeverity
  *
  * @author Mark S. Miller
  * @requires ___global_test_function___, ___global_valueOf_function___
@@ -554,63 +560,112 @@ var ses;
   };
 
   /**
+   * "makeTamperProof()" returns a "tamperProof(obj)" function that
+   * acts like "Object.freeze(obj)", except that, if obj is a
+   * prototypical object, it ensures that the effect of freezing
+   * properties of obj does not suppress the ability to override these
+   * properties on derived objects by simple assignment.
    *
+   * <p>Because of lack of sufficient foresight at the time, ES5
+   * unifortunately specified that a simple assignment to a
+   * non-existent property must fail if it would override a
+   * non-writable data property of the same name. (In retrospect, this
+   * was a mistake, but it is now too late and we must live with the
+   * consequences.) As a result, simply freezing an object to make it
+   * tamper proof has the unfortunate side effect of breaking
+   * previously correct code that is considered to have followed JS
+   * best practices, of this previous code used assignment to
+   * override.
+   *
+   * <p>To work around this mistake, tamperProof(obj) detects if obj
+   * is <i>prototypical</i>, i.e., is an object whose own
+   * "constructor" is a function whose "prototype" is this obj. If so,
+   * then when tamper proofing it, prior to freezing, replace all its
+   * configurable own data properties with accessor properties which
+   * simulate what we should have specified -- that assignments to
+   * derived objects succeed if otherwise possible.
+   *
+   * <p>Some platforms (Chrome and Safari as of this writing)
+   * implement the assignment semantics ES5 should have specified
+   * rather than what it did specify.
+   * "test_ASSIGN_CAN_OVERRIDE_FROZEN()" below tests whether we are on
+   * such a platform. If so, "repair_ASSIGN_CAN_OVERRIDE_FROZEN()"
+   * replaces "makeTamperProof" with a function that simply returns
+   * "Object.freeze", since the complex workaround here is not needed
+   * on those platforms.
+   *
+   * <p>"makeTamperProof" should only be called after the trusted
+   * initialization has done all the monkey patching that it is going
+   * to do on the Object.* methods, but before any untrusted code runs
+   * in this context.
    */
-  ses.defendOne = function(obj) {
+  var makeTamperProof = function defaultMakeTamperProof() {
+
+    // Sample these after all trusted monkey patching initialization
+    // but before any untrusted code runs in this frame.
     var gopd = Object.getOwnPropertyDescriptor;
     var gopn = Object.getOwnPropertyNames;
     var getProtoOf = Object.getPrototypeOf;
+    var freeze = Object.freeze;
     var isFrozen = Object.isFrozen;
     var defProp = Object.defineProperty;
 
+    function tamperProof(obj) {
     if (obj !== Object(obj)) { return obj; }
-    var func;
-    if (typeof obj === 'object' &&
-        !!gopd(obj, 'constructor') &&
-        typeof (func = obj.constructor) === 'function' &&
-        func.prototype === obj &&
-        !isFrozen(obj)) {
-      gopn(obj).forEach(function(name) {
-        var value;
-        function getter() {
-          if (obj === this) { return value; }
-          if (!this) { return void 0; }
-          if (!!gopd(this, name)) { return this[name]; }
-          return getter.call(getProtoOf(this));
-        }
-        function setter(newValue) {
-          if (obj === this) {
-            throw new TypeError('Cannot set virtually frozen property: ' +
-                                name);
+      var func;
+      if (typeof obj === 'object' &&
+          !!gopd(obj, 'constructor') &&
+          typeof (func = obj.constructor) === 'function' &&
+          func.prototype === obj &&
+          !isFrozen(obj)) {
+        strictForEachFn(gopn(obj), function(name) {
+          var value;
+          function getter() {
+            if (obj === this) { return value; }
+            if (!this) { return void 0; }
+            if (!!gopd(this, name)) { return this[name]; }
+            // TODO(erights): If we can reliably uncurryThis() in
+            // repairES5.js, the next line should be:
+            //   return callFn(getter, getProtoOf(this));
+            return getter.call(getProtoOf(this));
           }
-          if (!!gopd(this, name)) {
-            this[name] = newValue;
+          function setter(newValue) {
+            if (obj === this) {
+              throw new TypeError('Cannot set virtually frozen property: ' +
+                                  name);
+            }
+            if (!!gopd(this, name)) {
+              this[name] = newValue;
+            }
+            // TODO(erights): Do all the inherited property checks
+            defProp(this, name, {
+              value: newValue,
+              writable: true,
+              enumerable: true,
+              configurable: true
+            });
           }
-          // TODO(erights): Do all the inherited property checks
-          defProp(this, name, {
-            value: newValue,
-            writable: true,
-            enumerable: true,
-            configurable: true
-          });
-        }
-        var desc = gopd(obj, name);
-        if (desc.configurable && 'value' in desc) {
-          value = desc.value;
-          defProp(obj, name, {
-            get: getter,
-            set: setter,
-            // We should be able to omit the enumerable line, since it
-            // should default to its existing setting.
-            enumerable: desc.enumerable,
-            configurable: false
-          });
-        }
-      });
+          var desc = gopd(obj, name);
+          if (desc.configurable && 'value' in desc) {
+            value = desc.value;
+            defProp(obj, name, {
+              get: getter,
+              set: setter,
+              // We should be able to omit the enumerable line, since it
+              // should default to its existing setting.
+              enumerable: desc.enumerable,
+              configurable: false
+            });
+          }
+        });
+      }
+      return freeze(obj);
     }
-    return Object.freeze(obj);
+    return tamperProof;
   };
 
+
+  var needToTamperProof = [];
   /**
    * Various repairs may expose non-standard objects that are not
    * reachable from startSES's root, and therefore not freezable by
@@ -620,12 +675,21 @@ var ses;
    * order to install hidden properties for its own use before the
    * object becomes non-extensible.
    */
-  var needToFreeze = [];
-  function delayedFreeze(obj) {
-    needToFreeze.push(obj);
+  function rememberToTamperProof(obj) {
+    needToTamperProof.push(obj);
   }
-  ses.freezeDelayed = function freezeDelayed() {
-    needToFreeze.forEach(ses.defendOne);
+
+  /**
+   * Makes and returns a tamperProof(obj) function, and uses it to
+   * tamper proof all objects whose tamper proofing had been delayed.
+   *
+   * <p>"makeDelayedTamperProof()" must only be called once.
+   */
+  ses.makeDelayedTamperProof = function makeDelayedTamperProof() {
+    var tamperProof = makeTamperProof();
+    strictForEachFn(needToTamperProof, tamperProof);
+    needToTamperProof = void 0;
+    return tamperProof;
   };
 
   /**
@@ -1822,9 +1886,9 @@ var ses;
     var BOGUS_BOUND_PROTOTYPE = {
       toString: function BBPToString() { return 'bogus bound prototype'; }
     };
-    delayedFreeze(BOGUS_BOUND_PROTOTYPE);
-    delayedFreeze(BOGUS_BOUND_PROTOTYPE.toString);
-    delayedFreeze(BOGUS_BOUND_PROTOTYPE.toString.prototype);
+    rememberToTamperProof(BOGUS_BOUND_PROTOTYPE);
+    rememberToTamperProof(BOGUS_BOUND_PROTOTYPE.toString);
+    rememberToTamperProof(BOGUS_BOUND_PROTOTYPE.toString.prototype);
 
     var defProp = Object.defineProperty;
     defProp(Function.prototype, 'bind', {
@@ -1957,8 +2021,8 @@ var ses;
     function dummySetter(newValue) {
       throw new TypeError('no setter for assigning: ' + newValue);
     }
-    delayedFreeze(dummySetter.prototype);
-    delayedFreeze(dummySetter);
+    rememberToTamperProof(dummySetter.prototype);
+    rememberToTamperProof(dummySetter);
 
     defProp(Object, 'defineProperty', {
       value: function setSetterDefProp(base, name, desc) {
@@ -2322,7 +2386,9 @@ var ses;
   }
 
   function repair_ASSIGN_CAN_OVERRIDE_FROZEN() {
-    ses.defendOne = Object.freeze;
+    makeTamperProof = function simpleMakeTamperProof() {
+      return Object.freeze;
+    };
   }
 
 
@@ -3467,6 +3533,7 @@ function StringMap() {
  * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
  * anticipated ES6.
  *
+ * //provides ses.whitelist
  * @author Mark S. Miller,
  * @overrides ses, whitelistModule
  */
@@ -3557,6 +3624,7 @@ var ses;
   ses.whitelist = {
     cajaVM: {                        // Caja support
       log: t,
+      tamperProof: t,
       def: t,
 
       compileExpr: t,
@@ -3910,6 +3978,7 @@ var ses;
  * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
  * anticipated ES6.
  *
+ * // provides ses.atLeastFreeVarNames
  * @author Mark S. Miller
  * @requires StringMap
  * @overrides ses, atLeastFreeVarNamesModule
@@ -3992,7 +4061,7 @@ var ses;
       // apparent identifiers, rather than the total number of
       // apparently unique identifiers.
       var name = a[0];
-      
+
       if (!found.has(name)) {
         result.push(name);
         found.set(name, true);
@@ -4023,6 +4092,7 @@ var ses;
  * <p>Assumes ES5 plus a WeakMap that conforms to the anticipated ES6
  * WeakMap spec. Compatible with ES5-strict or anticipated ES6.
  *
+ * //provides ses.startSES
  * @author Mark S. Miller,
  * @requires WeakMap
  * @overrides ses, console, eval, Function, cajaVM
@@ -4332,9 +4402,10 @@ ses.startSES = function(global,
 
   /**
    * By this time, WeakMap has already monkey patched Object.freeze if
-   * necessary, so we can do the freezes delayed from repairES5.js
+   * necessary, so we can do the tamperProofing delayed from
+   * repairES5.js
    */
-  ses.freezeDelayed();
+  var tamperProof = ses.makeDelayedTamperProof();
 
   /**
    * Code being eval'ed by {@code cajaVM.eval} sees {@code
@@ -4381,7 +4452,12 @@ ses.startSES = function(global,
      * trick executes over 100x faster on V8.
      */
     function verifyStrictProgram(programSrc) {
-      UnsafeFunction('"use strict";' + programSrc);
+      try {
+        UnsafeFunction('"use strict";' + programSrc);
+      } catch (err) {
+        // debugger; // Useful for debugging -- to look at programSrc
+        throw err;
+      }
     }
 
     /**
@@ -4512,27 +4588,35 @@ ses.startSES = function(global,
 
 
     /**
-     * Like {@code compileExpr} but does not freeze the function it
-     * returns.
+     * Given SES source text that must not be run directly using any
+     * of the built-in unsafe evaluators on this platform, we instead
+     * surround it with a prelude and postlude.
+     *
+     * <p>Evaluating the resulting expression return a function that
+     * <i>can</i>be called to execute the original expression safely,
+     * in a controlled scope. See "makeCompiledExpr" for precisely the
+     * pattern that must be followed to call the resulting function
+     * safely.
+     *
+     * Notice that the source text placed around {@code exprSrc}
+     * <ul>
+     * <li>brings no variable names into scope, avoiding any
+     *     non-hygienic name capture issues, and
+     * <li>does not introduce any newlines preceding exprSrc, so
+     *     that all line number which a debugger might report are
+     *     accurate wrt the original source text. And except for the
+     *     first line, all the column numbers are accurate too.
+     * </ul>
+     *
+     * <p>TODO(erights): Find out if any platforms have any way to
+     * associate a file name and line number with eval'ed text, so
+     * that we can do something useful with the optional {@code
+     * opt_sourcePosition} to better support debugging.
      */
-    function internalCompileExpr(exprSrc, opt_sourcePosition) {
-      if (dirty) { fail('Initial cleaning failed'); }
+    function securableWrapperSrc(exprSrc, opt_sourcePosition) {
       verifyStrictExpression(exprSrc);
-      var freeNames = atLeastFreeVarNames(exprSrc);
 
-      /**
-       * Notice that the source text placed around {@code exprSrc}
-       * <ul>
-       * <li>brings no variable names into scope, avoiding any
-       *     non-hygienic name capture issues, and
-       * <li>does not introduce any newlines preceding exprSrc, so
-       *     that all line number which a debugger might report are
-       *     accurate wrt the original source text. And except for the
-       *     first line, all the column numbers are accurate too.
-       * </ul>
-       */
-      var wrapperSrc =
-        '(function() { ' +
+      return '(function() { ' +
         // non-strict code, where this === scopeObject
         '  with (this) { ' +
         '    return function() { ' +
@@ -4544,15 +4628,32 @@ ses.startSES = function(global,
         '    };\n' +
         '  }\n' +
         '})';
-      var wrapper = unsafeEval(wrapperSrc);
+    }
+    ses.securableWrapperSrc = securableWrapperSrc;
+
+
+    /**
+     * Given a wrapper function, such as the result of evaluating the
+     * source that securableWrapperSrc returns, and a list of all the
+     * names that we want to intercept to redirect to the imports,
+     * return a corresponding <i>compiled expr</i> function.
+     *
+     * <p>A compiled expr function, when called on an imports
+     * object, evaluates the original expression in a context where
+     * all its free variable references that appear in freeNames are
+     * redirected to the corresponding property of imports.
+     */
+    function makeCompiledExpr(wrapper, freeNames) {
+      if (dirty) { fail('Initial cleaning failed'); }
 
       function compiledCode(imports) {
         var scopeObject = makeScopeObject(imports, freeNames);
         return wrapper.call(scopeObject).call(imports);
       };
-      freeze(compiledCode.prototype);
+      tamperProof(compiledCode.prototype);
       return compiledCode;
     }
+    ses.makeCompiledExpr = makeCompiledExpr;
 
     /**
      * Compiles {@code exprSrc} as a strict expression into a function
@@ -4571,15 +4672,13 @@ ses.startSES = function(global,
      * <p>Thanks to Mike Samuel and Ankur Taly for this trick of using
      * {@code with} together with RegExp matching to intercept free
      * variable access without parsing.
-     *
-     * <p>TODO(erights): Find out if any platforms have any way to
-     * associate a file name and line number with eval'ed text, so
-     * that we can do something useful with the optional {@code
-     * opt_sourcePosition} to better support debugging.
      */
     function compileExpr(exprSrc, opt_sourcePosition) {
-      var result = internalCompileExpr(exprSrc, opt_sourcePosition);
-      return freeze(result);
+      var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
+      var wrapper = unsafeEval(wrapperSrc);
+      var freeNames = atLeastFreeVarNames(exprSrc);
+      var result = makeCompiledExpr(wrapper, freeNames);
+      return tamperProof(result);
     }
 
 
@@ -4613,7 +4712,7 @@ ses.startSES = function(global,
           result.push(m[1]);
         }
       }
-      return freeze(result);
+      return tamperProof(result);
     }
 
     /**
@@ -4642,11 +4741,16 @@ ses.startSES = function(global,
      * from the text to be compiled.
      */
     function compileModule(modSrc, opt_sourcePosition) {
-      var moduleMaker = internalCompileExpr(
-        '(function() {' + modSrc + '}).call(this)',
-        opt_sourcePosition);
+      var exprSrc = '(function() {' + modSrc + '}).call(this)';
+
+      // Follow the pattern in compileExpr
+      var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
+      var wrapper = unsafeEval(wrapperSrc);
+      var freeNames = atLeastFreeVarNames(exprSrc);
+      var moduleMaker = makeCompiledExpr(wrapper, freeNames);
+
       moduleMaker.requirements = getRequirements(modSrc);
-      return freeze(moduleMaker);
+      return tamperProof(moduleMaker);
     }
 
     /**
@@ -4711,7 +4815,7 @@ ses.startSES = function(global,
     var defended = WeakMap();
     var defending = WeakMap();
     /**
-     * To define a defended object is to freeze it and all objects
+     * To define a defended object is to tamperProof it and all objects
      * transitively reachable from it via transitive reflective
      * property and prototype traversal.
      */
@@ -4723,7 +4827,7 @@ ses.startSES = function(global,
         }
         defending.set(val, true);
         defendingList.push(val);
-        freeze(val);
+        tamperProof(val);
         recur(getProto(val));
         gopn(val).forEach(function(p) {
           if (typeof val === 'function' &&
@@ -4765,8 +4869,8 @@ ses.startSES = function(global,
         var getter = lengthMap.get(this);
         return getter ? getter() : void 0;
       }
-      freeze(lengthGetter);
-      freeze(lengthGetter.prototype);
+      tamperProof(lengthGetter);
+      tamperProof(lengthGetter.prototype);
 
       var nativeProxies = global.Proxy && (function () {
         var obj = {0: 'hi'};
@@ -4799,11 +4903,11 @@ ses.startSES = function(global,
             if (P === 'length') {
               return { get: lengthGetter };
             } else if (typeof P === 'number' || P === '' + (+P)) {
-              var get = freeze(function () {
+              var get = tamperProof(function () {
                 var getter = itemMap.get(this);
                 return getter ? getter(+P) : void 0;
               });
-              freeze(get.prototype);
+              tamperProof(get.prototype);
               return {
                 get: get,
                 enumerable: true,
@@ -4865,7 +4969,7 @@ ses.startSES = function(global,
             'delete': del,
             fix: function() { return void 0; }
           }, Object.prototype);
-          freeze(ArrayLike);
+          tamperProof(ArrayLike);
           makeArrayLike = function() { return ArrayLike; };
         })();
       } else {
@@ -4910,10 +5014,10 @@ ses.startSES = function(global,
               // Install native numeric getters.
               for (var i = 0; i < len; i++) {
                 (function(j) {
-                  var get = freeze(function() {
+                  var get = tamperProof(function() {
                     return itemMap.get(this)(j);
                   });
-                  freeze(get.prototype);
+                  tamperProof(get.prototype);
                   defProp(BAL.prototype, j, {
                     get: get,
                     enumerable: true
@@ -4922,9 +5026,9 @@ ses.startSES = function(global,
               }
               // Install native length getter.
               defProp(BAL.prototype, 'length', { get: lengthGetter });
-              // Freeze and cache the result
-              freeze(BAL);
-              freeze(BAL.prototype);
+              // TamperProof and cache the result
+              tamperProof(BAL);
+              tamperProof(BAL.prototype);
               BiggestArrayLike = BAL;
               maxLen = len;
             }
@@ -4963,8 +5067,10 @@ ses.startSES = function(global,
       defProp(cajaVM, p,
           gopd(extensionsRecord, p));
     });
-    // Move this down here so it is not available during the call to
+     
+    // Move these down here so they are not available during the call to
     // extensions.
+    global.cajaVM.tamperProof = tamperProof;
     global.cajaVM.def = def;
 
   })();
@@ -5183,7 +5289,7 @@ ses.startSES = function(global,
       });
     } catch (cantPoisonErr) {
       try {
-        // Perhaps it's writable non-configurable, it which case we
+        // Perhaps it's writable non-configurable, in which case we
         // should still be able to freeze it in a harmless state.
         var value = gopd(base, name).value;
         defProp(base, name, {
@@ -5245,7 +5351,7 @@ ses.startSES = function(global,
         cleanProperty(value, name, path);
       }
     });
-    freeze(value);
+    tamperProof(value);
   }
   clean(sharedImports, '');
 
@@ -5288,6 +5394,7 @@ ses.startSES = function(global,
  *
  * <p>Assumes ES5. Compatible with ES5-strict.
  *
+ * // provides ses.ejectorsGuardsTrademarks
  * @author kpreid@switchb.org
  * @requires WeakMap, cajaVM
  * @overrides ses, ejectorsGuardsTrademarksModule

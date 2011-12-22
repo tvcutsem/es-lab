@@ -18,6 +18,7 @@
  * <p>Assumes ES5 plus a WeakMap that conforms to the anticipated ES6
  * WeakMap spec. Compatible with ES5-strict or anticipated ES6.
  *
+ * //provides ses.startSES
  * @author Mark S. Miller,
  * @requires WeakMap
  * @overrides ses, console, eval, Function, cajaVM
@@ -327,9 +328,10 @@ ses.startSES = function(global,
 
   /**
    * By this time, WeakMap has already monkey patched Object.freeze if
-   * necessary, so we can do the freezes delayed from repairES5.js
+   * necessary, so we can do the tamperProofing delayed from
+   * repairES5.js
    */
-  ses.freezeDelayed();
+  var tamperProof = ses.makeDelayedTamperProof();
 
   /**
    * Code being eval'ed by {@code cajaVM.eval} sees {@code
@@ -379,7 +381,7 @@ ses.startSES = function(global,
       try {
         UnsafeFunction('"use strict";' + programSrc);
       } catch (err) {
-        // debugger; Useful for debugging -- to look at programSrc
+        // debugger; // Useful for debugging -- to look at programSrc
         throw err;
       }
     }
@@ -574,7 +576,7 @@ ses.startSES = function(global,
         var scopeObject = makeScopeObject(imports, freeNames);
         return wrapper.call(scopeObject).call(imports);
       };
-      freeze(compiledCode.prototype);
+      tamperProof(compiledCode.prototype);
       return compiledCode;
     }
     ses.makeCompiledExpr = makeCompiledExpr;
@@ -602,7 +604,7 @@ ses.startSES = function(global,
       var wrapper = unsafeEval(wrapperSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
       var result = makeCompiledExpr(wrapper, freeNames);
-      return freeze(result);
+      return tamperProof(result);
     }
 
 
@@ -636,7 +638,7 @@ ses.startSES = function(global,
           result.push(m[1]);
         }
       }
-      return freeze(result);
+      return tamperProof(result);
     }
 
     /**
@@ -674,7 +676,7 @@ ses.startSES = function(global,
       var moduleMaker = makeCompiledExpr(wrapper, freeNames);
 
       moduleMaker.requirements = getRequirements(modSrc);
-      return freeze(moduleMaker);
+      return tamperProof(moduleMaker);
     }
 
     /**
@@ -739,7 +741,7 @@ ses.startSES = function(global,
     var defended = WeakMap();
     var defending = WeakMap();
     /**
-     * To define a defended object is to freeze it and all objects
+     * To define a defended object is to tamperProof it and all objects
      * transitively reachable from it via transitive reflective
      * property and prototype traversal.
      */
@@ -751,7 +753,7 @@ ses.startSES = function(global,
         }
         defending.set(val, true);
         defendingList.push(val);
-        freeze(val);
+        tamperProof(val);
         recur(getProto(val));
         gopn(val).forEach(function(p) {
           if (typeof val === 'function' &&
@@ -793,8 +795,8 @@ ses.startSES = function(global,
         var getter = lengthMap.get(this);
         return getter ? getter() : void 0;
       }
-      freeze(lengthGetter);
-      freeze(lengthGetter.prototype);
+      tamperProof(lengthGetter);
+      tamperProof(lengthGetter.prototype);
 
       var nativeProxies = global.Proxy && (function () {
         var obj = {0: 'hi'};
@@ -827,11 +829,11 @@ ses.startSES = function(global,
             if (P === 'length') {
               return { get: lengthGetter };
             } else if (typeof P === 'number' || P === '' + (+P)) {
-              var get = freeze(function () {
+              var get = tamperProof(function () {
                 var getter = itemMap.get(this);
                 return getter ? getter(+P) : void 0;
               });
-              freeze(get.prototype);
+              tamperProof(get.prototype);
               return {
                 get: get,
                 enumerable: true,
@@ -893,7 +895,7 @@ ses.startSES = function(global,
             'delete': del,
             fix: function() { return void 0; }
           }, Object.prototype);
-          freeze(ArrayLike);
+          tamperProof(ArrayLike);
           makeArrayLike = function() { return ArrayLike; };
         })();
       } else {
@@ -938,10 +940,10 @@ ses.startSES = function(global,
               // Install native numeric getters.
               for (var i = 0; i < len; i++) {
                 (function(j) {
-                  var get = freeze(function() {
+                  var get = tamperProof(function() {
                     return itemMap.get(this)(j);
                   });
-                  freeze(get.prototype);
+                  tamperProof(get.prototype);
                   defProp(BAL.prototype, j, {
                     get: get,
                     enumerable: true
@@ -950,9 +952,9 @@ ses.startSES = function(global,
               }
               // Install native length getter.
               defProp(BAL.prototype, 'length', { get: lengthGetter });
-              // Freeze and cache the result
-              freeze(BAL);
-              freeze(BAL.prototype);
+              // TamperProof and cache the result
+              tamperProof(BAL);
+              tamperProof(BAL.prototype);
               BiggestArrayLike = BAL;
               maxLen = len;
             }
@@ -991,8 +993,10 @@ ses.startSES = function(global,
       defProp(cajaVM, p,
           gopd(extensionsRecord, p));
     });
-    // Move this down here so it is not available during the call to
+     
+    // Move these down here so they are not available during the call to
     // extensions.
+    global.cajaVM.tamperProof = tamperProof;
     global.cajaVM.def = def;
 
   })();
@@ -1211,7 +1215,7 @@ ses.startSES = function(global,
       });
     } catch (cantPoisonErr) {
       try {
-        // Perhaps it's writable non-configurable, it which case we
+        // Perhaps it's writable non-configurable, in which case we
         // should still be able to freeze it in a harmless state.
         var value = gopd(base, name).value;
         defProp(base, name, {
@@ -1273,7 +1277,7 @@ ses.startSES = function(global,
         cleanProperty(value, name, path);
       }
     });
-    freeze(value);
+    tamperProof(value);
   }
   clean(sharedImports, '');
 

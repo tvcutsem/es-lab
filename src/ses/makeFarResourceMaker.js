@@ -17,16 +17,18 @@
  * serializer/unserializer pair. A makeFarResource function makes a
  * farPromise for an (assumed remote) resource for a given URL.
  *
+ * //provides ses.makeFarResourceMaker
  * @author Mark S. Miller, but interim only until I examine how
  * ref_send/web_send (Tyler Close), qcomm (Kris Kowal), and BCap (Mark
  * Lentczner, Arjun Guha, Joe Politz) deal with similar issues.
- * //provides makeFarResourceMaker
- * @requires Q, cajaVM, this
+ * @overrides ses
+ * @requires Q, cajaVM
  * @requires UniformRequest, AnonXMLHttpRequest, XMLHttpRequest
  */
 
+var ses;
 
-(function(global) {
+(function() {
    "use strict";
 
    var bind = Function.prototype.bind;
@@ -94,7 +96,7 @@
          var opt_entityBody = serialize(args[1]);
          var xhr = new XHR();
          if (opt_name !== void 0) {
-           // SECURITY TODO(erights): Figure out what encoding is necessary
+           // This should be a safe encoding
            url = url + '&q=' + encodeURIComponent(opt_name);
          }
          xhr.open(OP, url);
@@ -102,6 +104,9 @@
          var result = Q.defer();
          xhr.onreadystatechange = function() {
            if (this.readyState === 4) {
+             // TODO(erights): On the status codes, do what mzero
+             // suggests. Seek to interoperate not just with ourselves
+             // but at least with ref_send, qcomm, and bcap.
              if (this.status === 200) {
                result.resolve(unserialize(this.responseText));
 
@@ -135,6 +140,6 @@
      }
      return def(makeFarResource);
    }
-   global.makeFarResourceMaker = def(makeFarResourceMaker);
+   ses.makeFarResourceMaker = def(makeFarResourceMaker);
 
- })(this);
+ })();

@@ -20,6 +20,7 @@
  * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
  * anticipated ES6.
  *
+ * // provides ses.atLeastFreeVarNames
  * @author Mark S. Miller
  * @requires StringMap
  * @overrides ses, atLeastFreeVarNamesModule
@@ -102,7 +103,7 @@ var ses;
       // apparent identifiers, rather than the total number of
       // apparently unique identifiers.
       var name = a[0];
-      
+
       if (!found.has(name)) {
         result.push(name);
         found.set(name, true);

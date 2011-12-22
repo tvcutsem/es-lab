@@ -17,13 +17,16 @@
  * http://wiki.ecmascript.org/doku.php?id=strawman:concurrency
  * strawman, securely when run a Caja or SES platform.
  *
+ * //provides ses.makeQ
  * @author Mark S. Miller, based on earlier designs by Tyler Close,
  * Kris Kowal, and Kevin Reid.
- * //provides makeQ
- * @requires WeakMap, cajaVM, this
+ * @overrides ses
+ * @requires WeakMap, cajaVM
  */
 
-(function(global) {
+var ses;
+
+(function() {
    "use strict";
 
    var bind = Function.prototype.bind;
@@ -624,16 +627,22 @@
        return result.promise;
      };
 
-     Q.join = function(xP, yP) {
-       return Q.all(xP, yP).when(function(xy) {
-         var x = xy[0];
-         var y = xy[1];
-         if (is(x, y)) {
-           // is() guarantees no observable difference.
-           return x;
-         } else {
-           throw new Error("not the same");
+     Q.join = function(var_args) {
+       var args = sliceFn(arguments, 0);
+       var len = args.length;
+       if (len === 0) {
+         return Q.reject(new Error('No references joined'));
+       }
+       return applyFn(Q.all, void 0, args).when(function(fulfilleds) {
+         var first = fulfilleds[0];
+         for (var i = 1; i < len; i++) {
+           if (!is(first, fulfilleds[i])) {
+             throw new Error("not the same");
+           }
          }
+         // is() guarantees there's no observable difference between
+         // first and any of the others
+         return first;
        });
      };
 
@@ -683,5 +692,5 @@
      return def(Q);
    };
    def(makeQ);
-   global.makeQ = makeQ;
- })(this);
+   ses.makeQ = makeQ;
+ })();

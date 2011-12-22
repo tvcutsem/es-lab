@@ -17,9 +17,10 @@
  * "cajaVM.compileExpr", except that it returns a promise for the
  * outcome of attempting to compile the argument expression.
  *
+ * //provides ses.compileExprLater
  * @author Mark S. Miller
- * //provides compileExprLater
- * @requires Q, cajaVM, this, ses
+ * @overrides ses
+ * @requires Q, cajaVM, document
  */
 
 
@@ -30,7 +31,7 @@ http://webreflection.blogspot.com/2011/08/simulate-script-injection-via-data-uri
 var ses;
 if (!ses) { ses = {}; }
 
-(function(global) {
+(function() {
   "use strict";
 
 
@@ -58,7 +59,7 @@ if (!ses) { ses = {}; }
    }
 
    if (typeof document === 'undefined') {
-     global.compileExprLater = compileExprLaterFallback;
+     ses.compileExprLater = compileExprLaterFallback;
      return;
    }
 
@@ -110,7 +111,7 @@ if (!ses) { ses = {}; }
      // generally true? If so, perhaps we can even make synchronous
      // eval debuggable? Is such synchronous eval ok for the use case
      // here, or do we need to postpone this to another turn just in
-     // case? 
+     // case?
      script.appendChild(document.createTextNode(scriptSrc));
 
      function deleteScriptNode() { script.parentNode.removeChild(script); }
@@ -120,6 +121,6 @@ if (!ses) { ses = {}; }
      return result.promise;
    }
 
-   global.compileExprLater = compileLaterInScript;
+   ses.compileExprLater = compileLaterInScript;
 
- })(this);
+ })();

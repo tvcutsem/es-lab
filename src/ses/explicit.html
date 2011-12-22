@@ -146,10 +146,10 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
         }
       }, millis);
     }
-    Q = makeQ(mySetTimeout);
-  
-    var makeTextResource = makeFarResourceMaker();
-  
+    Q = ses.makeQ(mySetTimeout);
+
+    var makeTextResource = ses.makeFarResourceMaker();
+
     var url = './makeSimpleAMDLoader.js';
     var makeSimpleAMDLoaderFileP = makeTextResource(url);
     var makeSimpleAMDLoaderSrcP = makeSimpleAMDLoaderFileP.get();
@@ -161,20 +161,33 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     var imports = cajaVM.makeImports();
     cajaVM.copyToImports(imports, {
       Q: Q,
-      compileExprLater: compileExprLater
+      compileExprLater: ses.compileExprLater
     });
 
     var makeSimpleAMDLoaderP = Q(makeSimpleAMDLoaderSrcP).when(function(src) {
       var exprSrc = '(function() {' + src + '}).call(this)';
-      var compiledExprP = compileExprLater(exprSrc, url);
+      var compiledExprP = ses.compileExprLater(exprSrc, url);
       return Q(compiledExprP).when(function(compiledExpr) {
         compiledExpr(imports);
         return imports.makeSimpleAMDLoader;
       });
     });
-  
+
+
+    /**
+     * What we should do is accept any legal module identifier according
+     * to the AMD definition and encode it into a legal URL. Instead,
+     * for now, we just conservatively accept an ascii subset of both
+     * that does not need any encoding.
+     * 
+     * See https://github.com/amdjs/amdjs-api/wiki/AMD#wiki-define-id-notes
+     */
+    var isModuleId = Object.freeze(/^[a-zA-Z0-9_/]*$/);
+
     function fetch(id) {
-      /* SECURITY TODO(erights): what encoding do we need on the "id"? */
+      if (!isModuleId.test(id)) {
+        throw new Error('illegal module id: ' + id);
+      }
       return makeTextResource('./' + id + '.js').get();
     }
   
@@ -198,12 +211,12 @@ Using <span id="browserName">unknown</span>
 on <span id="browserOS">unknown</span>
 <script src="detect.js"></script>
 <script>
-(function(){
-  "use strict"
-  gebi('browserName').textContent = BrowserDetect.browser;
-  gebi('browserVersion').textContent = BrowserDetect.version;
-  gebi('browserOS').textContent = BrowserDetect.OS;  
-})();
+  (function(){
+    "use strict"
+    gebi('browserName').textContent = BrowserDetect.browser;
+    gebi('browserVersion').textContent = BrowserDetect.version;
+    gebi('browserOS').textContent = BrowserDetect.OS;  
+  })();
 </script>
 
 

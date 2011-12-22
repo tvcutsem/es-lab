@@ -27,6 +27,11 @@
  * create it, use it, and delete it all within this module. But we
  * need to lie to the linter since it can't tell.
  *
+ * //provides ses.statuses, ses.ok, ses.makeDelayedTamperProof
+ * //provides ses.makeCallerHarmless, ses.makeArgumentsHarmless
+ * //provides ses.severities, ses.maxSeverity, ses.updateMaxSeverity
+ * //provides ses.maxAcceptableSeverityName, ses.maxAcceptableSeverity
+ *
  * @author Mark S. Miller
  * @requires ___global_test_function___, ___global_valueOf_function___
  * @requires JSON, navigator, this, eval, document
@@ -322,63 +327,112 @@ var ses;
   };
 
   /**
+   * "makeTamperProof()" returns a "tamperProof(obj)" function that
+   * acts like "Object.freeze(obj)", except that, if obj is a
+   * prototypical object, it ensures that the effect of freezing
+   * properties of obj does not suppress the ability to override these
+   * properties on derived objects by simple assignment.
    *
+   * <p>Because of lack of sufficient foresight at the time, ES5
+   * unifortunately specified that a simple assignment to a
+   * non-existent property must fail if it would override a
+   * non-writable data property of the same name. (In retrospect, this
+   * was a mistake, but it is now too late and we must live with the
+   * consequences.) As a result, simply freezing an object to make it
+   * tamper proof has the unfortunate side effect of breaking
+   * previously correct code that is considered to have followed JS
+   * best practices, of this previous code used assignment to
+   * override.
+   *
+   * <p>To work around this mistake, tamperProof(obj) detects if obj
+   * is <i>prototypical</i>, i.e., is an object whose own
+   * "constructor" is a function whose "prototype" is this obj. If so,
+   * then when tamper proofing it, prior to freezing, replace all its
+   * configurable own data properties with accessor properties which
+   * simulate what we should have specified -- that assignments to
+   * derived objects succeed if otherwise possible.
+   *
+   * <p>Some platforms (Chrome and Safari as of this writing)
+   * implement the assignment semantics ES5 should have specified
+   * rather than what it did specify.
+   * "test_ASSIGN_CAN_OVERRIDE_FROZEN()" below tests whether we are on
+   * such a platform. If so, "repair_ASSIGN_CAN_OVERRIDE_FROZEN()"
+   * replaces "makeTamperProof" with a function that simply returns
+   * "Object.freeze", since the complex workaround here is not needed
+   * on those platforms.
+   *
+   * <p>"makeTamperProof" should only be called after the trusted
+   * initialization has done all the monkey patching that it is going
+   * to do on the Object.* methods, but before any untrusted code runs
+   * in this context.
    */
-  ses.defendOne = function(obj) {
+  var makeTamperProof = function defaultMakeTamperProof() {
+
+    // Sample these after all trusted monkey patching initialization
+    // but before any untrusted code runs in this frame.
     var gopd = Object.getOwnPropertyDescriptor;
     var gopn = Object.getOwnPropertyNames;
     var getProtoOf = Object.getPrototypeOf;
+    var freeze = Object.freeze;
     var isFrozen = Object.isFrozen;
     var defProp = Object.defineProperty;
 
+    function tamperProof(obj) {
     if (obj !== Object(obj)) { return obj; }
-    var func;
-    if (typeof obj === 'object' &&
-        !!gopd(obj, 'constructor') &&
-        typeof (func = obj.constructor) === 'function' &&
-        func.prototype === obj &&
-        !isFrozen(obj)) {
-      gopn(obj).forEach(function(name) {
-        var value;
-        function getter() {
-          if (obj === this) { return value; }
-          if (!this) { return void 0; }
-          if (!!gopd(this, name)) { return this[name]; }
-          return getter.call(getProtoOf(this));
-        }
-        function setter(newValue) {
-          if (obj === this) {
-            throw new TypeError('Cannot set virtually frozen property: ' +
-                                name);
+      var func;
+      if (typeof obj === 'object' &&
+          !!gopd(obj, 'constructor') &&
+          typeof (func = obj.constructor) === 'function' &&
+          func.prototype === obj &&
+          !isFrozen(obj)) {
+        strictForEachFn(gopn(obj), function(name) {
+          var value;
+          function getter() {
+            if (obj === this) { return value; }
+            if (!this) { return void 0; }
+            if (!!gopd(this, name)) { return this[name]; }
+            // TODO(erights): If we can reliably uncurryThis() in
+            // repairES5.js, the next line should be:
+            //   return callFn(getter, getProtoOf(this));
+            return getter.call(getProtoOf(this));
           }
-          if (!!gopd(this, name)) {
-            this[name] = newValue;
+          function setter(newValue) {
+            if (obj === this) {
+              throw new TypeError('Cannot set virtually frozen property: ' +
+                                  name);
+            }
+            if (!!gopd(this, name)) {
+              this[name] = newValue;
+            }
+            // TODO(erights): Do all the inherited property checks
+            defProp(this, name, {
+              value: newValue,
+              writable: true,
+              enumerable: true,
+              configurable: true
+            });
           }
-          // TODO(erights): Do all the inherited property checks
-          defProp(this, name, {
-            value: newValue,
-            writable: true,
-            enumerable: true,
-            configurable: true
-          });
-        }
-        var desc = gopd(obj, name);
-        if (desc.configurable && 'value' in desc) {
-          value = desc.value;
-          defProp(obj, name, {
-            get: getter,
-            set: setter,
-            // We should be able to omit the enumerable line, since it
-            // should default to its existing setting.
-            enumerable: desc.enumerable,
-            configurable: false
-          });
-        }
-      });
+          var desc = gopd(obj, name);
+          if (desc.configurable && 'value' in desc) {
+            value = desc.value;
+            defProp(obj, name, {
+              get: getter,
+              set: setter,
+              // We should be able to omit the enumerable line, since it
+              // should default to its existing setting.
+              enumerable: desc.enumerable,
+              configurable: false
+            });
+          }
+        });
+      }
+      return freeze(obj);
     }
-    return Object.freeze(obj);
+    return tamperProof;
   };
 
+
+  var needToTamperProof = [];
   /**
    * Various repairs may expose non-standard objects that are not
    * reachable from startSES's root, and therefore not freezable by
@@ -388,12 +442,21 @@ var ses;
    * order to install hidden properties for its own use before the
    * object becomes non-extensible.
    */
-  var needToFreeze = [];
-  function delayedFreeze(obj) {
-    needToFreeze.push(obj);
+  function rememberToTamperProof(obj) {
+    needToTamperProof.push(obj);
   }
-  ses.freezeDelayed = function freezeDelayed() {
-    needToFreeze.forEach(ses.defendOne);
+
+  /**
+   * Makes and returns a tamperProof(obj) function, and uses it to
+   * tamper proof all objects whose tamper proofing had been delayed.
+   *
+   * <p>"makeDelayedTamperProof()" must only be called once.
+   */
+  ses.makeDelayedTamperProof = function makeDelayedTamperProof() {
+    var tamperProof = makeTamperProof();
+    strictForEachFn(needToTamperProof, tamperProof);
+    needToTamperProof = void 0;
+    return tamperProof;
   };
 
   /**
@@ -1590,9 +1653,9 @@ var ses;
     var BOGUS_BOUND_PROTOTYPE = {
       toString: function BBPToString() { return 'bogus bound prototype'; }
     };
-    delayedFreeze(BOGUS_BOUND_PROTOTYPE);
-    delayedFreeze(BOGUS_BOUND_PROTOTYPE.toString);
-    delayedFreeze(BOGUS_BOUND_PROTOTYPE.toString.prototype);
+    rememberToTamperProof(BOGUS_BOUND_PROTOTYPE);
+    rememberToTamperProof(BOGUS_BOUND_PROTOTYPE.toString);
+    rememberToTamperProof(BOGUS_BOUND_PROTOTYPE.toString.prototype);
 
     var defProp = Object.defineProperty;
     defProp(Function.prototype, 'bind', {
@@ -1725,8 +1788,8 @@ var ses;
     function dummySetter(newValue) {
       throw new TypeError('no setter for assigning: ' + newValue);
     }
-    delayedFreeze(dummySetter.prototype);
-    delayedFreeze(dummySetter);
+    rememberToTamperProof(dummySetter.prototype);
+    rememberToTamperProof(dummySetter);
 
     defProp(Object, 'defineProperty', {
       value: function setSetterDefProp(base, name, desc) {
@@ -2090,7 +2153,9 @@ var ses;
   }
 
   function repair_ASSIGN_CAN_OVERRIDE_FROZEN() {
-    ses.defendOne = Object.freeze;
+    makeTamperProof = function simpleMakeTamperProof() {
+      return Object.freeze;
+    };
   }
 
 

@@ -21,6 +21,7 @@
  * <p>Assumes only ES3. Compatible with ES5, ES5-strict, or
  * anticipated ES6.
  *
+ * //provides ses.whitelist
  * @author Mark S. Miller,
  * @overrides ses, whitelistModule
  */
@@ -111,6 +112,7 @@ var ses;
   ses.whitelist = {
     cajaVM: {                        // Caja support
       log: t,
+      tamperProof: t,
       def: t,
 
       compileExpr: t,

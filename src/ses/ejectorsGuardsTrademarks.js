@@ -20,6 +20,7 @@
  *
  * <p>Assumes ES5. Compatible with ES5-strict.
  *
+ * // provides ses.ejectorsGuardsTrademarks
  * @author kpreid@switchb.org
  * @requires WeakMap, cajaVM
  * @overrides ses, ejectorsGuardsTrademarksModule

@@ -18,13 +18,14 @@
  * https://github.com/amdjs/amdjs-api/wiki/AMD . Based on
  * http://wiki.ecmascript.org/doku.php?id=strawman:concurrency#amd_loader_lite
  *
- * @author Mark S. Miller
  * //provides makeSimpleAMDLoader
- * @requires Q, StringMap, cajaVM, this, compileExprLater
+ * @author Mark S. Miller
+ * @requires StringMap, cajaVM
+ * @requires this, compileExprLater, Q
  */
 
 
-(function(global){
+(function(imports){
    "use strict";
 
    var bind = Function.prototype.bind;
@@ -120,7 +121,10 @@
              return applyFn(factory, void 0, imports);
            });
          }
-         define.amd = { lite: true, caja: true, jQuery: true };
+         // TODO(erights): Once we're jQuery compatible, change
+         // jQuery: to true.
+         define.amd = { lite: true, caja: true, jQuery: false };
+         def(define);
 
          var imports = cajaVM.makeImports();
          cajaVM.copyToImports(imports, {define: def(define)});
@@ -140,6 +144,6 @@
      return loader = Q.memoize(rawLoad, moduleMap);
    }
 
-   global.makeSimpleAMDLoader = def(makeSimpleAMDLoader);
+   imports.makeSimpleAMDLoader = def(makeSimpleAMDLoader);
 
  })(this);
