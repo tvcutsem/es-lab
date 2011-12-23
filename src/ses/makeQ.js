@@ -336,7 +336,13 @@ var ses;
      function defer() {
        var buffer = [];
        function queue(messenger) {
-         buffer.push(messenger);
+         if (buffer) {
+           buffer.push(messenger);
+         } else {
+           // This case seems to have happened once but I have not yet
+           // been able to reproduce it.
+           debugger;
+         }
        }
        var promise = new Promise(UnresolvedHandler, queue);
        var handler = handle(promise);

@@ -20,7 +20,7 @@ defaultMakeTamperProof(){var gopd=Object.getOwnPropertyDescriptor,gopn=Object.ge
 tamperProof(obj){var func;return obj!==Object(obj)?obj:(typeof obj==='object'&&!!gopd(obj,'constructor')&&typeof(func=obj.constructor)==='function'&&func.prototype===obj&&!isFrozen(obj)&&strictForEachFn(gopn(obj),function(name){var
 desc,value;function getter(){return obj===this?value:this?gopd(this,name)?this[name]:getter.call(getProtoOf(this)):void
 0}function setter(newValue){if(obj===this)throw new TypeError('Cannot set virtually frozen property: '+name);!gopd(this,name)||(this[name]=newValue),defProp(this,name,{'value':newValue,'writable':true,'enumerable':true,'configurable':true})}desc=gopd(obj,name),desc.configurable&&'value'in
-desc&&(value=desc.value,defProp(obj,name,{'get':getter,'set':setter,'enumerable':desc.enumerable,'configurable':false}))}),freeze(obj))}return tamperProof},needToTamperProof=[];function
+desc&&(value=desc.value,getter.prototype=null,setter.prototype=null,defProp(obj,name,{'get':getter,'set':setter,'enumerable':desc.enumerable,'configurable':false}))}),freeze(obj))}return tamperProof},needToTamperProof=[];function
 rememberToTamperProof(obj){needToTamperProof.push(obj)}ses.makeDelayedTamperProof=function
 makeDelayedTamperProof(){var tamperProof=makeTamperProof();return strictForEachFn(needToTamperProof,tamperProof),needToTamperProof=void
 0,tamperProof};function testGlobalLeak(desc,that){return that===void 0?false:that===global?true:({}).toString.call(that)==='[object Window]'?true:desc+' leaked as: '+that}function

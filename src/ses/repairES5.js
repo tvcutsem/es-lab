@@ -415,6 +415,8 @@ var ses;
           var desc = gopd(obj, name);
           if (desc.configurable && 'value' in desc) {
             value = desc.value;
+            getter.prototype = null;
+            setter.prototype = null;
             defProp(obj, name, {
               get: getter,
               set: setter,

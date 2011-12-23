@@ -648,6 +648,8 @@ var ses;
           var desc = gopd(obj, name);
           if (desc.configurable && 'value' in desc) {
             value = desc.value;
+            getter.prototype = null;
+            setter.prototype = null;
             defProp(obj, name, {
               get: getter,
               set: setter,
@@ -4827,7 +4829,9 @@ ses.startSES = function(global,
         }
         defending.set(val, true);
         defendingList.push(val);
+
         tamperProof(val);
+
         recur(getProto(val));
         gopn(val).forEach(function(p) {
           if (typeof val === 'function' &&
@@ -5067,7 +5071,7 @@ ses.startSES = function(global,
       defProp(cajaVM, p,
           gopd(extensionsRecord, p));
     });
-     
+
     // Move these down here so they are not available during the call to
     // extensions.
     global.cajaVM.tamperProof = tamperProof;
