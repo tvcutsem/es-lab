@@ -98,7 +98,7 @@ function test() {
  *
  * success is a mapping from names to booleans. The test suite should
  * use it to indicate what the return value should be for the
- * 'defineProperty', 'set' and 'delete' traps.
+ * 'defineProperty', 'set' and 'deleteProperty' traps.
  */
 function createEmulatedObject(target, emulatedProps, success) {
   var emulatedProto = Object.getPrototypeOf(target);
@@ -125,7 +125,7 @@ function createEmulatedObject(target, emulatedProps, success) {
       Object.preventExtensions(target);
       return true;
     },
-    delete: function(target, name) {
+    deleteProperty: function(target, name) {
       delete emulatedProps[name];
       return success[name];
     },
@@ -628,14 +628,14 @@ function testFunctions() {
       assert(args.length === 3, 'apply: args is correct');
       return 'apply';
     },
-    new: function(tgt, args) {
-      assert(tgt === fun, 'new: target is correct');
-      assert(args.length === 3, 'new: args is correct');
-      return 'new';
+    construct: function(tgt, args) {
+      assert(tgt === fun, 'construct: target is correct');
+      assert(args.length === 3, 'construct: args is correct');
+      return 'construct';
     }
   });
   assert(proxy(1,2,3) === 'apply', 'calling apply');
-  assert(new proxy(1,2,3) === 'new', 'calling new');
+  assert(new proxy(1,2,3) === 'construct', 'calling construct');
 }
 
 function testSet() {

@@ -100,7 +100,7 @@
 //   to the attributes of non-own, inherited properties.
 // - defineProperty cannot make incompatible changes to the attributes of
 //   sealed properties
-// - delete cannot report a successful deletion of a sealed property
+// - deleteProperty cannot report a successful deletion of a sealed property
 // - hasOwn cannot report a sealed property as non-existent
 // - has cannot report a sealed property as non-existent
 // - get cannot report inconsistent values for frozen data
@@ -114,7 +114,7 @@
 // - if a property of a non-extensible proxy is reported as non-existent,
 //   then it must forever be reported as non-existent. This applies to
 //   own and inherited properties and is enforced in the
-//   delete, get{Own}PropertyDescriptor, has{Own},
+//   deleteProperty, get{Own}PropertyDescriptor, has{Own},
 //   get{Own}PropertyNames, keys and enumerate traps
 
 // Violation of any of these invariants by H will result in TypeError being
@@ -670,10 +670,10 @@ Validator.prototype = {
    */
   delete: function(name) { 
     "use strict";
-    var trap = this.getTrap("delete");
+    var trap = this.getTrap("deleteProperty");
     if (trap === undefined) {
       // default forwarding behavior
-      return Reflect.delete(this.target, name);
+      return Reflect.deleteProperty(this.target, name);
     }
     
     name = String(name);
@@ -694,11 +694,10 @@ Validator.prototype = {
    * Checks whether the trap result does not contain any new properties
    * if the proxy is non-extensible.
    *
-   * Any own properties of the target that are not included in the
-   * 'getPropertyNames' result are deleted from the target. This causes a
-   * TypeError if non-configurable properties are not included in the keys
-   * result. As such, we check whether the returned result contains at least
-   * all sealed properties of the target object.
+   * Any own non-configurable properties of the target that are not included
+   * in the trap result give rise to a TypeError. As such, we check whether the
+   * returned result contains at least all sealed properties of the target
+   * object.
    *
    * Additionally, the trap result is normalized.
    * Instead of returning the trap result directly:
@@ -942,10 +941,10 @@ Validator.prototype = {
   },
   
   /**
-   * Any enumerable own properties of the target that are not included in
-   * the 'enumerate' result are deleted from the target. This causes a
-   * TypeError if non-configurable properties are not included in the keys
-   * result.
+   * Any own enumerable non-configurable properties of the target that are not
+   * included in the trap result give rise to a TypeError. As such, we check
+   * whether the returned result contains at least all sealed enumerable properties
+   * of the target object.
    *
    * The trap result is normalized.
    * The trap result is not returned directly. Instead:
@@ -1024,11 +1023,10 @@ Validator.prototype = {
   },
   
   /**
-   * Checks whether the trap result does not contain any new properties
-   * if the proxy is non-extensible. Any enumerable own properties of the
-   * target that are not included in the 'keys' result are deleted from
-   * the target. This causes a TypeError if non-configurable properties
-   * are not included in the keys result.
+   * Any own non-configurable properties of the target that are not included
+   * in the trap result give rise to a TypeError. As such, we check whether the
+   * returned result contains at least all sealed properties of the target
+   * object.
    *
    * The trap result is normalized.
    * The trap result is not returned directly. Instead:
@@ -1117,10 +1115,10 @@ Validator.prototype = {
    *   new proxy(...args)
    * Triggers this trap
    */
-  new: function(target, args) {
-    var trap = this.getTrap("new");
+  construct: function(target, args) {
+    var trap = this.getTrap("construct");
     if (trap === undefined) {
-      return Reflect.new(target, args);
+      return Reflect.construct(target, args);
     }
     
     if (typeof this.target === "function") {
@@ -1233,7 +1231,7 @@ global.Reflect = {
     Object.defineProperty(target, name, desc);
     return true;
   },
-  delete: function(target, name) {
+  deleteProperty: function(target, name) {
     return delete target[name];
   },
   freeze: function(target) {
@@ -1359,13 +1357,13 @@ global.Reflect = {
     // target.apply(receiver, args)
     return Function.prototype.apply.call(target, receiver, args);
   },
-  new: function(target, args) {
+  construct: function(target, args) {
     // return new target(...args);
 
-    // if target is a proxy, invoke its "new" trap
+    // if target is a proxy, invoke its "construct" trap
     var handler = directProxies.get(target);
     if (handler !== undefined) {
-      return handler.new(handler.target, args);
+      return handler.construct(handler.target, args);
     }
     
     var proto = target.prototype;
@@ -1391,7 +1389,7 @@ VirtualHandler.prototype = {
   getOwnPropertyDescriptor: abstract("getOwnPropertyDescriptor"),
   getOwnPropertyNames: abstract("getOwnPropertyNames"),
   defineProperty: abstract("defineProperty"),
-  delete: abstract("delete"),
+  deleteProperty: abstract("deleteProperty"),
   preventExtensions: abstract("preventExtensions"),
   apply: abstract("apply"),
  
@@ -1542,7 +1540,7 @@ VirtualHandler.prototype = {
     }
     return result;
   },
-  new: function(target, args) {
+  construct: function(target, args) {
     var proto = this.get(target, 'prototype', target);
     var instance;
     if (Object(proto) === proto) {
@@ -1583,7 +1581,7 @@ Proxy = function(target, handler) {
       // construct trap
       function() {
         var args = Array.prototype.slice.call(arguments);
-        return vHandler.new(target, args);
+        return vHandler.construct(target, args);
       });
   } else {
     proxy = primCreate(vHandler, Object.getPrototypeOf(target));
@@ -1612,15 +1610,15 @@ Proxy.createFunction = function(handler, call, opt_construct) {
   var applyTrap = function(tgt, thisBinding, args) {
     return call.apply(thisBinding, args);
   };
-  var newTrap = function(tgt, args) {
+  var constructTrap = function(tgt, args) {
     return opt_construct.apply(undefined, args);
   };
   var fakeHandler = Proxy(fakeTarget, {
     get: function(target, trapName, rcvr) {
       if (trapName === "apply") return applyTrap;
-      if (trapName === "new") {
+      if (trapName === "construct") {
         if (opt_construct !== undefined) {
-          return newTrap;
+          return constructTrap;
         }
       }
       var trap = handler[trapName];
