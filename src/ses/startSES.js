@@ -1071,7 +1071,12 @@ ses.startSES = function(global,
           writable: false,
           configurable: false
         };
-        defProp(global, name, newDesc);
+        try {
+          defProp(global, name, newDesc);
+        } catch (err) {
+          reportProperty(ses.severities.NEW_SYMPTOM,
+                         'Global ' + name + ' cannot be made readonly: ' + err);
+        }
         defProp(sharedImports, name, newDesc);
       }
     }

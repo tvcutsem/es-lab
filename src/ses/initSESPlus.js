@@ -1721,7 +1721,15 @@ var ses;
   }
 
   /**
+   * Detects whether assignment can override an inherited
+   * non-writable, non-configurable data property.
    *
+   * <p>According to ES5.1, assignment should not be able to do so,
+   * which is unfortunate for SES, as the tamperProof function must
+   * kludge expensively to ensure that legacy assignments that don't
+   * violate best practices continue to work. Ironically, on platforms
+   * in which this bug is present, tamperProof can just be cheaply
+   * equivalent to Object.freeze.
    */
   function test_ASSIGN_CAN_OVERRIDE_FROZEN() {
     var x = Object.freeze({foo: 88});
@@ -1735,6 +1743,20 @@ var ses;
     if (y.foo === 99) { return true; }
     if (y.foo === 88) { return 'Override failed silently'; }
     return 'Unexpected override outcome: ' + y.foo;
+  }
+
+  /**
+   *
+   */
+  function test_CANT_REDEFINE_NAN_TO_ITSELF() {
+    var descNaN = Object.getOwnPropertyDescriptor(global, 'NaN');
+    try {
+      Object.defineProperty(global, 'NaN', descNaN);
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return 'defineProperty of NaN failed with: ' + err;
+    }
+    return false;
   }
 
 
@@ -2395,6 +2417,35 @@ var ses;
     };
   }
 
+  function repair_CANT_REDEFINE_NAN_TO_ITSELF() {
+    var defProp = Object.defineProperty;
+    // 'value' handled separately
+    var attrs = ['writable', 'get', 'set', 'enumerable', 'configurable'];
+
+    defProp(Object, 'defineProperty', {
+      value: function(base, name, desc) {
+        try {
+          return defProp(base, name, desc);
+        } catch (err) {
+          var oldDesc = Object.getOwnPropertyDescriptor(base, name);
+          for (var i = 0, len = attrs.length; i < len; i++) {
+            var attr = attrs[i];
+            if (attr in desc && desc[attr] !== oldDesc[attr]) { throw err; }
+          }
+          if (!('value' in desc) ||
+              desc.value === oldDesc.value) {
+            return base;
+          }
+          if (desc.value !== desc.value &&
+              oldDesc.value !== oldDesc.value) {
+            return base;
+          }
+          throw err;
+        }
+      }
+    });
+  }
+
 
   ////////////////////// Kludge Records /////////////////////
   //
@@ -2899,6 +2950,16 @@ var ses;
                '2011-November/017997.html'],
       sections: ['8.12.4'],
       tests: ['15.2.3.6-4-405']
+    },
+    {
+      description: 'Cannot redefine global NaN to itself',
+      test: test_CANT_REDEFINE_NAN_TO_ITSELF,
+      repair: repair_CANT_REDEFINE_NAN_TO_ITSELF,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: [], // Seen on WebKit Nightly. TODO(erights): report
+      sections: ['8.12.9', '15.1.1.1'],
+      tests: [] // TODO(erights): Add to test262
     }
   ];
 
@@ -5149,7 +5210,12 @@ ses.startSES = function(global,
           writable: false,
           configurable: false
         };
-        defProp(global, name, newDesc);
+        try {
+          defProp(global, name, newDesc);
+        } catch (err) {
+          reportProperty(ses.severities.NEW_SYMPTOM,
+                         'Global ' + name + ' cannot be made readonly: ' + err);
+        }
         defProp(sharedImports, name, newDesc);
       }
     }

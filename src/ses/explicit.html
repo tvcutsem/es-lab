@@ -130,7 +130,6 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
 <script src="makeFarResourceMaker.js"></script>
 <script src="compileExprLater.js"></script>
 <script>
-  console.profile("AMD Loader test");
   var Q;
   (function() {
     "use strict";
@@ -143,7 +142,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
         try {
           func();
         } catch (reason) {
-          console.log('uncaught: ', reason);
+          cajaVM.log('uncaught: ', reason);
         }
       }, millis);
     }
@@ -197,12 +196,10 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     var loaderP = Q(makeSimpleAMDLoaderP).send(void 0, fetch, moduleMap);
     var amdTestP = Q(loaderP).send(void 0, 'amdTest');
     Q(amdTestP).when(function(amdTest) {
-      console.profileEnd();
       var amdTestStatus = amdTest === 'this is a test' ?
         'succeeded' : 'failed, unexpected: ' + amdTest;
       appendText(amdLoaderTest, amdTestStatus);
     }, function(reason) {
-      console.profileEnd();
       appendText(amdLoaderTest, 'failed: ' + reason);
     }).end();
   })();
