@@ -22,13 +22,37 @@
  *
  * // provides ses.ejectorsGuardsTrademarks
  * @author kpreid@switchb.org
- * @requires WeakMap, cajaVM
+ * @requires WeakMap
  * @overrides ses, ejectorsGuardsTrademarksModule
  */
 var ses;
 
 (function ejectorsGuardsTrademarksModule(){
   "use strict";
+
+  /**
+   * During the call to {@code ejectorsGuardsTrademarks}, {@code
+   * ejectorsGuardsTrademarks} must not call {@code cajaVM.def},
+   * since startSES.js has not yet finished cleaning things. See the
+   * doc-comments on the {@code extensions} parameter of
+   * startSES.js.
+   *
+   * <p>Instead, we define here some conveniences for freezing just
+   * enough without prematurely freezing primodial objects
+   * transitively reachable from these.
+   */
+  var freeze = Object.freeze;
+
+  /**
+   * Use to tamper proof a function which is not intended to ever be
+   * used as a constructor, since it nulls out the function's
+   * prototype first.
+   */
+  function constFunc(func) {
+    func.prototype = null;
+    return freeze(func);
+  }
+
 
   ses.ejectorsGuardsTrademarks = function ejectorsGuardsTrademarks() {
 
@@ -38,46 +62,13 @@ var ses;
      */
     function Token(name) {
       name = '' + name;
-      return cajaVM.def({
-        toString: function tokenToString() {
+      return freeze({
+        toString: constFunc(function tokenToString() {
           return name;
-        }
+        })
       });
     }
 
-    /**
-     * During the call to {@code ejectorsGuardsTrademarks}, {@code
-     * ejectorsGuardsTrademarks} must not call {@code cajaVM.def},
-     * since startSES.js has not yet finished cleaning things. See the
-     * doc-comments on the {@code extensions} parameter of
-     * startSES.js.
-     *
-     * <p>Instead, we define here some conveniences for freezing just
-     * enough without prematurely freezing primodial objects
-     * transitively reachable from these, like {@code
-     * Function.prototype}. The {@code freezeFuncion} function will
-     * freeze a function and (if present) its prototype.
-     */
-    function freezeFunction(func) {
-      if (func.prototype) { Object.freeze(func.prototype); }
-      return Object.freeze(func);
-    }
-
-    /**
-     * The {@code freezeObjectRecord} takes as argument a record
-     * assumed to hold some methods in its properties.
-     *
-     * <p>{@code freezeObjectRecord} freezes the record and freezes
-     * (using {@code freezeFunction}) any functions found in own
-     * properties of that record.
-     */
-    function freezeObjectRecord(record) {
-      Object.getOwnPropertyNames(record).forEach(function(name) {
-        var val = record[name];
-        if (typeof val === 'function') { freezeFunction(val); }
-      });
-      return Object.freeze(record);
-    }
 
     ////////////////////////////////////////////////////////////////////////
     // Ejectors
@@ -135,7 +126,7 @@ var ses;
           throw token;
         }
       }
-      cajaVM.def(ejector);
+      constFunc(ejector);
       try {
         try {
           return attemptFunc(ejector);
@@ -175,7 +166,7 @@ var ses;
       var boxValues = new WeakMap(true); // use key lifetime
 
       function seal(value) {
-        var box = {};
+        var box = freeze({});
         boxValues.set(box, value);
         return box;
       }
@@ -190,10 +181,10 @@ var ses;
           return result[0];
         }
       }
-      return cajaVM.def({
-        seal: seal,
-        unseal: unseal,
-        optUnseal: optUnseal
+      return freeze({
+        seal: constFunc(seal),
+        unseal: constFunc(unseal),
+        optUnseal: constFunc(optUnseal)
       });
     }
 
@@ -218,8 +209,8 @@ var ses;
     function makeTrademark(typename, table) {
       typename = '' + typename;
 
-      var stamp = freezeObjectRecord({
-        toString: function() { return typename + 'Stamp'; }
+      var stamp = freeze({
+        toString: constFunc(function() { return typename + 'Stamp'; })
       });
 
       stampers.set(stamp, function(obj) {
@@ -227,16 +218,18 @@ var ses;
         return obj;
       });
 
-      return freezeObjectRecord({
-        toString: function() { return typename + 'Mark'; },
+      return freeze({
+        toString: constFunc(function() { return typename + 'Mark'; }),
         stamp: stamp,
-        guard: freezeObjectRecord({
-          toString: function() { return typename + 'T'; },
-          coerce: function(specimen, opt_ejector) {
-            if (table.get(specimen)) { return specimen; }
-            eject(opt_ejector,
-                  'Specimen does not have the "' + typename + '" trademark');
-          }
+        guard: freeze({
+          toString: constFunc(function() { return typename + 'T'; }),
+          coerce: constFunc(function(specimen, opt_ejector) {
+            if (!table.get(specimen)) {
+              eject(opt_ejector,
+                    'Specimen does not have the "' + typename + '" trademark');
+            }
+            return specimen;
+          })
         })
       });
     }
@@ -280,7 +273,6 @@ var ses;
     function Trademark(typename) {
       var result = makeTrademark(typename, new WeakMap());
       stampers.get(GuardStamp)(result.guard);
-      cajaVM.def(result);
       return result;
     };
 
@@ -312,7 +304,7 @@ var ses;
         // user-implementable auditing protocol.
         stampers.get(stamps[i])(record);
       }
-      return Object.freeze(record);
+      return freeze(record);
     };
 
     ////////////////////////////////////////////////////////////////////////
@@ -340,11 +332,11 @@ var ses;
     function passesGuard(g, specimen) {
       g = GuardT.coerce(g); // failure throws rather than ejects
       return callWithEjector(
-        Object.freeze(function(opt_ejector) {
+        constFunc(function(opt_ejector) {
           g.coerce(specimen, opt_ejector);
           return true;
         }),
-        Object.freeze(function(ignored) {
+        constFunc(function(ignored) {
           return false;
         })
       );
@@ -361,30 +353,30 @@ var ses;
      */
     function makeTableGuard(table, typename, errorMessage) {
       var g = {
-        toString: function() { return typename + 'T'; },
-        coerce: function(specimen, opt_ejector) {
-          if (table.get(specimen)) { return specimen; }
-          eject(opt_ejector, errorMessage);
-        }
+        toString: constFunc(function() { return typename + 'T'; }),
+        coerce: constFunc(function(specimen, opt_ejector) {
+          if (!table.get(specimen)) { eject(opt_ejector, errorMessage); }
+          return specimen;
+        })
       };
       stamp([GuardStamp], g);
-      return cajaVM.def(g);
+      return freeze(g);
     }
 
     ////////////////////////////////////////////////////////////////////////
     // Exporting
     ////////////////////////////////////////////////////////////////////////
 
-    return freezeObjectRecord({
-      callWithEjector: callWithEjector,
-      eject: eject,
-      makeSealerUnsealerPair: makeSealerUnsealerPair,
+    return freeze({
+      callWithEjector: constFunc(callWithEjector),
+      eject: constFunc(eject),
+      makeSealerUnsealerPair: constFunc(makeSealerUnsealerPair),
       GuardT: GuardT,
-      makeTableGuard: makeTableGuard,
-      Trademark: Trademark,
-      guard: guard,
-      passesGuard: passesGuard,
-      stamp: stamp
+      makeTableGuard: constFunc(makeTableGuard),
+      Trademark: constFunc(Trademark),
+      guard: constFunc(guard),
+      passesGuard: constFunc(passesGuard),
+      stamp: constFunc(stamp)
     });
   };
 })();

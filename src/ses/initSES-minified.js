@@ -152,11 +152,10 @@ repair_NEED_TO_WRAP_FOREACH(){var forEach=Array.prototype.forEach;Object.defineP
 forEachWrapper(callbackfn,opt_thisArg){return forEach.apply(this,arguments)}})}function
 repair_NEEDS_DUMMY_SETTER(){var defProp=Object.defineProperty,gopd=Object.getOwnPropertyDescriptor;function
 dummySetter(newValue){throw new TypeError('no setter for assigning: '+newValue)}rememberToTamperProof(dummySetter.prototype),rememberToTamperProof(dummySetter),defProp(Object,'defineProperty',{'value':function
-setSetterDefProp(base,name,desc){var desc2,fullDesc,newDesc,oldDesc,result,testBase;if(typeof
-desc.get==='function'&&desc.set===undefined&&objToString.call(base)==='[object HTMLFormElement]'&&gopd(base,name)===void
-0){desc2={'get':desc.get},'enumerable'in desc&&(desc2.enumerable=desc.enumerable),'configurable'in
-desc&&(desc2.configurable=desc.configurable),result=defProp(base,name,desc2),newDesc=gopd(base,name);if(newDesc.get===desc.get)return result}return oldDesc=gopd(base,name),testBase={},oldDesc&&defProp(testBase,name,oldDesc),defProp(testBase,name,desc),fullDesc=gopd(testBase,name),'get'in
-fullDesc&&fullDesc.set===void 0&&(fullDesc.set=dummySetter),defProp(base,name,fullDesc)}}),NEEDS_DUMMY_SETTER_repaired=true}function
+setSetterDefProp(base,name,desc){var desc2,newDesc,oldDesc,result,testBase;if(typeof
+desc.get==='function'&&desc.set===void 0){oldDesc=gopd(base,name);if(oldDesc)testBase={},defProp(testBase,name,oldDesc),defProp(testBase,name,desc),desc=gopd(testBase,name),desc.set===void
+0&&(desc.set=dummySetter);else{if(objToString.call(base)==='[object HTMLFormElement]'){desc2={'get':desc.get},'enumerable'in
+desc&&(desc2.enumerable=desc.enumerable),'configurable'in desc&&(desc2.configurable=desc.configurable),result=defProp(base,name,desc2),newDesc=gopd(base,name);if(newDesc.get===desc.get)return result}desc.set=dummySetter}}return defProp(base,name,desc)}}),NEEDS_DUMMY_SETTER_repaired=true}function
 repair_ACCESSORS_INHERIT_AS_OWN(){var defProp=Object.defineProperty,freeze=Object.freeze,seal=Object.seal,gopn=Object.getOwnPropertyNames,gopd=Object.getOwnPropertyDescriptor,complaint='Workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=637994  prohibits enumerable non-configurable accessor properties.';function
 isBadAccessor(derived,name){var desc=gopd(derived,name),base,superDesc;return!desc||!('get'in
 desc)?false:(base=getPrototypeOf(derived),base?(superDesc=gopd(base,name),!superDesc||!('get'in
@@ -180,10 +179,10 @@ replaceValueWrapper(m1,m2,m3){return replaceValue(m1,m2,m3)}return typeof replac
 repair_CANT_GOPD_CALLER(){var unsafeGOPD=Object.getOwnPropertyDescriptor;function
 gopdWrapper(base,name){try{return unsafeGOPD(base,name)}catch(err){if(err instanceof
 TypeError&&typeof base==='function'&&(name==='caller'||name==='arguments'))return(function(message){function
-fakePoison(){throw new TypeError(message)}return{'get':fakePoison,'set':fakePoison,'enumerable':false,'configurable':false}})(err.message);throw err}}Object.defineProperty(Object,'getOwnPropertyDescriptor',{'value':gopdWrapper})}function
+fakePoison(){throw new TypeError(message)}return fakePoison.prototype=null,{'get':fakePoison,'set':fakePoison,'enumerable':false,'configurable':false}})(err.message);throw err}}Object.defineProperty(Object,'getOwnPropertyDescriptor',{'value':gopdWrapper})}function
 repair_CANT_HASOWNPROPERTY_CALLER(){Object.defineProperty(Object.prototype,'hasOwnProperty',{'value':function
 hopWrapper(name){return!!Object.getOwnPropertyDescriptor(this,name)}})}function
-makeHarmless(magicName,func,path){var desc;function poison(){throw new TypeError('Cannot access property '+path)}desc=Object.getOwnPropertyDescriptor(func,magicName);if(!desc&&Object.isExtensible(func)||desc.configurable){try{Object.defineProperty(func,magicName,{'get':poison,'set':poison,'configurable':false})}catch(cantPoisonErr){return'Poisoning failed with '+cantPoisonErr}return desc=Object.getOwnPropertyDescriptor(func,magicName),desc&&desc.get===poison&&desc.set===poison&&!desc.configurable?'Apparently poisoned':'Not poisoned'}if('get'in
+makeHarmless(magicName,func,path){var desc;function poison(){throw new TypeError('Cannot access property '+path)}poison.prototype=null,desc=Object.getOwnPropertyDescriptor(func,magicName);if(!desc&&Object.isExtensible(func)||desc.configurable){try{Object.defineProperty(func,magicName,{'get':poison,'set':poison,'configurable':false})}catch(cantPoisonErr){return'Poisoning failed with '+cantPoisonErr}return desc=Object.getOwnPropertyDescriptor(func,magicName),desc&&desc.get===poison&&desc.set===poison&&!desc.configurable?'Apparently poisoned':'Not poisoned'}if('get'in
 desc||'set'in desc)return'Apparently safe';try{Object.defineProperty(func,magicName,{'value':desc.value===null?null:void
 0,'writable':false,'configurable':false})}catch(cantFreezeHarmlessErr){return'Freezing harmless failed with '+cantFreezeHarmlessErr}return desc=Object.getOwnPropertyDescriptor(func,magicName),desc&&(desc.value===null||desc.value===void
 0)&&!desc.writable&&!desc.configurable?'Apparently frozen harmless':'Did not freeze harmless'}function
@@ -232,7 +231,7 @@ getHiddenRecord(key){var gets,hiddenRecord,vals;if(key!==Object(key))throw new T
 identifyingFreeze(obj){return getHiddenRecord(obj),oldFreeze(obj)}}),oldSeal=Object.seal,defProp(Object,'seal',{'value':function
 identifyingSeal(obj){return getHiddenRecord(obj),oldSeal(obj)}}),oldPreventExtensions=Object.preventExtensions,defProp(Object,'preventExtensions',{'value':function
 identifyingPreventExtensions(obj){return getHiddenRecord(obj),oldPreventExtensions(obj)}})})();function
-constFunc(func){return Object.freeze(func.prototype),Object.freeze(func)}WeakMap=function(){var
+constFunc(func){return func.prototype=null,Object.freeze(func)}WeakMap=function(){var
 keys=[],vals=[];function get___(key,opt_default){var hr=getHiddenRecord(key),i,vs;return hr?(i=hr.gets.indexOf(get___),vs=hr.vals):(i=keys.indexOf(key),vs=vals),i>=0?vs[i]:opt_default}function
 has___(key){var hr=getHiddenRecord(key),i;return i=hr?hr.gets.indexOf(get___):keys.indexOf(key),i>=0}function
 set___(key,value){var hr=getHiddenRecord(key),i;hr?(i=hr.gets.indexOf(get___),i>=0?(hr.vals[i]=value):(hr.gets.push(get___),hr.vals.push(value))):(i=keys.indexOf(key),i>=0?(vals[i]=value):(keys.push(key),vals.push(value)))}function
@@ -250,9 +249,12 @@ EvalError('Non-ascii text not yet supported');if(/\\u/.test(programSrc))throw ne
 EvalError('Backslash-u escape encoded text not yet supported')}function SHOULD_MATCH_IDENTIFIER(){return/(\w|\$)+/g}ses.atLeastFreeVarNames=function
 atLeastFreeVarNames(programSrc){var a,found,name,regexp,result;programSrc=String(programSrc),LIMIT_SRC(programSrc),regexp=SHOULD_MATCH_IDENTIFIER(),result=[],found=StringMap();while(a=regexp.exec(programSrc))name=a[0],found.has(name)||(result.push(name),found.set(name,true));return result}})(),ses.startSES=function(global,whitelist,atLeastFreeVarNames,extensions){'use strict';var
 EMULATE_LEGACY_GETTERS_SETTERS,TAME_GLOBAL_EVAL,cleaning,create,defProp,dirty,freeze,getProto,gopd,gopn,hop,keys,propertyReports,sharedImports,tamperProof,whiteTable;TAME_GLOBAL_EVAL=false,EMULATE_LEGACY_GETTERS_SETTERS=true,dirty=true,hop=Object.prototype.hasOwnProperty,getProto=Object.getPrototypeOf,defProp=Object.defineProperty,gopd=Object.getOwnPropertyDescriptor,gopn=Object.getOwnPropertyNames,keys=Object.keys,freeze=Object.freeze,create=Object.create;function
-fail(str){debugger;throw new EvalError(str)}typeof WeakMap==='undefined'&&fail('No built-in WeakMaps, so WeakMap.js must be loaded first'),EMULATE_LEGACY_GETTERS_SETTERS?(defProp(Object.prototype,'__defineGetter__',{'value':function(sprop,getter){sprop=''+sprop,hop.call(this,sprop)?defProp(this,sprop,{'get':getter}):defProp(this,sprop,{'get':getter,'set':undefined,'enumerable':true,'configurable':true})},'writable':false,'enumerable':false,'configurable':false}),defProp(Object.prototype,'__defineSetter__',{'value':function(sprop,setter){sprop=''+sprop,hop.call(this,sprop)?defProp(this,sprop,{'set':setter}):defProp(this,sprop,{'get':undefined,'set':setter,'enumerable':true,'configurable':true})},'writable':false,'enumerable':false,'configurable':false}),defProp(Object.prototype,'__lookupGetter__',{'value':function(sprop){var
-base,desc;sprop=''+sprop,base=this,desc=void 0;while(base&&!(desc=gopd(base,sprop)))base=getProto(base);return desc&&desc.get},'writable':false,'enumerable':false,'configurable':false}),defProp(Object.prototype,'__lookupSetter__',{'value':function(sprop){var
-base,desc;sprop=''+sprop,base=this,desc=void 0;while(base&&!(desc=gopd(base,sprop)))base=getProto(base);return desc&&desc.set},'writable':false,'enumerable':false,'configurable':false})):(delete
+constFunc(func){return func.prototype=null,freeze(func)}function fail(str){debugger;throw new
+EvalError(str)}typeof WeakMap==='undefined'&&fail('No built-in WeakMaps, so WeakMap.js must be loaded first'),EMULATE_LEGACY_GETTERS_SETTERS?(function(){function
+legacyDefineGetter(sprop,getter){sprop=''+sprop,hop.call(this,sprop)?defProp(this,sprop,{'get':getter}):defProp(this,sprop,{'get':getter,'set':undefined,'enumerable':true,'configurable':true})}legacyDefineGetter.prototype=null,defProp(Object.prototype,'__defineGetter__',{'value':legacyDefineGetter,'writable':false,'enumerable':false,'configurable':false});function
+legacyDefineSetter(sprop,setter){sprop=''+sprop,hop.call(this,sprop)?defProp(this,sprop,{'set':setter}):defProp(this,sprop,{'get':undefined,'set':setter,'enumerable':true,'configurable':true})}legacyDefineSetter.prototype=null,defProp(Object.prototype,'__defineSetter__',{'value':legacyDefineSetter,'writable':false,'enumerable':false,'configurable':false});function
+legacyLookupGetter(sprop){var base,desc;sprop=''+sprop,base=this,desc=void 0;while(base&&!(desc=gopd(base,sprop)))base=getProto(base);return desc&&desc.get}legacyLookupGetter.prototype=null,defProp(Object.prototype,'__lookupGetter__',{'value':legacyLookupGetter,'writable':false,'enumerable':false,'configurable':false});function
+legacyLookupSetter(sprop){var base,desc;sprop=''+sprop,base=this,desc=void 0;while(base&&!(desc=gopd(base,sprop)))base=getProto(base);return desc&&desc.set}legacyLookupSetter.prototype=null,defProp(Object.prototype,'__lookupSetter__',{'value':legacyLookupSetter,'writable':false,'enumerable':false,'configurable':false})})():(delete
 Object.prototype.__defineGetter__,delete Object.prototype.__defineSetter__,delete
 Object.prototype.__lookupGetter__,delete Object.prototype.__lookupSetter__),tamperProof=ses.makeDelayedTamperProof(),sharedImports=create(null),(function
 startSESPrelude(){var unsafeEval=eval,UnsafeFunction=Function,defended,defending,directivePattern,extensionsRecord,makeArrayLike,requirePattern;function
@@ -260,31 +262,30 @@ verifyStrictProgram(programSrc){try{UnsafeFunction('\"use strict\";'+programSrc)
 verifyStrictExpression(exprSrc){verifyStrictProgram(exprSrc+';'),verifyStrictProgram('( '+exprSrc+'\n);')}function
 makeImports(){var imports=create(null);return copyToImports(imports,sharedImports),imports}function
 copyToImports(imports,from){return gopn(from).forEach(function(name){var desc=gopd(from,name);desc.enumerable=false,desc.configurable=true,defProp(imports,name,desc)}),imports}function
-makeScopeObject(imports,freeNames){var scopeObject=create(null);return freeNames.forEach(function(name){var
-desc=gopd(imports,name);(!desc||desc.writable!==false||desc.configurable)&&(desc={'get':function
+makeScopeObject(imports,freeNames){var scopeObject=create(null);return freeNames.forEach(function
+interceptName(name){var desc=gopd(imports,name);(!desc||desc.writable!==false||desc.configurable)&&(desc={'get':function
 scopedGet(){var result;if(name in imports){result=imports[name];if(typeof result==='function');return result}throw new
 ReferenceError('\"'+name+'\" not in scope')},'set':function scopedSet(newValue){throw name
 in imports&&(imports[name]=newValue),new TypeError('Cannot set \"'+name+'\"')},'enumerable':false}),desc.enumerable=false,defProp(scopeObject,name,desc)}),freeze(scopeObject)}function
 securableWrapperSrc(exprSrc,opt_sourcePosition){return verifyStrictExpression(exprSrc),'(function() {   with (this) {     return function() {       \"use strict\";       return (         '+exprSrc+'\n'+'      );\n'+'    };\n'+'  }\n'+'})'}ses.securableWrapperSrc=securableWrapperSrc;function
 makeCompiledExpr(wrapper,freeNames){dirty&&fail('Initial cleaning failed');function
-compiledCode(imports){var scopeObject=makeScopeObject(imports,freeNames);return wrapper.call(scopeObject).call(imports)}return tamperProof(compiledCode.prototype),compiledCode}ses.makeCompiledExpr=makeCompiledExpr;function
-compileExpr(exprSrc,opt_sourcePosition){var wrapperSrc=securableWrapperSrc(exprSrc,opt_sourcePosition),wrapper=unsafeEval(wrapperSrc),freeNames=atLeastFreeVarNames(exprSrc),result=makeCompiledExpr(wrapper,freeNames);return tamperProof(result)}directivePattern=/^['"](?:\w|\s)*['"]$/m,requirePattern=/^(?:\w*\s*(?:\w|\$|\.)*\s*=)?\s*require\s*\(\s*['"]((?:\w|\$|\.|\/)+)['"]\s*\)$/m;function
-getRequirements(modSrc){var result=[],stmts=modSrc.split(';'),i=0,ilen=stmts.length,m,stmt;for(;i<ilen;++i){stmt=stmts[i].trim();if(stmt!==''){if(!directivePattern.test(stmt))break}}for(;i<ilen;++i){stmt=stmts[i].trim();if(stmt!==''){m=requirePattern.exec(stmt);if(!m)break;result.push(m[1])}}return tamperProof(result)}function
-compileModule(modSrc,opt_sourcePosition){var exprSrc='(function() {'+modSrc+'}).call(this)',wrapperSrc=securableWrapperSrc(exprSrc,opt_sourcePosition),wrapper=unsafeEval(wrapperSrc),freeNames=atLeastFreeVarNames(exprSrc),moduleMaker=makeCompiledExpr(wrapper,freeNames);return moduleMaker.requirements=getRequirements(modSrc),tamperProof(moduleMaker)}function
+compiledCode(imports){var scopeObject=makeScopeObject(imports,freeNames);return wrapper.call(scopeObject).call(imports)}return compiledCode.prototype=null,compiledCode}ses.makeCompiledExpr=makeCompiledExpr;function
+compileExpr(exprSrc,opt_sourcePosition){var wrapperSrc=securableWrapperSrc(exprSrc,opt_sourcePosition),wrapper=unsafeEval(wrapperSrc),freeNames=atLeastFreeVarNames(exprSrc),result=makeCompiledExpr(wrapper,freeNames);return freeze(result)}directivePattern=/^['"](?:\w|\s)*['"]$/m,requirePattern=/^(?:\w*\s*(?:\w|\$|\.)*\s*=)?\s*require\s*\(\s*['"]((?:\w|\$|\.|\/)+)['"]\s*\)$/m;function
+getRequirements(modSrc){var result=[],stmts=modSrc.split(';'),i=0,ilen=stmts.length,m,stmt;for(;i<ilen;++i){stmt=stmts[i].trim();if(stmt!==''){if(!directivePattern.test(stmt))break}}for(;i<ilen;++i){stmt=stmts[i].trim();if(stmt!==''){m=requirePattern.exec(stmt);if(!m)break;result.push(m[1])}}return freeze(result)}function
+compileModule(modSrc,opt_sourcePosition){var exprSrc='(function() {'+modSrc+'}).call(this)',wrapperSrc=securableWrapperSrc(exprSrc,opt_sourcePosition),wrapper=unsafeEval(wrapperSrc),freeNames=atLeastFreeVarNames(exprSrc),moduleMaker=makeCompiledExpr(wrapper,freeNames);return moduleMaker.requirements=getRequirements(modSrc),freeze(moduleMaker)}function
 FakeFunction(var_args){var params=[].slice.call(arguments,0),body=params.pop(),exprSrc;return body=String(body||''),params=params.join(','),exprSrc='(function('+params+'\n){'+body+'})',compileExpr(exprSrc)(sharedImports)}FakeFunction.prototype=UnsafeFunction.prototype,FakeFunction.prototype.constructor=FakeFunction,global.Function=FakeFunction;function
 fakeEval(src){try{verifyStrictExpression(src)}catch(x){src='(function() {'+src+'\n}).call(this)'}return compileExpr(src)(sharedImports)}TAME_GLOBAL_EVAL&&(global.eval=fakeEval),defended=WeakMap(),defending=WeakMap();function
-def(node){var defendingList=[];function recur(val){if(val!==Object(val)||defended.get(val)||defending.get(val))return;defending.set(val,true),defendingList.push(val),tamperProof(val),recur(getProto(val)),gopn(val).forEach(function(p){var
+def(node){var defendingList=[];function recur(val){var t;if(!val)return;t=typeof
+val;if(t==='number'||t==='string'||t==='boolean')return;if(defended.get(val)||defending.get(val))return;defending.set(val,true),defendingList.push(val),tamperProof(val),recur(getProto(val)),gopn(val).forEach(function(p){var
 desc;if(typeof val==='function'&&(p==='caller'||p==='arguments'))return;desc=gopd(val,p),recur(desc.value),recur(desc.get),recur(desc.set)})}try{recur(node)}catch(err){throw defending=WeakMap(),err}return defendingList.forEach(function(obj){defended.set(obj,true)}),node}(function(){var
 itemMap=WeakMap(),lengthMap=WeakMap(),nativeProxies;function lengthGetter(){var getter=lengthMap.get(this);return getter?getter():void
-0}tamperProof(lengthGetter),tamperProof(lengthGetter.prototype),nativeProxies=global.Proxy&&(function(){var
-obj={'0':'hi'},p=global.Proxy.create({'get':function(){var P=arguments[0];return typeof
-P!=='string'&&(P=arguments[1]),obj[P]}});return p[0]==='hi'})(),nativeProxies?(function(){function
+0}constFunc(lengthGetter),nativeProxies=global.Proxy&&(function(){var obj={'0':'hi'},p=global.Proxy.create({'get':function(){var
+P=arguments[0];return typeof P!=='string'&&(P=arguments[1]),obj[P]}});return p[0]==='hi'})(),nativeProxies?(function(){function
 ArrayLike(proto,getItem,getLength){var obj;if(typeof proto!=='object')throw new TypeError('Expected proto to be an object.');if(!(proto
 instanceof ArrayLike))throw new TypeError('Expected proto to be instanceof ArrayLike.');return obj=create(proto),itemMap.set(obj,getItem),lengthMap.set(obj,getLength),obj}function
-ownPropDesc(P){var get;return P=''+P,P==='length'?{'get':lengthGetter}:typeof P==='number'||P===''+
-+P?(get=tamperProof(function(){var getter=itemMap.get(this);return getter?getter(+P):void
-0}),tamperProof(get.prototype),{'get':get,'enumerable':true,'configurable':true}):void
-0}function propDesc(P){var opd=ownPropDesc(P);return opd||gopd(Object.prototype,P)}function
+ownPropDesc(P){return P=''+P,P==='length'?{'get':lengthGetter}:typeof P==='number'||P===''+
++P?{'get':constFunc(function(){var getter=itemMap.get(this);return getter?getter(+P):void
+0}),'enumerable':true,'configurable':true}:void 0}function propDesc(P){var opd=ownPropDesc(P);return opd||gopd(Object.prototype,P)}function
 has(P){return P=''+P,P==='length'||typeof P==='number'||P===''+ +P||P in Object.prototype}function
 hasOwn(P){return P=''+P,P==='length'||typeof P==='number'||P===''+ +P}function getPN(){var
 result=getOwnPN(),objPropNames=gopn(Object.prototype);return result.push.apply(result,objPropNames),result}function
@@ -293,15 +294,13 @@ del(P){return P=''+P,!(P==='length'||''+ +P===P)}ArrayLike.prototype=global.Prox
 BiggestArrayLike,maxLen;function nextUInt31PowerOf2(v){return v&=2147483647,v|=v>>1,v|=v>>2,v|=v>>4,v|=v>>8,v|=v>>16,v+1}BiggestArrayLike=void
 0,maxLen=0,makeArrayLike=function(length){var BAL,i,len;if(!BiggestArrayLike||length>maxLen){len=nextUInt31PowerOf2(length),BAL=function(proto,getItem,getLength){var
 obj;if(typeof proto!=='object')throw new TypeError('Expected proto to be an object.');if(!(proto
-instanceof BAL))throw new TypeError('Expected proto to be instanceof ArrayLike.');return obj=create(proto),itemMap.set(obj,getItem),lengthMap.set(obj,getLength),obj};for(i=0;i<len;++i)(function(j){var
-get=tamperProof(function(){return itemMap.get(this)(j)});tamperProof(get.prototype),defProp(BAL.prototype,j,{'get':get,'enumerable':true})})(i);defProp(BAL.prototype,'length',{'get':lengthGetter}),tamperProof(BAL),tamperProof(BAL.prototype),BiggestArrayLike=BAL,maxLen=len}return BiggestArrayLike}})()})(),global.cajaVM={'log':function
-log(str){typeof console!=='undefined'&&'log'in console&&console.log(str)},'compileExpr':compileExpr,'compileModule':compileModule,'eval':fakeEval,'Function':FakeFunction,'sharedImports':sharedImports,'makeImports':makeImports,'copyToImports':copyToImports,'makeArrayLike':makeArrayLike},extensionsRecord=extensions(),gopn(extensionsRecord).forEach(function(p){defProp(cajaVM,p,gopd(extensionsRecord,p))}),global.cajaVM.tamperProof=tamperProof,global.cajaVM.def=def})(),propertyReports={};function
-reportProperty(severity,status,path){var group;ses.updateMaxSeverity(severity),group=propertyReports[status]||(propertyReports[status]={'severity':severity,'list':[]}),group.list.push(path)}function
-read(base,name){var desc=gopd(base,name),result;if(!desc)return undefined;if('value'in
-desc&&!desc.writable&&!desc.configurable)return desc.value;result=base[name];try{defProp(base,name,{'value':result,'writable':false,'configurable':false})}catch(ex){reportProperty(ses.severities.NEW_SYMPTOM,'Cannot be neutered','(a '+typeof
-base+').'+name)}return result}keys(whitelist).forEach(function(name){var desc=gopd(global,name),permit,value;desc&&(permit=whitelist[name],permit&&(value=read(global,name),defProp(sharedImports,name,{'value':value,'writable':true,'enumerable':false,'configurable':false})))}),TAME_GLOBAL_EVAL&&defProp(sharedImports,'eval',{'value':cajaVM.eval,'writable':true,'enumerable':false,'configurable':false}),whiteTable=WeakMap();function
+instanceof BAL))throw new TypeError('Expected proto to be instanceof ArrayLike.');return obj=create(proto),itemMap.set(obj,getItem),lengthMap.set(obj,getLength),obj};for(i=0;i<len;++i)(function(j){function
+get(){return itemMap.get(this)(j)}defProp(BAL.prototype,j,{'get':constFunc(get),'enumerable':true})})(i);defProp(BAL.prototype,'length',{'get':lengthGetter}),tamperProof(BAL),tamperProof(BAL.prototype),BiggestArrayLike=BAL,maxLen=len}return BiggestArrayLike}})()})(),global.cajaVM={'log':constFunc(function
+log(str){typeof console!=='undefined'&&'log'in console&&console.log(str)}),'compileExpr':constFunc(compileExpr),'compileModule':constFunc(compileModule),'eval':fakeEval,'Function':FakeFunction,'sharedImports':sharedImports,'makeImports':constFunc(makeImports),'copyToImports':constFunc(copyToImports),'makeArrayLike':constFunc(makeArrayLike)},extensionsRecord=extensions(),gopn(extensionsRecord).forEach(function(p){defProp(cajaVM,p,gopd(extensionsRecord,p))}),global.cajaVM.tamperProof=constFunc(tamperProof),global.cajaVM.def=constFunc(def)})(),propertyReports={};function
+reportProperty(severity,status,path){var group;ses.updateMaxSeverity(severity),group=propertyReports[status]||(propertyReports[status]={'severity':severity,'list':[]}),group.list.push(path)}keys(whitelist).forEach(function(name){var
+desc=gopd(global,name),newDesc,permit;desc&&(permit=whitelist[name],permit&&(newDesc={'value':global[name],'writable':false,'configurable':false},defProp(global,name,newDesc),defProp(sharedImports,name,newDesc)))}),TAME_GLOBAL_EVAL&&defProp(sharedImports,'eval',{'value':cajaVM.eval,'writable':false,'enumerable':false,'configurable':false}),whiteTable=WeakMap();function
 register(value,permit){var oldPermit;if(value!==Object(value))return;if(typeof permit!=='object')return;oldPermit=whiteTable.get(value),oldPermit&&fail('primordial reachable through multiple paths'),whiteTable.set(value,permit),keys(permit).forEach(function(name){var
-sub;permit[name]!=='skip'&&(sub=read(value,name),register(sub,permit[name]))})}register(sharedImports,whitelist);function
+sub;permit[name]!=='skip'&&(sub=value[name],register(sub,permit[name]))})}register(sharedImports,whitelist);function
 getPermit(base,name){var permit=whiteTable.get(base),result;if(permit){if(hop.call(permit,name))return permit[name]};while(true){base=getProto(base);if(base===null)return false;permit=whiteTable.get(base);if(permit&&hop.call(permit,name))return result=permit[name],result==='*'||result==='skip'?result:false}}cleaning=WeakMap();function
 cleanProperty(base,name,path){var deleted,desc2,diagnostic,dummy2,err,exists,value;function
 poison(){throw new TypeError('Cannot access property '+path)}if(typeof base==='function'){if(name==='caller')return diagnostic=ses.makeCallerHarmless(base,path),reportProperty(ses.severities.SAFE,diagnostic,path),true;if(name==='arguments')return diagnostic=ses.makeArgumentsHarmless(base,path),reportProperty(ses.severities.SAFE,diagnostic,path),true}deleted=void
@@ -312,6 +311,6 @@ if(err instanceof TypeError);else reportProperty(ses.severities.NEW_SYMPTOM,'Del
 instanceof TypeError)return reportProperty(ses.severities.SAFE,'Successfully poisoned',path),true}else
 if((desc2.value===void 0||desc2.value===null)&&!desc2.writable&&!desc2.configurable)return reportProperty(ses.severities.SAFE,'Frozen harmless',path),false;return reportProperty(ses.severities.NEW_SYMTOM,'Failed to be poisoned',path),false}function
 clean(value,prefix){if(value!==Object(value))return;if(cleaning.get(value))return;cleaning.set(value,true),gopn(value).forEach(function(name){var
-path=prefix+(prefix?'.':'')+name,p=getPermit(value,name),sub;p?p==='skip'?reportProperty(ses.severities.SAFE,'Skipped',path):(sub=read(value,name),clean(sub,path)):cleanProperty(value,name,path)}),tamperProof(value)}clean(sharedImports,''),keys(propertyReports).sort().forEach(function(status){var
+path=prefix+(prefix?'.':'')+name,p=getPermit(value,name),sub;p?p==='skip'?reportProperty(ses.severities.SAFE,'Skipped',path):(sub=value[name],clean(sub,path)):cleanProperty(value,name,path)})}clean(sharedImports,''),cajaVM.def(sharedImports),keys(propertyReports).sort().forEach(function(status){var
 group=propertyReports[status];ses.logger.reportDiagnosis(group.severity,status,group.list)}),ses.logger.reportMax(),ses.ok()?(dirty=false,ses.logger.log('initSES succeeded.')):ses.logger.error('initSES failed.')},(function
 hookupSESModule(global){'use strict';if(!ses.ok())return;try{ses.startSES(global,ses.whitelist,ses.atLeastFreeVarNames,function(){return{}})}catch(err){ses.updateMaxSeverity(ses.severities.NOT_SUPPORTED),ses.logger.error('hookupSES failed with: '+err)}})(this)}

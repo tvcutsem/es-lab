@@ -302,7 +302,7 @@ var WeakMap;
 
 
   function constFunc(func) {
-    Object.freeze(func.prototype);
+    func.prototype = null;
     return Object.freeze(func);
   }
 

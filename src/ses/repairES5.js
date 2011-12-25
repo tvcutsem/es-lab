@@ -329,9 +329,10 @@ var ses;
   /**
    * "makeTamperProof()" returns a "tamperProof(obj)" function that
    * acts like "Object.freeze(obj)", except that, if obj is a
-   * prototypical object, it ensures that the effect of freezing
-   * properties of obj does not suppress the ability to override these
-   * properties on derived objects by simple assignment.
+   * <i>prototypical</i> object (defined below), it ensures that the
+   * effect of freezing properties of obj does not suppress the
+   * ability to override these properties on derived objects by simple
+   * assignment.
    *
    * <p>Because of lack of sufficient foresight at the time, ES5
    * unifortunately specified that a simple assignment to a
@@ -378,7 +379,7 @@ var ses;
     var defProp = Object.defineProperty;
 
     function tamperProof(obj) {
-    if (obj !== Object(obj)) { return obj; }
+      if (obj !== Object(obj)) { return obj; }
       var func;
       if (typeof obj === 'object' &&
           !!gopd(obj, 'constructor') &&
@@ -1795,49 +1796,48 @@ var ses;
 
     defProp(Object, 'defineProperty', {
       value: function setSetterDefProp(base, name, desc) {
-        if (typeof desc.get === 'function' &&
-            desc.set === undefined &&
-            objToString.call(base) === '[object HTMLFormElement]' &&
-            gopd(base, name) === void 0) {
-          // This repair was triggering bug
-          // http://code.google.com/p/chromium/issues/detail?id=94666
-          // on Chrome, causing
-          // http://code.google.com/p/google-caja/issues/detail?id=1401
-          // so if base is an HTMLFormElement we skip this
-          // fix. Since this repair and this situation are both
-          // Chrome only, it is ok that we're conditioning this on
-          // the unspecified [[Class]] value of base.
-          //
-          // To avoid the further bug identified at Comment 2
-          // http://code.google.com/p/chromium/issues/detail?id=94666#c2
-          // We also have to reconstruct the requested desc so that
-          // the setter is absent. This is why we additionally
-          // condition this special case on the absence of an own
-          // name property on base.
-          var desc2 = { get: desc.get };
-          if ('enumerable' in desc) {
-            desc2.enumerable = desc.enumerable;
-          }
-          if ('configurable' in desc) {
-            desc2.configurable = desc.configurable;
-          }
-          var result = defProp(base, name, desc2);
-          var newDesc = gopd(base, name);
-          if (newDesc.get === desc.get) {
-            return result;
+        if (typeof desc.get === 'function' && desc.set === void 0) {
+          var oldDesc = gopd(base, name);
+          if (oldDesc) {
+            var testBase = {};
+            defProp(testBase, name, oldDesc);
+            defProp(testBase, name, desc);
+            desc = gopd(testBase, name);
+            if (desc.set === void 0) { desc.set = dummySetter; }
+          } else {
+            if (objToString.call(base) === '[object HTMLFormElement]') {
+              // This repair was triggering bug
+              // http://code.google.com/p/chromium/issues/detail?id=94666
+              // on Chrome, causing
+              // http://code.google.com/p/google-caja/issues/detail?id=1401
+              // so if base is an HTMLFormElement we skip this
+              // fix. Since this repair and this situation are both
+              // Chrome only, it is ok that we're conditioning this on
+              // the unspecified [[Class]] value of base.
+              //
+              // To avoid the further bug identified at Comment 2
+              // http://code.google.com/p/chromium/issues/detail?id=94666#c2
+              // We also have to reconstruct the requested desc so that
+              // the setter is absent. This is why we additionally
+              // condition this special case on the absence of an own
+              // name property on base.
+              var desc2 = { get: desc.get };
+              if ('enumerable' in desc) {
+                desc2.enumerable = desc.enumerable;
+              }
+              if ('configurable' in desc) {
+                desc2.configurable = desc.configurable;
+              }
+              var result = defProp(base, name, desc2);
+              var newDesc = gopd(base, name);
+              if (newDesc.get === desc.get) {
+                return result;
+              }
+            }
+            desc.set = dummySetter;
           }
         }
-        var oldDesc = gopd(base, name);
-        var testBase = {};
-        if (oldDesc) {
-          defProp(testBase, name, oldDesc);
-        }
-        defProp(testBase, name, desc);
-        var fullDesc = gopd(testBase, name);
-         if ('get' in fullDesc && fullDesc.set === void 0) {
-          fullDesc.set = dummySetter;
-        }
-        return defProp(base, name, fullDesc);
+        return defProp(base, name, desc);
       }
     });
     NEEDS_DUMMY_SETTER_repaired = true;
@@ -1988,6 +1988,7 @@ var ses;
             (name === 'caller' || name === 'arguments')) {
           return (function(message) {
              function fakePoison() { throw new TypeError(message); }
+             fakePoison.prototype = null;
              return {
                get: fakePoison,
                set: fakePoison,
@@ -2016,6 +2017,7 @@ var ses;
     function poison() {
       throw new TypeError('Cannot access property ' + path);
     }
+    poison.prototype = null;
     var desc = Object.getOwnPropertyDescriptor(func, magicName);
     if ((!desc && Object.isExtensible(func)) || desc.configurable) {
       try {
@@ -2238,14 +2240,14 @@ var ses;
       tests: ['S10.4.3_A1']
     },
     {
-	description: 'Global leaks through strict this',
-	test: test_GLOBAL_LEAKS_FROM_STRICT_THIS,
-	repair: void 0,
-	preSeverity: severities.NOT_ISOLATED,
-	canRepair: false,
-	urls: [],
-	sections: ['10.4.3'],
-	tests: ['10.4.3-1-8gs', '10.4.3-1-8-s']
+      description: 'Global leaks through strict this',
+      test: test_GLOBAL_LEAKS_FROM_STRICT_THIS,
+      repair: void 0,
+      preSeverity: severities.NOT_ISOLATED,
+      canRepair: false,
+      urls: [],
+      sections: ['10.4.3'],
+      tests: ['10.4.3-1-8gs', '10.4.3-1-8-s']
     },
     {
       description: 'Global object leaks from built-in methods',
