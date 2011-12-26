@@ -1544,6 +1544,10 @@ var ses;
     return false;
   }
 
+  /**
+   * These are all the own properties that appear on Error instances
+   * on various platforms as of this writing.
+   */
   var errorInstanceWhitelist = {
     // Chrome
     arguments: true,
@@ -1560,11 +1564,24 @@ var ses;
     sourceId: true,
     sourceURL: true,
 
+    // IE
+    number: true,
+    description: true,
+
     // Opera
     stacktrace: true
   };
+
   /**
+   * Do Error instances on thos platform carry own properties that we
+   * haven't yet examined and determined to be SES-safe?
    *
+   * <p>A new property should only be added to the
+   * errorInstanceWhitelist set after inspecting the consequences of
+   * that property to determine that it does compromise SES safety. If
+   * some platform maker does add an Error own property that does
+   * compromise SES safety, that might be a severe problem, if we
+   * can't find a way to deny untrusted code access to that property.
    */
   function test_UNEXPECTED_ERROR_PROPERTIES() {
     var errs = [new Error('e1')];
@@ -2780,7 +2797,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
-      description: 'xx',
+      description: 'Error instances have unexpected properties',
       test: test_UNEXPECTED_ERROR_PROPERTIES,
       repair: void 0,
       preSeverity: severities.NEW_SYMPTOM,
