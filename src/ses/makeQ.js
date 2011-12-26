@@ -39,31 +39,11 @@ var ses;
    var sliceFn = uncurryThis([].slice);
    var toStringFn = uncurryThis({}.toString);
 
-   var def;
-   if (typeof cajaVM !== 'undefined') {
-     def = cajaVM.def;
-   } else {
-     // Don't bother being properly defensive when run outside of Caja
-     // or SES.
-     def = Object.freeze;
-   }
+   var freeze = Object.freeze;
+   var constFunc = cajaVM.constFunc;
+   var def = cajaVM.def;
+   var is = cajaVM.is;
 
-   /**
-    * http://wiki.ecmascript.org/doku.php?id=harmony:egal
-    */
-   var is = Object.is || def(function(x, y) {
-     if (x === y) {
-       // 0 === -0, but they are not identical
-       return x !== 0 || 1 / x === 1 / y;
-     }
-
-     // NaN !== NaN, but they are identical.
-     // NaNs are the only non-reflexive value, i.e., if x !== x,
-     // then x is a NaN.
-     // isNaN is broken: it converts its argument to number, so
-     // isNaN("foo") => true
-     return x !== x && y !== y;
-   });
 
    /**
     * Tests if the presumably thrown error is simply signaling the end
@@ -251,12 +231,12 @@ var ses;
        nearer: function() { return this.promise; },
 
        dispatch: function(OP, args) {
-         if (OP === 'WHEN')  { return this.WHEN (args[0], args[1]); }
+         if (OP === 'WHEN') { return this.WHEN (args[0], args[1]); }
          return this.promise;
        },
 
        /** Just invoke fk, the failure continuation */
-       WHEN:  function(sk, fk)         { return fk(this.reason); }
+       WHEN:  function(sk, fk) { return fk(this.reason); }
      };
 
      /**
@@ -374,9 +354,9 @@ var ses;
          }
        }
 
-       return def({
+       return freeze({
          promise: promise,
-         resolve: resolve
+         resolve: constFunc(resolve)
        });
      }
 
@@ -401,10 +381,10 @@ var ses;
      FarHandler.prototype = {
        stateName: 'far',
 
-       nearer: function()       { return this.promise; },
+       nearer: function() { return this.promise; },
 
        /** Just invoke sk, the success continuation */
-       WHEN:   function(sk, fk) { return sk(this.promise); }
+       WHEN: function(sk, fk) { return sk(this.promise); }
      };
 
      function makeFar(farDispatch, nextSlotP) {
@@ -492,7 +472,8 @@ var ses;
       * a remote machine) or elsewhen (e.g., not yet computed).
       *
       * <p>The Promise constructor must not escape. Clients of this module
-      * use the Q function to make promises from non-promises.
+      * use the Q function to make promises from non-promises. Since
+      * Promise.prototype does escape, it must not point back at Promise.
       *
       * <p>The various methods on a genuine promise never execute "user
       * code", i.e., possibly untrusted client code, during the immediate
@@ -505,9 +486,14 @@ var ses;
      function Promise(HandlerMaker, arg) {
        var handler = new HandlerMaker(this, arg);
        handlers.set(this, handler);
-       def(this);
+       freeze(this);
      }
-     Promise.prototype = {
+     function DontMakePromise() {
+       throw new Error('Make promises by calling Q()');
+     }
+     DontMakePromise.prototype = Promise.prototype = {
+       constructor: DontMakePromise,
+
        toString: function() {
          return '[' + handle(this).stateName + ' promise]';
        },
@@ -569,6 +555,7 @@ var ses;
          });
        }
      };
+     def(DontMakePromise);
 
      function nearer(target1) {
        var optHandler = handle(target1);
@@ -663,7 +650,7 @@ var ses;
          }
          return resultP;
        }
-       return def(oneArgMemo);
+       return constFunc(oneArgMemo);
      };
 
      /**
@@ -674,7 +661,7 @@ var ses;
       * explanation.
       */
      Q.async = function(generatorFunc) {
-       return function asyncFunc(var_args) {
+       function asyncFunc(var_args) {
          var args = sliceFn(arguments, 0);
          var generator = generatorFunc.apply(this, args);
          var callback = continuer.bind(void 0, 'send');
@@ -692,7 +679,8 @@ var ses;
          }
 
          return callback(void 0);
-       };
+       }
+       return constFunc(asyncFunc);
      };
 
      return def(Q);

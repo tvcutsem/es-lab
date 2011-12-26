@@ -113,7 +113,9 @@ var ses;
     cajaVM: {                        // Caja support
       log: t,
       tamperProof: t,
+      constFunc: t,
       def: t,
+      is: t,
 
       compileExpr: t,
       compileModule: t,              // experimental

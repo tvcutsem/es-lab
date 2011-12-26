@@ -253,8 +253,6 @@ ses.startSES = function(global,
    * Use to tamper proof a function which is not intended to ever be
    * used as a constructor, since it nulls out the function's
    * prototype first.
-   *
-   * TODO(erights): Export to a reusable place, probably cajaVM.
    */
   function constFunc(func) {
     func.prototype = null;
@@ -1011,6 +1009,10 @@ ses.startSES = function(global,
           console.log(str);
         }
       }),
+      tamperProof: constFunc(tamperProof),
+      constFunc: constFunc(constFunc),
+      // def: see below
+      is: constFunc(ses.is),
 
       compileExpr: constFunc(compileExpr),
       compileModule: constFunc(compileModule),
@@ -1030,9 +1032,8 @@ ses.startSES = function(global,
               gopd(extensionsRecord, p));
     });
 
-    // Move these down here so they are not available during the call to
-    // extensions.
-    global.cajaVM.tamperProof = constFunc(tamperProof);
+    // Move this down here so it is not available during the call to
+    // extensions().
     global.cajaVM.def = constFunc(def);
 
   })();

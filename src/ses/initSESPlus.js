@@ -260,7 +260,7 @@ if (!ses) { ses = {}; }
  * create it, use it, and delete it all within this module. But we
  * need to lie to the linter since it can't tell.
  *
- * //provides ses.statuses, ses.ok, ses.makeDelayedTamperProof
+ * //provides ses.statuses, ses.ok, ses.is, ses.makeDelayedTamperProof
  * //provides ses.makeCallerHarmless, ses.makeArgumentsHarmless
  * //provides ses.severities, ses.maxSeverity, ses.updateMaxSeverity
  * //provides ses.maxAcceptableSeverityName, ses.maxAcceptableSeverity
@@ -516,6 +516,24 @@ var ses;
   var builtInMapMethod = Array.prototype.map;
 
   var builtInForEach = Array.prototype.forEach;
+
+  /**
+   * http://wiki.ecmascript.org/doku.php?id=harmony:egal
+   */
+  var is = ses.is = Object.is || function(x, y) {
+    if (x === y) {
+      // 0 === -0, but they are not identical
+      return x !== 0 || 1 / x === 1 / y;
+    }
+
+    // NaN !== NaN, but they are identical.
+    // NaNs are the only non-reflexive value, i.e., if x !== x,
+    // then x is a NaN.
+    // isNaN is broken: it converts its argument to number, so
+    // isNaN("foo") => true
+    return x !== x && y !== y;
+  };
+
 
   /**
    * By the time this module exits, either this is repaired to be a
@@ -2432,12 +2450,7 @@ var ses;
             var attr = attrs[i];
             if (attr in desc && desc[attr] !== oldDesc[attr]) { throw err; }
           }
-          if (!('value' in desc) ||
-              desc.value === oldDesc.value) {
-            return base;
-          }
-          if (desc.value !== desc.value &&
-              oldDesc.value !== oldDesc.value) {
+          if (!('value' in desc) || is(desc.value, oldDesc.value)) {
             return base;
           }
           throw err;
@@ -3384,7 +3397,14 @@ var WeakMap;
     return Object.freeze(func);
   }
 
+  // Right now (12/25/2012) the histogram supports the current
+  // representation. We should check this occasionally, as a true
+  // constant time representation is easy.
+  var histogram = [];
+
   WeakMap = function() {
+    // We are currently (12/25/2012) never encountering any prematurely
+    // non-extensible keys.
     var keys = []; // brute force for prematurely non-extensible keys.
     var vals = []; // brute force for corresponding values.
 
@@ -3420,6 +3440,8 @@ var WeakMap;
         if (i >= 0) {
           hr.vals[i] = value;
         } else {
+//          i = hr.gets.length;
+//          histogram[i] = (histogram[i] || 0) + 1;
           hr.gets.push(get___);
           hr.vals.push(value);
         }
@@ -3538,42 +3560,48 @@ var WeakMap;
  *
  * @author Mark S. Miller
  * @author Jasvir Nagra
- * @requires cajaVM
- * @provides StringMap
+ * @overrides StringMap
  */
 
-function StringMap() {
+var StringMap;
 
-  function assertString(x) {
-    if ('string' !== typeof(x)) {
-      throw new TypeError('Not a string: ' + String(x));
-    }
-    return x;
-  }
+(function() {
+   "use strict";
 
-  var def;
-  if ('undefined' !== typeof cajaVM) {
-    def = cajaVM.def;
-  } else {
-    def = Object.freeze;
-  }
+   var freeze = Object.freeze;
+   function constFunc(func) {
+     func.prototype = null;
+     return freeze(func);
+   }
 
-  var objAsMap = Object.create(null);
-  return def({
-    get: function(key) {
-        return objAsMap[assertString(key) + '$']; 
-      },
-    set: function(key, value) {
-        objAsMap[assertString(key) + '$'] = value;
-      },
-    has: function(key) {
-        return (assertString(key) + '$') in objAsMap;
-      },
-    'delete': function(key) {
-        return delete objAsMap[assertString(key) + '$']; 
-      }
-  });
-}
+   function assertString(x) {
+     if ('string' !== typeof(x)) {
+       throw new TypeError('Not a string: ' + String(x));
+     }
+     return x;
+   }
+
+   StringMap = function StringMap() {
+
+     var objAsMap = Object.create(null);
+
+     return freeze({
+       get: constFunc(function(key) {
+         return objAsMap[assertString(key) + '$'];
+       }),
+       set: constFunc(function(key, value) {
+         objAsMap[assertString(key) + '$'] = value;
+       }),
+       has: constFunc(function(key) {
+         return (assertString(key) + '$') in objAsMap;
+       }),
+       'delete': constFunc(function(key) {
+         return delete objAsMap[assertString(key) + '$'];
+       })
+     });
+   };
+
+ })();
 ;
 // Copyright (C) 2011 Google Inc.
 //
@@ -3690,7 +3718,9 @@ var ses;
     cajaVM: {                        // Caja support
       log: t,
       tamperProof: t,
+      constFunc: t,
       def: t,
+      is: t,
 
       compileExpr: t,
       compileModule: t,              // experimental
@@ -4392,8 +4422,6 @@ ses.startSES = function(global,
    * Use to tamper proof a function which is not intended to ever be
    * used as a constructor, since it nulls out the function's
    * prototype first.
-   *
-   * TODO(erights): Export to a reusable place, probably cajaVM.
    */
   function constFunc(func) {
     func.prototype = null;
@@ -5150,6 +5178,10 @@ ses.startSES = function(global,
           console.log(str);
         }
       }),
+      tamperProof: constFunc(tamperProof),
+      constFunc: constFunc(constFunc),
+      // def: see below
+      is: constFunc(ses.is),
 
       compileExpr: constFunc(compileExpr),
       compileModule: constFunc(compileModule),
@@ -5169,9 +5201,8 @@ ses.startSES = function(global,
               gopd(extensionsRecord, p));
     });
 
-    // Move these down here so they are not available during the call to
-    // extensions.
-    global.cajaVM.tamperProof = constFunc(tamperProof);
+    // Move this down here so it is not available during the call to
+    // extensions().
     global.cajaVM.def = constFunc(def);
 
   })();
@@ -5468,7 +5499,7 @@ ses.startSES = function(global,
  *
  * // provides ses.ejectorsGuardsTrademarks
  * @author kpreid@switchb.org
- * @requires WeakMap
+ * @requires WeakMap, cajaVM
  * @overrides ses, ejectorsGuardsTrademarksModule
  */
 var ses;
@@ -5476,31 +5507,22 @@ var ses;
 (function ejectorsGuardsTrademarksModule(){
   "use strict";
 
-  /**
-   * During the call to {@code ejectorsGuardsTrademarks}, {@code
-   * ejectorsGuardsTrademarks} must not call {@code cajaVM.def},
-   * since startSES.js has not yet finished cleaning things. See the
-   * doc-comments on the {@code extensions} parameter of
-   * startSES.js.
-   *
-   * <p>Instead, we define here some conveniences for freezing just
-   * enough without prematurely freezing primodial objects
-   * transitively reachable from these.
-   */
-  var freeze = Object.freeze;
-
-  /**
-   * Use to tamper proof a function which is not intended to ever be
-   * used as a constructor, since it nulls out the function's
-   * prototype first.
-   */
-  function constFunc(func) {
-    func.prototype = null;
-    return freeze(func);
-  }
-
-
   ses.ejectorsGuardsTrademarks = function ejectorsGuardsTrademarks() {
+
+    /**
+     * During the call to {@code ejectorsGuardsTrademarks}, {@code
+     * ejectorsGuardsTrademarks} must not call {@code cajaVM.def},
+     * since startSES.js has not yet finished cleaning things. See the
+     * doc-comments on the {@code extensions} parameter of
+     * startSES.js.
+     *
+     * <p>Instead, we define here some conveniences for freezing just
+     * enough without prematurely freezing primodial objects
+     * transitively reachable from these.
+     */
+    var freeze = Object.freeze;
+    var constFunc = cajaVM.constFunc;
+
 
     /**
      * Returns a new object whose only utility is its identity and (for

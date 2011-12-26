@@ -27,7 +27,7 @@
  * create it, use it, and delete it all within this module. But we
  * need to lie to the linter since it can't tell.
  *
- * //provides ses.statuses, ses.ok, ses.makeDelayedTamperProof
+ * //provides ses.statuses, ses.ok, ses.is, ses.makeDelayedTamperProof
  * //provides ses.makeCallerHarmless, ses.makeArgumentsHarmless
  * //provides ses.severities, ses.maxSeverity, ses.updateMaxSeverity
  * //provides ses.maxAcceptableSeverityName, ses.maxAcceptableSeverity
@@ -283,6 +283,24 @@ var ses;
   var builtInMapMethod = Array.prototype.map;
 
   var builtInForEach = Array.prototype.forEach;
+
+  /**
+   * http://wiki.ecmascript.org/doku.php?id=harmony:egal
+   */
+  var is = ses.is = Object.is || function(x, y) {
+    if (x === y) {
+      // 0 === -0, but they are not identical
+      return x !== 0 || 1 / x === 1 / y;
+    }
+
+    // NaN !== NaN, but they are identical.
+    // NaNs are the only non-reflexive value, i.e., if x !== x,
+    // then x is a NaN.
+    // isNaN is broken: it converts its argument to number, so
+    // isNaN("foo") => true
+    return x !== x && y !== y;
+  };
+
 
   /**
    * By the time this module exits, either this is repaired to be a
@@ -2199,12 +2217,7 @@ var ses;
             var attr = attrs[i];
             if (attr in desc && desc[attr] !== oldDesc[attr]) { throw err; }
           }
-          if (!('value' in desc) ||
-              desc.value === oldDesc.value) {
-            return base;
-          }
-          if (desc.value !== desc.value &&
-              oldDesc.value !== oldDesc.value) {
+          if (!('value' in desc) || is(desc.value, oldDesc.value)) {
             return base;
           }
           throw err;

@@ -22,7 +22,7 @@
  *
  * // provides ses.ejectorsGuardsTrademarks
  * @author kpreid@switchb.org
- * @requires WeakMap
+ * @requires WeakMap, cajaVM
  * @overrides ses, ejectorsGuardsTrademarksModule
  */
 var ses;
@@ -30,31 +30,22 @@ var ses;
 (function ejectorsGuardsTrademarksModule(){
   "use strict";
 
-  /**
-   * During the call to {@code ejectorsGuardsTrademarks}, {@code
-   * ejectorsGuardsTrademarks} must not call {@code cajaVM.def},
-   * since startSES.js has not yet finished cleaning things. See the
-   * doc-comments on the {@code extensions} parameter of
-   * startSES.js.
-   *
-   * <p>Instead, we define here some conveniences for freezing just
-   * enough without prematurely freezing primodial objects
-   * transitively reachable from these.
-   */
-  var freeze = Object.freeze;
-
-  /**
-   * Use to tamper proof a function which is not intended to ever be
-   * used as a constructor, since it nulls out the function's
-   * prototype first.
-   */
-  function constFunc(func) {
-    func.prototype = null;
-    return freeze(func);
-  }
-
-
   ses.ejectorsGuardsTrademarks = function ejectorsGuardsTrademarks() {
+
+    /**
+     * During the call to {@code ejectorsGuardsTrademarks}, {@code
+     * ejectorsGuardsTrademarks} must not call {@code cajaVM.def},
+     * since startSES.js has not yet finished cleaning things. See the
+     * doc-comments on the {@code extensions} parameter of
+     * startSES.js.
+     *
+     * <p>Instead, we define here some conveniences for freezing just
+     * enough without prematurely freezing primodial objects
+     * transitively reachable from these.
+     */
+    var freeze = Object.freeze;
+    var constFunc = cajaVM.constFunc;
+
 
     /**
      * Returns a new object whose only utility is its identity and (for

@@ -38,6 +38,7 @@
 
 <script src="useHTMLLogger.js"></script>
 <script>
+  console.profile('explicit SES init');
   function gebi(id) { 
     return document.getElementById(id); 
   };
@@ -82,7 +83,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       appendText(amdLoaderTest, 'cancelled');
       return;
     }
-    
+
     var imports = cajaVM.makeImports();
     cajaVM.copyToImports(imports, {window: 6});
 
@@ -198,8 +199,10 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     Q(amdTestP).when(function(amdTest) {
       var amdTestStatus = amdTest === 'this is a test' ?
         'succeeded' : 'failed, unexpected: ' + amdTest;
+      console.profileEnd();
       appendText(amdLoaderTest, amdTestStatus);
     }, function(reason) {
+      console.profileEnd();
       appendText(amdLoaderTest, 'failed: ' + reason);
     }).end();
   })();

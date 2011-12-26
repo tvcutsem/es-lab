@@ -39,14 +39,8 @@ var ses;
    var applyFn = uncurryThis(bind.apply);
    var mapFn = uncurryThis([].map);
 
-   var def;
-   if (typeof cajaVM !== 'undefined') {
-     def = cajaVM.def;
-   } else {
-     // Don't bother being properly defensive when run outside of Caja
-     // or SES.
-     def = Object.freeze;
-   }
+   var freeze = Object.freeze;
+   var constFunc = cajaVM.constFunc;
 
    var XHR;
    if (typeof UniformRequest !== 'undefined') {
@@ -116,7 +110,7 @@ var ses;
 
              } else if (this.status === 410) {
                var broken = Q.reject(new Error('Resource Gone'));
-               nextSlot.resolve(def({value: broken}));
+               nextSlot.resolve(freeze({value: broken}));
                result.resolve(broken);
 
              } else {
@@ -138,8 +132,8 @@ var ses;
 
        return Q.makeFar(farDispatch, nextSlot.promise);
      }
-     return def(makeFarResource);
+     return constFunc(makeFarResource);
    }
-   ses.makeFarResourceMaker = def(makeFarResourceMaker);
+   ses.makeFarResourceMaker = constFunc(makeFarResourceMaker);
 
  })();

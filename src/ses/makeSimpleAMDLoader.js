@@ -36,14 +36,9 @@
    var applyFn = uncurryThis(bind.apply);
    var mapFn = uncurryThis([].map);
 
-   var def;
-   if (typeof cajaVM !== 'undefined') {
-     def = cajaVM.def;
-   } else {
-     // Don't bother being properly defensive when run outside of Caja
-     // or SES.
-     def = Object.freeze;
-   }
+   var freeze = Object.freeze;
+   var constFunc = cajaVM.constFunc;
+
 
    /**
     * A pumpkin is a unique value that must never escape, and so may
@@ -123,11 +118,10 @@
          }
          // TODO(erights): Once we're jQuery compatible, change
          // jQuery: to true.
-         define.amd = { lite: true, caja: true, jQuery: false };
-         def(define);
+         define.amd = freeze({ lite: true, caja: true, jQuery: false });
 
          var imports = cajaVM.makeImports();
-         cajaVM.copyToImports(imports, {define: def(define)});
+         cajaVM.copyToImports(imports, {define: constFunc(define)});
 
          var compiledExprP = compileExprLater(
            '(function(){' + src + '})()', id);
@@ -144,6 +138,6 @@
      return loader = Q.memoize(rawLoad, moduleMap);
    }
 
-   imports.makeSimpleAMDLoader = def(makeSimpleAMDLoader);
+   imports.makeSimpleAMDLoader = constFunc(makeSimpleAMDLoader);
 
  })(this);
