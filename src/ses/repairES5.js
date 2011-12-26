@@ -1753,8 +1753,8 @@ var ses;
       toString: function BBPToString() { return 'bogus bound prototype'; }
     };
     rememberToTamperProof(BOGUS_BOUND_PROTOTYPE);
+    BOGUS_BOUND_PROTOTYPE.toString.prototype = null;
     rememberToTamperProof(BOGUS_BOUND_PROTOTYPE.toString);
-    rememberToTamperProof(BOGUS_BOUND_PROTOTYPE.toString.prototype);
 
     var defProp = Object.defineProperty;
     defProp(Function.prototype, 'bind', {
@@ -1887,7 +1887,7 @@ var ses;
     function dummySetter(newValue) {
       throw new TypeError('no setter for assigning: ' + newValue);
     }
-    rememberToTamperProof(dummySetter.prototype);
+    dummySetter.prototype = null;
     rememberToTamperProof(dummySetter);
 
     defProp(Object, 'defineProperty', {

@@ -142,7 +142,7 @@ repair_REGEXP_CANT_BE_NEUTERED(){var UnsafeRegExp=RegExp,FakeRegExp=function Reg
 repair_REGEXP_TEST_EXEC_UNSAFE(){var unsafeRegExpExec=RegExp.prototype.exec,unsafeRegExpTest=RegExp.prototype.test;Object.defineProperty(RegExp.prototype,'exec',{'value':function
 fakeExec(specimen){return unsafeRegExpExec.call(this,String(specimen))}}),Object.defineProperty(RegExp.prototype,'test',{'value':function
 fakeTest(specimen){return unsafeRegExpTest.call(this,String(specimen))}})}function
-repair_MISSING_BIND(){var BOGUS_BOUND_PROTOTYPE={'toString':function BBPToString(){return'bogus bound prototype'}},defProp;rememberToTamperProof(BOGUS_BOUND_PROTOTYPE),rememberToTamperProof(BOGUS_BOUND_PROTOTYPE.toString),rememberToTamperProof(BOGUS_BOUND_PROTOTYPE.toString.prototype),defProp=Object.defineProperty,defProp(Function.prototype,'bind',{'value':function
+repair_MISSING_BIND(){var BOGUS_BOUND_PROTOTYPE={'toString':function BBPToString(){return'bogus bound prototype'}},defProp;rememberToTamperProof(BOGUS_BOUND_PROTOTYPE),BOGUS_BOUND_PROTOTYPE.toString.prototype=null,rememberToTamperProof(BOGUS_BOUND_PROTOTYPE.toString),defProp=Object.defineProperty,defProp(Function.prototype,'bind',{'value':function
 fakeBind(self,var_args){var thisFunc=this,leftArgs=slice.call(arguments,1);function
 funcBound(var_args){var args;if(this===Object(this)&&getPrototypeOf(this)===BOGUS_BOUND_PROTOTYPE)throw new
 TypeError('Cannot emulate \"new\" on pseudo-bound function.');return args=concat.call(leftArgs,slice.call(arguments,0)),apply.call(thisFunc,self,args)}return defProp(funcBound,'prototype',{'value':BOGUS_BOUND_PROTOTYPE,'writable':false,'configurable':false}),funcBound},'writable':true,'enumerable':false,'configurable':true})}function
@@ -157,7 +157,7 @@ repair_MUTABLE_WEAKMAP_PROTO(){['set','delete'].forEach(makeMutableProtoPatcher(
 repair_NEED_TO_WRAP_FOREACH(){var forEach=Array.prototype.forEach;Object.defineProperty(Array.prototype,'forEach',{'value':function
 forEachWrapper(callbackfn,opt_thisArg){return forEach.apply(this,arguments)}})}function
 repair_NEEDS_DUMMY_SETTER(){var defProp=Object.defineProperty,gopd=Object.getOwnPropertyDescriptor;function
-dummySetter(newValue){throw new TypeError('no setter for assigning: '+newValue)}rememberToTamperProof(dummySetter.prototype),rememberToTamperProof(dummySetter),defProp(Object,'defineProperty',{'value':function
+dummySetter(newValue){throw new TypeError('no setter for assigning: '+newValue)}dummySetter.prototype=null,rememberToTamperProof(dummySetter),defProp(Object,'defineProperty',{'value':function
 setSetterDefProp(base,name,desc){var desc2,newDesc,oldDesc,result,testBase;if(typeof
 desc.get==='function'&&desc.set===void 0){oldDesc=gopd(base,name);if(oldDesc)testBase={},defProp(testBase,name,oldDesc),defProp(testBase,name,desc),desc=gopd(testBase,name),desc.set===void
 0&&(desc.set=dummySetter);else{if(objToString.call(base)==='[object HTMLFormElement]'){desc2={'get':desc.get},'enumerable'in
