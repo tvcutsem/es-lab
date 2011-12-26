@@ -1578,8 +1578,8 @@ var ses;
    * haven't yet examined and determined to be SES-safe?
    *
    * <p>A new property should only be added to the
-   * errorInstanceWhitelist set after inspecting the consequences of
-   * that property to determine that it does compromise SES safety. If
+   * errorInstanceWhitelist after inspecting the consequences of that
+   * property to determine that it does not compromise SES safety. If
    * some platform maker does add an Error own property that does
    * compromise SES safety, that might be a severe problem, if we
    * can't find a way to deny untrusted code access to that property.

@@ -1812,8 +1812,8 @@ var ses;
    * haven't yet examined and determined to be SES-safe?
    *
    * <p>A new property should only be added to the
-   * errorInstanceWhitelist set after inspecting the consequences of
-   * that property to determine that it does compromise SES safety. If
+   * errorInstanceWhitelist after inspecting the consequences of that
+   * property to determine that it does not compromise SES safety. If
    * some platform maker does add an Error own property that does
    * compromise SES safety, that might be a severe problem, if we
    * can't find a way to deny untrusted code access to that property.
@@ -3623,7 +3623,17 @@ var WeakMap;
 // limitations under the License.
 
 /**
- * @fileoverview
+ * @fileoverview An optional part of the SES initialization process
+ * that saves potentially valuable debugging aids on the side before
+ * startSES.js would remove these, and adds a debugging API which uses
+ * these without compromising SES security.
+ *
+ * <p>NOTE: The currently exposed debugging API is far from
+ * settled. This module is currently in an exploratory phase.
+ *
+ * <p>Meant to be run sometime after repairs are done and a working
+ * WeakMap is available, but before startSES.js. initSES.js includes
+ * this. initSESPlus.js does not.
  *
  * //provides ses.UnsafeError
  * @author Mark S. Miller

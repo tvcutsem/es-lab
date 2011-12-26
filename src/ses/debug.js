@@ -13,7 +13,17 @@
 // limitations under the License.
 
 /**
- * @fileoverview
+ * @fileoverview An optional part of the SES initialization process
+ * that saves potentially valuable debugging aids on the side before
+ * startSES.js would remove these, and adds a debugging API which uses
+ * these without compromising SES security.
+ *
+ * <p>NOTE: The currently exposed debugging API is far from
+ * settled. This module is currently in an exploratory phase.
+ *
+ * <p>Meant to be run sometime after repairs are done and a working
+ * WeakMap is available, but before startSES.js. initSES.js includes
+ * this. initSESPlus.js does not.
  *
  * //provides ses.UnsafeError
  * @author Mark S. Miller
