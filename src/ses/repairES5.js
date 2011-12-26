@@ -1544,6 +1544,44 @@ var ses;
     return false;
   }
 
+  var errorInstanceWhitelist = {
+    // Chrome
+    arguments: true,
+    stack: true,
+    message: true,
+    type: true,
+
+    // FF
+    fileName: true,
+    lineNumber: true,
+
+    // Safari, WebKit
+    line: true,
+    sourceId: true,
+    sourceURL: true,
+
+    // Opera
+    stacktrace: true
+  };
+  /**
+   *
+   */
+  function test_UNEXPECTED_ERROR_PROPERTIES() {
+    var errs = [new Error('e1')];
+    try { null.foo = 3; } catch (err) { errs.push(err); }
+    var result = false;
+
+    strictForEachFn(errs, function(err) {
+      strictForEachFn(Object.getOwnPropertyNames(err), function(name) {
+         if (!(name in errorInstanceWhitelist)) {
+           result = 'Unexpected error instance property: ' + name;
+           // would be good to terminate early
+         }
+      });
+    });
+    return result;
+  }
+
 
   ////////////////////// Repairs /////////////////////
   //
@@ -2740,6 +2778,16 @@ var ses;
       urls: [], // Seen on WebKit Nightly. TODO(erights): report
       sections: ['8.12.9', '15.1.1.1'],
       tests: [] // TODO(erights): Add to test262
+    },
+    {
+      description: 'xx',
+      test: test_UNEXPECTED_ERROR_PROPERTIES,
+      repair: void 0,
+      preSeverity: severities.NEW_SYMPTOM,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
     }
   ];
 

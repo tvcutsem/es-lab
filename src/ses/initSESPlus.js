@@ -229,6 +229,7 @@ if (!ses) { ses = {}; }
   }
 
   ses.logger = logger;
+
 })();
 ;
 // Copyright (C) 2011 Google Inc.
@@ -1777,6 +1778,44 @@ var ses;
     return false;
   }
 
+  var errorInstanceWhitelist = {
+    // Chrome
+    arguments: true,
+    stack: true,
+    message: true,
+    type: true,
+
+    // FF
+    fileName: true,
+    lineNumber: true,
+
+    // Safari, WebKit
+    line: true,
+    sourceId: true,
+    sourceURL: true,
+
+    // Opera
+    stacktrace: true
+  };
+  /**
+   *
+   */
+  function test_UNEXPECTED_ERROR_PROPERTIES() {
+    var errs = [new Error('e1')];
+    try { null.foo = 3; } catch (err) { errs.push(err); }
+    var result = false;
+
+    strictForEachFn(errs, function(err) {
+      strictForEachFn(Object.getOwnPropertyNames(err), function(name) {
+         if (!(name in errorInstanceWhitelist)) {
+           result = 'Unexpected error instance property: ' + name;
+           // would be good to terminate early
+         }
+      });
+    });
+    return result;
+  }
+
 
   ////////////////////// Repairs /////////////////////
   //
@@ -2973,6 +3012,16 @@ var ses;
       urls: [], // Seen on WebKit Nightly. TODO(erights): report
       sections: ['8.12.9', '15.1.1.1'],
       tests: [] // TODO(erights): Add to test262
+    },
+    {
+      description: 'xx',
+      test: test_UNEXPECTED_ERROR_PROPERTIES,
+      repair: void 0,
+      preSeverity: severities.NEW_SYMPTOM,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
     }
   ];
 
@@ -3400,7 +3449,7 @@ var WeakMap;
   // Right now (12/25/2012) the histogram supports the current
   // representation. We should check this occasionally, as a true
   // constant time representation is easy.
-  var histogram = [];
+  // var histogram = [];
 
   WeakMap = function() {
     // We are currently (12/25/2012) never encountering any prematurely
@@ -3541,6 +3590,93 @@ var WeakMap;
 
 })();
 ;
+// Copyright (C) 2011 Google Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview
+ *
+ * //provides ses.UnsafeError
+ * @author Mark S. Miller
+ * @requires WeakMap
+ * @overrides Error, ses, debugModule
+ */
+
+var Error;
+var ses;
+
+(function debugModule() {
+   "use strict";
+
+
+   /**
+    * Save away the original Error constructor as ses.UnsafeError and
+    * make it otheriwse unreachable. Replace it with a reachable
+    * wrapping constructor with the same standard behavior.
+    *
+    * <p>When followed by the rest of SES initialization, the
+    * UnsafeError we save off here is exempt from whitelist-based
+    * extra property removal and primordial freezing. Thus, we can
+    * use any platform specific APIs defined on Error for privileged
+    * debugging operations, unless explicitly turned off below.
+    */
+   var UnsafeError = Error;
+   ses.UnsafeError = Error;
+   function FakeError(message) {
+     return UnsafeError(message);
+   }
+   FakeError.prototype = UnsafeError.prototype;
+   FakeError.prototype.constructor = FakeError;
+
+   Error = FakeError;
+
+   var stacks = WeakMap(); // error -> sst
+   ses.getStack = function getStack(err) { return stacks.get(err); };
+
+   if ('captureStackTrace' in UnsafeError) {
+     // Assuming http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
+
+     UnsafeError.prepareStackTrace = function(err, sst) {
+       stacks.set(err, sst);
+       return void 0;
+     };
+
+     var unsafeCaptureStackTrace = UnsafeError.captureStackTrace;
+
+     // TODO(erights): This seems to be write only. Can this be made
+     // safe enough to expose to untrusted code?
+     UnsafeError.captureStackTrace = function(obj, opt_MyError) {
+       var wasFrozen = Object.isFrozen(obj);
+       var stackDesc = Object.getOwnPropertyDescriptor(obj, 'stack');
+       try {
+         var result = unsafeCaptureStackTrace(obj, opt_MyError);
+         var ignore = obj.stack;
+         return result;
+       } finally {
+         if (wasFrozen && !Object.isFrozen(obj)) {
+           if (stackDesc) {
+             Object.defineProperty(obj, 'stack', stackDesc);
+           } else {
+             delete obj.stack;
+           }
+           Object.freeze(obj);
+         }
+       }
+     };
+   }
+
+ })();;
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");

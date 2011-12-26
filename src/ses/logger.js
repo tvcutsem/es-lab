@@ -229,4 +229,5 @@ if (!ses) { ses = {}; }
   }
 
   ses.logger = logger;
+
 })();

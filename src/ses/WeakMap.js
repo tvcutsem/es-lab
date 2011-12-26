@@ -309,7 +309,7 @@ var WeakMap;
   // Right now (12/25/2012) the histogram supports the current
   // representation. We should check this occasionally, as a true
   // constant time representation is easy.
-  var histogram = [];
+  // var histogram = [];
 
   WeakMap = function() {
     // We are currently (12/25/2012) never encountering any prematurely
