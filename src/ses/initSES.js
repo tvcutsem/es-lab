@@ -642,12 +642,13 @@ var ses;
           var value;
           function getter() {
             if (obj === this) { return value; }
-            if (!this) { return void 0; }
-            if (!!gopd(this, name)) { return this[name]; }
+            if (this === void 0 || this === null) { return void 0; }
+            var thisObj = Object(this);
+            if (!!gopd(thisObj, name)) { return this[name]; }
             // TODO(erights): If we can reliably uncurryThis() in
             // repairES5.js, the next line should be:
-            //   return callFn(getter, getProtoOf(this));
-            return getter.call(getProtoOf(this));
+            //   return callFn(getter, getProtoOf(thisObj));
+            return getter.call(getProtoOf(thisObj));
           }
           function setter(newValue) {
             if (obj === this) {

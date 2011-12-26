@@ -19,8 +19,9 @@ assumeCallerHarmless(func,path){return'Apparently fine'},ses.makeArgumentsHarmle
 assumeArgumentsHarmless(func,path){return'Apparently fine'},makeTamperProof=function
 defaultMakeTamperProof(){var gopd=Object.getOwnPropertyDescriptor,gopn=Object.getOwnPropertyNames,getProtoOf=Object.getPrototypeOf,freeze=Object.freeze,isFrozen=Object.isFrozen,defProp=Object.defineProperty;function
 tamperProof(obj){var func;return obj!==Object(obj)?obj:(typeof obj==='object'&&!!gopd(obj,'constructor')&&typeof(func=obj.constructor)==='function'&&func.prototype===obj&&!isFrozen(obj)&&strictForEachFn(gopn(obj),function(name){var
-desc,value;function getter(){return obj===this?value:this?gopd(this,name)?this[name]:getter.call(getProtoOf(this)):void
-0}function setter(newValue){if(obj===this)throw new TypeError('Cannot set virtually frozen property: '+name);!gopd(this,name)||(this[name]=newValue),defProp(this,name,{'value':newValue,'writable':true,'enumerable':true,'configurable':true})}desc=gopd(obj,name),desc.configurable&&'value'in
+desc,value;function getter(){var thisObj;return obj===this?value:this===void 0||this===null?void
+0:(thisObj=Object(this),gopd(thisObj,name)?this[name]:getter.call(getProtoOf(thisObj)))}function
+setter(newValue){if(obj===this)throw new TypeError('Cannot set virtually frozen property: '+name);!gopd(this,name)||(this[name]=newValue),defProp(this,name,{'value':newValue,'writable':true,'enumerable':true,'configurable':true})}desc=gopd(obj,name),desc.configurable&&'value'in
 desc&&(value=desc.value,getter.prototype=null,setter.prototype=null,defProp(obj,name,{'get':getter,'set':setter,'enumerable':desc.enumerable,'configurable':false}))}),freeze(obj))}return tamperProof},needToTamperProof=[];function
 rememberToTamperProof(obj){needToTamperProof.push(obj)}ses.makeDelayedTamperProof=function
 makeDelayedTamperProof(){var tamperProof=makeTamperProof();return strictForEachFn(needToTamperProof,tamperProof),needToTamperProof=void
