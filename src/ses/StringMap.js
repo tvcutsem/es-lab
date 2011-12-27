@@ -25,6 +25,7 @@ var StringMap;
 (function() {
    "use strict";
 
+   var create = Object.create;
    var freeze = Object.freeze;
    function constFunc(func) {
      func.prototype = null;
@@ -40,7 +41,7 @@ var StringMap;
 
    StringMap = function StringMap() {
 
-     var objAsMap = Object.create(null);
+     var objAsMap = create(null);
 
      return freeze({
        get: constFunc(function(key) {

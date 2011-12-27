@@ -55,7 +55,7 @@
     * means that it either immediately returns an X or it immediately
     * returns a promise that it eventually fulfills with an X. Unless
     * stated otherwise, we implicitly elide the error conditions from
-    * such statements. The more explicit statement append: "or it
+    * such statements. For the more explicit statement, append: "or it
     * throws, or it does not terminate, or it breaks the returned
     * promise, or it never resolves the returned promise."
     *
