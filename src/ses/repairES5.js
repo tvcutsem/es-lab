@@ -1121,7 +1121,7 @@ var ses;
     if (finallySkipped) {
       logger.error('New symptom (e): (\'' +
                    name + '\' in <' + baseDesc +
-                   '>) finally inner finally skipped');
+                   '>) inner finally skipped');
     }
     return !!result;
   }
@@ -1132,11 +1132,8 @@ var ses;
     try {
       result = has(base, name, baseDesc);
     } catch (err) {
-      // This case should be already be reported as a failure of
-      // test_CANT_IN_CALLER or test_CANT_IN_ARGUMENTS, and so is no
-      // longer a new symptom.
-      // logger.error('New symptom (c): (\'' +
-      //              name + '\' in <' + baseDesc + '>) threw: ' + err);
+      logger.error('New symptom (c): (\'' +
+                   name + '\' in <' + baseDesc + '>) threw: ' + err);
       // treat this as a safe absence
       result = false;
       return false;
@@ -1150,7 +1147,7 @@ var ses;
     if (finallySkipped) {
       logger.error('New symptom (f): (\'' +
                    name + '\' in <' + baseDesc +
-                   '>) finally outer finally skipped');
+                   '>) outer finally skipped');
     }
     return !!result;
   }
@@ -2811,6 +2808,8 @@ var ses;
 
   ////////////////////// Testing, Repairing, Reporting ///////////
 
+  var aboutTo = void 0;
+
   /**
    * Run a set of tests & repairs, and report results.
    *
@@ -2822,6 +2821,7 @@ var ses;
    */
   function testRepairReport(kludges) {
     var beforeFailures = strictMapFn(kludges, function(kludge) {
+      aboutTo = ['pre test: ', kludge.description];
       return kludge.test();
     });
     var repairs = [];
@@ -2829,12 +2829,14 @@ var ses;
       if (beforeFailures[i]) {
         var repair = kludge.repair;
         if (repair && repairs.lastIndexOf(repair) === -1) {
+          aboutTo = ['repair: ', kludge.description];
           repair();
           repairs.push(repair);
         }
       }
     });
     var afterFailures = strictMapFn(kludges, function(kludge) {
+      aboutTo = ['post test: ', kludge.description];
       return kludge.test();
     });
 
@@ -2915,7 +2917,8 @@ var ses;
     logger.reportRepairs(reports);
   } catch (err) {
     ses.updateMaxSeverity(ses.severities.NOT_SUPPORTED);
-    logger.error('ES5 Repair failed with: ' + err);
+    var during = aboutTo ? '(' + aboutTo.join('') + ') ' : '';
+    logger.error('ES5 Repair ' + during + 'failed with: ' + err);
   }
 
   logger.reportMax();

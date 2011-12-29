@@ -4,7 +4,7 @@
 /**
  * @fileoverview Tries to figure out what browser we're on.
  *
- * @author Peter-Paul Koch, with modifications my Mark S. Miller
+ * @author Peter-Paul Koch, with modifications by Mark S. Miller
  * @provides BrowserDetect
  * @requires navigator, window
  */
