@@ -1866,6 +1866,21 @@ var ses;
     'stacktrace'
   ];
 
+  var errorInstanceBlacklist = [
+    // seen in a Firebug on FF
+    'category',
+    'context',
+    'href',
+    'lineNo',
+    'msgId',
+    'source',
+    'trace',
+    'correctSourcePoint',
+    'correctWithStackTrace',
+    'getSourceLine',
+    'resetSource'
+  ];
+
   /** Return a fresh one so client can mutate freely */
   function freshErrorInstanceWhiteMap() {
     var result = Object.create(null);
@@ -1873,6 +1888,14 @@ var ses;
       // We cannot yet use StringMap so do it manually
       // We do this naively here assuming we don't need to worry about
       // __proto__
+      result[name] = true;
+    });
+    return result;
+  }
+
+  function freshHiddenPropertyCandidates() {
+    var result = freshErrorInstanceWhiteMap();
+    strictForEachFn(errorInstanceBlacklist, function(name) {
       result[name] = true;
     });
     return result;
@@ -1920,7 +1943,7 @@ var ses;
     var unreported = Object.create(null);
 
     strictForEachFn(suspects, function(suspect) {
-      var candidates = freshErrorInstanceWhiteMap();
+      var candidates = freshHiddenPropertyCandidates();
       strictForEachFn(gopn(suspect), function(name) {
         // Delete the candidates that are reported
         delete candidates[name];
@@ -1938,7 +1961,7 @@ var ses;
 
     var unreportedNames = gopn(unreported);
     if (unreportedNames.length === 0) { return false; }
-    return 'Error Own properties unreported by getOwnPropertyNames: ' +
+    return 'Error own properties unreported by getOwnPropertyNames: ' +
       unreportedNames.sort().join(',');
   }
 

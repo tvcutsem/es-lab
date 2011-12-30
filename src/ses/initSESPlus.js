@@ -1866,6 +1866,21 @@ var ses;
     'stacktrace'
   ];
 
+  var errorInstanceBlacklist = [
+    // seen in a Firebug on FF
+    'category',
+    'context',
+    'href',
+    'lineNo',
+    'msgId',
+    'source',
+    'trace',
+    'correctSourcePoint',
+    'correctWithStackTrace',
+    'getSourceLine',
+    'resetSource'
+  ];
+
   /** Return a fresh one so client can mutate freely */
   function freshErrorInstanceWhiteMap() {
     var result = Object.create(null);
@@ -1873,6 +1888,14 @@ var ses;
       // We cannot yet use StringMap so do it manually
       // We do this naively here assuming we don't need to worry about
       // __proto__
+      result[name] = true;
+    });
+    return result;
+  }
+
+  function freshHiddenPropertyCandidates() {
+    var result = freshErrorInstanceWhiteMap();
+    strictForEachFn(errorInstanceBlacklist, function(name) {
       result[name] = true;
     });
     return result;
@@ -1920,7 +1943,7 @@ var ses;
     var unreported = Object.create(null);
 
     strictForEachFn(suspects, function(suspect) {
-      var candidates = freshErrorInstanceWhiteMap();
+      var candidates = freshHiddenPropertyCandidates();
       strictForEachFn(gopn(suspect), function(name) {
         // Delete the candidates that are reported
         delete candidates[name];
@@ -1938,7 +1961,7 @@ var ses;
 
     var unreportedNames = gopn(unreported);
     if (unreportedNames.length === 0) { return false; }
-    return 'Error Own properties unreported by getOwnPropertyNames: ' +
+    return 'Error own properties unreported by getOwnPropertyNames: ' +
       unreportedNames.sort().join(',');
   }
 
@@ -3759,16 +3782,17 @@ var WeakMap;
  * WeakMap is available, but before startSES.js. initSES.js includes
  * this. initSESPlus.js does not.
  *
- * //provides ses.UnsafeError, ses.getCWStack
+ * //provides ses.UnsafeError,
+ * //provides ses.getCWStack ses.stackString ses.getStack
  * @author Mark S. Miller
- * @requires WeakMap
+ * @requires WeakMap, this
  * @overrides Error, ses, debugModule
  */
 
 var Error;
 var ses;
 
-(function debugModule() {
+(function debugModule(global) {
    "use strict";
 
 
@@ -3808,7 +3832,7 @@ var ses;
 
    if ('captureStackTrace' in UnsafeError) {
      (function() {
-     // Assuming http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
+       // Assuming http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
        // So this section is v8 specific.
 
        UnsafeError.prepareStackTrace = function(err, sst) {
@@ -3867,6 +3891,50 @@ var ses;
        };
        ses.getCWStack = getCWStack;
      })();
+
+   } else if (global.opera) {
+     (function() {
+       // Since pre-ES5 browsers are disqualified, we can assume a
+       // minimum of Opera 11.60.
+     })();
+
+
+   } else if (new Error().stack) {
+     (function() {
+       var FFFramePattern = (/^([^@]*)@(.*?):?(\d*)$/);
+
+       // stacktracejs.org suggests that this indicates FF. Really?
+       function getCWStack(err) {
+         var stack = err.stack;
+         if (!stack) { return void 0; }
+         var lines = stack.split('\n');
+         var frames = lines.map(function(line) {
+           var match = FFFramePattern.exec(line);
+           if (match) {
+             return {
+               name: match[1].trim() || '?',
+               source: match[2].trim() || '?',
+               span: [[+match[3]]]
+             };
+           } else {
+             return {
+               name: line.trim() || '?',
+               source: '?',
+               span: []
+             };
+           }
+         });
+         return { calls: frames };
+       }
+
+       ses.getCWStack = getCWStack;
+     })();
+
+   } else {
+     (function() {
+       // Including Safari and IE10.
+     })();
+
    }
 
    /**
@@ -3903,7 +3971,7 @@ var ses;
    };
    ses.getStack = getStack;
 
- })();;
+ })(this);;
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");

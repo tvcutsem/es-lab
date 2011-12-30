@@ -29,11 +29,11 @@ http://webreflection.blogspot.com/2011/08/simulate-script-injection-via-data-uri
 */
 
 var ses;
-if (!ses) { ses = {}; }
 
 (function() {
-  "use strict";
+   "use strict";
 
+   if (ses && !ses.ok()) { return; }
 
    /**
     * This implementation works and satisfies the semantics, but

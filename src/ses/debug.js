@@ -25,16 +25,17 @@
  * WeakMap is available, but before startSES.js. initSES.js includes
  * this. initSESPlus.js does not.
  *
- * //provides ses.UnsafeError, ses.getCWStack
+ * //provides ses.UnsafeError,
+ * //provides ses.getCWStack ses.stackString ses.getStack
  * @author Mark S. Miller
- * @requires WeakMap
+ * @requires WeakMap, this
  * @overrides Error, ses, debugModule
  */
 
 var Error;
 var ses;
 
-(function debugModule() {
+(function debugModule(global) {
    "use strict";
 
 
@@ -74,7 +75,7 @@ var ses;
 
    if ('captureStackTrace' in UnsafeError) {
      (function() {
-     // Assuming http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
+       // Assuming http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
        // So this section is v8 specific.
 
        UnsafeError.prepareStackTrace = function(err, sst) {
@@ -133,6 +134,50 @@ var ses;
        };
        ses.getCWStack = getCWStack;
      })();
+
+   } else if (global.opera) {
+     (function() {
+       // Since pre-ES5 browsers are disqualified, we can assume a
+       // minimum of Opera 11.60.
+     })();
+
+
+   } else if (new Error().stack) {
+     (function() {
+       var FFFramePattern = (/^([^@]*)@(.*?):?(\d*)$/);
+
+       // stacktracejs.org suggests that this indicates FF. Really?
+       function getCWStack(err) {
+         var stack = err.stack;
+         if (!stack) { return void 0; }
+         var lines = stack.split('\n');
+         var frames = lines.map(function(line) {
+           var match = FFFramePattern.exec(line);
+           if (match) {
+             return {
+               name: match[1].trim() || '?',
+               source: match[2].trim() || '?',
+               span: [[+match[3]]]
+             };
+           } else {
+             return {
+               name: line.trim() || '?',
+               source: '?',
+               span: []
+             };
+           }
+         });
+         return { calls: frames };
+       }
+
+       ses.getCWStack = getCWStack;
+     })();
+
+   } else {
+     (function() {
+       // Including Safari and IE10.
+     })();
+
    }
 
    /**
@@ -169,4 +214,4 @@ var ses;
    };
    ses.getStack = getStack;
 
- })();
+ })(this);

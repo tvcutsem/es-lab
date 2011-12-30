@@ -29,6 +29,8 @@ var ses;
 (function() {
    "use strict";
 
+   if (ses && !ses.ok()) { return; }
+
    var bind = Function.prototype.bind;
    // See
    // http://wiki.ecmascript.org/doku.php?id=conventions:safe_meta_programming

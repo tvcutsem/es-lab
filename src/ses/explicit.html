@@ -136,6 +136,8 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
   (function() {
     "use strict";
 
+    if (!ses.ok()) { return; }
+
     /* TODO(erights): Extract the reusable boilerplate below into a
        reusable abstraction. */
 
