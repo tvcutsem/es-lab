@@ -1544,31 +1544,71 @@ var ses;
 
   /**
    * These are all the own properties that appear on Error instances
-   * on various platforms as of this writing.
+   * on various ES5 platforms as of this writing.
+   *
+   * <p>Due to browser bugs, some of these are absent from
+   * getOwnPropertyNames (gopn). TODO(erights): File bugs with various
+   * browser makers for any own properties that we know to be present
+   * but not reported by gopn.
+   *
+   * <p>TODO(erights): do intelligence with the various browser
+   * implementors to find out what other properties are provided by
+   * their implementation but absent from gopn, whether on Errors or
+   * anything else. Every one of these are potentially fatal to our
+   * security until we can examine these.
+   *
+   * <p>The source form is a list rather than a map so that we can list a
+   * name like "message" for each browser section we think it goes in.
+   *
+   * <p>We thank the following people, projects, and websites for
+   * providing some useful intelligence of what property names we
+   * should suspect:<ul>
+   * <li><a href="http://stacktracejs.org">stacktracejs.org</a>
+   * <li>TODO(erights): find message on es-discuss list re
+   * "   stack". credit author.
+   * </ul>
    */
-  var errorInstanceWhitelist = {
-    // Chrome
-    arguments: true,
-    stack: true,
-    message: true,
-    type: true,
+  var errorInstanceWhitelist = [
+    // at least Chrome 16
+    'arguments',
+    'stack',
+    'message',
+    'type',
 
-    // FF
-    fileName: true,
-    lineNumber: true,
+    // at least FF 9
+    'fileName',
+    'lineNumber',
+    'message',
+    'stack',
 
-    // Safari, WebKit
-    line: true,
-    sourceId: true,
-    sourceURL: true,
+    // at least Safari, WebKit 5.1
+    'line',
+    'message',
+    'sourceId',
+    'sourceURL',
 
-    // IE
-    number: true,
-    description: true,
+    // at least IE 10 preview 2
+    'message',
+    'number',
+    'description',
 
-    // Opera
-    stacktrace: true
-  };
+    // at least Opera 11.60
+    'message',
+    'stack',
+    'stacktrace'
+  ];
+
+  /** Return a fresh one so client can mutate freely */
+  function freshErrorInstanceWhiteMap() {
+    var result = Object.create(null);
+    strictForEachFn(errorInstanceWhitelist, function(name) {
+      // We cannot yet use StringMap so do it manually
+      // We do this naively here assuming we don't need to worry about
+      // __proto__
+      result[name] = true;
+    });
+    return result;
+  }
 
   /**
    * Do Error instances on thos platform carry own properties that we
@@ -1586,15 +1626,52 @@ var ses;
     try { null.foo = 3; } catch (err) { errs.push(err); }
     var result = false;
 
+    var approvedNames = freshErrorInstanceWhiteMap();
+
     strictForEachFn(errs, function(err) {
       strictForEachFn(Object.getOwnPropertyNames(err), function(name) {
-         if (!(name in errorInstanceWhitelist)) {
+         if (!(name in approvedNames)) {
            result = 'Unexpected error instance property: ' + name;
            // would be good to terminate early
          }
       });
     });
     return result;
+  }
+
+  /**
+   *
+   */
+  function test_GET_OWN_PROPERTY_NAME_LIES() {
+    var gopn = Object.getOwnPropertyNames;
+    var gopd = Object.getOwnPropertyDescriptor;
+
+    var suspects = [new Error('e1')];
+    try { null.foo = 3; } catch (err) { suspects.push(err); }
+
+    var unreported = Object.create(null);
+
+    strictForEachFn(suspects, function(suspect) {
+      var candidates = freshErrorInstanceWhiteMap();
+      strictForEachFn(gopn(suspect), function(name) {
+        // Delete the candidates that are reported
+        delete candidates[name];
+      });
+      strictForEachFn(gopn(candidates), function(name) {
+        if (!gopd(suspect, name)) {
+          // Delete the candidates that are not own properties
+          delete candidates[name];
+        }
+      });
+      strictForEachFn(gopn(candidates), function(name) {
+        unreported[name] = true;
+      });
+    });
+
+    var unreportedNames = gopn(unreported);
+    if (unreportedNames.length === 0) { return false; }
+    return 'Error Own properties unreported by getOwnPropertyNames: ' +
+      unreportedNames.sort().join(',');
   }
 
 
@@ -2799,6 +2876,16 @@ var ses;
       test: test_UNEXPECTED_ERROR_PROPERTIES,
       repair: void 0,
       preSeverity: severities.NEW_SYMPTOM,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
+      description: 'getOwnPropertyNames lies, hiding some own properties',
+      test: test_GET_OWN_PROPERTY_NAME_LIES,
+      repair: void 0,
+      preSeverity: severities.NOT_ISOLATED,
       canRepair: false,
       urls: [],
       sections: [],
