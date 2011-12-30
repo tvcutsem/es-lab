@@ -999,6 +999,13 @@ ses.startSES = function(global,
     })();
 
     global.cajaVM = { // don't freeze here
+
+      /**
+       * This is about to be deprecated once we expose ses.logger.
+       *
+       * <p>In the meantime, privileged code should use ses.logger.log
+       * instead of cajaVM.log.
+       */
       log: constFunc(function log(str) {
         if (typeof console !== 'undefined' && 'log' in console) {
           // We no longer test (typeof console.log === 'function') since,

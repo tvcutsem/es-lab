@@ -1107,7 +1107,7 @@ var ses;
       result = name in base;
     } catch (err) {
       logger.error('New symptom (a): (\'' +
-                   name + '\' in <' + baseDesc + '>) threw: ' + err);
+                   name + '\' in <' + baseDesc + '>) threw: ', err);
       // treat this as a safe absence
       result = false;
       return false;
@@ -1133,7 +1133,7 @@ var ses;
       result = has(base, name, baseDesc);
     } catch (err) {
       logger.error('New symptom (c): (\'' +
-                   name + '\' in <' + baseDesc + '>) threw: ' + err);
+                   name + '\' in <' + baseDesc + '>) threw: ', err);
       // treat this as a safe absence
       result = false;
       return false;
@@ -1571,8 +1571,8 @@ var ses;
   var errorInstanceWhitelist = [
     // at least Chrome 16
     'arguments',
-    'stack',
     'message',
+    'stack',
     'type',
 
     // at least FF 9
@@ -1588,9 +1588,9 @@ var ses;
     'sourceURL',
 
     // at least IE 10 preview 2
+    'description',
     'message',
     'number',
-    'description',
 
     // at least Opera 11.60
     'message',
@@ -1724,8 +1724,8 @@ var ses;
           'value' in desc) {
         try {
           base.prototype = desc.value;
-        } catch (x) {
-          logger.warn('prototype fixup failed');
+        } catch (err) {
+          logger.warn('prototype fixup failed', err);
         }
       }
       return unsafeDefProp(base, name, desc);
@@ -3005,7 +3005,7 @@ var ses;
   } catch (err) {
     ses.updateMaxSeverity(ses.severities.NOT_SUPPORTED);
     var during = aboutTo ? '(' + aboutTo.join('') + ') ' : '';
-    logger.error('ES5 Repair ' + during + 'failed with: ' + err);
+    logger.error('ES5 Repair ' + during + 'failed with: ', err);
   }
 
   logger.reportMax();

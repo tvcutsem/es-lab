@@ -47,8 +47,8 @@
   ses.maxAcceptableSeverityName = 'NEW_SYMPTOM';
 </script>
 <!--
-The <script src=... tags below, from "logger.js" to "hookupSES.js", is 
-  equivalent to <script src="initSES.js"></script>, but is more 
+The <script src=... tags below, from "logger.js" to "hookupSESPlus.js", is 
+  equivalent to <script src="initSESPlus.js"></script>, but is more 
   pleasant to debug.
 
 The <script src="useHTMLLogger.js"> and the inline script above advises 
@@ -144,7 +144,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
         try {
           func();
         } catch (reason) {
-          cajaVM.log('uncaught: ', reason);
+          ses.logger.log('uncaught: ', reason);
         }
       }, millis);
     }

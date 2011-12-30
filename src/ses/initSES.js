@@ -26,12 +26,19 @@
  * <p>The {@code ses.logger} API consists of
  * <dl>
  *   <dt>log, info, warn, and error methods</dt>
- *     <dd>each of which take a
- *         string, and which should display this string associated with
- *         that severity level. If no {@code ses.logger} already
- *         exists, the default provided here forwards to the pre-existing
- *         global {@code console} if one exists. Otherwise, all for of these
- *         do nothing.</dd>
+ *     <dd>each of which take a list of arguments which should be
+ *         stringified and appended together. The logger should
+ *         display this string associated with that severity level. If
+ *         any of the arguments has an associated stack trace
+ *         (presumably Error objects), then the logger <i>may</i> also
+ *         show this stack trace. If no {@code ses.logger} already
+ *         exists, the default provided here forwards to the
+ *         pre-existing global {@code console} if one
+ *         exists. Otherwise, all four of these do nothing. If we
+ *         default to forwarding to the pre-existing {@code console} ,
+ *         we prepend an empty string as first argument since we do
+ *         not want to obligate all loggers to implement the console's
+ *         "%" formatting. </dd>
  *   <dt>classify(postSeverity)</dt>
  *     <dd>where postSeverity is a severity
  *         record as defined by {@code ses.severities} in
@@ -124,6 +131,11 @@ if (!ses) { ses = {}; }
   var logger;
   function logNowhere(str) {}
 
+  var slice = [].slice;
+  var apply = slice.apply;
+
+
+
   if (ses.logger) {
     logger = ses.logger;
 
@@ -142,11 +154,33 @@ if (!ses) { ses = {}; }
     //     we install an emulated bind.
     // </ul>
 
+    var forward = function(level, args) {
+      args = slice.call(args, 0);
+      // We don't do "console.apply" because "console" is not a function
+      // on IE 10 preview 2 and it has no apply method. But it is a
+      // callable that Function.prototype.apply can successfully apply.
+      // This code most work on ES3 where there's no bind. When we
+      // decide support defensiveness in contexts (frames) with mutable
+      // primordials, we will need to revisit the "call" below.
+      apply.call(console[level], console, [''].concat(args));
+
+      // See debug.js
+      var getStack = ses.getStack;
+      if (getStack) {
+        for (var i = 0, len = args.length; i < len; i++) {
+          var stack = getStack(args[i]);
+          if (stack) {
+            console[level]('', stack);
+          }
+        }
+      }
+    };
+
     logger = {
-      log:   function log(str)   { console.log(str); },
-      info:  function info(str)  { console.info(str); },
-      warn:  function warn(str)  { console.warn(str); },
-      error: function error(str) { console.error(str); }
+      log:   function log(var_args)   { forward('log', arguments); },
+      info:  function info(var_args)  { forward('info', arguments); },
+      warn:  function warn(var_args)  { forward('warn', arguments); },
+      error: function error(var_args) { forward('error', arguments); }
     };
   } else {
     logger = {
@@ -1341,7 +1375,7 @@ var ses;
       result = name in base;
     } catch (err) {
       logger.error('New symptom (a): (\'' +
-                   name + '\' in <' + baseDesc + '>) threw: ' + err);
+                   name + '\' in <' + baseDesc + '>) threw: ', err);
       // treat this as a safe absence
       result = false;
       return false;
@@ -1367,7 +1401,7 @@ var ses;
       result = has(base, name, baseDesc);
     } catch (err) {
       logger.error('New symptom (c): (\'' +
-                   name + '\' in <' + baseDesc + '>) threw: ' + err);
+                   name + '\' in <' + baseDesc + '>) threw: ', err);
       // treat this as a safe absence
       result = false;
       return false;
@@ -1805,8 +1839,8 @@ var ses;
   var errorInstanceWhitelist = [
     // at least Chrome 16
     'arguments',
-    'stack',
     'message',
+    'stack',
     'type',
 
     // at least FF 9
@@ -1822,9 +1856,9 @@ var ses;
     'sourceURL',
 
     // at least IE 10 preview 2
+    'description',
     'message',
     'number',
-    'description',
 
     // at least Opera 11.60
     'message',
@@ -1958,8 +1992,8 @@ var ses;
           'value' in desc) {
         try {
           base.prototype = desc.value;
-        } catch (x) {
-          logger.warn('prototype fixup failed');
+        } catch (err) {
+          logger.warn('prototype fixup failed', err);
         }
       }
       return unsafeDefProp(base, name, desc);
@@ -3239,7 +3273,7 @@ var ses;
   } catch (err) {
     ses.updateMaxSeverity(ses.severities.NOT_SUPPORTED);
     var during = aboutTo ? '(' + aboutTo.join('') + ') ' : '';
-    logger.error('ES5 Repair ' + during + 'failed with: ' + err);
+    logger.error('ES5 Repair ' + during + 'failed with: ', err);
   }
 
   logger.reportMax();
@@ -5326,6 +5360,13 @@ ses.startSES = function(global,
     })();
 
     global.cajaVM = { // don't freeze here
+
+      /**
+       * This is about to be deprecated once we expose ses.logger.
+       *
+       * <p>In the meantime, privileged code should use ses.logger.log
+       * instead of cajaVM.log.
+       */
       log: constFunc(function log(str) {
         if (typeof console !== 'undefined' && 'log' in console) {
           // We no longer test (typeof console.log === 'function') since,
@@ -5673,6 +5714,6 @@ ses.startSES = function(global,
                  function () { return {}; });
   } catch (err) {
     ses.updateMaxSeverity(ses.severities.NOT_SUPPORTED);
-    ses.logger.error('hookupSES failed with: ' + err);
+    ses.logger.error('hookupSES failed with: ', err);
   }
 })(this);
