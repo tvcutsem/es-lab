@@ -1154,23 +1154,28 @@ var ses;
   }
 
   /**
-   * TODO(erights): isolate and report the V8 bug mentioned below.
-   *
    * <p>Sometimes, when trying to freeze an object containing an
-   * accessor property with a getter but no setter, Chrome fails with
-   * <blockquote>Uncaught TypeError: Cannot set property ident___ of
-   * #<Object> which has only a getter</blockquote>. So if necessary,
-   * this kludge overrides {@code Object.defineProperty} to always
-   * install a dummy setter in lieu of the absent one.
+   * accessor property with a getter but no setter, Chrome <= 17 fails
+   * with <blockquote>Uncaught TypeError: Cannot set property ident___
+   * of #<Object> which has only a getter</blockquote>. So if
+   * necessary, this kludge overrides {@code Object.defineProperty} to
+   * always install a dummy setter in lieu of the absent one.
+   *
+   * <p>Since this problem seems to have gone away as of Chrome 18, it
+   * is no longer as important to isolate and report it.
    *
    * <p>TODO(erights): We should also override {@code
    * Object.getOwnPropertyDescriptor} to hide the presence of the
    * dummy setter, and instead report an absent setter.
    */
   function test_NEEDS_DUMMY_SETTER() {
-    return (typeof navigator !== 'undefined' &&
-            (/Chrome/).test(navigator.userAgent) &&
-            !NEEDS_DUMMY_SETTER_repaired);
+    if (NEEDS_DUMMY_SETTER_repaired) { return false; }
+    if (typeof navigator === 'undefined') { return false; }
+    var ChromeMajorVersionPattern = (/Chrome\/(\d*)\./);
+    var match = ChromeMajorVersionPattern.exec(navigator.userAgent);
+    if (!match) { return false; }
+    var ver = +match[1];
+    return ver <= 17;
   }
   /** we use this variable only because we haven't yet isolated a test
    * for the problem. */

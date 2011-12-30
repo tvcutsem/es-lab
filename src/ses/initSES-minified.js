@@ -55,8 +55,9 @@ v==='number'?false:v===1957?true:'Mutating Date.prototype did not throw'}functio
 test_MUTABLE_WEAKMAP_PROTO(){var v,x;if(typeof WeakMap!=='function')return false;x={};try{WeakMap.prototype.set(x,86)}catch(err){return err
 instanceof TypeError?false:'Mutating WeakMap.prototype failed with: '+err}return v=WeakMap.prototype.get(x),v===86?true:'Mutating WeakMap.prototype did not throw'}function
 test_NEED_TO_WRAP_FOREACH(){if(!('freeze'in Object))return false;if(Array.prototype.forEach!==builtInForEach)return false;try{return['z'].forEach(function(){Object.freeze(Array.prototype.forEach)}),false}catch(err){return err
-instanceof TypeError?true:'freezing forEach failed with '+err}}function test_NEEDS_DUMMY_SETTER(){return typeof
-navigator!=='undefined'&&/Chrome/.test(navigator.userAgent)&&!NEEDS_DUMMY_SETTER_repaired}NEEDS_DUMMY_SETTER_repaired=false;function
+instanceof TypeError?true:'freezing forEach failed with '+err}}function test_NEEDS_DUMMY_SETTER(){var
+ChromeMajorVersionPattern,match,ver;return NEEDS_DUMMY_SETTER_repaired?false:typeof
+navigator==='undefined'?false:(ChromeMajorVersionPattern=/Chrome\/(\d*)\./,match=ChromeMajorVersionPattern.exec(navigator.userAgent),match?(ver=+match[1],ver<=17):false)}NEEDS_DUMMY_SETTER_repaired=false;function
 test_FORM_GETTERS_DISAPPEAR(){var desc,f;function getter(){return'gotten'}if(typeof
 document==='undefined'||typeof document.createElement!=='function')return false;f=document.createElement('form');try{Object.defineProperty(f,'foo',{'get':getter,'set':void
 0})}catch(err){return'defining accessor on form failed with: '+err}return desc=Object.getOwnPropertyDescriptor(f,'foo'),desc.get===getter?false:desc.get===void
