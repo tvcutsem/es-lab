@@ -1309,7 +1309,14 @@ global.Reflect = {
       }
       if (isDataDescriptor(receiverDesc)) {
         if (!receiverDesc.writable) return false;
-        Object.defineProperty(receiver, name, {value: value});
+        Object.defineProperty(receiver, name,
+          {value: value,
+           // FIXME: it should not be necessary to describe these attributes
+           // Added to partially circumvent a bug in tracemonkey:
+           // https://bugzilla.mozilla.org/show_bug.cgi?id=601329
+           writable:     receiverDesc.writable,
+           enumerable:   receiverDesc.enumerable,
+           configurable: receiverDesc.configurable });
         return true;
       }
       // property doesn't exist yet, add it
