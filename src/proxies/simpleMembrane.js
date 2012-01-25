@@ -37,45 +37,52 @@
  */
 load("DirectProxies.js");
 
-// strategies for membranes & invariant enforcement:
-// - no special action taken: membrane proxies are always extensible,
-//   cannot expose non-configurable property descriptors across membrane
-// Re. non-extensibility:
-// - have membrane proxies inherit the [[Extensible]] flag of
-//   their target object:
-//   - at creation time
-//     (may become inconsistent later: target non-extensible, proxy remains extensible)
-//   - sync before each access
-// Re. non-configurability:
-// - have membrane proxies turn all exposed configurable:false descriptors
-//   into configurable:true => avoids TypeErrors, but invariants can't
-//   pass through the membrane.
-//   Likewise, O.defineProperty(proxy,name,{configurable:false}) always fails.
-// - have membrane proxies store all exposed configurable:false descriptors
-//   on fakeTarget before exposing. Eagerly copy all such descriptors if
-//   target is or becomes non-extensible.
-//   The stored descriptors should be wrapped (or at least for data properties
-//   the value attribute should be wrapped)
-//   Likewise, O.defineProperty(proxy,name,{configurable:false}) defines
-//   a wrapped value on fakeTarget, unwrapped value on real target.
+/**
+ * This code showcases three types of membranes using direct proxies:
+ *
+ * - invariant-containing membranes:
+ *   - don't allow observation of non-configurable props across membrane
+ *   - don't allow definition of new non-configurable props across membrane
+ *   - no storage overhead
+ *
+ * - invariant-relaxing membranes:
+ *   - expose non-configurable props as configurable across membrane
+ *   - don't allow definition of new non-configurable props across membrane
+ *   - no storage overhead
+ *
+ * - invariant-preserving membranes:
+ *   - properly expose non-configurable props as non-configurable across membrane
+ *   - allow definition of new non-configurable props across membrane
+ *   - membrane wrappers store all exposed non-configurable properties
+ *
+ * Re. non-extensibility, the membrane proxies always appear as extensible,
+ * unless their target is non-extensible when it passes the membrane.
+ * Neither of the above 3 implementations does yet allow the wrapper to
+ * be made non-extensible at a later point in time. Also, when the wrapper
+ * is non-extensible, clients will fail to observe whether a property is "own".
+ *
+ * In addition, all three implementations are currently what we call "simple"
+ * membranes, in that the membrane:
+ *  - does not unwrap when a wrapped object crosses the membrane in the opposite
+ *    direction.
+ *  - does not preserve object identity along both sides of the membrane:
+ *    an object can have more than one wrapped version.
+ */
 
 function isPrimitive(obj) {
   return Object(obj) !== obj;  
 }
 
 /**
- * A simple membrane:
- *  - does not unwrap when a wrapped object crosses the membrane in the opposite
- *    direction.
- *  - does not preserve object identity along both sides of the membrane:
- *    an object can have more than one wrapped version.
+ * A simple invariant-containing membrane:
+ *
  *  - does not allow observing non-configurability on wrapped objects.
  *  - does not allow (re)defining non-configurable properties on wrapped objects.
  *  - does not allow observing whether a property is 'own' on non-extensible objects.
- *    The last three points are due to the invariant enforcement mechanism of
- *    direct proxies.
+ *  (these restrictions are all due to the invariant enforcement mechanism of
+ *   direct proxies)
  */
-function makeSimpleMembrane(initTarget) {
+function makeInvariantContainingMembrane(initTarget) {
   var enabled = true;
   function wrap(target) {
    //primitives provide only irrevocable knowledge, no need to wrap them
@@ -86,12 +93,11 @@ function makeSimpleMembrane(initTarget) {
        return function(fakeTarget/*, ...args*/) {
          var args = Array.prototype.slice.call(arguments, 1);
          try {
-           // return wrap(Reflect[trapName](target, ...args.map(wrap)));
+           // in ES6: return wrap(Reflect[trapName](target, ...args.map(wrap)));
            return wrap(
              Reflect[trapName].apply(Reflect,
                                      [target].concat(args.map(wrap))));
          } catch (e) {
-           //print(trapName + " caught "+e);
            // TODO: why does this code throw StopIteration?
            // TODO: if StopIteration needs special treatment, are there
            // other such 'standard' exceptions that should be passed
@@ -110,7 +116,8 @@ function makeSimpleMembrane(initTarget) {
      
    // TODO: should fakeTarget inherit target's [[Extensible]]
    // attribute? If yes, the following code is not sufficient:
-   // the target may become non-extensible at a later point in time
+   // the target may be extensible now, but may become
+   // non-extensible at a later point in time
    if (!Object.isExtensible(target)) {
      Object.preventExtensions(fakeTarget);
    }
@@ -123,7 +130,185 @@ function makeSimpleMembrane(initTarget) {
   };
 }
 
-// === Unit tests ===
+/**
+ * A simple invariant-relaxing membrane:
+ *
+ *  - exposes all non-configurable properties as configurable ones
+ *  - does not allow (re)defining non-configurable properties on wrapped objects.
+ *  - does not allow observing whether a property is 'own' on non-extensible objects.
+ */
+function makeInvariantRelaxingMembrane(initTarget) {
+  var enabled = true;
+  function wrap(target) {
+   //primitives provide only irrevocable knowledge, no need to wrap them
+   if (isPrimitive(target)) { return target; }
+   
+   var baseHandler = new Reflect.VirtualHandler();
+   baseHandler.getOwnPropertyDescriptor = function(fakeTgt, name) {
+     if (!enabled) {throw new Error("revoked");}
+     var desc = Reflect.getOwnPropertyDescriptor(target, name);
+     if (desc !== undefined) {
+       desc.configurable = true; // can't expose non-configurable props
+       if ('value' in desc) { desc.value = wrap(desc.value); }
+       if ('get' in desc) { desc.get = wrap(desc.get); }
+       if ('set' in desc) { desc.set = wrap(desc.set); }
+     }
+     return desc;
+   };
+   baseHandler.defineProperty = function(fakeTgt, name, desc) {
+     if (!enabled) {throw new Error("revoked");}
+     if (!desc.configurable) {
+       return false; // can't define non-configurable props
+     }
+     if ('value' in desc) { desc.value = wrap(desc.value); }
+     if ('get' in desc) { desc.get = wrap(desc.get); }
+     if ('set' in desc) { desc.set = wrap(desc.set); }
+     return wrap(Reflect.defineProperty(target, name, desc));
+   };
+   baseHandler.preventExtensions = function(fakeTgt) {
+     if (!enabled) {throw new Error("revoked");}
+     return false; // can't make the object non-extensible across the membrane
+   };
+   baseHandler.deleteProperty = function(fakeTgt, name) {
+     if (!enabled) {throw new Error("revoked");}
+     return wrap(Reflect.deleteProperty(target, name));
+   };
+   baseHandler.getOwnPropertyNames = function(fakeTgt) {
+     if (!enabled) {throw new Error("revoked");}
+     return wrap(Reflect.getOwnPropertyNames(target));
+   };
+   baseHandler.apply = function(fakeTgt, receiver, args) {
+     if (!enabled) {throw new Error("revoked");}
+     try {
+       // in ES6: return wrap(Reflect[trapName](target, ...args.map(wrap)));
+       return wrap(Reflect.apply(target, wrap(receiver), args.map(wrap)));
+     } catch (e) {
+       if (e instanceof StopIteration) { throw e; } // FIXME
+       throw wrap(e);
+     }
+   };
+
+   // can't use real target, which would expose unwrapped proto
+   var fakeTarget = (typeof target === "function") ?
+     function() {} :
+     Object.create(wrap(Object.getPrototypeOf(target)));
+     
+   // TODO: should fakeTarget inherit target's [[Extensible]]
+   // attribute? If yes, the following code is not sufficient:
+   // the target may be extensible now, but may become
+   // non-extensible at a later point in time
+   if (!Object.isExtensible(target)) {
+     Object.preventExtensions(fakeTarget);
+   }
+  
+   return Proxy(fakeTarget, baseHandler);
+  }
+  return {
+   wrapper: wrap(initTarget),
+   revoke: function() { enabled = false; }
+  };
+}
+
+/**
+ * A simple invariant-preserving membrane:
+ *
+ *  - correctly exposes non-configurable properties
+ *  - allows (re)defining non-configurable properties on wrapped objects.
+ */
+function makeInvariantPreservingMembrane(initTarget) {
+  var enabled = true;
+  
+  function wrapDescriptor(desc) {
+    var wrappedDesc = {
+      enumerable:   desc.enumerable,
+      configurable: desc.configurable
+    };
+    if ('value'    in desc) { wrappedDesc.value    = wrap(desc.value); }
+    if ('writable' in desc) { wrappedDesc.writable = desc.writable; }
+    if ('get'      in desc) { wrappedDesc.get      = wrap(desc.get); }
+    if ('set'      in desc) { wrappedDesc.set      = wrap(desc.set); }
+    return wrappedDesc;
+  }
+  
+  function wrap(target) {
+   //primitives provide only irrevocable knowledge, no need to wrap them
+   if (isPrimitive(target)) { return target; }
+   
+   var baseHandler = new Reflect.VirtualHandler();
+   baseHandler.getOwnPropertyDescriptor = function(fixedProps, name) {
+     if (!enabled) {throw new Error("revoked");}
+     var desc = Reflect.getOwnPropertyDescriptor(target, name);
+     if (desc !== undefined) {
+       var wrappedDesc = wrapDescriptor(desc);
+       if (!desc.configurable) {
+         // TODO: what if fixedProps already contains a property
+         // for 'name'? wrappedDesc will not be compatible
+         // since simple membranes don't preserve identity of wrapped objects
+         Object.defineProperty(fixedProps, name, wrappedDesc);
+       }
+       return wrappedDesc;
+     }
+     return undefined;
+   };
+   baseHandler.defineProperty = function(fixedProps, name, desc) {
+     if (!enabled) {throw new Error("revoked");}
+     var success = Reflect.defineProperty(target, name, wrapDescriptor(desc));
+     if (success && !desc.configurable) {
+       Object.defineProperty(fixedProps, name, desc);
+     }
+     return success;
+   };
+   baseHandler.preventExtensions = function(fixedProps) {
+     if (!enabled) {throw new Error("revoked");}
+     // TODO: if we allow preventing extensions across the membrane,
+     // the wrapper could query Object.getOwnPropertyNames(target),
+     // install those props in fixedProps, then call preventExtensions
+     // on both fixedProps and the target
+     return false; // can't make the object non-extensible across the membrane
+   };
+   baseHandler.deleteProperty = function(fixedProps, name) {
+     if (!enabled) {throw new Error("revoked");}
+     return wrap(Reflect.deleteProperty(target, name));
+   };
+   baseHandler.getOwnPropertyNames = function(fixedProps) {
+     if (!enabled) {throw new Error("revoked");}
+     return wrap(Reflect.getOwnPropertyNames(target));
+   };
+   baseHandler.apply = function(fixedProps, receiver, args) {
+     if (!enabled) {throw new Error("revoked");}
+     try {
+       // in ES6: return wrap(Reflect[trapName](target, ...args.map(wrap)));
+       return wrap(Reflect.apply(target, wrap(receiver), args.map(wrap)));
+     } catch (e) {
+       if (e instanceof StopIteration) { throw e; } // FIXME
+       throw wrap(e);
+     }
+   };
+
+   // can't use real target, which would expose unwrapped proto
+   // store all non-configurable properties on this fake target,
+   // which we now name the "fixedProps" object
+   var fixedProps = (typeof target === "function") ?
+     function() {} :
+     Object.create(wrap(Object.getPrototypeOf(target)));
+     
+   // TODO: should fakeTarget inherit target's [[Extensible]]
+   // attribute? If yes, the following code is not sufficient:
+   // the target may be extensible now, but may become
+   // non-extensible at a later point in time
+   if (!Object.isExtensible(target)) {
+     Object.preventExtensions(fixedProps);
+   }
+  
+   return Proxy(fixedProps, baseHandler);
+  }
+  return {
+   wrapper: wrap(initTarget),
+   revoke: function() { enabled = false; }
+  };
+}
+
+// ========= Unit tests =========
 
 function assert(b, reason) {
   if (!b) throw new Error('assertion failed: '+reason);
@@ -139,15 +324,22 @@ function assertThrows(reason, msg, f) {
   }
 }
 
-var TESTS = {}; // unit test functions stored in here
+var TESTS = Object.create(null); // unit test functions stored in here
+
+// each unit test is a function(membraneMaker, membraneType)
+// where membraneMaker is a function to construct an initial membrane
+// and membraneType is one of 'containing', 'relaxing', 'preserving'
+var M_CONTAINING = "containing";
+var M_RELAXING   = "relaxing";
+var M_PRESERVING = "preserving";
 
 // test simple transitive wrapping
 // test whether primitives make it through unwrapped
-TESTS.testSimpleMembrane = function() {
+TESTS.testTransitiveWrapping = function(makeMembrane, membraneType) {
   // membrane works for configurable properties
   var wetA = {x:1};
   var wetB = {y:wetA};
-  var membrane = makeSimpleMembrane(wetB);
+  var membrane = makeMembrane(wetB);
   var dryB = membrane.wrapper;
   var dryA = dryB.y;
   assert(wetA !== dryA, 'wetA !== dryA');
@@ -162,9 +354,9 @@ TESTS.testSimpleMembrane = function() {
 }
 
 // test whether functions are wrapped
-TESTS.testFunctionSimpleMembrane = function() {
+TESTS.testFunctionWrapping = function(makeMembrane, membraneType) {
   var wetA = function(x) { return x; };
-  var membrane = makeSimpleMembrane(wetA);
+  var membrane = makeMembrane(wetA);
   var dryA = membrane.wrapper;
 
   assert(wetA !== dryA, 'wetA !== dryA');
@@ -177,12 +369,12 @@ TESTS.testFunctionSimpleMembrane = function() {
 }
 
 // test whether values returned from wrapped methods are wrapped
-TESTS.testReturnSimpleMembrane = function() {
+TESTS.testReturnWrapping = function(makeMembrane, membraneType) {
   var wetA = { x: 42 };
   var wetB = {
     m: function() { return wetA; }
   };
-  var membrane = makeSimpleMembrane(wetB);
+  var membrane = makeMembrane(wetB);
   assert(wetA.x === 42, 'wetA.x === 42');
   assert(wetB.m().x === 42, 'wetB.m().x === 42');
   
@@ -201,14 +393,14 @@ TESTS.testReturnSimpleMembrane = function() {
 }
 
 // test whether the prototype is also wrapped
-TESTS.testProtoSimpleMembrane = function() {
+TESTS.testProtoWrapping = function(makeMembrane, membraneType) {
   var wetA = { x: 42 };
   var wetB = Object.create(wetA);
 
   assert(Object.getPrototypeOf(wetB) === wetA,
          'Object.getPrototypeOf(wetB) === wetA');
   
-  var membrane = makeSimpleMembrane(wetB);
+  var membrane = makeMembrane(wetB);
   var dryB = membrane.wrapper;
   var dryA = Object.getPrototypeOf(dryB);
 
@@ -222,7 +414,7 @@ TESTS.testProtoSimpleMembrane = function() {
 
 // test whether typeof results are unchanged when
 // crossing a membrane
-TESTS.testTypeOfSimpleMembrane = function() {
+TESTS.testTypeOf = function(makeMembrane, membraneType) {
   var wetA = {
     obj: {},
     arr: [],
@@ -235,7 +427,7 @@ TESTS.testTypeOfSimpleMembrane = function() {
     rex: /x/,
     dat: new Date()
   };
-  var membrane = makeSimpleMembrane(wetA);
+  var membrane = makeMembrane(wetA);
   var dryA = membrane.wrapper;
   
   Object.keys(wetA).forEach(function (name) {
@@ -244,9 +436,8 @@ TESTS.testTypeOfSimpleMembrane = function() {
   });
 };
 
-// test that simple membrane does not allow observation of
-// non-configurability of wrapped properties
-TESTS.testNonConfigSimpleMembrane = function() {
+// test observation of non-configurability of wrapped properties
+TESTS.testNonConfigurableObservation = function(makeMembrane, membraneType) {
   var wetA = Object.create(null, {
     x: { value: 1,
          writable: true,
@@ -258,7 +449,7 @@ TESTS.testNonConfigSimpleMembrane = function() {
   assert(!Object.getOwnPropertyDescriptor(wetA,'x').configurable,
          'wetA.x is non-configurable');
   
-  var membrane = makeSimpleMembrane(wetA);
+  var membrane = makeMembrane(wetA);
   var dryA = membrane.wrapper;
   
   // perhaps surprisingly, just reading out the property value works,
@@ -266,20 +457,43 @@ TESTS.testNonConfigSimpleMembrane = function() {
   // own property.
   assert(dryA.x === 1, 'dryA.x === 1');
   
-  assertThrows('observing x as non-configurable',
-               "cannot report a non-configurable descriptor "+
-                 "for non-existent property 'x'",
-               function() { Object.getOwnPropertyDescriptor(dryA,'x') });
+  switch (membraneType) {
+    // containing membranes throw when observing non-configurable props
+    case M_CONTAINING:
+      assertThrows('observing x as non-configurable',
+                   "cannot report a non-configurable descriptor "+
+                   "for non-existent property 'x'",
+                   function() { Object.getOwnPropertyDescriptor(dryA,'x') });
+      break;
+    // relaxing membranes expose a non-configurable prop as configurable
+    case M_RELAXING:
+      var relaxedDesc = Object.getOwnPropertyDescriptor(dryA,'x');
+      assert(relaxedDesc.configurable, 'relaxedDesc.configurable is true');
+      assert(relaxedDesc.value === 1, relaxedDesc.value === 1);
+      assert(relaxedDesc.enumerable, 'relaxedDesc.enumerable is true');
+      assert(relaxedDesc.writable, 'relaxedDesc.writable is true');
+      break;
+    // preserving membranes expose a non-configurable prop as non-configurable
+    case M_PRESERVING:
+      var exactDesc = Object.getOwnPropertyDescriptor(dryA,'x');
+      assert(!exactDesc.configurable, 'exactDesc.configurable is false');
+      assert(exactDesc.value === 1, exactDesc.value === 1);
+      assert(exactDesc.enumerable, 'exactDesc.enumerable is true');
+      assert(exactDesc.writable, 'exactDesc.writable is true');
+      break;
+    default:
+      throw new Error("Illegal membrane type: "+membraneType);
+  }
+
   assert(dryA.x === 1, 'dryA.x === 1');
 };
 
-// test that a simple membrane cannot expose own properties on
-// non-extensible objects  
-TESTS.testNonExtSimpleMembrane = function() {
+// test that a membrane cannot expose own properties on non-extensible objects  
+TESTS.testNonExtensibleOwnProps = function(makeMembrane, membraneType) {
   var wetA = Object.preventExtensions({x:1});
   assert(!Object.isExtensible(wetA), 'wetA is non-extensible');
   
-  var membrane = makeSimpleMembrane(wetA);
+  var membrane = makeMembrane(wetA);
   var dryA = membrane.wrapper;
   
   assert(dryA.x === 1, 'dryA.x === 1');
@@ -295,12 +509,12 @@ TESTS.testNonExtSimpleMembrane = function() {
                function() { Reflect.hasOwn(dryA,'x'); });
 };
 
-// test assignment into a simple membrane
-TESTS.testAssignSimpleMembrane = function() {
+// test assignment into a membrane
+TESTS.testAssignment = function(makeMembrane, membraneType) {
   var wetA = {x:1};
   assert(wetA.x === 1, 'wetA.x === 1');
   
-  var membrane = makeSimpleMembrane(wetA);
+  var membrane = makeMembrane(wetA);
   var dryA = membrane.wrapper;
   
   Object.defineProperty(dryA,'y',
@@ -311,7 +525,7 @@ TESTS.testAssignSimpleMembrane = function() {
   assert(dryA.y === 2, 'dryA.y === 2');
 
   assert(dryA.x === 1, 'dryA.x === 1');
-  assert(dryA.x = 2, 'dryA.x = 2');
+  dryA.x = 2;
   assert(dryA.x === 2, 'dryA.x === 2');
   
   membrane.revoke();
@@ -319,11 +533,50 @@ TESTS.testAssignSimpleMembrane = function() {
   assertThrows("dryA.x = 3", "revoked", function() { dryA.x = 3; });
 };
 
+// test definition of a new non-configurable property on a membrane
+TESTS.testNonConfigurableDefinition = function(makeMembrane, membraneType) {
+  var wetA = {};  
+  var membrane = makeMembrane(wetA);
+  var dryA = membrane.wrapper;
+  
+  function defineProp() {
+    Object.defineProperty(dryA,'x',
+      { value:1,
+        writable:true,
+        enumerable:true,
+        configurable:false });
+  }
+  
+  switch (membraneType) {
+    // containing membranes throw when defining non-configurable props
+    case M_CONTAINING:
+      assertThrows('defining non-config prop on containing membrane',
+                   "cannot successfully define a non-configurable descriptor "+
+                   "for non-existent property 'x'",
+                   function() { defineProp(); });
+      break;
+    // relaxing membranes reject definition of non-configurable props
+    case M_RELAXING:
+      defineProp();
+      assert(dryA.x === undefined, 'dryA.x === undefined');
+      assert(wetA.x === undefined, 'wetA.x === undefined');
+      break;
+    // preserving membranes allow definition of non-configurable props
+    case M_PRESERVING:
+      defineProp();
+      assert(dryA.x === 1, 'dryA.x === 1');
+      assert(wetA.x === 1, 'wetA.x === 1');
+      break;
+    default:
+      throw new Error("Illegal membrane type: "+membraneType);
+  }
+};
+
 // test that a simple membrane does not preserve object identity
-TESTS.testIdentitySimpleMembrane = function() {
+TESTS.testIdentitySimpleMembrane = function(makeMembrane, membraneType) {
   var wetA = {};
   var wetB = {x:wetA};
-  var membrane = makeSimpleMembrane(wetB);
+  var membrane = makeMembrane(wetB);
   var dryB = membrane.wrapper;
   
   var dryA1 = dryB.x;
@@ -334,11 +587,11 @@ TESTS.testIdentitySimpleMembrane = function() {
 
 // test that a simple membrane wraps twice when crossing the
 // boundary twice, instead of unwrapping
-TESTS.testCrossingSimpleMembrane = function() {
+TESTS.testCrossingSimpleMembrane = function(makeMembrane, membraneType) {
   var wetA = {};
   var inWetA = null;
   var wetB = {out:wetA, in: function(x) { inWetA = x; return x; }};
-  var membrane = makeSimpleMembrane(wetB);
+  var membrane = makeMembrane(wetB);
   var dryB = membrane.wrapper;
   
   var dryA = dryB.out;
@@ -349,9 +602,24 @@ TESTS.testCrossingSimpleMembrane = function() {
   assert(wetA !== outWetA, 'wetA !== outWetA');
 };
 
+var MEMBRANES = Object.create(null);
+MEMBRANES[M_CONTAINING] = makeInvariantContainingMembrane;
+MEMBRANES[M_RELAXING]   = makeInvariantRelaxingMembrane;
+MEMBRANES[M_PRESERVING] = makeInvariantPreservingMembrane;
+
 // simple test driver loop
-Object.getOwnPropertyNames(TESTS).forEach(function (name) {
-  print(name);
-  TESTS[name]();
-  print("ok");  
-});
+function runTests() {
+  for (var membraneType in MEMBRANES) {
+    print(">> " + membraneType);
+    for (var testName in TESTS) {
+      print(testName + ", " + membraneType);
+      TESTS[testName](MEMBRANES[membraneType], membraneType);
+      print("ok");      
+    }
+    print(">> " + membraneType + " ok");
+  }
+}
+
+runTests();
+
+print("done");
