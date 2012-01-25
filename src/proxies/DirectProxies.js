@@ -863,7 +863,7 @@ Validator.prototype = {
    * check its return value against the previously asserted value of the
    * fixed property.
    */
-  get: function(receiver, name) {    
+  get: function(receiver, name) {
     var trap = this.getTrap("get");
     if (trap === undefined) {
       // default forwarding behavior
@@ -1441,6 +1441,9 @@ VirtualHandler.prototype = {
       return true;
     }
     var proto = Object.getPrototypeOf(target);
+    if (proto === null) {
+      return false;
+    }
     return Reflect.has(proto, name);
   },
   hasOwn: function(target,name) {
@@ -1448,7 +1451,7 @@ VirtualHandler.prototype = {
     desc = normalizeAndCompletePropertyDescriptor(desc);
     return desc !== undefined;
   },
-  get: function(target, name, receiver) {
+  get: function(target, name, receiver) {    
     var desc = this.getOwnPropertyDescriptor(target, name);
     desc = normalizeAndCompletePropertyDescriptor(desc);
     if (desc === undefined) {
@@ -1467,7 +1470,7 @@ VirtualHandler.prototype = {
     }
     return desc.get.call(receiver);
   },
-  set: function(target, name, val, receiver) {
+  set: function(target, name, value, receiver) {
     var ownDesc = this.getOwnPropertyDescriptor(target, name);
     ownDesc = normalizeAndCompletePropertyDescriptor(ownDesc);
     if (isDataDescriptor(ownDesc)) {
@@ -1480,6 +1483,9 @@ VirtualHandler.prototype = {
     }
     var proto = Object.getPrototypeOf(target);
     if (proto === null) {
+      // TODO: consider wrapping the next 2 if-tests in an
+      // if (target !== receiver) test, since otherwise receiverDesc
+      // should be the same as ownDesc and we already know the outcome
       var receiverDesc = Object.getOwnPropertyDescriptor(receiver, name);
       if (isAccessorDescriptor(receiverDesc)) {
         if(receiverDesc.set === undefined) return false;
@@ -1488,12 +1494,20 @@ VirtualHandler.prototype = {
       }
       if (isDataDescriptor(receiverDesc)) {
         if (!receiverDesc.writable) return false;
-        Object.defineProperty(receiver, name, {value: value});
+        Object.defineProperty(receiver, name, {
+          value: value,
+          // FIXME: it should not be necessary to describe these attributes
+          // Added to partially circumvent a bug in tracemonkey:
+          // https://bugzilla.mozilla.org/show_bug.cgi?id=601329
+          writable:     receiverDesc.writable,
+          enumerable:   receiverDesc.enumerable,
+          configurable: receiverDesc.configurable
+        });
         return true;
       }
       if (!Object.isExtensible(receiver)) return false;
       Object.defineProperty(receiver, name,
-        { value: v,
+        { value: value,
           writable: true,
           enumerable: true,
           configurable: true });
@@ -1515,6 +1529,9 @@ VirtualHandler.prototype = {
       }
     }
     var proto = Object.getPrototypeOf(target);
+    if (proto === null) {
+      return result;
+    }
     var inherited = Reflect.enumerate(proto);
     // FIXME: filter duplicates
     return result.concat(inherited);
