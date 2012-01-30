@@ -68,6 +68,59 @@ load("DirectProxies.js");
  *  - does not preserve object identity along both sides of the membrane:
  *    an object can have more than one wrapped version.
  */
+ 
+/**
+ * The following TypeErrors can occur when crossing an invariant-containing membrane:
+ * TODO(tvcutsem): write unit test for each of these
+ * wrapper = the membrane proxy/dummy target
+ * target = the real (not the dummy) membraned target object
+ * 
+ * getOwnPropertyDescriptor
+ *   - if wrapper is non-extensible and exposed descriptor defined on target:
+ *     cannot report a new own property on a non-extensible object
+ *   - if exposed descriptor is non-configurable:
+ *     cannot report a non-configurable descriptor for non-existent property
+ * defineProperty
+ *   - if wrapper is non-extensible and property successfully updated on target:
+ *     cannot successfully add a new property to a non-extensible object
+ *     Note: assuming target is well-behaved, this will only occur when updating
+ *           non-configurable, writable target props to non-configurable, non-writable
+ *           or when the update was a no-op
+ *   - if descriptor is non-configurable and successfully updated on target:
+ *     cannot successfully define a non-configurable descriptor for non-existent property
+ * freeze, seal, preventExtensions
+ *   - if wrapper is extensible and target is successfully frozen/sealed/made non-extensible:
+ *     can't report non-frozen/non-sealed/extensible object as frozen/sealed/non-extensible
+ * delete
+ *   - membrane can't violate any invariants
+ * getOwnPropertyNames
+ *   - if wrapper is non-extensible and target has own properties:
+ *     getOwnPropertyNames cannot list a new property on a non-extensible object
+ * hasOwn
+ *   - if wrapper is non-extensible and own property exists on target:
+ *     cannot report a new own property on a non-extensible object
+ * has
+ *   - membrane can't violate any invariants
+ * get
+ *   - membrane can't violate any invariants
+ * set
+ *   - membrane can't violate any invariants
+ * enumerate
+ *   - membrane can't violate any invariants
+ * iterate
+ *   - membrane can't violate any invariants
+ * keys
+ *   - if wrapper is non-extensible and target has own enumerable properties:
+ *     keys trap cannot list a new property on a non-extensible object
+ * apply
+ *   - membrane can't violate any invariants
+ * construct
+ *   - membrane can't violate any invariants
+ *
+ * Generally speaking:
+ *   - if wrapper is non-extensible, can't observe "ownness" of properties
+ *   - can't observe non-configurability or define/update non-configurable properties
+ */
 
 function isPrimitive(obj) {
   return Object(obj) !== obj;  

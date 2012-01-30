@@ -61,6 +61,7 @@
 //  - Object.prototype.valueOf
 //  - Proxy
 //  - Proxy.create{Function}
+// Adds new globals:
 //  - Reflect
 
 // Loading this file will automatically patch Proxy.create and
@@ -722,7 +723,6 @@ Validator.prototype = {
     for (var i = 0; i < numProps; i++) {
       var s = String(trapResult[i]);
       if (propNames[s]) {
-        // TODO(tvcutsem): we could also silently ignore duplicates
         throw new TypeError("getOwnPropertyNames cannot list a "+
                             "duplicate property '"+s+"'");
       }
@@ -1311,8 +1311,8 @@ global.Reflect = {
         if (!receiverDesc.writable) return false;
         Object.defineProperty(receiver, name,
           {value: value,
-           // FIXME: it should not be necessary to describe these attributes
-           // Added to partially circumvent a bug in tracemonkey:
+           // FIXME: it should not be necessary to describe the following
+           // attributes. Added to circumvent a bug in tracemonkey:
            // https://bugzilla.mozilla.org/show_bug.cgi?id=601329
            writable:     receiverDesc.writable,
            enumerable:   receiverDesc.enumerable,
@@ -1496,8 +1496,8 @@ VirtualHandler.prototype = {
         if (!receiverDesc.writable) return false;
         Object.defineProperty(receiver, name, {
           value: value,
-          // FIXME: it should not be necessary to describe these attributes
-          // Added to partially circumvent a bug in tracemonkey:
+          // FIXME: it should not be necessary to describe the following
+          // attributes. Added to circumvent a bug in tracemonkey:
           // https://bugzilla.mozilla.org/show_bug.cgi?id=601329
           writable:     receiverDesc.writable,
           enumerable:   receiverDesc.enumerable,
