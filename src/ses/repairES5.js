@@ -1742,7 +1742,6 @@ var ses;
     } finally {
       delete Number.prototype.___test_prop___;
     }
-
   }
 
   ////////////////////// Repairs /////////////////////
@@ -2972,6 +2971,7 @@ var ses;
              'https://bugs.webkit.org/show_bug.cgi?id=79843',
              'https://connect.microsoft.com/ie/feedback/details/727027',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=603201'],
+             // Opera DSK-358415
       sections: ['10.4.3'],
       tests: [] // ['10.4.3-1-59-s']
     },
