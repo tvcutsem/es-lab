@@ -1702,6 +1702,48 @@ var ses;
       unreportedNames.sort().join(',');
   }
 
+  /**
+   *
+   */
+  function test_STRICT_GETTER_BOXES() {
+    Object.defineProperty(Number.prototype, '___test_prop___', {
+      get: function() { return this; },
+      set: void 0,
+      enumerable: false,
+      configurable: true
+    });
+    var v = null;
+    try {
+      v = (3).___test_prop___;
+      if (v === 3) { return false; }
+      if (v instanceof Number) { return true; }
+      return 'unexpected boxing test result: ' + v;
+    } finally {
+      delete Number.prototype.___test_prop___;
+    }
+  }
+
+  /**
+   *
+   */
+  function test_NON_STRICT_GETTER_DOESNT_BOX() {
+    Object.defineProperty(Number.prototype, '___test_prop___', {
+      get: new Function('return this;'),
+      set: void 0,
+      enumerable: false,
+      configurable: true
+    });
+    var v = null;
+    try {
+      v = (3).___test_prop___;
+      if (v instanceof Number) { return false; }
+      if (v === 3) { return true; }
+      return 'unexpected non-boxing test result: ' + v;
+    } finally {
+      delete Number.prototype.___test_prop___;
+    }
+
+  }
 
   ////////////////////// Repairs /////////////////////
   //
@@ -2919,6 +2961,30 @@ var ses;
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=726477'],
       sections: [],
       tests: []
+    },
+    {
+      description: 'Strict getter must not box this, but does',
+      test: test_STRICT_GETTER_BOXES,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['https://bugs.ecmascript.org/show_bug.cgi?id=284',
+             'https://bugs.webkit.org/show_bug.cgi?id=79843',
+             'https://connect.microsoft.com/ie/feedback/details/727027',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=603201'],
+      sections: ['10.4.3'],
+      tests: [] // ['10.4.3-1-59-s']
+    },
+    {
+      description: 'Non-strict getter must box this, but does not',
+      test: test_NON_STRICT_GETTER_DOESNT_BOX,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['https://bugs.ecmascript.org/show_bug.cgi?id=284',
+             'http://code.google.com/p/v8/issues/detail?id=1977'],
+      sections: ['10.4.3'],
+      tests: [] // ['10.4.3-1-59-s']
     }
   ];
 
