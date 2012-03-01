@@ -3100,7 +3100,8 @@ var ses;
       repair: void 0,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: false,
-      urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832'],
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832',
+             'https://bugs.webkit.org/show_bug.cgi?id=78438'],
       sections: ['8.6.2'],
       tests: ['S8.6.2_A8']
     },
@@ -3183,7 +3184,7 @@ var ses;
       repair: void 0,
       preSeverity: severities.NOT_ISOLATED,
       canRepair: false,
-      urls: [],
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=726477'],
       sections: [],
       tests: []
     }
