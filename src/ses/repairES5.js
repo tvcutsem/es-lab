@@ -1698,8 +1698,10 @@ var ses;
 
     var unreportedNames = gopn(unreported);
     if (unreportedNames.length === 0) { return false; }
+    var badness = unreportedNames.sort().join(',');
+    if (badness == 'fileName,lineNumber,message,stack') { return true; }
     return 'Error own properties unreported by getOwnPropertyNames: ' +
-      unreportedNames.sort().join(',');
+      badness;
   }
 
   /**
@@ -2957,7 +2959,8 @@ var ses;
       repair: void 0,
       preSeverity: severities.NOT_ISOLATED,
       canRepair: false,
-      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=726477'],
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=726477',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=724768'],
       sections: [],
       tests: []
     },
@@ -2970,7 +2973,8 @@ var ses;
       urls: ['https://bugs.ecmascript.org/show_bug.cgi?id=284',
              'https://bugs.webkit.org/show_bug.cgi?id=79843',
              'https://connect.microsoft.com/ie/feedback/details/727027',
-             'https://bugzilla.mozilla.org/show_bug.cgi?id=603201'],
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=603201',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=732669'],
              // Opera DSK-358415
       sections: ['10.4.3'],
       tests: [] // ['10.4.3-1-59-s']
@@ -2982,7 +2986,8 @@ var ses;
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
       urls: ['https://bugs.ecmascript.org/show_bug.cgi?id=284',
-             'http://code.google.com/p/v8/issues/detail?id=1977'],
+             'http://code.google.com/p/v8/issues/detail?id=1977',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=732669'],
       sections: ['10.4.3'],
       tests: [] // ['10.4.3-1-59-s']
     }
