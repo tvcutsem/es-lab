@@ -2928,8 +2928,11 @@ var ses;
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1169',
+             'http://code.google.com/p/v8/issues/detail?id=1475',
              'https://mail.mozilla.org/pipermail/es-discuss/' +
-               '2011-November/017997.html'],
+               '2011-November/017997.html',
+             'http://wiki.ecmascript.org/doku.php?id=strawman:' +
+               'fixing_override_mistake'],
       sections: ['8.12.4'],
       tests: ['15.2.3.6-4-405']
     },
