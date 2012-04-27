@@ -111,6 +111,52 @@ Object.setProperty = function(receiver, name, value, parent) {
   }
 }
 
+// updated [[SetP]] algorithm proposed by Jeff Walden
+// https://mail.mozilla.org/pipermail/es-discuss/2012-April/022561.html
+var Reflect = {};
+Reflect.set = function(target, name, value, receiver) {
+  receiver = receiver || target;
+  
+  var ownDesc = Object.getOwnPropertyDescriptor(target, name);
+  if (ownDesc !== undefined) {
+    if (isAccessorDescriptor(ownDesc)) {
+      var setter = ownDesc.set;
+      if (setter === undefined) return false;
+      setter.call(receiver, value);
+      return true;
+    }
+    // otherwise, isDataDescriptor(ownDesc) must be true
+    if (ownDesc.writable === false) return false;
+    if (receiver === target) {
+      var updateDesc = {value: value};
+      Object.defineProperty(receiver, name, updateDesc);
+      return true;
+    } else {
+      var newDesc =
+        { value: value,
+          writable: true,
+          enumerable: true,
+          configurable: true };
+      if (!Object.isExtensible(receiver)) return false;
+      Object.defineProperty(receiver, name, newDesc);
+      return true;
+    }
+  }
+  
+  var proto = Object.getPrototypeOf(target);
+  if (proto === null) {
+    var newDesc =
+      { value: value,
+        writable: true,
+        enumerable: true,
+        configurable: true };
+    if (!Object.isExtensible(receiver)) return false;
+    Object.defineProperty(receiver, name, newDesc);
+    return true;
+  }
+  return Reflect.set(proto, name, value, receiver);
+};
+
 // current ES5 [[Put]] semantics
 Object.setPropertyES5 = function(receiver, name, val) {
   var desc = Object.getOwnPropertyDescriptor(receiver, name);
@@ -225,7 +271,8 @@ function runTests() {
           var oldPropValueResult = child[name];
           
           setup(place, writability, type, extensibility);
-          var newSetPropertyResult = Object.setProperty(child, name, val+1);
+          //var newSetPropertyResult = Object.setProperty(child, name, val+1);
+          var newSetPropertyResult = Reflect.set(child, name, val+1);
           var newPropValueResult = child[name];
 
           setup(place, writability, type, extensibility);
