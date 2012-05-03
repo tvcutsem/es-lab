@@ -116,13 +116,13 @@ Object.setProperty = function(receiver, name, value, parent) {
 var Reflect = {};
 Reflect.set = function(target, name, value, receiver) {
   receiver = receiver || target;
-  
+    
   var ownDesc = Object.getOwnPropertyDescriptor(target, name);
   if (ownDesc !== undefined) {
     if (isAccessorDescriptor(ownDesc)) {
       var setter = ownDesc.set;
       if (setter === undefined) return false;
-      setter.call(receiver, value);
+      setter.call(receiver, value); // assumes Function.prototype.call
       return true;
     }
     // otherwise, isDataDescriptor(ownDesc) must be true
@@ -132,12 +132,12 @@ Reflect.set = function(target, name, value, receiver) {
       Object.defineProperty(receiver, name, updateDesc);
       return true;
     } else {
+      if (!Object.isExtensible(receiver)) return false;
       var newDesc =
         { value: value,
           writable: true,
           enumerable: true,
           configurable: true };
-      if (!Object.isExtensible(receiver)) return false;
       Object.defineProperty(receiver, name, newDesc);
       return true;
     }
@@ -145,12 +145,12 @@ Reflect.set = function(target, name, value, receiver) {
   
   var proto = Object.getPrototypeOf(target);
   if (proto === null) {
+    if (!Object.isExtensible(receiver)) return false;
     var newDesc =
       { value: value,
         writable: true,
         enumerable: true,
         configurable: true };
-    if (!Object.isExtensible(receiver)) return false;
     Object.defineProperty(receiver, name, newDesc);
     return true;
   }
