@@ -36,11 +36,17 @@
  *
  */
 
+// ****************************************************************************
+// Deprecating Warning: DirectProxies.js is superseded by the new reflect.js
+// shim. Please use https://github.com/tvcutsem/harmony-reflect
+// ****************************************************************************
+
+
 (function(global){ // function-as-module pattern
 "use strict";
 
 // ----------------------------------------------------------------------------
-// this is a prototype implementation of
+// this is a DEPRECATED prototype implementation of
 // http://wiki.ecmascript.org/doku.php?id=harmony:direct_proxies
 
 // This code was tested on tracemonkey / Firefox 7 / Firefox 8
@@ -1277,6 +1283,8 @@ global.Reflect = {
     return desc.get.call(receiver);
   },
   set: function(target, name, value, receiver) {
+    receiver = receiver || target;
+    
     // if target is a proxy, invoke its "set" trap
     var handler = directProxies.get(target);
     if (handler !== undefined) {
@@ -1471,6 +1479,8 @@ VirtualHandler.prototype = {
     return desc.get.call(receiver);
   },
   set: function(target, name, value, receiver) {
+    receiver = receiver || target;
+    
     var ownDesc = this.getOwnPropertyDescriptor(target, name);
     ownDesc = normalizeAndCompletePropertyDescriptor(ownDesc);
     if (isDataDescriptor(ownDesc)) {
