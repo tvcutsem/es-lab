@@ -112,7 +112,7 @@
              deps = opt_id;
            }
            var importPs = mapFn(deps, loader);
-           result = applyFn(Q.all, void 0, importPs).when(function(imports) {
+           result = Q.all(importPs).when(function(imports) {
              return applyFn(factory, void 0, imports);
            });
          }

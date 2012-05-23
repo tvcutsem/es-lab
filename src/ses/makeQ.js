@@ -589,8 +589,7 @@ var ses;
        return result.promise;
      };
 
-     Q.race = function(var_args) {
-       var answerPs = sliceFn(arguments, 0);
+     Q.race = function(answerPs) {
        var result = Q.defer();
        answerPs.forEach(function(answerP) {
          Q(answerP).when(function(answer) {
@@ -602,8 +601,7 @@ var ses;
        return result.promise;
      };
 
-     Q.all = function(var_args) {
-       var answerPs = sliceFn(arguments, 0);
+     Q.all = function(answerPs) {
        var countDown = answerPs.length;
        var answers = [];
        if (countDown === 0) { return Q(answers); }
@@ -628,7 +626,7 @@ var ses;
        if (len === 0) {
          return Q.reject(new Error('No references joined'));
        }
-       return applyFn(Q.all, void 0, args).when(function(fulfilleds) {
+       return Q.all(args).when(function(fulfilleds) {
          var first = fulfilleds[0];
          for (var i = 1; i < len; i++) {
            if (!is(first, fulfilleds[i])) {
