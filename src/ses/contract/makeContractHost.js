@@ -1,4 +1,4 @@
-// Copyright (C) 2011 Google Inc.
+// Copyright (C) 2012 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,13 +13,31 @@
 // limitations under the License.
 
 /**
- * @fileoverview Simple AMD module exports a makeContractHost function,
- * which makes a contract host, which makes and runs a contract.
- * @requires WeakMap, define, Q
+ * @fileoverview Simple AMD module exports a makeContractHost
+ * function, which makes a contract host, which makes and runs a
+ * contract. Requires ses. Specifically, requires the eval function in
+ * scope to be a SES confining eval.
+ * @requires WeakMap, define, Q, eval
+ * @author Mark S. Miller erights@gmail.com
  */
 define('makeContractHost', [], function() {
   "use strict";
 
+  /**
+   * A contract host as a mutually trusted third party for honestly
+   * running whatever smart contract code its customers agree on.
+   *
+   * <p>When mutually suspicious parties wish to engage in a joint
+   * contract, if they can agree on a contract host to be run the
+   * following code honestly, agree on the code that represents their
+   * smart contract, and agree on which side of the contract they each
+   * play, then they can validly engage in the contract.
+   *
+   * <p>The contractSrc is assumed to be the source code for a closed
+   * SES function, where each of the parties to the contract is
+   * supposed to provide their respective fulfilled arguments. Once all
+   * these arguments are fulfilled, then the contract is run.
+   */
   return function makeContractHost() {
     var amp = WeakMap();
 
