@@ -13,10 +13,10 @@
 // limitations under the License.
 
 /**
- * @fileoverview Simple AMD module exports a makeContractHost
+ * @fileoverview Simple AMD module exports a {@code makeContractHost}
  * function, which makes a contract host, which makes and runs a
- * contract. Requires ses. Specifically, requires the eval function in
- * scope to be a SES confining eval.
+ * contract. Requires SES. Specifically, requires the {@code eval}
+ * function in scope to be a SES confining eval.
  * @requires WeakMap, define, Q, eval
  * @author Mark S. Miller erights@gmail.com
  */
@@ -33,10 +33,35 @@ define('makeContractHost', [], function() {
    * smart contract, and agree on which side of the contract they each
    * play, then they can validly engage in the contract.
    *
-   * <p>The contractSrc is assumed to be the source code for a closed
-   * SES function, where each of the parties to the contract is
-   * supposed to provide their respective fulfilled arguments. Once all
-   * these arguments are fulfilled, then the contract is run.
+   * <p>The {@code contractSrc} is assumed to be the source code for a
+   * closed SES function, where each of the parties to the contract is
+   * supposed to provide their respective fulfilled arguments. Once
+   * all these arguments are fulfilled, then the contract is run.
+   *
+   * <p>There are two "roles" for participating in the protocol:
+   * contract initiator, who calls the contract host's {@code setup}
+   * method, and contract participants, who call the contract host's
+   * {@code redeem} method. For example, let's say the contract in
+   * question is the board manager for playing chess. The initiator
+   * instantiates a new chess game, which is a two argument function,
+   * where argument zero is provided by the player playing "white" and
+   * argument one is provided by the player playing "black".
+   *
+   * <pre>
+   *   const tokensP = contractHostP ! setup(chessSrc);
+   *   const whiteTokenP = tokensP ! [0];
+   *   const blackTokenP = tokensP ! [1];
+   *   whitePlayer ! play(whiteTokenP, chessSrc, 0);
+   *   blackPlayer ! play(blackTokenP, chessSrc, 1);
+   * </pre>
+   *
+   * <pre>
+   *   function play(tokenP, allegedChessSrc, allegedSide) {
+   *     check(allegedChessSrc, allegedSide);
+   *     const chairP = contractHostP ! redeem(tokenP);
+   *     const outcomeP = chairP ! (allegedChessSrc, allegedSide, player);
+   *   }
+   * </pre>
    */
   return function makeContractHost() {
     var amp = WeakMap();
@@ -73,7 +98,9 @@ define('makeContractHost', [], function() {
         }));
         return tokens;
       },
-      redeem: amp.get.bind(amp)
+      redeem: function(tokenP) {
+        return Q(tokenP).when(function(token) { return amp.get(token); });
+      }
     });
   };
 });
