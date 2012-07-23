@@ -43,11 +43,20 @@ define('makeContractHost', [], function() {
    * method, and contract participants, who call the contract host's
    * {@code redeem} method. For example, let's say the contract in
    * question is the board manager for playing chess. The initiator
-   * instantiates a new chess game, which is a two argument function,
-   * where argument zero is provided by the player playing "white" and
-   * argument one is provided by the player playing "black".
+   * instantiates a new chess game, whose board manager is a two
+   * argument function, where argument zero is provided by the player
+   * playing "white" and argument one is provided by the player
+   * playing "black".
+   *
+   * <p>The {@code setup} method returns an array of tokens, one per
+   * argument, where each token represents the exclusive right to
+   * provide that argument. The initiator would then distribute these
+   * tokens to each of the players, together with the alleged source
+   * for the game they would be playing, and their alleged side, i.e.,
+   * which argument position they are responsible for providing.
    *
    * <pre>
+   *   // Contract initiator
    *   const tokensP = contractHostP ! setup(chessSrc);
    *   const whiteTokenP = tokensP ! [0];
    *   const blackTokenP = tokensP ! [1];
@@ -55,7 +64,17 @@ define('makeContractHost', [], function() {
    *   blackPlayer ! play(blackTokenP, chessSrc, 1);
    * </pre>
    *
+   * <p>Each player, on receiving the token, alleged game source, and
+   * alleged argument index, would first decide (e.g., with the {@code
+   * check} function below) whether this is a game they would be
+   * interested in playing. If so, the redeem the token to get a
+   * function they can invoke to provide their argument, in order to
+   * start playing their side of the game -- but only if the contract
+   * host verifies that they are playing the side of the game that
+   * they think they are.
+   *
    * <pre>
+   *   // Contract participant
    *   function play(tokenP, allegedChessSrc, allegedSide) {
    *     check(allegedChessSrc, allegedSide);
    *     const chairP = contractHostP ! redeem(tokenP);
@@ -84,7 +103,6 @@ define('makeContractHost', [], function() {
             if (i !== allegedI) {
               throw new Error('unexpected player number: ' + i);
             }
-            amp.delete(token);
             argPair.resolve(arg);
             return result.promise;
           }));
@@ -99,7 +117,11 @@ define('makeContractHost', [], function() {
         return tokens;
       },
       redeem: function(tokenP) {
-        return Q(tokenP).when(function(token) { return amp.get(token); });
+        return Q(tokenP).when(function(token) {
+          const result = amp.get(token);
+          amp.delete(token);
+          return result;
+        });
       }
     });
   };
