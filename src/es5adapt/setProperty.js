@@ -157,6 +157,68 @@ Reflect.set = function(target, name, value, receiver) {
   return Reflect.set(proto, name, value, receiver);
 };
 
+// revised [[SetP]] algorithm, based on the one above (proposed by Jeff Walden)
+// revision due to an issue with Reflect.set(target, name, value, proxy)
+// where proxy is a proxy for the given target, in which case the test for
+// (receiver === target) to distinguish the update-case from the add-case in
+// the above algorithm failed.
+// see: https://github.com/tvcutsem/harmony-reflect/issues/11
+Reflect.setRevised = function(target, name, value, receiver) {
+  receiver = receiver || target;
+  
+  // first, check whether target has a non-writable property
+  // shadowing name on receiver
+  var ownDesc = Object.getOwnPropertyDescriptor(target, name);
+  if (ownDesc !== undefined) {
+    if (isAccessorDescriptor(ownDesc)) {
+      var setter = ownDesc.set;
+      if (setter === undefined) return false;
+      setter.call(receiver, value); // assumes Function.prototype.call
+      return true;
+    }
+    // otherwise, isDataDescriptor(ownDesc) must be true
+    if (ownDesc.writable === false) return false;
+//    if (receiver === target) { // -
+    // we found an existing writable data property on the prototype chain
+    // (maybe even on the receiver object itself)
+    // now we can add or update the data property on the receiver, depending
+    // on whether it already defines the property or not)
+    var existingDesc = Object.getOwnPropertyDescriptor(receiver, name); // +
+    if (existingDesc !== undefined) {                                   // +
+      var updateDesc = { value: value };
+      Object.defineProperty(receiver, name, updateDesc);
+      return true;
+    } else {
+      if (!Object.isExtensible(receiver)) return false;
+      var newDesc =
+        { value: value,
+          writable: true,
+          enumerable: true,
+          configurable: true };
+      Object.defineProperty(receiver, name, newDesc);
+      return true;
+    }
+  }
+
+  // name is not defined in target, search target's prototype
+  var proto = Object.getPrototypeOf(target);
+  if (proto === null) {
+    // target was the last prototype, now we know that 'name' is not shadowed
+    // by an existing (accessor or data) property, so we can add the property
+    // to the initial receiver object
+    if (!Object.isExtensible(receiver)) return false;
+    var newDesc =
+      { value: value,
+        writable: true,
+        enumerable: true,
+        configurable: true };
+    Object.defineProperty(receiver, name, newDesc);
+    return true;
+  }
+  // continue the search in target's prototype
+  return Reflect.setRevised(proto, name, value, receiver);
+};
+
 // current ES5 [[Put]] semantics
 Object.setPropertyES5 = function(receiver, name, val) {
   var desc = Object.getOwnPropertyDescriptor(receiver, name);
@@ -272,7 +334,8 @@ function runTests() {
           
           setup(place, writability, type, extensibility);
           //var newSetPropertyResult = Object.setProperty(child, name, val+1);
-          var newSetPropertyResult = Reflect.set(child, name, val+1);
+          //var newSetPropertyResult = Reflect.set(child, name, val+1);
+          var newSetPropertyResult = Reflect.setRevised(child, name, val+1);
           var newPropValueResult = child[name];
 
           setup(place, writability, type, extensibility);
@@ -286,7 +349,7 @@ function runTests() {
           print("{exists: "+place+", writable: "+writability+
                 ", type: "+type+ ", extensible: "+extensibility+"} "+
                 " => ES5: " + oldPropValueResult +
-                ", ES.next: " + newPropValueResult +
+                ", Reflect.set: " + newPropValueResult +
                 ", this browser: " + builtinPropValueResult);
           if (oldSetPropertyResult !== newSetPropertyResult) {
             print("! setProperty results don't match. ES5: " +
