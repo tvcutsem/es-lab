@@ -214,7 +214,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     }).end();
 
     var cTestP = Q(loaderP).send(void 0, 'contractTest');
-    Q(cTestP).when(cTest) {
+    Q(cTestP).when(function(cTest) {
       appendText(contractTest, 'ok');
     }, function(reason) {
       appendText(contractTest, 'oops');
