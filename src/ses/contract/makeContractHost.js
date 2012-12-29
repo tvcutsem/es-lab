@@ -20,7 +20,7 @@
  * @requires WeakMap, define, Q, eval
  * @author Mark S. Miller erights@gmail.com
  */
-define('makeContractHost', [], function() {
+define('contract/makeContractHost', [], function() {
   "use strict";
 
   /**
