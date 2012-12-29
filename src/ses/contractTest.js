@@ -13,14 +13,28 @@
 // limitations under the License.
 
 /**
- * @fileoverview Trivial test of simple AMD loader.
- * Tests anon case. Tests importing other modules.
+ * @fileoverview Test simple contract code
  * @requires define
  */
 
-define(['contract/makeContractHost'],
-function(makeContractHost) {
+define(['Q', 'contract/makeContractHost'],
+function(Q, makeContractHostFar) {
   "use strict";
 
+  var contractHostP = Q(makeContractHostFar).send(void 0);
 
+  function trivContract(whiteP, blackP) {
+    return 8;
+  }
+  var contractSrc = '' + trivContract;
+
+  var tokensP = Q(contractHostP).send('setup', contractSrc);
+
+  var whiteTokenP = Q(tokensP).get(0);
+  var whiteChairP = Q(contractHostP).send('redeem', whiteTokenP);
+  Q(whiteChairP).send(void 0, contractSrc, 0, {});
+
+  var blackTokenP = Q(tokensP).get(1);
+  var blackChairP = Q(contractHostP).send('redeem', blackTokenP);
+  return Q(blackChairP).send(void 0, contractSrc, 1, {});
 });

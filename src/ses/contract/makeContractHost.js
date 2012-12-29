@@ -20,7 +20,7 @@
  * @requires WeakMap, define, Q, eval
  * @author Mark S. Miller erights@gmail.com
  */
-define('contract/makeContractHost', [], function() {
+define('contract/makeContractHost', ['Q', 'def'], function(Q, def) {
   "use strict";
 
   /**
@@ -88,7 +88,8 @@ define('contract/makeContractHost', [], function() {
     return def({
       setup: function(contractSrc) {
         contractSrc = String(contractSrc);
-        var contract = eval(contractSrc);
+        var contract = Function('Q', 'def', 
+                                'return (' + contractSrc + '\n);')(Q, def);
         var result = Q.defer();
         var tokens = [];
         var argPs = [];
