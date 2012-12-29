@@ -118,7 +118,7 @@ define('makeContractHost', [], function() {
       },
       redeem: function(tokenP) {
         return Q(tokenP).when(function(token) {
-          const result = amp.get(token);
+          var result = amp.get(token);
           amp.delete(token);
           return result;
         });
