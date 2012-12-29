@@ -41,7 +41,7 @@ var ses;
 
    /**
     * Save away the original Error constructor as ses.UnsafeError and
-    * make it otheriwse unreachable. Replace it with a reachable
+    * make it otherwise unreachable. Replace it with a reachable
     * wrapping constructor with the same standard behavior.
     *
     * <p>When followed by the rest of SES initialization, the

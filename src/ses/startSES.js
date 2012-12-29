@@ -20,6 +20,7 @@
  *
  * //provides ses.startSES
  * @author Mark S. Miller,
+ * @author Jasvir Nagra
  * @requires WeakMap
  * @overrides ses, console, eval, Function, cajaVM
  */
@@ -526,7 +527,7 @@ ses.startSES = function(global,
               // behalf of a typeof expression, we'd return the string
               // "undefined" here instead. Unfortunately, without
               // parsing or proxies, that isn't possible.
-              throw new ReferenceError('"' + name + '" not in scope');
+              throw new ReferenceError('"' + name + '" blocked by Caja');
             },
             set: function scopedSet(newValue) {
               if (name in imports) {
@@ -698,7 +699,9 @@ ses.startSES = function(global,
      * from the text to be compiled.
      */
     function compileModule(modSrc, opt_sourcePosition) {
-      var exprSrc = '(function() {' + modSrc + '}).call(this)';
+      // Note the EOL after modSrc to prevent trailing line comment in modSrc
+      // eliding the rest of the wrapper.
+      var exprSrc = '(function() {' + modSrc + '\n}).call(this)';
 
       // Follow the pattern in compileExpr
       var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
@@ -723,7 +726,9 @@ ses.startSES = function(global,
       var body = params.pop();
       body = String(body || '');
       params = params.join(',');
-      var exprSrc = '(function(' + params + '\n){' + body + '})';
+      // Note the EOL after modSrc to prevent trailing line comment in body
+      // eliding the rest of the wrapper.
+      var exprSrc = '(function(' + params + '\n){' + body + '\n})';
       return compileExpr(exprSrc)(sharedImports);
     }
     FakeFunction.prototype = UnsafeFunction.prototype;
@@ -1031,7 +1036,8 @@ ses.startSES = function(global,
       makeImports: constFunc(makeImports),
       copyToImports: constFunc(copyToImports),
 
-      makeArrayLike: constFunc(makeArrayLike)
+      makeArrayLike: constFunc(makeArrayLike),
+      inES5Mode: true
     };
     var extensionsRecord = extensions();
     gopn(extensionsRecord).forEach(function (p) {
@@ -1077,7 +1083,8 @@ ses.startSES = function(global,
         var newDesc = {
           value: global[name],
           writable: false,
-          configurable: false
+          configurable: false,
+          enumerable: desc.enumerable // firefox bug 787262
         };
         try {
           defProp(global, name, newDesc);
@@ -1260,7 +1267,7 @@ ses.startSES = function(global,
                      'Frozen harmless', path);
       return false;
     }
-    reportProperty(ses.severities.NEW_SYMTOM,
+    reportProperty(ses.severities.NEW_SYMPTOM,
                    'Failed to be poisoned', path);
     return false;
   }
@@ -1304,7 +1311,7 @@ ses.startSES = function(global,
 
   ses.logger.reportMax();
 
-  if (ses.ok()) {
+  if (ses.ok(ses['severities'][ses.maxAcceptableSeverityName])) {
     // We succeeded. Enable safe Function, eval, and compile* to work.
     dirty = false;
     ses.logger.log('initSES succeeded.');

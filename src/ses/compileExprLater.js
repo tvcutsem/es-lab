@@ -20,7 +20,7 @@
  * //provides ses.compileExprLater
  * @author Mark S. Miller
  * @overrides ses
- * @requires Q, cajaVM, document
+ * @requires Q, cajaVM, document, URI
  */
 
 
@@ -81,13 +81,13 @@ var ses;
    /**
     *
     */
-   function compileLaterInScript(exprSrc, opt_sourcePosition) {
+   function compileLaterInScript(exprSrc, opt_sourceUrl) {
 
      var result = Q.defer();
 
      // The portion of the pattern in compileExpr which is appropriate
      // here as well.
-     var wrapperSrc = ses.securableWrapperSrc(exprSrc, opt_sourcePosition);
+     var wrapperSrc = ses.securableWrapperSrc(exprSrc, opt_sourceUrl);
      var freeNames = ses.atLeastFreeVarNames(exprSrc);
 
      var head = document.getElementsByTagName("head")[0];
@@ -98,12 +98,25 @@ var ses;
 
      var scriptSrc = 'ses.redeemResolver(' + resolverTicket + ')(' +
        'Object.freeze(ses.makeCompiledExpr(' + wrapperSrc + ',\n' +
-       // SECURITY TODO(erights): Any encoding issues here?
+       // Freenames consist solely of identifier characters (\w|\$)+
+       // which do not need to be escaped further
        '["' + freeNames.join('", "') + '"])));';
 
-     if (opt_sourcePosition) {
-       // FATAL SECURITY TODO(erights): What encoding do we need here?
-       scriptSrc = '/* from ' + opt_sourcePosition + ' */ ' + scriptSrc;
+     if (opt_sourceUrl) {
+       if (URI && URI.parse) {
+         var parsed = URI.parse(String(opt_sourceUrl));
+         parsed = null === parsed ? null : parsed.toString();
+
+         // Note we could try to encode these characters or search specifically
+         // for */ as a pair of characters but since it is for debugging only
+         // choose to avoid
+         if (null !== parsed &&
+             parsed.indexOf("<") < 0 &&
+             parsed.indexOf(">") < 0 &&
+             parsed.indexOf("*") < 0) {
+           scriptSrc = '/* from ' + parsed + ' */ ' + scriptSrc;
+         }
+       }
      }
 
      // TODO(erights): It seems that on Chrome at least, the injected

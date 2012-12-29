@@ -91,10 +91,14 @@ var ses;
    * The severity levels.
    *
    * <dl>
+   *   <dt>MAGICAL_UNICORN</dt><dd>Unachievable magical mode used for testing.
    *   <dt>SAFE</dt><dd>no problem.
    *   <dt>SAFE_SPEC_VIOLATION</dt>
    *     <dd>safe (in an integrity sense) even if unrepaired. May
    *         still lead to inappropriate failures.</dd>
+   *   <dt>NO_KNOWN_EXPLOIT_SPEC_VIOLATION</dt>
+   *     <dd>known to introduce an indirect safety issue which,
+   *     however, is not known to be exploitable.</dd>
    *   <dt>UNSAFE_SPEC_VIOLATION</dt>
    *     <dd>a safety issue only indirectly, in that this spec
    *         violation may lead to the corruption of assumptions made
@@ -113,13 +117,16 @@ var ses;
    * </dl>
    */
   ses.severities = {
+    MAGICAL_UNICORN:       { level: -1, description: 'Testing only' },
     SAFE:                  { level: 0, description: 'Safe' },
     SAFE_SPEC_VIOLATION:   { level: 1, description: 'Safe spec violation' },
-    UNSAFE_SPEC_VIOLATION: { level: 2, description: 'Unsafe spec violation' },
-    NOT_OCAP_SAFE:         { level: 3, description: 'Not ocap safe' },
-    NOT_ISOLATED:          { level: 4, description: 'Not isolated' },
-    NEW_SYMPTOM:           { level: 5, description: 'New symptom' },
-    NOT_SUPPORTED:         { level: 6, description: 'Not supported' }
+    NO_KNOWN_EXPLOIT_SPEC_VIOLATION: {
+        level: 2, description: 'Unsafe spec violation but no known exploits' },
+    UNSAFE_SPEC_VIOLATION: { level: 3, description: 'Unsafe spec violation' },
+    NOT_OCAP_SAFE:         { level: 4, description: 'Not ocap safe' },
+    NOT_ISOLATED:          { level: 5, description: 'Not isolated' },
+    NEW_SYMPTOM:           { level: 6, description: 'New symptom' },
+    NOT_SUPPORTED:         { level: 7, description: 'Not supported' }
   };
 
   /**
@@ -201,28 +208,43 @@ var ses;
    * be adequately repairable, or otherwise falling back to Caja's
    * ES5/3 translator.
    */
-  if (ses.maxAcceptableSeverityName) {
-    var maxSev = ses.severities[ses.maxAcceptableSeverityName];
-    if (maxSev && typeof maxSev.level === 'number' &&
-        maxSev.level >= ses.severities.SAFE.level &&
-        maxSev.level < ses.severities.NOT_SUPPORTED.level) {
-      // do nothing
-    } else {
-      logger.error('Ignoring bad maxAcceptableSeverityName: ' +
-                   ses.maxAcceptableSeverityName + '.') ;
-      ses.maxAcceptableSeverityName = 'SAFE_SPEC_VIOLATION';
-    }
-  } else {
-    ses.maxAcceptableSeverityName = 'SAFE_SPEC_VIOLATION';
-  }
+  ses.maxAcceptableSeverityName = 
+    validateSeverityName(ses.maxAcceptableSeverityName);
   ses.maxAcceptableSeverity = ses.severities[ses.maxAcceptableSeverityName];
+
+  function validateSeverityName(severityName) {
+    if (severityName) {
+      var sev = ses.severities[severityName];
+      if (sev && typeof sev.level === 'number' &&
+        sev.level >= ses.severities.SAFE.level &&
+        sev.level < ses.severities.NOT_SUPPORTED.level) {
+        // do nothing
+      } else {
+        logger.error('Ignoring bad severityName: ' +
+                   severityName + '.');
+        severityName = 'SAFE_SPEC_VIOLATION';
+      }
+    } else {
+      severityName = 'SAFE_SPEC_VIOLATION';
+    }
+    return severityName;
+  }
+  function severityNameToLevel(severityName) {
+    return ses.severities[validateSeverityName(severityName)];
+  }
 
   /**
    * Once this returns false, we can give up on the SES
    * verification-only strategy and fall back to ES5/3 translation.
    */
-  ses.ok = function ok() {
-    return ses.maxSeverity.level <= ses.maxAcceptableSeverity.level;
+  ses.ok = function ok(maxSeverity) {
+    if ("string" === typeof maxSeverity) {
+      maxSeverity = ses.severities[maxSeverity];
+    }
+    if (!maxSeverity) {
+      maxSeverity = ses.maxAcceptableSeverity;
+    }
+    return ses.maxSeverity.level <= maxSeverity.level;
   };
 
   /**
@@ -353,19 +375,20 @@ var ses;
    * assignment.
    *
    * <p>Because of lack of sufficient foresight at the time, ES5
-   * unifortunately specified that a simple assignment to a
+   * unfortunately specified that a simple assignment to a
    * non-existent property must fail if it would override a
    * non-writable data property of the same name. (In retrospect, this
    * was a mistake, but it is now too late and we must live with the
    * consequences.) As a result, simply freezing an object to make it
    * tamper proof has the unfortunate side effect of breaking
    * previously correct code that is considered to have followed JS
-   * best practices, of this previous code used assignment to
+   * best practices, if this previous code used assignment to
    * override.
    *
    * <p>To work around this mistake, tamperProof(obj) detects if obj
    * is <i>prototypical</i>, i.e., is an object whose own
-   * "constructor" is a function whose "prototype" is this obj. If so,
+   * "constructor" is a function whose "prototype" is this obj. For example,
+   * Object.prototype and Function.prototype are prototypical.  If so,
    * then when tamper proofing it, prior to freezing, replace all its
    * configurable own data properties with accessor properties which
    * simulate what we should have specified -- that assignments to
@@ -474,10 +497,15 @@ var ses;
    *
    * <p>"makeDelayedTamperProof()" must only be called once.
    */
+  var makeDelayedTamperProofCalled = false;
   ses.makeDelayedTamperProof = function makeDelayedTamperProof() {
+    if (makeDelayedTamperProofCalled) {
+      throw "makeDelayedTamperProof() must only be called once.";
+    }
     var tamperProof = makeTamperProof();
     strictForEachFn(needToTamperProof, tamperProof);
     needToTamperProof = void 0;
+    makeDelayedTamperProofCalled = true;
     return tamperProof;
   };
 
@@ -883,6 +911,20 @@ var ses;
       if (err instanceof TypeError) { return true; }
       return 'freezing forEach failed with ' + err;
     }
+  }
+
+  /**
+   * Detects http://code.google.com/p/v8/issues/detail?id=2273
+   *
+   * A strict mode function should receive a non-coerced 'this'
+   * value. That is, in strict mode, if 'this' is a primitive, it
+   * should not be boxed
+   */
+  function test_FOREACH_COERCES_THISOBJ() {
+    "use strict";
+    var needsWrapping = true;
+    [1].forEach(function(){ needsWrapping = ("string" != typeof this); }, "f");
+    return needsWrapping;
   }
 
   /**
@@ -1452,8 +1494,35 @@ var ses;
       if (err instanceof TypeError) { return false; }
       return 'Defining __proto__ failed with: ' + err;
     }
-    if (y.isPrototypeOf(x)) { return true; }
-    return 'Defining __proto__ neither failed nor succeeded';
+    // If x.__proto__ has changed but is not equal to y,
+    // we deal with that in the next test.
+    return (x.__proto__ === y);
+  }
+
+
+  /**
+   * Some versions of v8 fail silently when attempting to assign to __proto__
+   */
+  function test_DEFINING_READ_ONLY_PROTO_FAILS_SILENTLY() {
+    if (!('freeze' in Object)) {
+      // Object.freeze and its ilk (including preventExtensions) are
+      // still absent on released Android and would
+      // cause a bogus bug detection in the following try/catch code.
+      return false;
+    }
+    var x = Object.preventExtensions({});
+    if (x.__proto__ === void 0 && !('__proto__' in x)) { return false; }
+    var y = {};
+    try {
+      Object.defineProperty(x, '__proto__', { value: y });
+    } catch (err) {
+      if (err instanceof TypeError) { return false; }
+      return 'Defining __proto__ failed with: ' + err;
+    }
+    if (x.__proto__ === Object.prototype) {
+      return true;
+    }
+    return "Read-only proto was changed in a strange way.";
   }
 
   /**
@@ -1471,6 +1540,23 @@ var ses;
     }
     return false;
   }
+  /**
+   * Detects http://code.google.com/p/v8/issues/detail?id=2396
+   * 
+   * <p>Commenting out the eval does the right thing.  Only fails in
+   * non-strict mode.
+   */
+  function test_EVAL_BREAKS_MASKING() {
+    var x;
+    x = (function a() {
+      function a() {}
+      eval("");
+      return a;
+    });
+    // x() should be the internal function a(), not itself
+    return x() === x;
+  }
+
 
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1645
@@ -1534,6 +1620,90 @@ var ses;
   }
 
   /**
+   * Detects whether calling pop on a frozen array can modify the array.
+   * See https://bugs.webkit.org/show_bug.cgi?id=75788
+   */
+  function test_POP_IGNORES_FROZEN() {
+    var x = [1,2];
+    Object.freeze(x);
+    try {
+      x.pop();
+    } catch (e) {
+      if (x.length !== 2) { return 'Unexpected modification of frozen array'; }
+      if (x[0] === 1 && x[1] === 2) { return false; }
+    }
+    if (x.length !== 2) {
+      return 'Unexpected silent modification of frozen array';
+    }
+    return (x[0] !== 1 || x[1] !== 2);
+  }
+
+
+  /**
+   * Detects whether calling sort on a frozen array can modify the array.
+   * See http://code.google.com/p/v8/issues/detail?id=2419
+   */
+  function test_SORT_IGNORES_FROZEN() {
+    var x = [2,1];
+    Object.freeze(x);
+    try {
+      x.sort();
+    } catch (e) {
+      if (x.length !== 2) { return 'Unexpected modification of frozen array'; }
+      if (x[0] === 2 && x[1] === 1) { return false; }
+    }
+    if (x.length !== 2) {
+      return 'Unexpected silent modification of frozen array';
+    }
+    return (x[0] !== 2 || x[1] !== 1);
+  }
+
+  /**
+   * Detects whether calling push on a sealed array can modify the array.
+   * See http://code.google.com/p/v8/issues/detail?id=2412
+   */
+  function test_PUSH_IGNORES_SEALED() {
+    var x = [1,2];
+    Object.seal(x);
+    try {
+      x.push(3);
+    } catch (e) {
+      if (x.length !== 2) { return 'Unexpected modification of frozen array'; }
+      if (x[0] === 1 && x[1] === 2) { return false; }
+    }
+    return (x.length !== 2 || x[0] !== 1 || x[1] !== 2);
+  }
+
+  /**
+   * In some browsers, assigning to array length can delete
+   * non-configurable properties.
+   * https://bugzilla.mozilla.org/show_bug.cgi?id=590690
+   * TODO(felix8a): file bug for chrome
+   */
+  function test_ARRAYS_DELETE_NONCONFIGURABLE() {
+    var x = [];
+    Object.defineProperty(x, 0, { value: 3, configurable: false });
+    try {
+      x.length = 0;
+    } catch (e) {}
+    return x.length !== 1 || x[0] !== 3;
+  }
+
+  /**
+   * In some versions of Chrome, extending an array can
+   * modify a read-only length property.
+   * http://code.google.com/p/v8/issues/detail?id=2379
+   */
+  function test_ARRAYS_MODIFY_READONLY() {
+    var x = [];
+    try {
+      Object.defineProperty(x, 'length', {value: 0, writable: false});
+      x[0] = 1;
+    } catch(e) {}
+    return x.length !== 0 || x[0] !== void 0;
+  }
+
+  /**
    *
    */
   function test_CANT_REDEFINE_NAN_TO_ITSELF() {
@@ -1545,6 +1715,22 @@ var ses;
       return 'defineProperty of NaN failed with: ' + err;
     }
     return false;
+  }
+
+  /**		
+   * In Firefox 15+, Object.freeze and Object.isFrozen only work for		
+   * descendents of that same Object.		
+   */		
+  function test_FIREFOX_15_FREEZE_PROBLEM() {		
+    if (!document || !document.createElement) { return false; }		
+    var iframe = document.createElement('iframe');		
+    var where = document.getElementsByTagName('script')[0];		
+    where.parentNode.insertBefore(iframe, where);		
+    var otherObject = iframe.contentWindow.Object;		
+    where.parentNode.removeChild(iframe);		
+    var obj = {};		
+    otherObject.freeze(obj);		
+    return !Object.isFrozen(obj);		
   }
 
   /**
@@ -1568,7 +1754,7 @@ var ses;
    * <p>We thank the following people, projects, and websites for
    * providing some useful intelligence of what property names we
    * should suspect:<ul>
-   * <li><a href="http://stacktracejs.org">stacktracejs.org</a>
+   * <li><a href="http://stacktracejs.com">stacktracejs.com</a>
    * <li>TODO(erights): find message on es-discuss list re
    * "   stack". credit author.
    * </ul>
@@ -1630,16 +1816,8 @@ var ses;
     return result;
   }
 
-  function freshHiddenPropertyCandidates() {
-    var result = freshErrorInstanceWhiteMap();
-    strictForEachFn(errorInstanceBlacklist, function(name) {
-      result[name] = true;
-    });
-    return result;
-  }
-
   /**
-   * Do Error instances on thos platform carry own properties that we
+   * Do Error instances on those platform carry own properties that we
    * haven't yet examined and determined to be SES-safe?
    *
    * <p>A new property should only be added to the
@@ -1668,40 +1846,38 @@ var ses;
   }
 
   /**
-   *
+   * On Firefox 14+ (and probably earlier), error instances have magical
+   * properties that do not appear in getOwnPropertyNames until you refer
+   * to the property.  This makes test_UNEXPECTED_ERROR_PROPERTIES
+   * unreliable, so we can't assume that passing that test is safe.
    */
-  function test_GET_OWN_PROPERTY_NAME_LIES() {
+  function test_ERRORS_HAVE_INVISIBLE_PROPERTIES() {
     var gopn = Object.getOwnPropertyNames;
     var gopd = Object.getOwnPropertyDescriptor;
 
-    var suspects = [new Error('e1')];
-    try { null.foo = 3; } catch (err) { suspects.push(err); }
-
-    var unreported = Object.create(null);
-
-    strictForEachFn(suspects, function(suspect) {
-      var candidates = freshHiddenPropertyCandidates();
-      strictForEachFn(gopn(suspect), function(name) {
-        // Delete the candidates that are reported
-        delete candidates[name];
+    var errors = [new Error('e1')];
+    try { null.foo = 3; } catch (err) { errors.push(err); }
+    for (var i = 0; i < errors.length; i++) {
+      var err = errors[i];
+      var found = Object.create(null);
+      strictForEachFn(gopn(err), function (prop) {
+        found[prop] = true;
       });
-      strictForEachFn(gopn(candidates), function(name) {
-        if (!gopd(suspect, name)) {
-          // Delete the candidates that are not own properties
-          delete candidates[name];
+      var j, prop;
+      for (j = 0; j < errorInstanceWhitelist.length; j++) {
+        prop = errorInstanceWhitelist[j];
+        if (gopd(err, prop) && !found[prop]) {
+          return true;
         }
-      });
-      strictForEachFn(gopn(candidates), function(name) {
-        unreported[name] = true;
-      });
-    });
-
-    var unreportedNames = gopn(unreported);
-    if (unreportedNames.length === 0) { return false; }
-    var badness = unreportedNames.sort().join(',');
-    if (badness == 'fileName,lineNumber,message,stack') { return true; }
-    return 'Error own properties unreported by getOwnPropertyNames: ' +
-      badness;
+      }
+      for (j = 0; j < errorInstanceBlacklist.length; j++) {
+        prop = errorInstanceBlacklist[j];
+        if (gopd(err, prop) && !found[prop]) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -1746,6 +1922,7 @@ var ses;
     }
   }
 
+
   ////////////////////// Repairs /////////////////////
   //
   // Each repair_NAME function exists primarily to repair the problem
@@ -1760,6 +1937,8 @@ var ses;
   var slice = Array.prototype.slice;
   var concat = Array.prototype.concat;
   var getPrototypeOf = Object.getPrototypeOf;
+  var unsafeDefProp = Object.defineProperty;
+  var isExtensible = Object.isExtensible;
 
   function patchMissingProp(base, name, missingFunc) {
     if (!(name in base)) {
@@ -1787,8 +1966,11 @@ var ses;
                      function fakeIsExtensible(obj) { return true; });
   }
 
-  function repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES() {
-    var unsafeDefProp = Object.defineProperty;
+  /*
+   * Fixes both FUNCTION_PROTOTYPE_DESCRIPTOR_LIES and
+   * DEFINING_READ_ONLY_PROTO_FAILS_SILENTLY.
+   */
+  function repair_DEFINE_PROPERTY() {
     function repairedDefineProperty(base, name, desc) {
       if (typeof base === 'function' &&
           name === 'prototype' &&
@@ -1798,6 +1980,9 @@ var ses;
         } catch (err) {
           logger.warn('prototype fixup failed', err);
         }
+      }
+      if (!isExtensible(base) && name === '__proto__') {
+        throw TypeError('Cannot redefine __proto__ on a non-extensible object');
       }
       return unsafeDefProp(base, name, desc);
     }
@@ -2016,10 +2201,28 @@ var ses;
   }
 
   function repair_NEED_TO_WRAP_FOREACH() {
-    var forEach = Array.prototype.forEach;
     Object.defineProperty(Array.prototype, 'forEach', {
-      value: function forEachWrapper(callbackfn, opt_thisArg) {
-        return forEach.apply(this, arguments);
+      // Taken from https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Array/forEach
+      value: function(callback, thisArg) { 
+        var T, k;
+        if (this === null || this === undefined) {
+          throw new TypeError("this is null or not defined");
+        }
+        var O = Object(this);
+        var len = O.length >>> 0;
+        if (objToString.call(callback) !== "[object Function]") {
+          throw new TypeError(callback + " is not a function");
+        }
+        T = thisArg;
+        k = 0;
+        while(k < len) {
+          var kValue;
+          if (k in O) {
+            kValue = O[k];
+            callback.call(T, kValue, k, O);
+          }
+          k++;
+        }
       }
     });
   }
@@ -2427,6 +2630,54 @@ var ses;
     });
   }
 
+  function repair_POP_IGNORES_FROZEN() {
+    var pop = Array.prototype.pop;
+    var frozen = Object.isFrozen;
+    Object.defineProperty(Array.prototype, 'pop', {
+      value: function () {
+        if (frozen(this)) {
+          throw new TypeError('Cannot pop a frozen object.');
+        }
+        return pop.call(this);
+      },
+      configurable : true,
+      writable: true
+    });
+  }
+
+  function repair_SORT_IGNORES_FROZEN() {
+    var sort = Array.prototype.sort;
+    var frozen = Object.isFrozen;
+    Object.defineProperty(Array.prototype, 'sort', {
+      value: function (compareFn) {
+        if (frozen(this)) {
+          throw new TypeError('Cannot sort a frozen object.');
+        }
+        if (arguments.length === 0) {
+          return sort.call(this);
+        } else {
+          return sort.call(this, compareFn);
+        }
+      },
+      configurable: true,
+      writable: true
+    });
+  }
+
+  function repair_PUSH_IGNORES_SEALED() {
+    var push = Array.prototype.push;
+    var sealed = Object.isSealed;
+    Object.defineProperty(Array.prototype, 'push', {
+      value: function (compareFn) {
+        if (sealed(this)) {
+          throw new TypeError('Cannot push onto a sealed object.');
+        }
+        return push.apply(this, arguments);
+      },
+      configurable: true,
+      writable: true
+    });
+  }
 
   ////////////////////// Kludge Records /////////////////////
   //
@@ -2551,7 +2802,7 @@ var ses;
     {
       description: 'A function.prototype\'s descriptor lies',
       test: test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
-      repair: repair_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
+      repair: repair_DEFINE_PROPERTY,
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: true,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1530',
@@ -2671,6 +2922,17 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1447'],
       sections: ['15.4.4.18'],
       tests: ['S15.4.4.18_A1', 'S15.4.4.18_A2']
+    },
+    {
+      description: 'Array forEach converts primitive thisObj arg to object',
+      test: test_FOREACH_COERCES_THISOBJ,
+      repair: repair_NEED_TO_WRAP_FOREACH,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=2273',
+          'https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Array/forEach'],
+      sections: ['15.4.4.18'],
+      tests: []
     },
     {
       description: 'Workaround undiagnosed need for dummy setter',
@@ -2891,6 +3153,16 @@ var ses;
       tests: ['S8.6.2_A8']
     },
     {
+      description: 'Defining __proto__ on non-extensible object fails silently',
+      test: test_DEFINING_READ_ONLY_PROTO_FAILS_SILENTLY,
+      repair: repair_DEFINE_PROPERTY,
+      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=2441'],
+      sections: ['8.6.2'],
+      tests: [] // TODO(erights): Add to test262
+    },
+    {
       description: 'Strict eval function leaks variable definitions',
       test: test_STRICT_EVAL_LEAKS_GLOBALS,
       repair: void 0,
@@ -2899,6 +3171,16 @@ var ses;
       urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
       sections: ['10.4.2.1'],
       tests: ['S10.4.2.1_A1']
+    },
+    {
+      description: 'Eval breaks masking of named functions in non-strict code',
+      test: test_EVAL_BREAKS_MASKING,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=2396'],
+      sections: ['10.2'],
+      tests: [] // TODO(erights): Add to test262
     },
     {
       description: 'parseInt still parsing octal',
@@ -2937,6 +3219,56 @@ var ses;
       tests: ['15.2.3.6-4-405']
     },
     {
+      description: 'Array.prototype.pop ignores frozeness',
+      test: test_POP_IGNORES_FROZEN,
+      repair: repair_POP_IGNORES_FROZEN,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=75788'],
+      sections: ['15.4.4.6'],
+      tests: [] // TODO(erights): Add to test262
+    },
+    {
+      description: 'Array.prototype.sort ignores frozeness',
+      test: test_SORT_IGNORES_FROZEN,
+      repair: repair_SORT_IGNORES_FROZEN,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=2419'],
+      sections: ['15.4.4.11'],
+      tests: [] // TODO(erights): Add to test262
+    },
+    {
+      description: 'Array.prototype.push ignores sealing',
+      test: test_PUSH_IGNORES_SEALED,
+      repair: repair_PUSH_IGNORES_SEALED,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=2412'],
+      sections: ['15.4.4.11'],
+      tests: [] // TODO(erights): Add to test262
+    },
+    {
+      description: 'Setting [].length can delete non-configurable elements',
+      test: test_ARRAYS_DELETE_NONCONFIGURABLE,
+      repair: void 0,
+      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=590690'],
+      sections: ['15.4.5.2'],
+      tests: [] // TODO(erights): Add to test262
+    },
+    {
+      description: 'Extending an array can modify read-only array length',
+      test: test_ARRAYS_MODIFY_READONLY,
+      repair: void 0,
+      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=2379'],
+      sections: ['15.4.5.1.3.f'],
+      tests: [] // TODO(erights): Add to test262
+    },
+    {
       description: 'Cannot redefine global NaN to itself',
       test: test_CANT_REDEFINE_NAN_TO_ITSELF,
       repair: repair_CANT_REDEFINE_NAN_TO_ITSELF,
@@ -2945,6 +3277,17 @@ var ses;
       urls: [], // Seen on WebKit Nightly. TODO(erights): report
       sections: ['8.12.9', '15.1.1.1'],
       tests: [] // TODO(erights): Add to test262
+    },
+    {
+      description: 'Firefox 15 cross-frame freeze problem',
+      test: test_FIREFOX_15_FREEZE_PROBLEM,
+      repair: void 0,
+      preSeverity: severities.NOT_ISOLATED,
+      canRepair: false,
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=784892',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=674195'],
+      sections: [],
+      tests: []
     },
     {
       description: 'Error instances have unexpected properties',
@@ -2957,8 +3300,8 @@ var ses;
       tests: []
     },
     {
-      description: 'getOwnPropertyNames lies, hiding some own properties',
-      test: test_GET_OWN_PROPERTY_NAME_LIES,
+      description: 'Error instances may have invisible properties',
+      test: test_ERRORS_HAVE_INVISIBLE_PROPERTIES,
       repair: void 0,
       preSeverity: severities.NOT_ISOLATED,
       canRepair: false,
@@ -3077,8 +3420,12 @@ var ses;
         }
       }
 
-      if (typeof beforeFailure === 'string' ||
-          typeof afterFailure === 'string') {
+      if (typeof beforeFailure === 'string') {
+        logger.error('New Symptom: ' + beforeFailure);
+        postSeverity = severities.NEW_SYMPTOM;
+      }
+      if (typeof afterFailure === 'string') {
+        logger.error('New Symptom: ' + afterFailure);
         postSeverity = severities.NEW_SYMPTOM;
       }
 
