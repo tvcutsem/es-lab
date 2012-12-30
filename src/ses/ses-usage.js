@@ -13,7 +13,7 @@
 //    hi
 
 var FS = require("fs");
-var VM = require("vm");
+// var VM = require("vm");
 
 var source = FS.readFileSync("logger.js") +
      FS.readFileSync("repairES5.js") +
@@ -26,8 +26,9 @@ var source = FS.readFileSync("logger.js") +
      FS.readFileSync("ejectorsGuardsTrademarks.js") +
      FS.readFileSync("hookupSESPlus.js");
 
-var script = new VM.Script(source);
-script.runInThisContext();
+// var script = new VM.Script(source);
+// script.runInThisContext();
+eval(source);
 
 var f = cajaVM.compileExpr("console.log('hi')");
 f({console: console});
