@@ -376,6 +376,19 @@ ses.startSES = function(global,
    */
   var sharedImports = create(null);
 
+  var MAX_NAT = Math.pow(2,52); // Is this right?
+  function Nat(allegedNum) {
+    if (typeof allegedNum !== 'number') { 
+      throw new RangeError("not a number"); 
+    }
+    if (allegedNum !== allegedNum) { throw new RangeError("NaN not natural"); }
+    if (allegedNumber < 0)         { throw new RangeError("negative"); }
+    if (allegedNumber % 1 !== 0)   { throw new RangeError("not integral"); }
+    if (allegedNumber > MAX_NAT)   { throw new RangeError("too big"); }
+    return allegedNum;
+  }
+
+
   (function startSESPrelude() {
 
     /**
@@ -1023,6 +1036,7 @@ ses.startSES = function(global,
       }),
       tamperProof: constFunc(tamperProof),
       constFunc: constFunc(constFunc),
+      Nat: constFunc(Nat),
       // def: see below
       is: constFunc(ses.is),
 

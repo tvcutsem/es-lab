@@ -201,7 +201,6 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
 
     var moduleMap = StringMap();
     moduleMap.set('Q', Q);
-    moduleMap.set('def', cajaVM.def);
     var loaderP = Q(makeSimpleAMDLoaderP).send(void 0, fetch, moduleMap);
     var amdTestP = Q(loaderP).send(void 0, 'amdTest');
     Q(amdTestP).when(function(amdTest) {
@@ -216,9 +215,9 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
 
     var cTestP = Q(loaderP).send(void 0, 'contractTest');
     Q(cTestP).when(function(cTest) {
-      appendText(contractTest, 'ok');
+      appendText(contractTest, 'ok: ' + cTest);
     }, function(reason) {
-      appendText(contractTest, 'oops');
+      appendText(contractTest, 'oops: ' + reason);
     }).end();
 
   })();

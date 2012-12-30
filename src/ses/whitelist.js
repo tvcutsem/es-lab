@@ -114,6 +114,7 @@ var ses;
       log: t,
       tamperProof: t,
       constFunc: t,
+      Nat: t,
       def: t,
       is: t,
 

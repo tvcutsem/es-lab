@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+define('contract/escrowExchange', ['Q'], function(Q) {
+
 function escrowExchange(argA, argB) {   // argA from Alice, argB from Bob
 
   function failOnly(cordP) {
@@ -47,3 +49,4 @@ function escrowExchange(argA, argB) {   // argA from Alice, argB from Bob
   return d.promise;
 }
 
+});
