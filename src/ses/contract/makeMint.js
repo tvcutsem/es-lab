@@ -17,7 +17,7 @@ define('contract/makeMint', [], function() {
   var def = cajaVM.def;
   var Nat = cajaVM.Nat;
 
-  function makeMint() {
+  return function makeMint() {
   
     var amp = WeakMap();
     function makePurse() { return mint(0); }

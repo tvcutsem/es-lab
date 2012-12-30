@@ -589,50 +589,35 @@ var ses;
      //////////////////////////////////////////////////////////////////////////
      // Non-fundamental conveniences below.
 
-     Q.defer = function() {
-       var deferred = {};
-       deferred.promise = promise(function(resolve, reject) {
-         deferred.resolve = resolve;
-         deferred.reject = reject;
-       });
-       return freeze(deferred);
-     };
-
      Q.delay = function(millis, opt_answer) {
-       var result = Q.defer();
-       setTimeout(function() { result.resolve(opt_answer); }, millis);
-       return result.promise;
+       return promise(function(resolve) {
+         setTimeout(function() { resolve(opt_answer); }, millis);
+       });
      };
 
      Q.race = function(answerPs) {
-       var result = Q.defer();
-       answerPs.forEach(function(answerP) {
-         Q(answerP).then(function(answer) {
-           result.resolve(answer);
-         }, function(err) {
-           result.resolve(Q.reject(err));
+       return promise(function(resolve,reject) {
+         answerPs.forEach(function(answerP) {
+           Q(answerP).then(resolve,reject);
          });
        });
-       return result.promise;
      };
 
      Q.all = function(answerPs) {
        var countDown = answerPs.length;
        var answers = [];
        if (countDown === 0) { return Q(answers); }
-       var result = Q.defer();
-       answerPs.forEach(function(answerP, index) {
-         Q(answerP).then(function(answer) {
-           answers[index] = answer;
-           if (--countDown === 0) {
-             // Note: Only a shallow freeze(), not a def().
-             result.resolve(Object.freeze(answers));
-           }
-         }, function(err) {
-           result.resolve(Q.reject(err));
+       return promise(function(resolve,reject) {
+         answerPs.forEach(function(answerP, index) {
+           Q(answerP).then(function(answer) {
+             answers[index] = answer;
+             if (--countDown === 0) {
+               // Note: Only a shallow freeze(), not a def().
+               resolve(Object.freeze(answers));
+             }
+           }, reject);
          });
        });
-       return result.promise;
      };
 
      Q.join = function(var_args) {
@@ -696,6 +681,15 @@ var ses;
          return callback(void 0);
        }
        return constFunc(asyncFunc);
+     };
+
+     Q.defer = function() {
+       var deferred = {};
+       deferred.promise = promise(function(resolve, reject) {
+         deferred.resolve = resolve;
+         deferred.reject = reject;
+       });
+       return freeze(deferred);
      };
 
      return def(Q);
