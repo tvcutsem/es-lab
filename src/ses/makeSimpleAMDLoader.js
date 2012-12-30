@@ -97,7 +97,7 @@
      var loader;
 
      function rawLoad(id) {
-       return Q(fetch(id)).when(function(src) {
+       return Q(fetch(id)).then(function(src) {
 
          var result = defineNotCalledPumpkin;
          function define(opt_id, deps, factory) {
@@ -112,7 +112,7 @@
              deps = opt_id;
            }
            var importPs = mapFn(deps, loader);
-           result = Q.all(importPs).when(function(imports) {
+           result = Q.all(importPs).then(function(imports) {
              return applyFn(factory, void 0, imports);
            });
          }
@@ -125,7 +125,7 @@
 
          var compiledExprP = compileExprLater(
            '(function(){' + src + '})()', id);
-         return Q(compiledExprP).when(function(compiledExpr) {
+         return Q(compiledExprP).then(function(compiledExpr) {
 
            compiledExpr(imports);
            if (result === defineNotCalledPumpkin) {

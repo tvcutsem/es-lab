@@ -113,13 +113,13 @@ define('contract/makeContractHost', ['Q'], function(Q) {
           addParam(i, def({}), Q.defer());
         }
 
-        result.resolve(Q.all(argPs).when(function(args) {
+        result.resolve(Q.all(argPs).then(function(args) {
           return contract.apply(void 0, args);
         }));
         return tokens;
       },
       play: function(tokenP, allegedSrc, allegedI, arg) {
-        return Q(tokenP).when(function(token) {
+        return Q(tokenP).then(function(token) {
           return amp.get(token)(allegedSrc, allegedI, arg);
         });
       }

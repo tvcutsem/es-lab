@@ -134,7 +134,7 @@ var ses;
       * <ul>
       * <li>OP - the name of one of the concrete handler methods spelled
       * in all upper case, which is currently GET, POST, PUT, DELETE, and
-      * WHEN. We might add the other HTTP verbs, HEAD and OPTION. And we
+      * THEN. We might add the other HTTP verbs, HEAD and OPTION. And we
       * might add the other needed reference bookkeeping operation,
       * WHEN_BROKEN, so that a farPromise can notify if it later breaks.
       * <li>args - the array of arguments to use when calling the
@@ -198,7 +198,7 @@ var ses;
        DELETE: function(name)     { return delete this.target[name]; },
 
        /** Just invoke sk, the success continuation */
-       WHEN:function(sk, fk)      { return sk(this.target); }
+       THEN:function(sk, fk)      { return sk(this.target); }
      };
 
      /**
@@ -233,12 +233,12 @@ var ses;
        nearer: function() { return this.promise; },
 
        dispatch: function(OP, args) {
-         if (OP === 'WHEN') { return this.WHEN (args[0], args[1]); }
+         if (OP === 'THEN') { return this.THEN (args[0], args[1]); }
          return this.promise;
        },
 
        /** Just invoke fk, the failure continuation */
-       WHEN:  function(sk, fk) { return fk(this.reason); }
+       THEN:  function(sk, fk) { return fk(this.reason); }
      };
 
      /**
@@ -370,7 +370,7 @@ var ses;
       *
       * <p>The farDispatch function acts like the dispatch method of the
       * FarHandler, except that it gets only the HTTP verb operations,
-      * not the WHEN operation.
+      * not the THEN operation.
       *
       * <p>To support the reporting of partition, for those farDispatches
       * whose failure model makes partition visible, a far promise may
@@ -386,14 +386,14 @@ var ses;
        nearer: function() { return this.promise; },
 
        /** Just invoke sk, the success continuation */
-       WHEN: function(sk, fk) { return sk(this.promise); }
+       THEN: function(sk, fk) { return sk(this.promise); }
      };
 
      function makeFar(farDispatch, nextSlotP) {
        var farPromise;
 
        function dispatch(OP, args) {
-         if (OP === 'WHEN') { return farPromise.WHEN(args[0], args[1]); }
+         if (OP === 'THEN') { return farPromise.THEN(args[0], args[1]); }
          return farDispatch(OP, args);
        }
        farPromise = new Promise(FarHandler, dispatch);
@@ -412,7 +412,7 @@ var ses;
          become(farHandler, farPromise);
        }
 
-       Q(nextSlotP).get('value').when(function(v) {
+       Q(nextSlotP).get('value').then(function(v) {
          breakFar(new Error('A farPromise can only further resolve to broken'));
        }, breakFar).end();
 
@@ -429,7 +429,7 @@ var ses;
       *
       * <p>The remoteDispatch function acts like the dispatch method of the
       * RemoteHandler, except that it gets only the HTTP verb operations,
-      * not the WHEN operation. Instead, the WHEN operations are
+      * not the THEN operation. Instead, the THEN operations are
       * forwarded on to the promise for the remote promise's next
       * resolution.
       */
@@ -447,18 +447,18 @@ var ses;
        var remotePromise;
 
        function dispatch(OP, args) {
-         if (OP === 'WHEN') {
-           // Send "when"s to the remote promise's eventual next
+         if (OP === 'THEN') {
+           // Send "then"s to the remote promise's eventual next
            // resolution. This has the effect of buffering them locally
            // until there is such a next resolution.
-           return Q(nextSlotP).get('value').when(args[0], args[1]);
+           return Q(nextSlotP).get('value').then(args[0], args[1]);
          }
          return remoteDispatch(OP, args);
        }
        remotePromise = new Promise(RemoteHandler, remoteDispatch);
 
 
-       Q(nextSlotP).when(function(nextSlot) {
+       Q(nextSlotP).then(function(nextSlot) {
          become(handle(remotePromise, Q(nextSlot.value)));
        }, function(reason) {
          become(handle(remotePromise, reject(reason)));
@@ -526,30 +526,30 @@ var ses;
            return handle(that).dispatch('DELETE', [name]);
          });
        },
-       when: function(callback, opt_errback) {
+       then: function(callback, opt_errback) {
          var errback = opt_errback || function(reason) { throw reason; };
          var done = false;
 
          /** success continuation */
          function sk(value) {
-           if (done) { throw new Error('This "when" already done.'); }
+           if (done) { throw new Error('This "then" already done.'); }
            done = true;
            return postpone(function() { return callback(value); });
          }
          /** failure continuation */
          function fk(reason) {
-           if (done) { throw new Error('This "when" already done.'); }
+           if (done) { throw new Error('This "then" already done.'); }
            done = true;
            return postpone(function() { return errback(reason); });
          }
 
          var that = this;
          return postpone(function() {
-           return handle(that).dispatch('WHEN', [sk, fk]);
+           return handle(that).dispatch('THEN', [sk, fk]);
          });
        },
        end: function() {
-         this.when(function(){},
+         this.then(function(){},
                    function(reason) {
            // So if this setTimeout logs throws that terminate a turn, it
            // will also log this reason.
@@ -592,7 +592,7 @@ var ses;
      Q.race = function(answerPs) {
        var result = Q.defer();
        answerPs.forEach(function(answerP) {
-         Q(answerP).when(function(answer) {
+         Q(answerP).then(function(answer) {
            result.resolve(answer);
          }, function(err) {
            result.resolve(Q.reject(err));
@@ -607,7 +607,7 @@ var ses;
        if (countDown === 0) { return Q(answers); }
        var result = Q.defer();
        answerPs.forEach(function(answerP, index) {
-         Q(answerP).when(function(answer) {
+         Q(answerP).then(function(answer) {
            answers[index] = answer;
            if (--countDown === 0) {
              // Note: Only a shallow freeze(), not a def().
@@ -626,7 +626,7 @@ var ses;
        if (len === 0) {
          return Q.reject(new Error('No references joined'));
        }
-       return Q.all(args).when(function(fulfilleds) {
+       return Q.all(args).then(function(fulfilleds) {
          var first = fulfilleds[0];
          for (var i = 1; i < len; i++) {
            if (!is(first, fulfilleds[i])) {
@@ -675,7 +675,7 @@ var ses;
              if (isStopIteration(err)) { return Q(err.value); }
              return Q.reject(err);
            }
-           return Q(promisedValue).when(callback, errback);
+           return Q(promisedValue).then(callback, errback);
          }
 
          return callback(void 0);

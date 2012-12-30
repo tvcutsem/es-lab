@@ -17,7 +17,7 @@ define('contract/escrowExchange', ['Q'], function(Q) {
 function escrowExchange(argA, argB) {   // argA from Alice, argB from Bob
 
   function failOnly(cordP) {
-    return Q(cordP).when(function(cord) { throw cord; });
+    return Q(cordP).then(function(cord) { throw cord; });
   }
 
   function makeTransfer(makeEscrowPurseP) {
@@ -25,7 +25,7 @@ function escrowExchange(argA, argB) {   // argA from Alice, argB from Bob
     return function transfer(decisionP, srcPurseP, dstPurseP, amount) {
       var escrowPurseP = Q(makeEscrowPurseP).send();
 
-        Q(decisionP).when(function(_) {                        // setup phase 2
+        Q(decisionP).then(function(_) {                        // setup phase 2
           Q(dstPurseP).send('deposit', amount, escrowPurseP);
         }, function(reason) {
           Q(srcPurseP).send('deposit', amount, escrowPurseP);

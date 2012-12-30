@@ -168,10 +168,10 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       compileExprLater: ses.compileExprLater
     });
 
-    var makeSimpleAMDLoaderP = Q(makeSimpleAMDLoaderSrcP).when(function(src) {
+    var makeSimpleAMDLoaderP = Q(makeSimpleAMDLoaderSrcP).then(function(src) {
       var exprSrc = '(function() {' + src + '}).call(this)';
       var compiledExprP = ses.compileExprLater(exprSrc, url);
-      return Q(compiledExprP).when(function(compiledExpr) {
+      return Q(compiledExprP).then(function(compiledExpr) {
         compiledExpr(imports);
         return imports.makeSimpleAMDLoader;
       });
@@ -199,7 +199,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     moduleMap.set('Q', Q);
     var loaderP = Q(makeSimpleAMDLoaderP).send(void 0, fetch, moduleMap);
     var amdTestP = Q(loaderP).send(void 0, 'amdTest');
-    Q(amdTestP).when(function(amdTest) {
+    Q(amdTestP).then(function(amdTest) {
       var amdTestStatus = amdTest === 'this is a test' ?
         'succeeded' : 'failed, unexpected: ' + amdTest;
       /*console.profileEnd();*/
