@@ -271,17 +271,17 @@ var ses;
 
 
      /*************************************************************************
-      * The handler for a local unresolved promise, as made by defer().
+      * The handler for a local pending promise, as made by defer().
       *
-      * <p>"promise" must be a local unresolved promise.
+      * <p>"promise" must be a local pending promise.
       */
-     function UnresolvedHandler(promise, queue) {
+     function PendingHandler(promise, queue) {
        this.promise = promise;
        this.queue = queue;
      }
-     UnresolvedHandler.prototype = {
+     PendingHandler.prototype = {
 
-       stateName: 'unresolved',
+       stateName: 'pending',
 
        nearer: function() { return this.promise; },
 
@@ -300,8 +300,8 @@ var ses;
       * Have all promises which were using oldHandler as their handler
       * instead use newPromise's handler as their handler.
       *
-      * <p>oldHandler must be a become-able kind of handler, i.e., an
-      * UnresolvedHandler, FarHandler, or RemoteHandler. It also must
+      * <p>oldHandler must be a become-able kind of handler, i.e., a
+      * PendingHandler, FarHandler, or RemoteHandler. It also must
       * not yet have become anything.
       */
      function become(oldHandler, newPromise) {
@@ -312,7 +312,7 @@ var ses;
      }
 
      /**
-      * Returns an unresolved promise and its corresponding resolver
+      * Returns a pending promise and its corresponding resolver
       * (resolve function).
       */
      function defer() {
@@ -326,7 +326,7 @@ var ses;
            debugger;
          }
        }
-       var promise = new Promise(UnresolvedHandler, queue);
+       var promise = new Promise(PendingHandler, queue);
        var handler = handle(promise);
 
        function resolve(value) {
@@ -344,7 +344,7 @@ var ses;
          promise = void 0;
 
          var forward;
-         if (newHandler instanceof UnresolvedHandler) {
+         if (newHandler instanceof PendingHandler) {
            // A nice optimization but not strictly necessary.
            forward = newHandler.queue;
          } else {
@@ -421,7 +421,7 @@ var ses;
 
 
      /*************************************************************************
-      * A remote promise is an unresolved promise with a possibly remote
+      * A remote promise is a pending promise with a possibly remote
       * resolver, where the behavior of sending a message to a remote
       * promise may be to send the message to that destination (e.g. for
       * promise pipelining). The actual behavior is locally represented
@@ -438,7 +438,7 @@ var ses;
        this.dispatch = dispatch;
      }
      RemoteHandler.prototype = {
-       stateName: 'unresolved remote',
+       stateName: 'pending remote',
 
        nearer: function()       { return this.promise; }
      };
