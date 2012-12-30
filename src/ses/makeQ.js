@@ -97,13 +97,13 @@ var ses;
       * Get the "best" handler associated with this promise, shortening
       * "became" chains in the process.
       */
-     function handle(promise) {
-       var handler = handlers.get(promise);
+     function handle(prom) {
+       var handler = handlers.get(prom);
        if (!handler || !handler.became) { return handler; }
        while (handler.became) {
          handler = handler.became;
        }
-       handlers.set(promise, handler);
+       handlers.set(prom, handler);
        return handler;
      }
 
@@ -112,17 +112,16 @@ var ses;
       * promise for what its outcome will be.
       */
      function postpone(thunk) {
-       var result = defer();
-       setTimeout(function() {
-         var value;
-         try {
-           value = thunk();
-         } catch (reason) {
-           value = reject(reason);
-         }
-         result.resolve(value);
-       }, 0);
-       return result.promise;
+       return promise(function(resolve, reject) {
+         setTimeout(function() {
+           var value;
+           try {
+             resolve(thunk());
+           } catch (reason) {
+             reject(reason);
+           }
+         }, 0);
+       });
      }
 
      /**
@@ -136,7 +135,8 @@ var ses;
       * in all upper case, which is currently GET, POST, PUT, DELETE, and
       * THEN. We might add the other HTTP verbs, HEAD and OPTION. And we
       * might add the other needed reference bookkeeping operation,
-      * WHEN_BROKEN, so that a farPromise can notify if it later breaks.
+      * WHEN_REJECTED, so that a farPromise can notify if it later becomes
+      * rejected.
       * <li>args - the array of arguments to use when calling the
       * handler's OP method.
       * <li>resolve - a resolver function, for reporting the outcome of
@@ -165,13 +165,13 @@ var ses;
      /*************************************************************************
       * A near promise's resolution is a non-promise.
       *
-      * <p>"promise" must be a near promise whose handler is this
+      * <p>"prom" must be a near promise whose handler is this
       * handler. "target" must be a non-promise. The NearHandler
-      * constructor does not actually use its "promise" argument, but it
+      * constructor does not actually use its "prom" argument, but it
       * is there to support the general HandlerConstructor API as assumed
       * by the Promise constructor.
       */
-     function NearHandler(promise, target) {
+     function NearHandler(prom, target) {
        this.target = target;
      }
      NearHandler.prototype = {
@@ -214,21 +214,21 @@ var ses;
 
 
      /*************************************************************************
-      * A broken promise will never deliver any operations because of the
+      * A rejected promise will never deliver any operations because of the
       * stated reason.
       *
-      * <p>"promise" must be a broken promise whose handler is this handler.
-      * "reason" will typically be a thrown Error. An originally broken
-      * promise's resolution is itself. A broken promise's resolution is
-      * a broken promise just like itself, except possibly for identity.
+      * <p>"prom" must be a rejected promise whose handler is this handler.
+      * "reason" will typically be a thrown Error. An originally rejected
+      * promise's resolution is itself. A rejected promise's resolution is
+      * a rejected promise just like itself, except possibly for identity.
       */
-     function BrokenHandler(promise, reason) {
-       this.promise = promise;
+     function RejectedHandler(prom, reason) {
+       this.promise = prom;
        this.reason = reason;
 
-       this.stateName = 'broken (by ' + reason + ')';
+       this.stateName = 'rejected (' + reason + ')';
      }
-     BrokenHandler.prototype = {
+     RejectedHandler.prototype = {
 
        nearer: function() { return this.promise; },
 
@@ -242,8 +242,8 @@ var ses;
      };
 
      /**
-      * Reject makes a new broken promise which reports "reason" as the
-      * alleged reason why it is broken.
+      * Reject makes a new rejected promise which reports "reason" as the
+      * alleged reason why it is rejected.
       *
       * <p>Does a def(reason), which (transitively under SES) freezes
       * reason.
@@ -251,18 +251,18 @@ var ses;
      function reject(reason) {
        reason = def(reason);
        try {
-         return new Promise(BrokenHandler, reason);
+         return new Promise(RejectedHandler, reason);
        } catch (err) {
          // Workaround undiagnosed intermittent FF bug. TODO(erights):
          // isolate and report.
          // debugger;
          reason = 'Failing to report error for mysterious reasons';
        }
-       return new Promise(BrokenHandler, reason);
+       return new Promise(RejectedHandler, reason);
      }
 
      /**
-      * Resolving a promise to itself breaks all promises in the loop
+      * Resolving a promise to itself rejects all promises in the loop
       * with the reason being an Error complaining of a vicious promise
       * cycle.
       */
@@ -271,12 +271,12 @@ var ses;
 
 
      /*************************************************************************
-      * The handler for a local pending promise, as made by defer().
+      * The handler for a local pending promise, as made by promise().
       *
-      * <p>"promise" must be a local pending promise.
+      * <p>"prom" must be a local pending promise.
       */
-     function PendingHandler(promise, queue) {
-       this.promise = promise;
+     function PendingHandler(prom, queue) {
+       this.promise = prom;
        this.queue = queue;
      }
      PendingHandler.prototype = {
@@ -286,13 +286,13 @@ var ses;
        nearer: function() { return this.promise; },
 
        dispatch: function(OP, args) {
-         var result = defer();
-         this.queue({
-           resolve: result.resolve,
-           OP: OP,
-           args: args
-         });
-         return result.promise;
+         return promise(function(resolve) {
+           this.queue({
+             resolve: resolve,
+             OP: OP,
+             args: args
+           });
+         }.bind(this));
        }
      };
 
@@ -312,10 +312,9 @@ var ses;
      }
 
      /**
-      * Returns a pending promise and its corresponding resolver
-      * (resolve function).
+      * User-visible function for making a promise
       */
-     function defer() {
+     function promise(func) {
        var buffer = [];
        function queue(messenger) {
          if (buffer) {
@@ -326,12 +325,12 @@ var ses;
            debugger;
          }
        }
-       var promise = new Promise(PendingHandler, queue);
-       var handler = handle(promise);
+       var resultP = new Promise(PendingHandler, queue);
+       var handler = handle(resultP);
 
        function resolve(value) {
          if (!buffer) { return; } // silent
-         // assert(handler === handle(promise)) since, the only way this
+         // assert(handler === handle(resultP)) since, the only way this
          // becomes untrue is by a prior call to resolve, which will
          // clear buffer, so we would never get here.
 
@@ -339,9 +338,9 @@ var ses;
          buffer = void 0;
 
          var newHandler = become(handler, Q(value));
-         handle(promise); // just to shorten
+         handle(resultP); // just to shorten
          handler = void 0; // A dead resolver should not retain dead objects
-         promise = void 0;
+         resultP = void 0;
 
          var forward;
          if (newHandler instanceof PendingHandler) {
@@ -356,10 +355,16 @@ var ses;
          }
        }
 
-       return freeze({
-         promise: promise,
-         resolve: constFunc(resolve)
-       });
+       function rejector(reason) {
+         resolve(reject(reason));
+       }
+
+       try {
+         func(constFunc(resolve), constFunc(rejector));
+       } catch (reason) {
+         rejector(reason);
+       }
+       return resultP;
      }
 
 
@@ -374,10 +379,10 @@ var ses;
       *
       * <p>To support the reporting of partition, for those farDispatches
       * whose failure model makes partition visible, a far promise may
-      * become broken.
+      * become rejected.
       */
-     function FarHandler(promise, dispatch) {
-       this.promise = promise;
+     function FarHandler(prom, dispatch) {
+       this.promise = prom;
        this.dispatch = dispatch;
      }
      FarHandler.prototype = {
@@ -399,22 +404,23 @@ var ses;
        farPromise = new Promise(FarHandler, dispatch);
 
 
-       function breakFar(reason) {
+       function rejectFar(reason) {
          // Note that a farPromise is resolved, so its nearer()
          // identity must be stable, even when it becomes
-         // broken. Thus, we do not become(farHandler, reject(reason))
+         // rejected. Thus, we do not become(farHandler, reject(reason))
          // or become(farHandler, nextSlot.value). Rather, we switch
-         // to a new broken handler whose promise is this same
+         // to a new rejected handler whose promise is this same
          // farPromise.
          var farHandler = handle(farPromise);
-         var brokenHandler = new BrokenHandler(farPromise, reason);
-         handlers.set(farPromise, brokenHandler);
+         var rejectedHandler = new RejectedHandler(farPromise, reason);
+         handlers.set(farPromise, rejectedHandler);
          become(farHandler, farPromise);
        }
 
        Q(nextSlotP).get('value').then(function(v) {
-         breakFar(new Error('A farPromise can only further resolve to broken'));
-       }, breakFar).end();
+         rejectFar(new Error(
+             'A farPromise can only further resolve to rejected'));
+       }, rejectFar).end();
 
        return farPromise;
      };
@@ -433,8 +439,8 @@ var ses;
       * forwarded on to the promise for the remote promise's next
       * resolution.
       */
-     function RemoteHandler(promise, dispatch) {
-       this.promise = promise;
+     function RemoteHandler(prom, dispatch) {
+       this.promise = prom;
        this.dispatch = dispatch;
      }
      RemoteHandler.prototype = {
@@ -568,7 +574,7 @@ var ses;
      //////////////////////////////////////////////////////////////////////////
 
      Q.reject = reject;
-     Q.defer = defer;
+     Q.promise = promise;
      Q.isPromise = isPromise;
 
      Q.makeFar = makeFar;
@@ -582,6 +588,15 @@ var ses;
 
      //////////////////////////////////////////////////////////////////////////
      // Non-fundamental conveniences below.
+
+     Q.defer = function() {
+       var deferred = {};
+       deferred.promise = promise(function(resolve, reject) {
+         deferred.resolve = resolve;
+         deferred.reject = reject;
+       });
+       return freeze(deferred);
+     };
 
      Q.delay = function(millis, opt_answer) {
        var result = Q.defer();

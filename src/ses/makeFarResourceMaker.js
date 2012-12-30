@@ -111,9 +111,9 @@ var ses;
                // permanent redirect?
 
              } else if (this.status === 410) {
-               var broken = Q.reject(new Error('Resource Gone'));
-               nextSlot.resolve(freeze({value: broken}));
-               result.resolve(broken);
+               var rejected = Q.reject(new Error('Resource Gone'));
+               nextSlot.resolve(freeze({value: rejected}));
+               result.resolve(rejected);
 
              } else {
                // TODO(erights): better diagnostics. Include
