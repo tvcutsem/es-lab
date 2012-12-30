@@ -1722,7 +1722,11 @@ var ses;
    * descendents of that same Object.		
    */		
   function test_FIREFOX_15_FREEZE_PROBLEM() {		
-    if (!document || !document.createElement) { return false; }		
+    if (typeof document === 'undefined' ||
+       typeof document.createElement !== 'function') {
+      // likely not a browser environment
+      return false;
+    }
     var iframe = document.createElement('iframe');		
     var where = document.getElementsByTagName('script')[0];		
     where.parentNode.insertBefore(iframe, where);		
