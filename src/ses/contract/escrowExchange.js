@@ -16,8 +16,8 @@ define('contract/escrowExchange', ['Q'], function(Q) {
 
   return function escrowExchange(argA, argB) { // argA from Alice, argB from Bob
   
-    function failOnly(cordP) {
-      return Q(cordP).then(function(cord) { throw cord; });
+    function failOnly(cancelP) {
+      return Q(cancelP).then(function(cancel) { throw cancel; });
     }
   
     function transfer(decisionP, srcPurseP, dstPurseP, amount) {
@@ -39,8 +39,8 @@ define('contract/escrowExchange', ['Q'], function(Q) {
           transfer(d.promise, argA.moneySrcP, argB.moneyDstP, argB.moneyNeeded),
           transfer(d.promise, argB.stockSrcP, argA.stockDstP, argA.stockNeeded)
         ]),
-        failOnly(argA.cordP),
-        failOnly(argB.cordP)
+        failOnly(argA.cancelP),
+        failOnly(argB.cancelP)
       ]));
     });
   }

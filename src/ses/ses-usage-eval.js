@@ -12,18 +12,11 @@
 //     initSES succeeded.
 //    hi
 
+var unsafeEval = eval;
+var global = this;
+
 var FS = require("fs");
-var VM = require("vm");
-
-var context = VM.createContext({
-    console: console,
-    hack: function (cajaVM) {
-        console.log(cajaVM);
-        var f = cajaVM.compileExpr("console.log('hi')");
-        f({console: console});
-    }
-});
-
+var src = '';
 [
     "logger.js",
     "repairES5.js",
@@ -37,7 +30,11 @@ var context = VM.createContext({
     "hookupSESPlus.js",
 ].forEach(function (path) {
     console.log("Running: " + path);
-    VM.runInContext(FS.readFileSync(path), context, path);
+    src += FS.readFileSync(path);
 });
 
-VM.runInContext("hack(cajaVM)", context);
+unsafeEval(src);
+
+console.log('hi');
+console.log(global);
+console.log(Object.getOwnPropertyNames(global).sort().join('\n'));

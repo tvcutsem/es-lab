@@ -98,13 +98,13 @@ define('contract/makeContractHost', ['Q'], function(Q) {
           tokens[i] = token;
           argPs[i] = argPair.promise;
           amp.set(token, def(function(allegedSrc, allegedI, arg) {
-            amp.delete(token);
             if (contractSrc !== allegedSrc) {
               throw new Error('unexpected contract: ' + contractSrc);
             }
             if (i !== allegedI) {
               throw new Error('unexpected player number: ' + i);
             }
+            amp.delete(token);
             argPair.resolve(arg);
             return result.promise;
           }));
