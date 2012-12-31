@@ -35,6 +35,6 @@ var src = '';
 
 unsafeEval(src);
 
-console.log('hi');
+global.cajaVM.eval("console.log('hi');");
 console.log(global);
 console.log(Object.getOwnPropertyNames(global).sort().join('\n'));
