@@ -1,0 +1,231 @@
+\documentclass{llncs}
+\usepackage{makeidx}  
+\begin{document}
+
+\title{Distributed Electronic Rights in JavaScript:\\
+A Progress Report}
+
+\author{Mark S. Miller\inst{1} \and Tom Van Cutsem\inst{2} \and Bill Tulloh\inst{3} }
+
+\institute{Google, Inc. \and V.U.B \and George Mason University}
+
+\maketitle    
+
+\begin{abstract}
+
+Smart Contracts are cool.
+
+\keywords{security, distributed objects, capabilities, smart contracts}
+\end{abstract}
+
+\section{Smart Contracts for the Rest of Us}
+
+The fabric of the global economy is held together by contracts. A contract is an agreed arrangement for cooperation between mutually suspicious parties. But existing contracts are ambiguous, jurisdictions-specific, and written, interpreted, and adjudicated only by expensive experts. \emph{Smart contracts} are contract-like arrangements expressed in program code, where the behavior of the program enforces the terms of the ``contract''. Though not a substitute for legal contracts, they can provide some of the benefits of contracts for fine-grain, jurisdiction-free, and automated arrangements for which legal contracts are impractical.
+
+To realize this potential, smart contracts themselves need a distributed, secure, and persistent computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts.
+
+We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by massive numbers of non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}\footnote{The official standards name for JavaScript is ``EcmaScript''.}. We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 40 lines of straightforward JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
+
+\section{Dr. SES: Distributed Resilient Secure EcmaScript}
+
+The current JavaScript standard, EcmaScript 5, enables the \emph{SES} library to easily enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. And the \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system for distributed orthogonal persistence -- resilient against many failures. We explain each below.
+
+\subsection{Just Enough JavaScript}
+
+For the sake of brevity, this paper borrows two syntactic conveniences proposed for EcmaScript 6, \emph{arrow functions} and \emph{rest arguments}, and one proposed for EcmaScript 7, the infix ``{\tt !}'' operator. Expanding away both of these conveniences, all the code here is working EcmaScript 5 code, and is available at \\
+{\tt code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} \\
+and its {\tt contract} subdirectory.
+
+JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. 
+
+For purposes of this paper, the following five lines are synonymous. All define a one parameter function which returns double its parameter. All bind a local variable named ``{\tt double}'' to this function. The first two lines are of historic interest only. This paper uses only the arrow function syntax of the last three lines.
+
+\begin{verbatim}
+function double(n) { return n+n; }        // old function declaration
+var double = function(n) { return n+n; }; // old function expression
+var double = (n) => { return n+n; }; // ES6 arrow function
+var double = n => { return n+n; };   // parens optional if one param
+var double = n => n+n;               // non-"{" expr implicitly returned
+\end{verbatim}
+
+The record syntax {\tt \{x: 3, y: 4\}} is an expression that evaluates to a record with two named fields initialized to the values shown. Records and functions compose together naturally to give objects:
+
+\begin{verbatim}
+var makePoint = (x, y) => {
+  return {
+    getX: () => x,
+    getY: () => y,
+    add: other => makePoint(x + other.getX(), y + other.getY())
+  };
+};
+
+var pt = makePoint(3, 5).add(makePoint(2, 7));
+\end{verbatim}
+
+A record of functions hiding variables serves as an object of methods ({\tt getX, getY, add}) hiding instance variables ({\tt x, y}). The {\tt makePoint} function serves as a class-like factory for making new point instances.
+
+Explain rest arguments
+
+\subsection{SES: Securing JavaScript}
+
+From a security perspective, there were three problems with such objects: 
+\begin{itemize}
+\item Records were fully mutable, allowing one client of the point to, for example, replace its {\tt getX} method, violating the assumptions of other clients. EcmaScript 5 provides a {\tt freeze} primitive, used by the SES library to define the {\tt def} function for making a tamper proof object graph.
+\item EcmaScript 3 had six violations of static scoping. Three of these are fixed unconditionally by EcmaScript 5. In addition, EcmaScript 5 provides a \emph{strict mode}, enabled by the {\tt "use strict";} directive shown below, which fixes the remaining three violations. (Throughout the rest of this paper, strict mode is assumed without further notation.)  
+\item Even aside from these scoping violations, EcmaScript functions were not encapsulated. However, EcmaScript 5 strict functions are fully encapsulated.
+\end{itemize}
+
+\begin{verbatim}
+"use strict";
+var makePoint = (x, y) => {
+  return def({
+    getX: () => x,
+    getY: () => y,
+    add: other => makePoint(x + other.getX(), y + other.getY())
+  });
+};
+\end{verbatim}
+
+A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables serves as a \emph{defensible} object. An object is ``defensible'' if it can be straightforwardly coded to be \emph{defensively consistent}\cite{markm:thesis}, i.e., it can defend its own invariants and provide correct service to its well behaved clients despite arbitrary or malicious misbehavior by its other clients. Our revised {\tt makePoint} above makes defensively consistent points.
+
+Other SES elements: 
+All effects only by using references.
+No powerful references by default -- all implicitly shared objects are transitively immutable. 
+
+def
+confine
+Nat
+WeakMap
+
+\subsection{Q: Distributed JavaScript Objects}
+
+Communicating Event-Loop Concurrency
+Immediate call and eventual send
+Promises, local and remote
+Bang syntax and its expansion
+Distributed cryptographic-capabilities
+
+\subsection{NodeKen: Distributed Orthogonal Persistence}
+
+Assumes asynchronously communicating event loops.
+
+Number outgoing messages.
+Retry unacknowledged outgoing messages.
+Drop duplicate incoming messages.
+Don't release messages or acknowledgments except from a checkpointed state.
+
+Brian Warner's sketch of secure communications.
+
+\section{The Contract Host}
+\section{Contracts use Electronic Rights}
+\section{Towards a Taxonomy of Electronic Rights}
+\section{Contracts create Electronic Rights}
+\section{A More Cooperative World?}
+
+\begin{thebibliography}{5}
+
+
+\end{thebibliography}
+
+\appendix
+
+\section{The Mint Maker (19 lines)}
+
+\begin{verbatim}
+var makeMint = () => {
+  var amp = WeakMap();
+  var makePurse = () => mint(0);
+  var mint = balance => {
+    var purse = def({
+      getBalance: () => balance,
+      makePurse: makePurse,
+      deposit: (amount, src) => {
+        Nat(balance + amount);
+        amp.get(src)(Nat(amount)); 
+        balance += amount; 
+      } 
+    });
+    amp.set(purse, 
+            amount => { balance = Nat(balance - amount); });
+    return purse;
+  };
+  return mint;
+};
+\end{verbatim}
+
+\section{The Escrow Exchange Agent (21 lines)}
+
+\begin{verbatim}
+var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
+  var makeEscrowPurseP = Q.join(srcPurseP ! makePurse, 
+                                dstPurseP ! makePurse);
+  var escrowPurseP = makeEscrowPurseP ! ();
+
+  Q(decisionP).then(                                  // setup phase 2
+    _      => { dstPurseP ! deposit(amount, escrowPurseP); },
+    reason => { srcPurseP ! deposit(amount, escrowPurseP); });
+
+  return escrowPurseP ! deposit(amount, srcPurseP);   // phase 1
+};
+
+var failOnly = cancelP => Q(cancelP).then(
+  cancel => { throw cancel; });
+
+var exchange = (argA, argB) => { // argA from Alice, argB from Bob
+  var decide;
+  var decisionP = Q.promise(resolve => { decide = resolve; });
+
+  decide(Q.race([Q.all([
+      transfer(decisionP, argA.moneySrcP, argB.moneyDstP, argB.moneyNeeded),
+      transfer(decisionP, argB.stockSrcP, argA.stockDstP, argA.stockNeeded)]),
+    failOnly(argA.cancelP), 
+    failOnly(argB.cancelP)]));
+  return decisionP;
+};
+\end{verbatim}
+
+\section{The Contract Host (36 lines)}
+
+\begin{verbatim}
+var makeContractHost = () => {
+  var amp = WeakMap();
+
+  return def({
+    setup: contractSrc => {
+      contractSrc = ''+contractSrc;
+      var contract = confine(contractSrc, {Q: Q});
+      var resolve;
+      var resultP = Q.promise(r => { resolve = r; });
+      var tokens = [];
+      var argPs = [];
+
+      var addParam = (i, token) => {
+        tokens[i] = token;
+        var resolveArg;
+        argPs[i] = Q.promise(r => { resolveArg = r; });
+        amp.set(token, (allegedSrc, allegedI, arg) => {
+          if (contractSrc !== allegedSrc) {
+            throw new Error('unexpected contract: ' + contractSrc);
+          }
+          if (i !== allegedI) {
+            throw new Error('unexpected player number: ' + i);
+          }
+          amp.delete(token);
+          resolveArg(arg);
+          return resultP;
+        });
+      };
+      for (var i = 0; i < contract.length; i++) {
+        addParam(i, def({}));
+      }
+      resolve(Q.all(argPs).then(args => contract(...args)));
+      return tokens;
+    },
+    play: (tokenP, allegedSrc, allegedI, arg) => Q(tokenP).then(
+      token => amp.get(token)(allegedSrc, allegedI, arg))
+  });
+};
+\end{verbatim}
+
+
+\end{document}
