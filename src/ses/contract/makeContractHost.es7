@@ -77,7 +77,7 @@ var makeContractHost = () => {
   return def({
     setup: contractSrc => {
       contractSrc = ''+contractSrc;
-      var contract = confine(contractSrc)({Q: Q});
+      var contract = confine(contractSrc, {Q: Q});
       var resolve;
       var resultP = Q.promise(r => { resolve = r; });
       var tokens = [];

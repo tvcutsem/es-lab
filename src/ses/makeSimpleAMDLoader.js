@@ -25,7 +25,7 @@
  */
 
 
-(function(imports){
+(function(pseudoGlobal){
    "use strict";
 
    var bind = Function.prototype.bind;
@@ -111,9 +111,9 @@
              factory = deps;
              deps = opt_id;
            }
-           var importPs = mapFn(deps, loader);
-           result = Q.all(importPs).then(function(imports) {
-             return applyFn(factory, void 0, imports);
+           var amdImportPs = mapFn(deps, loader);
+           result = Q.all(amdImportPs).then(function(amdImports) {
+             return applyFn(factory, void 0, amdImports);
            });
          }
          // TODO(erights): Once we're jQuery compatible, change
@@ -122,6 +122,7 @@
 
          var imports = cajaVM.makeImports();
          cajaVM.copyToImports(imports, {define: constFunc(define)});
+         cajaVM.def(imports);
 
          var compiledExprP = compileExprLater(
            '(function(){' + src + '})()', id);
@@ -138,6 +139,6 @@
      return loader = Q.memoize(rawLoad, moduleMap);
    }
 
-   imports.makeSimpleAMDLoader = constFunc(makeSimpleAMDLoader);
+   pseudoGlobal.makeSimpleAMDLoader = constFunc(makeSimpleAMDLoader);
 
  })(this);

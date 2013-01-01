@@ -26,7 +26,7 @@ var makeMint = () => {
       } 
     });
     amp.set(purse, 
-            amount => { balance = Nat(balance – amount); });
+            amount => { balance = Nat(balance - amount); });
     return purse;
   };
   return mint;

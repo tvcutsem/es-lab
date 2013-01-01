@@ -15,17 +15,18 @@
 
 var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
   var makeEscrowPurseP = Q.join(srcPurseP ! makePurse, 
-                                dstPurse ! makePurse);
+                                dstPurseP ! makePurse);
   var escrowPurseP = makeEscrowPurseP ! ();
 
-  Q(decisionP).then(                                         // setup phase 2
-    _ => { dstPurseP ! deposit(amount, escrowPurseP); },
+  Q(decisionP).then(                                  // setup phase 2
+    _      => { dstPurseP ! deposit(amount, escrowPurseP); },
     reason => { srcPurseP ! deposit(amount, escrowPurseP); });
 
-  return escrowPurseP ! deposit(amount, srcPurseP);          // phase 1
+  return escrowPurseP ! deposit(amount, srcPurseP);   // phase 1
 };
 
-var failOnly = cancelP => Q(cancelP).then(function(cancel) { throw cancel; });
+var failOnly = cancelP => Q(cancelP).then(
+  cancel => { throw cancel; });
 
 var exchange = (argA, argB) => { // argA from Alice, argB from Bob
   var decide;
@@ -34,6 +35,7 @@ var exchange = (argA, argB) => { // argA from Alice, argB from Bob
   decide(Q.race([Q.all([
       transfer(decisionP, argA.moneySrcP, argB.moneyDstP, argB.moneyNeeded),
       transfer(decisionP, argB.stockSrcP, argA.stockDstP, argA.stockNeeded)]),
-    failOnly(argA.cancelP), failOnly(argB.cancelP)]));
+    failOnly(argA.cancelP), 
+    failOnly(argB.cancelP)]));
   return decisionP;
 };

@@ -119,6 +119,7 @@ var ses;
       is: t,
 
       compileExpr: t,
+      confine: t,
       compileModule: t,              // experimental
       compileProgram: t,             // Cannot be implemented in just ES5.1.
       eval: t,

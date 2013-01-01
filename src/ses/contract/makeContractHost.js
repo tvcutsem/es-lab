@@ -22,7 +22,7 @@
 define('contract/makeContractHost', ['Q'], function(Q) {
   "use strict";
   var def = cajaVM.def;
-  var confine = cajaVM.compileExpr;
+  var confine = cajaVM.confine;
 
   /**
    * A contract host as a mutually trusted third party for honestly
@@ -89,7 +89,7 @@ define('contract/makeContractHost', ['Q'], function(Q) {
     return def({
       setup: function(contractSrc) {
         contractSrc = ''+contractSrc;
-        var contract = confine(contractSrc)({Q: Q});
+        var contract = confine(contractSrc, {Q: Q});
         var result = Q.defer();
         var tokens = [];
         var argPs = [];
