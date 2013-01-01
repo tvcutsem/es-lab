@@ -28,27 +28,35 @@ We are working towards turning JavaScript into such a fabric. JavaScript is alre
 
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
-The current JavaScript standard, EcmaScript 5, enables the \emph{SES} library to easily enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. And the \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system for distributed orthogonal persistence -- resilient against many failures. We explain each below.
+The current JavaScript standard, EcmaScript 5 (ES5), enables the \emph{SES} library to easily enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. And the \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system for distributed orthogonal persistence -- resilient against many failures. We explain each below.
 
 \subsection{Just Enough JavaScript}
 
-For the sake of brevity, this paper borrows two syntactic conveniences proposed for EcmaScript 6, \emph{arrow functions} and \emph{rest arguments}, and one proposed for EcmaScript 7, the infix ``{\tt !}'' operator. Expanding away both of these conveniences, all the code here is working EcmaScript 5 code, and is available at \\
+JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. 
+
+For the sake of brevity, this paper borrows two syntactic conveniences proposed for ES6, \emph{rest arguments}(``{\tt \ldots}'') and \emph{arrow functions}(``{\tt =>}''), and one proposed for ES7, the \emph{eventual-send operator}(``{\tt !}''). Expanding away these three conveniences, all the code here is working ES5 code, and is available at \\
 {\tt code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} \\
 and its {\tt contract} subdirectory.
 
-JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. 
-
-For purposes of this paper, the following five lines are synonymous. All define a one parameter function which returns double its parameter. All bind a local variable named ``{\tt double}'' to this function. The first two lines are of historic interest only. This paper uses only the arrow function syntax of the last three lines.
+\paragraph{Rest arguments.} ES6 provides ``{\tt \ldots}'' as a syntactic convenience for applying a function to an array of arguments. The following three lines are equivalent, but the second line is of historic interest only.
 
 \begin{verbatim}
-function double(n) { return n+n; }        // old function declaration
-var double = function(n) { return n+n; }; // old function expression
-var double = (n) => { return n+n; }; // ES6 arrow function
-var double = n => { return n+n; };   // parens optional if one param
-var double = n => n+n;               // non-"{" expr implicitly returned
+  foo(3, 5)                 // normal fixed arity function call
+  foo.apply(void 0, [3, 5]) // old way to apply to an array
+  foo(...[3, 5])            // ES6 rest args, as used in this paper
 \end{verbatim}
 
-The record syntax {\tt \{x: 3, y: 4\}} is an expression that evaluates to a record with two named fields initialized to the values shown. Records and functions compose together naturally to give objects:
+\paragraph{Arrow functions.} The following five lines all define a one parameter function which returns double its parameter. All bind a local variable named ``{\tt double}'' to this function. The first two lines are of historic interest only. This paper uses only the arrow function syntax of the last three lines.
+
+\begin{verbatim}
+  function double(n) { return n+n; }        // old function declaration
+  var double = function(n) { return n+n; }; // old function expression
+  var double = (n) => { return n+n; }; // ES6 arrow function
+  var double = n => { return n+n; };   // parens optional if one param
+  var double = n => n+n;               // non-"{" expr implicitly returned
+\end{verbatim}
+
+\paragraph{Records.} The record syntax {\tt \{x: 3, y: 4\}} is an expression that evaluates to a record with two named fields initialized to the values shown. Records and functions compose together naturally to give objects:
 
 \begin{verbatim}
 var makePoint = (x, y) => {
@@ -64,15 +72,14 @@ var pt = makePoint(3, 5).add(makePoint(2, 7));
 
 A record of functions hiding variables serves as an object of methods ({\tt getX, getY, add}) hiding instance variables ({\tt x, y}). The {\tt makePoint} function serves as a class-like factory for making new point instances.
 
-Explain rest arguments
 
 \subsection{SES: Securing JavaScript}
 
 From a security perspective, there were three problems with such objects: 
 \begin{itemize}
-\item Records were fully mutable, allowing one client of the point to, for example, replace its {\tt getX} method, violating the assumptions of other clients. EcmaScript 5 provides a {\tt freeze} primitive, used by the SES library to define the {\tt def} function for making a tamper proof object graph.
-\item EcmaScript 3 had six violations of static scoping. Three of these are fixed unconditionally by EcmaScript 5. In addition, EcmaScript 5 provides a \emph{strict mode}, enabled by the {\tt "use strict";} directive shown below, which fixes the remaining three violations. (Throughout the rest of this paper, strict mode is assumed without further notation.)  
-\item Even aside from these scoping violations, EcmaScript functions were not encapsulated. However, EcmaScript 5 strict functions are fully encapsulated.
+\item Records were fully mutable, allowing one client of the point to, for example, replace its {\tt getX} method, violating the assumptions of other clients. ES5 provides a {\tt freeze} primitive, used by the SES library to define the {\tt def} function for making a tamper proof object graph.
+\item ES3 had six violations of static scoping. Three of these are fixed unconditionally by ES5. In addition, ES5 provides a \emph{strict mode}, enabled by the {\tt "use strict";} directive shown below, which fixes the remaining three violations. (Throughout the rest of this paper, strict mode is assumed without further notation.)  
+\item Even aside from these scoping violations, ES3 functions were not encapsulated. However, ES5 strict functions are fully encapsulated.
 \end{itemize}
 
 \begin{verbatim}
@@ -116,9 +123,9 @@ Don't release messages or acknowledgments except from a checkpointed state.
 
 Brian Warner's sketch of secure communications.
 
-\section{The Contract Host}
 \section{Contracts use Electronic Rights}
 \section{Towards a Taxonomy of Electronic Rights}
+\section{The Contract Host}
 \section{Contracts create Electronic Rights}
 \section{A More Cooperative World?}
 
