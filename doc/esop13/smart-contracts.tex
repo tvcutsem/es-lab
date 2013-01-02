@@ -31,7 +31,7 @@ We are working towards turning JavaScript into such a fabric. JavaScript is alre
 
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
-The current JavaScript standard, EcmaScript 5 (ES5), enables the \emph{SES} library to easily enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. And the \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system for distributed orthogonal persistence -- resilient against many failures. We explain each below.
+The current JavaScript standard, EcmaScript 5 (ES5), enables the \emph{SES} library to easily enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. The \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system for distributed orthogonal persistence---resilient against many failures. We explain each below.
 
 \subsection{Just Enough JavaScript}
 
@@ -122,6 +122,8 @@ Bang syntax and its expansion
 
 Distributed cryptographic-capabilities
 
+!, Q.then, Q.promise, Q.all, Q.race, Q.join
+
 \subsection{NodeKen: Distributed Orthogonal Persistence}
 
 Assumes asynchronously communicating event loops.
@@ -135,6 +137,16 @@ Brian Warner's sketch of secure communications.
 
 \section{Contracts use Electronic Rights}
 \section{Towards a Taxonomy of Electronic Rights}
+
+\begin{tabular}{ l l }
+  Object reference & Money \\ \hline
+  Shared & Exclusive \\
+  Specific & Fungible \\
+  Opaque & Assayable \\
+  Exercisable & Symbolic \\
+\end{tabular}
+
+
 \section{The Contract Host}
 \section{Contracts create Electronic Rights}
 \section{A More Cooperative World?}
