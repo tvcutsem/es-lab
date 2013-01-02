@@ -2,6 +2,8 @@
 \usepackage{makeidx}  
 % \usepackage{hyperref}
 \begin{document}
+\sloppypar
+
 
 \title{Distributed Electronic Rights in JavaScript:\\
 A Progress Report}
@@ -25,7 +27,7 @@ The fabric of the global economy is held together by contracts. A contract is an
 
 To realize this potential, smart contracts themselves need a distributed, secure, and persistent computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts.
 
-We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by massive numbers of non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}\footnote{The official standards name for JavaScript is ``EcmaScript''.}. We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 40 lines of straightforward JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
+We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by massive numbers of non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}\footnote{The official standards name for JavaScript is ``EcmaScript''.}. We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 41 lines of straightforward JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
 
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
@@ -50,11 +52,11 @@ and its {\tt contract} subdirectory.
 \paragraph{Arrow functions.} The following five lines all define a one parameter function which returns double its parameter. All bind a local variable named ``{\tt double}'' to this function. The first two lines are of historic interest only. This paper uses only the arrow function syntax of the last three lines.
 
 \begin{verbatim}
-  function double(n) { return n+n; }        // old function declaration
-  var double = function(n) { return n+n; }; // old function expression
-  var double = (n) => { return n+n; }; // ES6 arrow function
-  var double = n => { return n+n; };   // parens optional if one param
-  var double = n => n+n;               // non-"{" expr implicitly returned
+  function double(n) { return n+n; }        // old function decl
+  var double = function(n) { return n+n; }; // old function expr
+  var double = (n) => { return n+n; };      // ES6 arrow function
+  var double = (n) => n+n;    // non-"{" expr implicitly returned
+  var double = n => n+n;      // parens optional if one param
 \end{verbatim}
 
 \paragraph{Records.} The record syntax {\tt \{x: 3, y: 4\}} is an expression that evaluates to a record with two named fields initialized to the values shown. Records and functions compose together naturally to give objects:
@@ -111,9 +113,13 @@ WeakMap
 \subsection{Q: Distributed JavaScript Objects}
 
 Communicating Event-Loop Concurrency
+
 Immediate call and eventual send
+
 Promises, local and remote
+
 Bang syntax and its expansion
+
 Distributed cryptographic-capabilities
 
 \subsection{NodeKen: Distributed Orthogonal Persistence}
@@ -164,7 +170,7 @@ var makeMint = () => {
 };
 \end{verbatim}
 
-\section{The Escrow Exchange Agent (21 lines)}
+\section{The Escrow Exchange Agent (22 lines)}
 
 \begin{verbatim}
 var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
@@ -172,25 +178,26 @@ var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
                                 dstPurseP ! makePurse);
   var escrowPurseP = makeEscrowPurseP ! ();
 
-  Q(decisionP).then(                                  // setup phase 2
+  Q(decisionP).then(                              // setup phase 2
     _      => { dstPurseP ! deposit(amount, escrowPurseP); },
     reason => { srcPurseP ! deposit(amount, escrowPurseP); });
 
-  return escrowPurseP ! deposit(amount, srcPurseP);   // phase 1
+  return escrowPurseP ! deposit(amount, srcPurseP);     // phase 1
 };
 
 var failOnly = cancelP => Q(cancelP).then(
   cancel => { throw cancel; });
 
-var exchange = (argA, argB) => { // argA from Alice, argB from Bob
+var exchange = (a, b) => { // a from Alice, b from Bob
   var decide;
   var decisionP = Q.promise(resolve => { decide = resolve; });
 
   decide(Q.race([Q.all([
-      transfer(decisionP, argA.moneySrcP, argB.moneyDstP, argB.moneyNeeded),
-      transfer(decisionP, argB.stockSrcP, argA.stockDstP, argA.stockNeeded)]),
-    failOnly(argA.cancelP), 
-    failOnly(argB.cancelP)]));
+     transfer(decisionP, a.moneySrcP, b.moneyDstP, b.moneyNeeded),
+     transfer(decisionP, b.stockSrcP, a.stockDstP, a.stockNeeded)
+    ]), 
+    failOnly(a.cancelP), 
+    failOnly(b.cancelP)]));
   return decisionP;
 };
 \end{verbatim}
@@ -216,10 +223,10 @@ var makeContractHost = () => {
         argPs[i] = Q.promise(r => { resolveArg = r; });
         amp.set(token, (allegedSrc, allegedI, arg) => {
           if (contractSrc !== allegedSrc) {
-            throw new Error('unexpected contract: ' + contractSrc);
+            throw new Error('unexpected contract: '+contractSrc);
           }
           if (i !== allegedI) {
-            throw new Error('unexpected player number: ' + i);
+            throw new Error('unexpected player number: '+i);
           }
           amp.delete(token);
           resolveArg(arg);
