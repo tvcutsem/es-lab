@@ -1,5 +1,6 @@
 \documentclass{llncs}
 \usepackage{makeidx}  
+% \usepackage{hyperref}
 \begin{document}
 
 \title{Distributed Electronic Rights in JavaScript:\\
@@ -20,7 +21,7 @@ Smart Contracts are cool.
 
 \section{Smart Contracts for the Rest of Us}
 
-The fabric of the global economy is held together by contracts. A contract is an agreed arrangement for cooperation between mutually suspicious parties. But existing contracts are ambiguous, jurisdictions-specific, and written, interpreted, and adjudicated only by expensive experts. \emph{Smart contracts} are contract-like arrangements expressed in program code, where the behavior of the program enforces the terms of the ``contract''. Though not a substitute for legal contracts, they can provide some of the benefits of contracts for fine-grain, jurisdiction-free, and automated arrangements for which legal contracts are impractical.
+The fabric of the global economy is held together by contracts. A contract is an agreed arrangement for cooperation between mutually suspicious parties. But existing contracts are ambiguous, jurisdictions-specific, and written, interpreted, and adjudicated only by expensive experts. \emph{Smart contracts} are contract-like arrangements expressed in program code, where the behavior of the program enforces the terms of the ``contract''\cite{szabo1997formalizing}. Though not a substitute for legal contracts, they can provide some of the benefits of contracts for fine-grain, jurisdiction-free, and automated arrangements for which legal contracts are impractical.
 
 To realize this potential, smart contracts themselves need a distributed, secure, and persistent computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts.
 
@@ -43,7 +44,7 @@ and its {\tt contract} subdirectory.
 \begin{verbatim}
   foo(3, 5)                 // normal fixed arity function call
   foo.apply(void 0, [3, 5]) // old way to apply to an array
-  foo(...[3, 5])            // ES6 rest args, as used in this paper
+  foo(...[3, 5])            // ES6 rest args used in this paper
 \end{verbatim}
 
 \paragraph{Arrow functions.} The following five lines all define a one parameter function which returns double its parameter. All bind a local variable named ``{\tt double}'' to this function. The first two lines are of historic interest only. This paper uses only the arrow function syntax of the last three lines.
@@ -75,9 +76,12 @@ A record of functions hiding variables serves as an object of methods ({\tt getX
 
 \subsection{SES: Securing JavaScript}
 
+
+
+
 From a security perspective, there were three problems with such objects: 
 \begin{itemize}
-\item Records were fully mutable, allowing one client of the point to, for example, replace its {\tt getX} method, violating the assumptions of other clients. ES5 provides a {\tt freeze} primitive, used by the SES library to define the {\tt def} function for making a tamper proof object graph.
+\item Records were fully mutable, allowing one client of a point to, for example, replace its {\tt getX} method, violating the assumptions of other clients. ES5 provides a {\tt freeze} primitive, used by the SES library to define the {\tt def} function for making a tamper proof object graph.
 \item ES3 had six violations of static scoping. Three of these are fixed unconditionally by ES5. In addition, ES5 provides a \emph{strict mode}, enabled by the {\tt "use strict";} directive shown below, which fixes the remaining three violations. (Throughout the rest of this paper, strict mode is assumed without further notation.)  
 \item Even aside from these scoping violations, ES3 functions were not encapsulated. However, ES5 strict functions are fully encapsulated.
 \end{itemize}
@@ -93,7 +97,7 @@ var makePoint = (x, y) => {
 };
 \end{verbatim}
 
-A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables serves as a \emph{defensible} object. An object is ``defensible'' if it can be straightforwardly coded to be \emph{defensively consistent}\cite{markm:thesis}, i.e., it can defend its own invariants and provide correct service to its well behaved clients despite arbitrary or malicious misbehavior by its other clients. Our revised {\tt makePoint} above makes defensively consistent points.
+A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables serves as a \emph{defensible} object. An object is ``defensible'' if it can be straightforwardly coded to be \emph{defensively consistent}\cite{RobustComposition}, i.e., it can defend its own invariants and provide correct service to its well behaved clients despite arbitrary or malicious misbehavior by its other clients. Our revised {\tt makePoint} above makes defensively consistent points.
 
 Other SES elements: 
 All effects only by using references.
@@ -129,10 +133,10 @@ Brian Warner's sketch of secure communications.
 \section{Contracts create Electronic Rights}
 \section{A More Cooperative World?}
 
-\begin{thebibliography}{5}
+\bibliographystyle{splncs}
+% \bibliographystyle{alpha}
+\bibliography{common}
 
-
-\end{thebibliography}
 
 \appendix
 
