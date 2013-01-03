@@ -1,5 +1,19 @@
 \documentclass{llncs}
 \usepackage{makeidx}  
+\usepackage{ifthen}
+\usepackage{amssymb}
+
+\newboolean{showcomments}
+\setboolean{showcomments}{true}
+\ifthenelse{\boolean{showcomments}}
+  {\newcommand{\bnote}[2]{
+	\fbox{\bfseries\sffamily\scriptsize#1}
+    {\sf\small$\blacktriangleright$\textit{#2}$\blacktriangleleft$}
+   }
+  }
+  {\newcommand{\bnote}[2]{}
+  } 
+
 % \usepackage{hyperref}
 \begin{document}
 \sloppypar
@@ -126,7 +140,7 @@ The processing of a single event is called a \emph{turn} of the event loop. Proc
 
 A system of communicating event loops consists of multiple event loops (in the same or distributed address spaces) that communicate with each other solely by means of asynchronous message passing. The Web Workers API~\cite{webworkerspec} enables such communication among multiple isolated event loops within the same browser. On a distributed scale, a Javascript webpage communicating with a node.js server using asynchronous XHR requests or WebSockets~\cite{websocketsspec} is another example of two communicating event loops.
 
-Dr. SES builds upon communicating event loops because this concurrency model provides adequate support for plan coordination~\cite{concurrencyamongstrangers}. That is, the model makes it manageable for objects to maintain their invariants in the face of concurrent (interleaved) requests made by multiple clients.
+Dr. SES builds upon communicating event loops because this concurrency model provides adequate support for plan coordination~\cite{miller:strangers}. That is, the model makes it manageable for objects to maintain their invariants in the face of concurrent (interleaved) requests made by multiple clients.
 
 While Javascript environments already effectively support event loop concurrency, the ECMAScript language itself has no built-in support for concurrent or distributed programming. Dr. SES thus extends Javascript with a handful of features that enable programmers to more directly express distributed interactions between individual objects.
 
@@ -152,7 +166,7 @@ promise.then(success(v) => result, failure(e) => result) => resultP
 
 This registers the functions \texttt{success} and \texttt{failure} to be called back in a later turn, when \texttt{promise} is resolved. If the promise was fulfilled with a value \texttt{v}, then \texttt{success(v)} is called. If the promise was rejected with an error \texttt{e}, then \texttt{failure(e)} is called.
 
-\texttt{then} itself returns \texttt{resultP}, a promise for either of the callbacks' \texttt{result} value. If the callback itself throws an error, that error is used to reject \texttt{resultP}. This propagation of errors along chains of dependent promises is called promise contagion~\cite{concurrency_among_strangers}, and it is the asynchronous equivalent of propagating exceptions up the call stack.
+\texttt{then} itself returns \texttt{resultP}, a promise for either of the callbacks' \texttt{result} value. If the callback itself throws an error, that error is used to reject \texttt{resultP}. This propagation of errors along chains of dependent promises is called promise contagion~\cite{miller:strangers}, and it is the asynchronous equivalent of propagating exceptions up the call stack.
 
 The \texttt{failure} callback is optional. If missing, then rejecting \texttt{promise} will automatically eventually reject \texttt{resultP} with the same reason.
 
@@ -202,7 +216,7 @@ Q.promise( f(resolve,reject) => () ) => promise
 \end{verbatim}
 
 \texttt{Q.promise} makes a fresh promise, where the promise is initially pending. It immediately calls the argument function \texttt{f} with two functions, conventionally named \texttt{resolve} and \texttt{reject}, that can be used to either fulfil or reject this new promise explicitly.
-% TODO(tvcutsem): shouldn't "resolve" be called "fulfil"?
+\bnote{tom}{shouldn't \texttt{resolve} be called \texttt{fulfil}?}
 
 We now use \texttt{Q.promise} to define a small set of promise combinators that we will come to rely upon later, when introducing the escrow exchange contract.
 
@@ -242,7 +256,7 @@ For example, given \texttt{sumP = Q.all([xP,yP]).then(([x,y]) => x+y)}, if both 
 
 \paragraph{Q.join} Join is our eventual equality operation. \texttt{Q.join(xP,yP)} takes two promises \texttt{xP} and \texttt{yP} and returns a joined promise. Any messages sent to this joined promise are only delivered if \texttt{xP} and \texttt{yP} eventually come to designate the same target object. If this is the case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
 
-% TODO(tvcutsem): replace Object.is(x,y) by (x === y) to simplify the explanation?
+\bnote{tom}{replace \texttt{Object.is(x,y)} by \texttt{(x === y)} to simplify the explanation?}
 \begin{verbatim}
 Q.join = (xP, yP) => {
   return Q.all([xP, yP]).then(([x, y]) => {
@@ -260,7 +274,7 @@ Q.join = (xP, yP) => {
 Electronic rights require a distributed, secure, and persistent computational fabric.
 We have already covered the distributed and secure aspects of Dr. SES. Here, we cover the final aspect of resilience against failures.
 
-To introduce resilience against failures, Dr. SES builds upon the Ken protocol~\cite{ken_usenix_2012_paper}. It offers to applications two primary features:
+To introduce resilience against failures, Dr. SES builds upon the Ken protocol~\cite{Yoo:CKen}. It offers to applications two primary features:
 
 \begin{description}
   \item[Reliable messaging] Ken provides primitives to reliably transmit a message exactly once to a recipient process. In addition, multiple messages sent to the same recipient are guaranteed to arrive in the same order (i.e. Ken ensures pair-wise FIFO message ordering).
@@ -290,9 +304,9 @@ One assumption that Ken does make is that all Ken processes eventually recover. 
 
 One objection against the Ken approach to checkpointing is that making a checkpoint after every event loop turn is too costly. The Ken implementation currently makes use of the OS virtual memory paging system to save to disk only those parts of the heap that have changed while processing a message. Furthermore, the availability of cheap low-latency non-volatile memory (such as solid-state drives) has driven down the cost of writing state to disk to the point that making micro-snapshots after every turn becomes practical.
 
-To date, there exist two implementations of the Ken protocol, one in C (CKen~\cite{ken_usenix_2012_paper}) and one in Java (WaterKen~\cite{waterken}). We are actively working towards integrating CKen with the v8 Javascript virtual machine\footnote{See \url{https://github.com/supergillis/v8-ken}.}. The longer-term goal is to integrate such a Ken-aware v8 runtime platform with node.js (which is built on v8), to arrive at what we call NodeKen. The key idea is to turn node.js into a Ken process, enabling distributed orthogonal persistence of server-side Javascript programs.
+To date, there exist two implementations of the Ken protocol, one in C (CKen~\cite{Yoo:CKen}) and one in Java (WaterKen~\cite{waterken}). We are actively working towards integrating CKen with the v8 Javascript virtual machine\footnote{See \url{https://github.com/supergillis/v8-ken}.}. The longer-term goal is to integrate such a Ken-aware v8 runtime platform with node.js (which is built on v8), to arrive at what we call NodeKen. The key idea is to turn node.js into a Ken process, enabling distributed orthogonal persistence of server-side Javascript programs.
 
-TODO: Brian Warner's sketch of secure communications. (NACL Library)
+\bnote{tom}{TODO: Brian Warner's sketch of secure communications. (NACL Library)}
 
 \section{Contracts use Electronic Rights}
 \section{Towards a Taxonomy of Electronic Rights}
