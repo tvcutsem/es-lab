@@ -112,28 +112,187 @@ WeakMap
 
 \subsection{Q: Distributed JavaScript Objects}
 
-Communicating Event-Loop Concurrency
+As stated in the introduction, to realize electronic rights, we need a distributed, secure, and persistent computational fabric. We have just seen how SES can secure a local Javascript environment. Here, we focus on how to link up multiple such secured Javascript environments into a distributed system.
 
-Immediate call and eventual send
+%Before jumping ahead to distributed programming, let us first turn to concurrent programming, which is an essential ingredient of distributed programming.
 
-Promises, local and remote
+\paragraph{Communicating Event-Loop Concurrency}
 
-Bang syntax and its expansion
+On both the browser and the server, Javascript's de-facto concurrency model is based on ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. ``node.js'', the most popular server-side Javascript environment, is based on a similar model, although on the server the focus is less on UI and more on asynchronous networking and file I/O.
 
-Distributed cryptographic-capabilities
+In its most general form, an event loop consists of an event queue and a set of event handlers. The event loop processes events one by one from its queue by dispatching to the appropriate event handler. In Javascript, event handlers are usually functions registered as callbacks on certain events (e.g. button clicks or incoming XHR responses).
 
-!, Q.then, Q.promise, Q.all, Q.race, Q.join
+The processing of a single event is called a \emph{turn} of the event loop. Processing an event usually entails calling a callback function, which then runs to completion, without any interruption. Thus, turns are the smallest unit of interleaving.
+
+A system of communicating event loops consists of multiple event loops (in the same or distributed address spaces) that communicate with each other solely by means of asynchronous message passing. The Web Workers API~\cite{webworkerspec} enables such communication among multiple isolated event loops within the same browser. On a distributed scale, a Javascript webpage communicating with a node.js server using asynchronous XHR requests or WebSockets~\cite{websocketsspec} is another example of two communicating event loops.
+
+Dr. SES builds upon communicating event loops because this concurrency model provides adequate support for plan coordination~\cite{concurrencyamongstrangers}. That is, the model makes it manageable for objects to maintain their invariants in the face of concurrent (interleaved) requests made by multiple clients.
+
+While Javascript environments already effectively support event loop concurrency, the ECMAScript language itself has no built-in support for concurrent or distributed programming. Dr. SES thus extends Javascript with a handful of features that enable programmers to more directly express distributed interactions between individual objects.
+
+\paragraph{Promises}
+
+We introduce a new type of object, called a Promise, to represent both the outcome of asynchronous operations, as well as to represent remote object references. A normal Javascript direct reference may only designate an object within the same event loop. Only promises may come to designate objects in other event loops. A promise may be in one of several states:
+
+\begin{description}
+  \item[pending] when it is not yet determined what object the promise designates,
+  \item[fulfilled] when it is resolved to successfully designate some object,
+  \item[rejected] when it will never designate an object, for an alleged reason represented by an associated error.
+\end{description}
+
+A fulfilled or rejected promise is also called a resolved promise.
+
+The function \texttt{Q(target)} returns a fulfilled promise designating the \texttt{target} object. If \texttt{target} is already a promise, that same promise is returned.
+
+Promise objects provide a method called \texttt{then} that allows eventual access to the promise's resolution. Its signature is:
+
+\begin{verbatim}
+promise.then(success(v) => result, failure(e) => result) => resultP
+\end{verbatim}
+
+This registers the functions \texttt{success} and \texttt{failure} to be called back in a later turn, when \texttt{promise} is resolved. If the promise was fulfilled with a value \texttt{v}, then \texttt{success(v)} is called. If the promise was rejected with an error \texttt{e}, then \texttt{failure(e)} is called.
+
+\texttt{then} itself returns \texttt{resultP}, a promise for either of the callbacks' \texttt{result} value. If the callback itself throws an error, that error is used to reject \texttt{resultP}. This propagation of errors along chains of dependent promises is called promise contagion~\cite{concurrency_among_strangers}, and it is the asynchronous equivalent of propagating exceptions up the call stack.
+
+The \texttt{failure} callback is optional. If missing, then rejecting \texttt{promise} will automatically eventually reject \texttt{resultP} with the same reason.
+
+To make matters more concrete, if \texttt{pointP} is a promise for a local \texttt{point} object, we may construct a derived point as follows:
+
+\begin{verbatim}
+var newP = pointP.then((point) => point.add(makePoint(1,2)); });
+\end{verbatim}
+
+\paragraph{Immediate call and eventual send}
+
+Promises may designate both local objects, and remote objects belonging to another event loop. If the promise comes to designate a local object (or a primitive value), that value can be accessed via the \texttt{.then} method.
+
+However, if the promise comes to designate a remote object, it is not possible to resolve the promise to a local reference. Instead, one must interact with the remote object via the promise. Any such interaction must be asynchronous, to ensure that interaction between the event loops as a whole remains asynchronous.
+
+Javascript provides many operators to interact with an object. Here, we will focus on only two: method calls and function application. Javascript has the familiar dot operator to express local, immediate method calls, such as \texttt{point.getX()}. We introduce a corresponding infix \texttt{!} operator (named the \emph{bang} or \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
+
+The \texttt{!} operator can be used anywhere the dot operator can be used. For instance, if \texttt{pointP} is a promise for a \texttt{point}, then \texttt{pointP ! getX()} denotes an eventual send, which enqueues a request to call the \texttt{getX()} method in the event loop of \texttt{point}. In addition, the syntax \texttt{fP ! (x,y)}, where \texttt{fP} is a promise designating a function \texttt{f}, enqueues a request to call \texttt{f(x,y)} in the event loop of \texttt{f}. The \texttt{!} operator is actually a thin veneer of syntactic sugar over a more explicit method call on the promise object:
+
+\begin{center}
+  \begin{tabular}{|l|l|l|}
+  \hline
+  Immediate syntax & Eventual syntax & Expansion \\
+  \hline
+  \texttt{p.m(x,y)} & \texttt{p ! m(x,y)} & \texttt{Q(p).send("m",x,y)} \\
+  \texttt{p(x,y)} & \texttt{p ! (x,y)} & \texttt{Q(p).send(undefined,x,y)}\\
+  \hline
+  \end{tabular} 
+\end{center}
+
+\paragraph{Remote object references}
+
+A local reference to an object is guaranteed to be unique and unforgeable, and grants only access to the public interface of the designated object. This is why a local reference is effectively a capability. When a promise comes to designate a remote object, the promise effectively becomes a remote object reference. How are such references represented, and do they have the same characteristics as local references?
+
+A first difference, already explained above, is that remote references only carry eventual message sends, not immediate method calls. A second difference is that in a distributed setting, it is impossible to guarantee unique and unforgeable references, but we can come close.
+
+We represent remote object references as unguessable HTTPS URLs (also called YURLs or web-keys~\cite{mashing_with_permission}). Such a reference may look like \texttt{https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment segment (everything after the \texttt{\#}) is a random character string that uniquely identifies an object on the \texttt{example.com} server.
+
+Such URLs form distributed cryptographic-capabilities. While such a URL is neither unique nor unforgeable, it nevertheless shares an important property with a local object reference: both are unguessable secrets. This implies that if you do not know the secret, you can only come to know it if somebody else who \emph{does} know the secret chooses to share it with you.
+
+\paragraph{Promise combinators}
+
+Just like it is useful to compose individual functions into a composite function, it is often useful to combine multiple individual promises into a single promise whose outcome depends on the individual promises. To construct such promise combinators, a final primitive is needed for programmers to define promises with a custom resolution strategy. This primitive is called \texttt{Q.promise}, and it has the following signature:
+
+\begin{verbatim}
+Q.promise( f(resolve,reject) => () ) => promise
+\end{verbatim}
+
+\texttt{Q.promise} makes a fresh promise, where the promise is initially pending. It immediately calls the argument function \texttt{f} with two functions, conventionally named \texttt{resolve} and \texttt{reject}, that can be used to either fulfil or reject this new promise explicitly.
+% TODO(tvcutsem): shouldn't "resolve" be called "fulfil"?
+
+We now use \texttt{Q.promise} to define a small set of promise combinators that we will come to rely upon later, when introducing the escrow exchange contract.
+
+\paragraph{Q.race} Given an array of promises \texttt{answerPs}, \texttt{Q.race(answerPs)} returns a promise for the resolution of whichever promise we notice has completed first.
+
+\begin{verbatim}
+Q.race = (answerPs) => {
+  return Q.promise((resolve,reject) => {
+    answerPs.forEach((answerP) => {
+      Q(answerP).then(resolve,reject);
+    });
+  });
+};
+\end{verbatim}
+
+For example, the call \texttt{Q.race([xP,yP]).then((v) => { print(v); })} will cause either the value of \texttt{xP} or \texttt{yP} to be printed to the screen, whichever resolves first. If neither resolves, then neither does the promise returned by \texttt{Q.race}. If the first promise to resolve is rejected, the promise returned by \texttt{Q.race} is rejected with the same reason.
+
+\paragraph{Q.all} It is often useful to collect several promised answers, in order to react either when all the answers are ready or when any of the promises becomes rejected.
+
+\begin{verbatim}
+Q.all = (answerPs) => {
+  var countDown = answerPs.length;
+  var answers = [];
+  if (countDown === 0) { return Q(answers); }
+  return Q.promise((resolve,reject) => {
+    answerPs.forEach((answerP, index) => {
+      Q(answerP).then(answer => {
+        answers[index] = answer;
+        if (--countDown === 0) { resolve(answers); }
+      }, reject);
+    });
+  });
+};  
+\end{verbatim}
+
+For example, given \texttt{sumP = Q.all([xP,yP]).then(([x,y]) => x+y)}, if both \texttt{xP} and \texttt{yP} resolve to a number, \texttt{sumP} resolves to their sum. If neither resolves, then neither does \texttt{sumP}. If either \texttt{xP} or \texttt{yP} is rejected, \texttt{sumP} is rejected with the same reason.
+
+\paragraph{Q.join} Join is our eventual equality operation. \texttt{Q.join(xP,yP)} takes two promises \texttt{xP} and \texttt{yP} and returns a joined promise. Any messages sent to this joined promise are only delivered if \texttt{xP} and \texttt{yP} eventually come to designate the same target object. If this is the case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
+
+% TODO(tvcutsem): replace Object.is(x,y) by (x === y) to simplify the explanation?
+\begin{verbatim}
+Q.join = (xP, yP) => {
+  return Q.all([xP, yP]).then(([x, y]) => {
+    if (Object.is(x, y)) {
+      return x;
+    } else {
+      throw new Error("not the same");
+    }
+  });
+};
+\end{verbatim}
 
 \subsection{NodeKen: Distributed Orthogonal Persistence}
 
-Assumes asynchronously communicating event loops.
+Electronic rights require a distributed, secure, and persistent computational fabric.
+We have already covered the distributed and secure aspects of Dr. SES. Here, we cover the final aspect of resilience against failures.
 
-Number outgoing messages.
-Retry unacknowledged outgoing messages.
-Drop duplicate incoming messages.
-Don't release messages or acknowledgments except from a checkpointed state.
+To introduce resilience against failures, Dr. SES builds upon the Ken protocol~\cite{ken_usenix_2012_paper}. It offers to applications two primary features:
 
-Brian Warner's sketch of secure communications.
+\begin{description}
+  \item[Reliable messaging] Ken provides primitives to reliably transmit a message exactly once to a recipient process. In addition, multiple messages sent to the same recipient are guaranteed to arrive in the same order (i.e. Ken ensures pair-wise FIFO message ordering).
+  \item[Distributed consistent snapshots] Ken provides to applications a persistent object heap. All objects allocated in this heap will survive arbitrary failures. Ken further ensures that the snapshots of distributed processes does not grow inconsistent. For example, it is impossible for the sender of a message to record in its snapshot that the message was successfully delivered, while the receiver has no record of having processed that message in its snapshot.
+\end{description}
+
+In short, a Ken process can tolerate arbitrary failures in such a way that when an application is restarted after a crash, it is automatically restored to a state that is consistent with the state before the crash. To the process itself, it is as if the crash had never happened. To any of the process's communication partners, the process just seemed slow to respond.
+
+Ken is a protocol best implemented at the level of a virtual machine. Ken assumes communicating event loops, and so aligns well with Javascript's de-facto execution model. A Ken process is an event loop. The way that Ken achieves the above properties is simple, yet effective:
+
+\begin{itemize}
+  \item Buffer all outgoing messages sent during a turn.
+  \item At the end of each turn, make a checkpoint of the persistent heap and of all outgoing unacknowledged messages.
+  \item Only then release any new outgoing messages, and acknowledge the message processed this turn.
+  \item Outgoing messages are numbered with a sequence number (for duplicate detection and message ordering).
+  \item Unacknowledged outgoing messages are periodically retried (with exponential back-off) until an acknowledgement is received.
+  \item Incoming messages are checked for duplicates. When a duplicate message is detected, it is dropped (not processed) and immediately acknowledged.
+\end{itemize}
+
+The snapshot of a Ken process consists of both the heap and the outgoing message queue. It does not include the runtime stack (which is guaranteed to be empty between two turns) nor the incoming message queue.
+
+The key point is that outgoing messages are released, and incoming messages are acknowledged only \emph{after} the message has been fully processed by the receiver \emph{and} the heap state has been checkpointed.
+
+The Ken protocol guarantees distributed snapshots even in the face of mutual suspicion. There is nothing an adversarial process can do that will corrupt the distributed snapshots of benign processes.
+
+One assumption that Ken does make is that all Ken processes eventually recover. To Ken, a permanently crashed client is indistinguishable from a very slow client. Thus, while Ken guarantees exactly-once message delivery, it is still up to the application to do its own failure handling if it does not receive a response within a given timeout period.
+
+One objection against the Ken approach to checkpointing is that making a checkpoint after every event loop turn is too costly. The Ken implementation currently makes use of the OS virtual memory paging system to save to disk only those parts of the heap that have changed while processing a message. Furthermore, the availability of cheap low-latency non-volatile memory (such as solid-state drives) has driven down the cost of writing state to disk to the point that making micro-snapshots after every turn becomes practical.
+
+To date, there exist two implementations of the Ken protocol, one in C (CKen~\cite{ken_usenix_2012_paper}) and one in Java (WaterKen~\cite{waterken}). We are actively working towards integrating CKen with the v8 Javascript virtual machine\footnote{See \url{https://github.com/supergillis/v8-ken}.}. The longer-term goal is to integrate such a Ken-aware v8 runtime platform with node.js (which is built on v8), to arrive at what we call NodeKen. The key idea is to turn node.js into a Ken process, enabling distributed orthogonal persistence of server-side Javascript programs.
+
+TODO: Brian Warner's sketch of secure communications. (NACL Library)
 
 \section{Contracts use Electronic Rights}
 \section{Towards a Taxonomy of Electronic Rights}
