@@ -15,7 +15,45 @@
   {\newcommand{\bnote}[2]{}
   } 
 
-% \usepackage{hyperref}
+
+% Package for including code in the document
+\usepackage{listings}
+\lstdefinelanguage{javascript}{
+   morekeywords={break,do,instanceof,typeof,case,else,new,var,catch,finally,return, void, continue, for, switch, while, debugger, function, this, with, default, if, throw, delete, in, try, class, enum, extends, super, const, export, import, implements, let, private, public, interface, package,protected, static, yield},
+   keywordstyle=\ttfamily\bfseries,
+   basicstyle=\ttfamily\small,
+   ndkeywords={},
+%                >>>=
+%              , >>= , >>> , === , !==, <<=
+%              , +=  , -=  , *=  , %= , >=
+%              , ==  , !=  , ++  , -- , <<
+%              , >>  , <=  , &=  , ,= , ^=
+%              , &&  ,
+%              , {     , }     , (     , )    , [   , ]
+%              , .     , ;     , ,     , <    , >   , !
+%              , ~     , =     , &     , ,    , ^   , ?
+%              , :     , *     , %     , +    , -
+   ndkeywordstyle=\ttfamily\bfseries,
+   identifierstyle=\ttfamily,
+   sensitive=false,
+   comment=[l]{//},
+   morecomment=[s]{/*}{*/}, 
+   commentstyle=\rmfamily,
+   stringstyle=\ttfamily,
+   columns=flexible,
+   showstringspaces=false,
+   numbers=left,
+   numberstyle=\tiny,
+   stepnumber=1,
+   numbersep=5pt,
+   numberblanklines=false
+}
+
+% suppress counting of empty lines in lstlistings, thanks to: http://tex.stackexchange.com/questions/33999/suppress-line-numbering-for-empty-lines-in-listings-package
+\makeatletter
+\lst@AddToHook{OnEmptyLine}{\addtocounter{lstnumber}{-1}}% Remove line number increment from listings
+\makeatother
+
 \begin{document}
 \sloppypar
 
@@ -46,17 +84,21 @@ We are working towards turning JavaScript into such a fabric. JavaScript is alre
 
 \section{Why Dr. SES?}
 
-Dr. SES is a platform for distributed, resilient and secure computing, layered on top of EcmaScript. Let us first discuss why each of these ingredients is needed to achieve electronic rights and contracts.
+Dr. SES is a platform for distributed, resilient and secure computing, layered on top of EcmaScript. Why is each of these ingredients needed to achieve electronic rights and contracts?
 
-Dr. SES is layered on top of EcmaScript for two primary reasons. First is the ubiquity of the language. Due to its embedding in the browser, EcmaScript is available on a wide range of platforms and devices. Second, because of this ubiquity, Javascript is widely adopted among developers and is thus accessible to a large audience of developers, many of whom are not expert programmers.
+Dr. SES is layered on top of EcmaScript for two primary reasons. First is the ubiquity of the language. Due to its embedding in the browser, EcmaScript is available on a wide range of platforms. Second, because of this ubiquity, Javascript is widely adopted among a broad developer audience.
 
-When trying to express electronic rights or contracts, it should be fairly obvious that security must play a key role in the architecture. Dr. SES builds upon the object-capability paradigm. Capability principles are followed both to secure distributed objects as well as to secure the local execution environment. The latter allows Dr. SES programs to execute mobile code from untrusted parties without fear of granting unprivileged access to that piece of code. This is especially relevant in the context of Javascript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that wholly depends on the ability to safely execute third-party code.
+In an architecture that aims to express electronic rights or contracts, security must play a key role. Dr. SES builds upon the object-capability paradigm. Capability principles are followed both to secure distributed objects as well as to secure the local execution environment. The latter allows Dr. SES programs to execute mobile code from untrusted parties without fear of granting excess privileges to that piece of code. This is especially relevant in the context of Javascript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that  depends on the ability to safely execute third-party code.
 
-Javascript is not a distributed programming language. In the browser, a large number of APIs is available to scripts to communicate with servers and other frames, but these APIs are tedious to work with, and hard to secure. That is why Dr. SES extends the Javascript language proper with a handful of features to support distributed programming at the level of individual objects.
+Javascript is not a distributed programming language. In the browser, a large number of APIs is available to scripts to communicate with servers and other frames, but these APIs are tedious to work with, and not designed with least-authority rules. That is why Dr. SES extends the Javascript language proper with a handful of features to support least-authority distributed programming at the level of individual objects.
 
-Finally, the resilience aspect of Dr. SES deals with the unavoidable issues of failure handling that come up in distributed systems. It is widely appreciated that writing correct, bug-free code in the presence of arbitrary failures is hard. Dr. SES, then, tries to make it as easy as possible for non-experts to deal with distributed failures. To a first approximation, Dr. SES does so by allowing programmers to pretend that failures do not exist.
+Finally, the resilience aspect of Dr. SES deals with the unavoidable issues of failure handling that come up in distributed systems.
+%It is widely appreciated that writing correct, bug-free code in the presence of arbitrary failures is hard. Dr. SES, then, tries to make it as easy as possible for non-experts to deal with distributed failures.
+Server-side Dr. SES programs periodically checkpoint their entire state, so that in the event of a failure, the program can always recover to a previously consistent state. Such Dr. SES programs can survive failures without any effort on the part of the programmer.
 
-Dr. SES has nothing to do with electronic rights or contracts per se. Its focus is to make distributed programming in Javascript as effortless as possible. Given such a platform, it then becomes possible to implement contracts with very little code. This is precisely what we will demonstrate in the second part of this paper, after having explained Dr. SES in more detail.
+%Objects and object references in Dr. SES are always persistent, meaning that they survive arbitrary failures by default.
+
+Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed programming in Javascript as effortless as possible. Given such a platform, it then becomes possible to implement contracts with very little code. This is precisely what we will demonstrate in the second part of this paper, after having explained Dr. SES in more detail.
 
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
@@ -107,9 +149,18 @@ A record of functions hiding variables serves as an object of methods ({\tt getX
 
 \subsection{SES: Securing JavaScript}
 
-\bnote{Tom}{Before diving into SES details, we might want to take a moment to explain the key idea of capability-based security (maybe even briefly contrast it with ACLs). Make the point that we want scripts to be born powerless, unless endowed with references to powerful objects. That's the bootstrapping phase. Then, we want to make the point that a reference to an object should provide only the right to access its public API (encapsulation), and that only connectivity begets connectivity (that's how one acquires new capabilities). Then we can explain why we need to secure Javascript: because scripts are not born powerless, and because objects are not encapsulated.}
+\bnote{Tom}{I expanded this section to include an introduction to capability-based security. Please review.}
 
-From a security perspective, there were three problems with such objects: 
+SES is an object-capability-secure subset of Javascript. Historically, there have been two contrasting views on how to secure shared resources. In the ACL (access control list) approach, every time a resource is used, an access control check is performed, checking if the requestor holds the right to use the resource. In this paradigm, resources are often coarse-grained. In the capability-based approach, a capability represents the right to perform a set of operations on a specific, designated resource. The very fact that an operation was performed \emph{via} a capability is sufficient proof to the resource that the operation is authorized. In capability-based systems, both access rights and resources are mostly fine-grained.
+
+Object-capability security marries the ideas of capability-based security with standard object-oriented programming. An object reference represents the right to invoke only the public methods on a specific object.
+
+To secure a Javascript application using object-capability principles, we require two properties. First, a script (program) must be born powerless, i.e. there must be no powerful globally accessible objects, such as an \texttt{XMLHttpRequest} object that allows the script to communicate with the outside world. But if a script is born powerless, then how can it interact with the outside world at all? The answer is that the creator of the script may \emph{endow} the newborn script with references to some powerful objects at birth. This is how the script comes to obtain its first external object references.
+
+Once a script obtains a reference to an external object, we must establish rules as to what the script can do with the object, and how the script can come to acquire further object references. The rules are familiar to any object-oriented programmer: an object reference should only grant the ability to invoke an object's public methods. The object's private state should be encapsulated. Thus, an object can only come to acquire new object references via argument and result passing.
+
+Javascript by itself is not an object-capability-secure language, because scripts are not born powerless (A Javascript environment is full of globally mutable state) and because plain Javascript objects are not encapsulated. From a security perspective, there were three problems with Javascript's objects:
+
 \begin{itemize}
 \item Records were fully mutable, allowing one client of a point to, for example, replace its {\tt getX} method, violating the assumptions of other clients. ES5 provides a {\tt freeze} primitive, used by the SES library to define the {\tt def} function for making a tamper proof object graph.
 \item ES3 had six violations of static scoping. Three of these are fixed unconditionally by ES5. In addition, ES5 provides a \emph{strict mode}, enabled by the {\tt "use strict";} directive shown below, which fixes the remaining three violations. (Throughout the rest of this paper, strict mode is assumed without further notation.)  
@@ -233,8 +284,6 @@ Q.promise( f(resolve,reject) => () ) => promise
 \end{verbatim}
 
 \texttt{Q.promise} makes a fresh promise, where the promise is initially pending. It immediately calls the argument function \texttt{f} with two functions, conventionally named \texttt{resolve} and \texttt{reject}, that can be used to either fulfil or reject this new promise explicitly.
-\bnote{tom}{shouldn't \texttt{resolve} be called \texttt{fulfil}?}
-\bnote{Mark}{no, because it doesn't fulfil the promise if its argument is a pending or rejected promise. By this criteria, "resolve" isn't quite the right name either, but...}
 
 We now use \texttt{Q.promise} to define a small set of promise combinators that we will come to rely upon later, when introducing the escrow exchange contract.
 
@@ -311,11 +360,9 @@ Ken is a protocol best implemented at the level of a virtual machine. Ken assume
   \item Incoming messages are checked for duplicates. When a duplicate message is detected, it is dropped (not processed) and immediately acknowledged.
 \end{itemize}
 
-The snapshot of a Ken process consists of both the heap and the outgoing message queue. It does not include the runtime stack (which is guaranteed to be empty between two turns) nor the incoming message queue.
+The snapshot of a Ken process consists of both the heap and the outgoing message queue. It does not include the runtime stack (which is guaranteed to be empty between turns) nor the incoming message queue.
 
 The key point is that outgoing messages are released, and incoming messages are acknowledged only \emph{after} the message has been fully processed by the receiver \emph{and} the heap state has been checkpointed.
-
-The Ken protocol guarantees distributed snapshots even in the face of mutual suspicion. There is nothing an adversarial process can do that will corrupt the distributed snapshots of benign processes.
 
 One assumption that Ken does make is that all Ken processes eventually recover. To Ken, a permanently crashed client is indistinguishable from a very slow client. Thus, while Ken guarantees exactly-once message delivery, it is still up to the application to do its own failure handling if it does not receive a response within a given timeout period.
 
@@ -323,13 +370,16 @@ One objection against the Ken approach to checkpointing is that making a checkpo
 
 To date, there exist two implementations of the Ken protocol, one in C (CKen~\cite{Yoo:CKen}) and one in Java (WaterKen~\cite{waterken}). We are actively working towards integrating CKen with the v8 Javascript virtual machine\footnote{See \url{https://github.com/supergillis/v8-ken}.}. The longer-term goal is to integrate such a Ken-aware v8 runtime platform with node.js (which is built on v8), to arrive at what we call NodeKen. The key idea is to turn node.js into a Ken process, enabling distributed orthogonal persistence of server-side Javascript programs.
 
-\bnote{tom}{TODO: Brian Warner's sketch of secure communications. (NACL Library)}
+\paragraph{Ken and security}
+The Ken protocol guarantees distributed snapshots even in the face of mutual suspicion. There is nothing an adversarial process can do that will corrupt the distributed snapshots of benign processes.
+
+The CKen implementation used to build NodeKen currently does not use an encrypted communications channel to deliver messages between Ken processes. Hence, the authenticity, integrity or confidentiality of incoming messages cannot be guaranteed. In NodeKen, our plan is to actively secure the communications channels between NodeKen processes using a cryptographic library\footnote{An outline of how this would work is available online: \url{http://www.eros-os.org/pipermail/cap-talk/2012-September/015386.html}}.
 
 \section{Contracts use Electronic Rights}
 
 \begin{figure}[htbp]
 \begin{center}
-\begin{verbatim}
+\begin{lstlisting}[language=javascript]
 var makeMint = () => {
   var amp = WeakMap();
   var makePurse = () => mint(0);
@@ -350,7 +400,7 @@ var makeMint = () => {
   };
   return mint;
 };
-\end{verbatim}
+\end{lstlisting}
 \caption{The Mint Maker (19 lines)}
 \label{makeMint}
 \end{center}
@@ -429,7 +479,7 @@ These four dimensions are only a start. It is not clear even that all 16 combina
 
 \begin{figure}[htbp]
 \begin{center}
-\begin{verbatim}
+\begin{lstlisting}[language=javascript]
 var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
   var makeEscrowPurseP = Q.join(srcPurseP ! makePurse, 
                                 dstPurseP ! makePurse);
@@ -457,7 +507,7 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
     failOnly(b.cancelP)]));
   return decisionP;
 };
-\end{verbatim}
+\end{lstlisting}
 \caption{The Escrow Exchange Contract (22 lines)}
 \label{escrowExchange}
 \end{center}
@@ -469,7 +519,7 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
 
 \begin{figure}[htbp]
 \begin{center}
-\begin{verbatim}
+\begin{lstlisting}[language=javascript]
 var makeContractHost = () => {
   var amp = WeakMap();
 
@@ -508,7 +558,7 @@ var makeContractHost = () => {
       token => amp.get(token)(allegedSrc, allegedI, arg))
   });
 };
-\end{verbatim}
+\end{lstlisting}
 \caption{The Contract Host (36 lines)}
 \label{makeContractHost}
 \end{center}
