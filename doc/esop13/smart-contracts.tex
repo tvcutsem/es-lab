@@ -43,6 +43,20 @@ To realize this potential, smart contracts themselves need a distributed, secure
 
 We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by massive numbers of non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}\footnote{The official standards name for JavaScript is ``EcmaScript''.}. We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 41 lines of straightforward JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
 
+\section{Why Dr. SES?}
+
+Dr. SES is a platform for distributed, resilient and secure computing, layered on top of EcmaScript. Let us first discuss why each of these ingredients is needed to achieve electronic rights and contracts.
+
+Dr. SES is layered on top of EcmaScript for two primary reasons. First is the ubiquity of the language. Due to its embedding in the browser, EcmaScript is available on a wide range of platforms and devices. Second, because of this ubiquity, Javascript is widely adopted among developers and is thus accessible to a large audience of developers, many of whom are not expert programmers.
+
+When trying to express electronic rights or contracts, it should be fairly obvious that security must play a key role in the architecture. Dr. SES builds upon the object-capability paradigm. Capability principles are followed both to secure distributed objects as well as to secure the local execution environment. The latter allows Dr. SES programs to execute mobile code from untrusted parties without fear of granting unprivileged access to that piece of code. This is especially relevant in the context of Javascript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that wholly depends on the ability to safely execute third-party code.
+
+Javascript is not a distributed programming language. In the browser, a large number of APIs is available to scripts to communicate with servers and other frames, but these APIs are tedious to work with, and hard to secure. That is why Dr. SES extends the Javascript language proper with a handful of features to support distributed programming at the level of individual objects.
+
+Finally, the resilience aspect of Dr. SES deals with the unavoidable issues of failure handling that come up in distributed systems. It is widely appreciated that writing correct, bug-free code in the presence of arbitrary failures is hard. Dr. SES, then, tries to make it as easy as possible for non-experts to deal with distributed failures. To a first approximation, Dr. SES does so by allowing programmers to pretend that failures do not exist.
+
+Dr. SES has nothing to do with electronic rights or contracts per se. Its focus is to make distributed programming in Javascript as effortless as possible. Given such a platform, it then becomes possible to implement contracts with very little code. This is precisely what we will demonstrate in the second part of this paper, after having explained Dr. SES in more detail.
+
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
 The current JavaScript standard, EcmaScript 5 (ES5), enables the \emph{SES} library to easily enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. The \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system for distributed orthogonal persistence---resilient against many failures. We explain each below.
@@ -92,8 +106,7 @@ A record of functions hiding variables serves as an object of methods ({\tt getX
 
 \subsection{SES: Securing JavaScript}
 
-
-
+\bnote{Tom}{Before diving into SES details, we might want to take a moment to explain the key idea of capability-based security (maybe even briefly contrast it with ACLs). Make the point that we want scripts to be born powerless, unless endowed with references to powerful objects. That's the bootstrapping phase. Then, we want to make the point that a reference to an object should provide only the right to access its public API (encapsulation), and that only connectivity begets connectivity (that's how one acquires new capabilities). Then we can explain why we need to secure Javascript: because scripts are not born powerless, and because objects are not encapsulated.}
 
 From a security perspective, there were three problems with such objects: 
 \begin{itemize}
@@ -289,9 +302,9 @@ In short, a Ken process can tolerate arbitrary failures in such a way that when 
 Ken is a protocol best implemented at the level of a virtual machine. Ken assumes communicating event loops, and so aligns well with Javascript's de-facto execution model. A Ken process is an event loop. The way that Ken achieves the above properties is simple, yet effective:
 
 \begin{itemize}
-  \item Buffer all outgoing messages sent during a turn.
+  \item During a turn, all outgoing messages are accumulated in an outgoing message queue. These messages are not yet released to the network.
   \item At the end of each turn, make a checkpoint of the persistent heap and of all outgoing unacknowledged messages.
-  \item Only then release any new outgoing messages, and acknowledge the message processed this turn.
+  \item After the end-of-turn checkpoint is made, release any new outgoing messages to the network and acknowledge the message processed this turn.
   \item Outgoing messages are numbered with a sequence number (for duplicate detection and message ordering).
   \item Unacknowledged outgoing messages are periodically retried (with exponential back-off) until an acknowledgement is received.
   \item Incoming messages are checked for duplicates. When a duplicate message is detected, it is dropped (not processed) and immediately acknowledged.
