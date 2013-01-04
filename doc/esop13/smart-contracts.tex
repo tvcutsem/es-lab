@@ -326,9 +326,39 @@ To date, there exist two implementations of the Ken protocol, one in C (CKen~\ci
 
 \section{Contracts use Electronic Rights}
 
+\begin{figure}[htbp]
+\begin{center}
+\begin{verbatim}
+var makeMint = () => {
+  var amp = WeakMap();
+  var makePurse = () => mint(0);
+  
+  var mint = balance => {
+    var purse = def({
+      getBalance: () => balance,
+      makePurse: makePurse,
+      deposit: (amount, src) => {
+        Nat(balance + amount);
+        amp.get(src)(Nat(amount)); 
+        balance += amount; 
+      } 
+    });
+    amp.set(purse, 
+            amount => { balance = Nat(balance - amount); });
+    return purse;
+  };
+  return mint;
+};
+\end{verbatim}
+\caption{The Mint Maker (19 lines)}
+\label{makeMint}
+\end{center}
+\end{figure}
+
+
 Contracts generally manipulate rights. The parties to the contract each bring the rights the contract will manipulate, and the logic of the contract together with the decisions of the players determines which derived rights they each walk away with. The simplest example is a direct trade. Since half the rights exchanged in most trades are money, let's start with money. 
 
-Appendix~\ref{makeMint}  is our implementation of a money-like rights issuer, using only elements of Dr. SES explained above. To explain how it works, it is best to start with how it is used. Say Alice wishes to buy something from Bob for \$10. The three parties involved would be Alice, Bob, and a \$ issuer, which we will informally call a bank. The starting assumptions are that Alice and Bob do not trust each other, the bank does not trust either Alice or Bob, and Alice and Bob trust the bank with their money but with nothing else. In this scenario, Alice is willing to risk her \$10 on the possibility of Bob's non-delivery. But Bob wants to be sure he's been paid before he releases the good in exchange.
+Figure~\ref{makeMint}  is our implementation of a money-like rights issuer, using only elements of Dr. SES explained above. To explain how it works, it is best to start with how it is used. Say Alice wishes to buy something from Bob for \$10. The three parties involved would be Alice, Bob, and a \$ issuer, which we will informally call a bank. The starting assumptions are that Alice and Bob do not trust each other, the bank does not trust either Alice or Bob, and Alice and Bob trust the bank with their money but with nothing else. In this scenario, Alice is willing to risk her \$10 on the possibility of Bob's non-delivery. But Bob wants to be sure he's been paid before he releases the good in exchange.
 
 What do these initial conditions mean in terms of a configuration of persistent objects? Say Alice owns (or is) a set of objects on machine A, Bob on machine B, and the bank on machine C. In order for Alice to be able to make a {\tt buy} request of Bob, we assume one of Alice's objects already has a remote reference to an object of Bob's objects. Alice's trust of the bank with her money is represented by a remote reference to an object within the bank representing Alice's account at the bank. We refer to such objects as \emph{purses}. The one representing Alice's account is Alice's \emph{main purse}. And likewise for Bob. Where do these initial account purses come from?
 
@@ -373,56 +403,30 @@ Following {\tt deposit} sequentially, we see it
 
 \section{Towards a Taxonomy of Electronic Rights}
 
+The local unforgeable object reference and the remote unguessable object reference represent one kind of eright---the eright to invoke the public interface of the object it designates. The Mint Maker, building on object references as erights, builds a new kind of eright at a new level of abstraction, one having many of the properties of money. By contrasting these, we can begin to form a taxonomy of erights, and to understand how the layers of abstractions relate to each other. 
+
 \begin{tabular}{ l l }
   Object reference & Money \\ \hline
   Shared & Exclusive \\
   Specific & Fungible \\
   Opaque & Assayable \\
   Exercisable & Symbolic \\
-\end{tabular}
+\end{tabular}\\
+
+When Alice sends the payment purse to Bob, she has \emph{shared} with Bob access to this purse object. If Bob's {\tt deposit} message to his main purse succeeds, Bob obtains \emph{exclusive} access to this money, denying Alice any further access.
+
+The reference to the payment purse designates a \emph{specific} object, this payment purse as opposed to any other. Whereas the counters in the purses represent only quantities of money (though still specific to a given currency at a given issuer). Bob doesn't care which of these \$s he gets, so long as he gets the amount he expects.
+
+When Bob receives access to the payment purse, he doesn't know what it is except that it is some object that one of his clients chose to send him in this argument position. If his {\tt deposit} method succeeds, he knows exactly what money rights he has received.
+
+By sending a message to an object, one \emph{exercises} whatever erights to cause effects are provided by that object's public interface. By contrast, money is only valuable because it is valued by others. Money does not have any direct use-value.
+
+These four dimensions are only a start. It is not clear even that all 16 combinations are useful, but clearly many are. To have an expressive system of erights, we wish to be able to express many of these easily. But to have a small kernel, we wish to build directly on only the minimal set needed to be able to build the rest easily. Experiments so far, such as the Mint Maker, indicate that object-references are indeed a good choice of kernel eright.
 
 \section{The Escrow Exchange Contract}
 
-
-\section{The Contract Host}
-\section{A More Cooperative World?}
-
-\bibliographystyle{splncs}
-% \bibliographystyle{alpha}
-\bibliography{common}
-
-
-\appendix
-
-\section{The Mint Maker (19 lines)}
-\label{makeMint}
-
-\begin{verbatim}
-var makeMint = () => {
-  var amp = WeakMap();
-  var makePurse = () => mint(0);
-  
-  var mint = balance => {
-    var purse = def({
-      getBalance: () => balance,
-      makePurse: makePurse,
-      deposit: (amount, src) => {
-        Nat(balance + amount);
-        amp.get(src)(Nat(amount)); 
-        balance += amount; 
-      } 
-    });
-    amp.set(purse, 
-            amount => { balance = Nat(balance - amount); });
-    return purse;
-  };
-  return mint;
-};
-\end{verbatim}
-
-\section{The Escrow Exchange Contract (22 lines)}
-\label{escrowExchange}
-
+\begin{figure}[htbp]
+\begin{center}
 \begin{verbatim}
 var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
   var makeEscrowPurseP = Q.join(srcPurseP ! makePurse, 
@@ -452,10 +456,17 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
   return decisionP;
 };
 \end{verbatim}
+\caption{The Escrow Exchange Contract (22 lines)}
+\label{escrowExchange}
+\end{center}
+\end{figure}
 
-\section{The Contract Host (36 lines)}
-\label{makeContractHost}
 
+
+\section{The Contract Host}
+
+\begin{figure}[htbp]
+\begin{center}
 \begin{verbatim}
 var makeContractHost = () => {
   var amp = WeakMap();
@@ -496,6 +507,15 @@ var makeContractHost = () => {
   });
 };
 \end{verbatim}
+\caption{The Contract Host (36 lines)}
+\label{makeContractHost}
+\end{center}
+\end{figure}
 
+\section{A More Cooperative World?}
+
+\bibliographystyle{splncs}
+% \bibliographystyle{alpha}
+\bibliography{common}
 
 \end{document}
