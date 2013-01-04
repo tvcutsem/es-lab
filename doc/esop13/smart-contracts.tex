@@ -378,7 +378,7 @@ The CKen implementation used to build NodeKen currently does not use an encrypte
 \section{Contracts use Electronic Rights}
 
 \begin{figure}[htbp]
-\begin{center}
+\begin{minipage}{0.48\linewidth}
 \begin{lstlisting}[language=javascript]
 var makeMint = () => {
   var amp = WeakMap();
@@ -395,20 +395,20 @@ var makeMint = () => {
       } 
     });
     amp.set(purse, 
-            amount => { balance = Nat(balance - amount); });
+             amount => { balance = Nat(balance - amount); });
     return purse;
   };
   return mint;
 };
 \end{lstlisting}
-\caption{The Mint Maker (19 lines)}
+\end{minipage}
+\begin{minipage}{0.48\linewidth}
+\end{minipage}
+\includegraphics[scale=0.3]{bw-mint.pdf}
+\caption{The Mint Maker}
 \label{makeMint}
-\end{center}
 \end{figure}
 
-\includegraphics[scale=0.3]{bw-mint.pdf}
-
-\bnote{Mark}{It would be great if we could place this graphic into the figure without it taking up more vertical space. Unfortunately, two columns won't do because of the long line of text near the bottom. Failing that, it would be good to flow the following text around it, but I couldn't figure that out either.} 
 
 Contracts generally manipulate rights. The parties to the contract each bring the rights the contract will manipulate, and the logic of the contract together with the decisions of the players determines which derived rights they each walk away with. The simplest example is a direct trade. Since half the rights exchanged in most trades are money, let's start with money. 
 
@@ -478,7 +478,6 @@ These four dimensions are only a start. It is not clear even that all 16 combina
 \section{The Escrow Exchange Contract}
 
 \begin{figure}[htbp]
-\begin{center}
 \begin{lstlisting}[language=javascript]
 var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
   var makeEscrowPurseP = Q.join(srcPurseP ! makePurse, 
@@ -508,9 +507,8 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
   return decisionP;
 };
 \end{lstlisting}
-\caption{The Escrow Exchange Contract (22 lines)}
+\caption{The Escrow Exchange Contract}
 \label{escrowExchange}
-\end{center}
 \end{figure}
 
 
@@ -518,7 +516,6 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
 \section{The Contract Host}
 
 \begin{figure}[htbp]
-\begin{center}
 \begin{lstlisting}[language=javascript]
 var makeContractHost = () => {
   var amp = WeakMap();
@@ -559,9 +556,8 @@ var makeContractHost = () => {
   });
 };
 \end{lstlisting}
-\caption{The Contract Host (36 lines)}
+\caption{The Contract Host}
 \label{makeContractHost}
-\end{center}
 \end{figure}
 
 \section{A More Cooperative World?}
