@@ -2,6 +2,7 @@
 \usepackage{makeidx}  
 \usepackage{ifthen}
 \usepackage{amssymb}
+\usepackage{graphicx}
 
 \newboolean{showcomments}
 \setboolean{showcomments}{true}
@@ -355,6 +356,9 @@ var makeMint = () => {
 \end{center}
 \end{figure}
 
+\includegraphics[scale=0.3]{bw-mint.pdf}
+
+\bnote{Mark}{It would be great if we could place this graphic into the figure without it taking up more vertical space. Unfortunately, two columns won't do because of the long line of text near the bottom. Failing that, it would be good to flow the following text around it, but I couldn't figure that out either.} 
 
 Contracts generally manipulate rights. The parties to the contract each bring the rights the contract will manipulate, and the logic of the contract together with the decisions of the players determines which derived rights they each walk away with. The simplest example is a direct trade. Since half the rights exchanged in most trades are money, let's start with money. 
 
@@ -370,8 +374,6 @@ For Alice to pay Bob, she sets up a \emph{payment purse}, deposits \$10 into it 
   var ackP = paymentP ! deposit(10, myPurse);
   var goodP = ackP.then(_ => bobP ! buy(desc, paymentP));
 \end{verbatim}
-
-\bnote{Mark}{If we could assume E-order, we could omit the ackP above, as I normally do in my talks. OTOH, if we could assume FIFO, we could omit the first .then below. Unfortunately, I don't think Q should commit yet to either choice.}
 
 Bob receives this request at the following {\tt buy} method:
 \begin{verbatim}
