@@ -24,13 +24,13 @@ A Progress Report}
 
 \author{Mark S. Miller\inst{1} \and Tom Van Cutsem\inst{2} \and Bill Tulloh\inst{3} }
 
-\institute{Google, Inc. \and V.U.B \and George Mason University}
+\institute{Google, Inc. \and Vrije Universiteit Brussel \and George Mason University}
 
 \maketitle    
 
 \begin{abstract}
 
-Smart Contracts are cool.
+Smart Contracts are cool. \bnote{Mark}{need a real abstract}
 
 \keywords{security, distributed objects, capabilities, smart contracts}
 \end{abstract}
@@ -39,7 +39,7 @@ Smart Contracts are cool.
 
 The fabric of the global economy is held together by contracts. A contract is an agreed arrangement for cooperation between mutually suspicious parties. But existing contracts are ambiguous, jurisdictions-specific, and written, interpreted, and adjudicated only by expensive experts. \emph{Smart contracts} are contract-like arrangements expressed in program code, where the behavior of the program enforces the terms of the ``contract''\cite{szabo1997formalizing}. Though not a substitute for legal contracts, they can provide some of the benefits of contracts for fine-grain, jurisdiction-free, and automated arrangements for which legal contracts are impractical.
 
-To realize this potential, smart contracts themselves need a distributed, secure, and persistent computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts.
+To realize this potential, smart contracts themselves need a distributed, secure, persistent, and ubiquitous computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts.
 
 We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by massive numbers of non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}\footnote{The official standards name for JavaScript is ``EcmaScript''.}. We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 41 lines of straightforward JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
 
@@ -73,7 +73,7 @@ and its {\tt contract} subdirectory.
   var double = n => n+n;      // parens optional if one param
 \end{verbatim}
 
-\paragraph{Records.} The record syntax {\tt \{x: 3, y: 4\}} is an expression that evaluates to a record with two named fields initialized to the values shown. Records and functions compose together naturally to give objects:
+\paragraph{Records.} The record syntax {\tt \{x: 3, y: 4\}} is an expression that evaluates to a record with two named properties initialized to the values shown. Records and functions compose together naturally to give objects:
 
 \begin{verbatim}
 var makePoint = (x, y) => {
@@ -182,9 +182,11 @@ Promises may designate both local objects, and remote objects belonging to anoth
 
 However, if the promise comes to designate a remote object, it is not possible to resolve the promise to a local reference. Instead, one must interact with the remote object via the promise. Any such interaction must be asynchronous, to ensure that interaction between the event loops as a whole remains asynchronous.
 
-Javascript provides many operators to interact with an object. Here, we will focus on only two: method calls and function application. Javascript has the familiar dot operator to express local, immediate method calls, such as \texttt{point.getX()}. We introduce a corresponding infix \texttt{!} operator (named the \emph{bang} or \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
+Javascript provides many operators to interact with an object. Here, we will focus on only three: method calls, function application, and reading the value of a property. Javascript has the familiar dot operator to express local, immediate method calls, such as \texttt{point.getX()}. We introduce a corresponding infix \texttt{!} operator (named the \emph{bang} or \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
 
 The \texttt{!} operator can be used anywhere the dot operator can be used. For instance, if \texttt{pointP} is a promise for a \texttt{point}, then \texttt{pointP ! getX()} denotes an eventual send, which enqueues a request to call the \texttt{getX()} method in the event loop of \texttt{point}. In addition, the syntax \texttt{fP ! (x,y)}, where \texttt{fP} is a promise designating a function \texttt{f}, enqueues a request to call \texttt{f(x,y)} in the event loop of \texttt{f}. The \texttt{!} operator is actually a thin veneer of syntactic sugar over a more explicit method call on the promise object:
+
+\bnote{Mark}{I added promise.get because the escrow exchange contract uses it to obtain the two makePurse functions to Q.join.}
 
 \begin{center}
   \begin{tabular}{|l|l|l|}
@@ -193,6 +195,7 @@ The \texttt{!} operator can be used anywhere the dot operator can be used. For i
   \hline
   \texttt{p.m(x,y)} & \texttt{p ! m(x,y)} & \texttt{Q(p).send("m",x,y)} \\
   \texttt{p(x,y)} & \texttt{p ! (x,y)} & \texttt{Q(p).send(undefined,x,y)}\\
+  \texttt{p.m} & \texttt{p ! m} & \texttt{Q(p).get("m")}\\
   \hline
   \end{tabular} 
 \end{center}
@@ -217,6 +220,7 @@ Q.promise( f(resolve,reject) => () ) => promise
 
 \texttt{Q.promise} makes a fresh promise, where the promise is initially pending. It immediately calls the argument function \texttt{f} with two functions, conventionally named \texttt{resolve} and \texttt{reject}, that can be used to either fulfil or reject this new promise explicitly.
 \bnote{tom}{shouldn't \texttt{resolve} be called \texttt{fulfil}?}
+\bnote{Mark}{no, because it doesn't fulfil the promise if its argument is a pending or rejected promise. By this criteria, "resolve" isn't quite the right name either, but...}
 
 We now use \texttt{Q.promise} to define a small set of promise combinators that we will come to rely upon later, when introducing the escrow exchange contract.
 
@@ -256,11 +260,10 @@ For example, given \texttt{sumP = Q.all([xP,yP]).then(([x,y]) => x+y)}, if both 
 
 \paragraph{Q.join} Join is our eventual equality operation. \texttt{Q.join(xP,yP)} takes two promises \texttt{xP} and \texttt{yP} and returns a joined promise. Any messages sent to this joined promise are only delivered if \texttt{xP} and \texttt{yP} eventually come to designate the same target object. If this is the case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
 
-\bnote{tom}{replace \texttt{Object.is(x,y)} by \texttt{(x === y)} to simplify the explanation?}
 \begin{verbatim}
 Q.join = (xP, yP) => {
   return Q.all([xP, yP]).then(([x, y]) => {
-    if (Object.is(x, y)) {
+    if (x === y) {
       return x;
     } else {
       throw new Error("not the same");
@@ -309,6 +312,52 @@ To date, there exist two implementations of the Ken protocol, one in C (CKen~\ci
 \bnote{tom}{TODO: Brian Warner's sketch of secure communications. (NACL Library)}
 
 \section{Contracts use Electronic Rights}
+
+Contracts generally manipulate rights. The parties to the contract each bring the rights the contract will manipulate, and the logic of the contract together with the decisions of the players determines which derived rights they each walk away with. The simplest example is a direct trade. Since half the rights exchanged in most trades are money, let's start with money. 
+
+Appendix~\ref{makeMint}  is our implementation of a money-like rights issuer, using only elements of Dr. SES explained above. To explain how it works, it is best to start with how it is used. Say Alice wishes to buy something from Bob for \$10. The three parties involved would be Alice, Bob, and a \$ issuer, which we will informally call a bank. The starting assumptions are that Alice and Bob do not trust each other, the bank does not trust either Alice or Bob, and Alice and Bob trust the bank with their money but with nothing else. In this scenario, Alice is willing to risk her \$10 on the possibility of Bob's non-delivery. But Bob wants to be sure he's been paid before he releases the good in exchange.
+
+What do these initial conditions mean in terms of a configuration of persistent objects? Say Alice owns (or is) a set of objects on machine A, Bob on machine B, and the bank on machine C. In order for Alice to be able to make a {\tt buy} request of Bob, we assume one of Alice's objects already has a remote reference to an object of Bob's objects. Alice's trust of the bank with her money is represented by a remote reference to an object within the bank representing Alice's account at the bank. We refer to such objects as \emph{purses}. The one representing Alice's account is Alice's \emph{main purse}. And likewise for Bob. Where do these initial account purses come from?
+
+For each currency the bank wishes to manage, the bank calls {\tt makeMint()} once to get a {\tt mint} function for making purses holding units of that currency. When Alice opens an account with, say \$100 in cash, the bank calls {\tt mint(100)} on its \$ mint, to make Alice's main purse. The bank then gives Alice a persistent remote reference to this object within the bank.
+
+For Alice to pay Bob, she sets up a \emph{payment purse}, deposits \$10 into it from her main purse, and sends it to Bob in a buy request, together with a description of what she wishes to buy.
+\begin{verbatim}
+  var paymentP = myPurse ! makePurse();
+  var ackP = paymentP ! deposit(10, myPurse);
+  var goodP = ackP.then(_ => bobP ! buy(desc, paymentP));
+\end{verbatim}
+
+\bnote{Mark}{If we could assume E-order, we could omit the ackP above, as I normally do in my talks. OTOH, if we could assume FIFO, we could omit the first .then below. Unfortunately, I don't think Q should commit yet to either choice.}
+
+Bob receives this request at the following {\tt buy} method:
+\begin{verbatim}
+  buy: (desc, paymentP) => {
+    // do whatever with desc, look up $10 price
+    return Q(paymentP).then(
+      p => (myPurse ! deposit(10, p)).then(
+        _ => good,
+        // failure handling...
+\end{verbatim}
+
+Bob's {\tt buy} method handles a message from untrusted clients such as Alice, and thus it does not know what objects Alice actually provided as the arguments. In particular, Bob has no idea if his {\tt paymentP} parameter actually designates a purse, whether it is a purse at this bank, of this currency, and of adequate funds. Even if he knew all these conditions were true at the moment, since Bob doesn't know whether Alice still retains access to it, Bob wouldn't know the funds would still be there by the time he deposits it. He delegates all these problems to the bank with the {\tt deposit} request above. If the bank's deposit method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then the success callback of the second {\tt then} above gets called, returning the {\tt good}, resolving Alice's pending {\tt goodP} promise.
+
+\bnote{Mark}{I know that I'm saying *way* too much. But it's easier to generate and trim than to try to say just enough directly.}
+Following {\tt deposit} sequentially, we see it
+\begin{enumerate}
+\item Uses {\tt Nat} to ensure that the new {\tt balance} would not overflow the range of reliably represented non-negative integers. Otherwise an error is thrown, breaking Bob's promise for the result of the deposit, and the good is not released back to Alice.
+\item Looks up the alleged payment purse in the {\tt amp} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error.
+\item If this lookup succeeds, it find {\tt amount => { balance = Nat(balance - amount); })} function that was registered with this payment purse when that payment purse was created. The {\tt balance} in that function refers to the payment purse's {\tt balance}. 
+\item After checking that the amount to be deposited is indeed a non-negative integer, this function is called to withdraw that amount from the payment purse.
+\item If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
+\item This is the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no potential locally observable failures remain.
+\item The assignment decrements the balance by the amount. This function now returns and we continue with rest of the {\tt deposit} method.
+\item The {\tt +=} increments the balance of purse being deposited into.
+\item The {\tt deposit} method implicitly returns undefined, fulfilling Bob's promise for the result if the deposit, triggering Bob to release the good to Alice in exchange.
+\end{enumerate}
+
+\bnote{Mark}{The reason I don't reuse the result of adding balance and amount, but rather re-add them, is to defend against an aliasing attack, where the same purse is used as receiver and argument.}
+
 \section{Towards a Taxonomy of Electronic Rights}
 
 \begin{tabular}{ l l }
@@ -319,9 +368,10 @@ To date, there exist two implementations of the Ken protocol, one in C (CKen~\ci
   Exercisable & Symbolic \\
 \end{tabular}
 
+\section{The Escrow Exchange Contract}
+
 
 \section{The Contract Host}
-\section{Contracts create Electronic Rights}
 \section{A More Cooperative World?}
 
 \bibliographystyle{splncs}
@@ -332,11 +382,13 @@ To date, there exist two implementations of the Ken protocol, one in C (CKen~\ci
 \appendix
 
 \section{The Mint Maker (19 lines)}
+\label{makeMint}
 
 \begin{verbatim}
 var makeMint = () => {
   var amp = WeakMap();
   var makePurse = () => mint(0);
+  
   var mint = balance => {
     var purse = def({
       getBalance: () => balance,
@@ -355,7 +407,8 @@ var makeMint = () => {
 };
 \end{verbatim}
 
-\section{The Escrow Exchange Agent (22 lines)}
+\section{The Escrow Exchange Contract (22 lines)}
+\label{escrowExchange}
 
 \begin{verbatim}
 var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
@@ -373,7 +426,7 @@ var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
 var failOnly = cancelP => Q(cancelP).then(
   cancel => { throw cancel; });
 
-var exchange = (a, b) => { // a from Alice, b from Bob
+var escrowExchange = (a, b) => { // a from Alice, b from Bob
   var decide;
   var decisionP = Q.promise(resolve => { decide = resolve; });
 
@@ -388,6 +441,7 @@ var exchange = (a, b) => { // a from Alice, b from Bob
 \end{verbatim}
 
 \section{The Contract Host (36 lines)}
+\label{makeContractHost}
 
 \begin{verbatim}
 var makeContractHost = () => {
