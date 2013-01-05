@@ -537,7 +537,7 @@ Since the situation is now symmetric, we explain the progression of events from 
 
 By a protocol whose details appear below, Alice sends this {\tt a} object to the escrow exchange agent, for it to use as the first argument in a call to {\tt escrowExchange}, which initiates this specific contract between Alice and Bob. The {\tt escrowExchange} function returns a promise for the outcome of the contract, which the escrow exchange agent returns to Alice. 
 
-If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to have been deposited into her {\tt a.stockDstP}. If this promise becomes rejected, the exchange failed, and she should expect her {\tt a.moneySrcP} to again hold her \$10. In the meantime, if she gets impatient and would rather cancel the exchange than continue waiting, she can call her {\tt cancelled} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.
+If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to have been deposited into her {\tt a.stockDstP}. If this promise becomes rejected, the exchange failed, and she should expect her {\tt a.moneySrcP} to again hold her \$10. In the meantime, if she gets impatient and would rather cancel the exchange than continue waiting, she can call her {\tt canceller} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.
 
 On lines 14 and 15 of Figure~\ref{escrowExchange} the {\tt escrowExchange} contract makes a {\tt decisionP} promise whose fulfillment or rejection represents its decision about whether the exchange must succeed or fail. It makes this decision by calling {\tt decide} with the outcome of a race between a {\tt Q.all} and two calls to {\tt failOnly}. Until a player cancels the exchange, the {\tt Q.race} can only be won by the {\tt Q.all}, which is where the exchange is proceeding.
 
@@ -550,6 +550,8 @@ The {\tt transfer} function sets up the second phase on lines 5, 6, and 7. Assum
 Only one mystery remains. How does the escrow agent obtain a fresh escrow purse at this money issuer, in order to be confident that it has obtained exclusive access to the money at stake? Since the escrow exchange agent has no prior knowledge or trust in the money issuer, it cannot become confident that the issuer is honest or even that the money it issues means anything. The question is meaningless. Instead, it must only obtain a fresh escrow purse whose veracity is \emph{mutually acceptable} to Alice and Bob.
 
 If it simply asks Alice's purse for a new empty purse ({\tt srcPurseP ! makePurse()}), Alice could return a dishonest purse that acknowledges deposit without transferring anything. Alice would then obtain Bob's stock for free. If it simply asks Bob's purse, then Bob could steal Alice's money during phase 1. Instead, it checks if their {\tt makePurse} methods are the very same function object---have the same object identity--by using {\tt Q.join} on promises for these two methods. This is why, on lines 3 and 7 of Figure~\ref{makeMint}, all purses of the same currency at the same back share the same function as their {\tt makePurse} method. If the {\tt Q.join} of these two methods fails, the either Alice was dishonest, Bob was dishonest, or they simply didn't have prior agreement on the same currency at the same money issuer.
+
+
 
 \section{The Contract Host}
 
@@ -597,6 +599,25 @@ var makeContractHost = () => {
 \caption{The Contract Host}
 \label{makeContractHost}
 \end{figure}
+
+This is not yet a satisfying fabric for smart contracting. To engage in the escrow exchange contract, Alice and Bob had to agree on the issuers, which is unsurprising since they need to agree on the nature of rights exchanged by the contract. And they had to agree on an escrow exchange agent to honestly run the escrow exchange contract specifically. For a contract as general as this, perhaps that is not a problem. But if Alice and Bob negotiate a custom contract specialized to their needs, they should not expect to find a mutually trusted third party specializing in running this particular contract. Rather, it should be adequate for them to agree on:
+
+\begin{itemize}
+\item The issuers of each of the rights at stake.
+\item The source code of the contract.
+\item Who is to play which side of the contract.
+\item A third party that they mutually trust to run their agreed code, whatever it is, honestly.
+\end{itemize}
+
+Figure~\ref{makeContractHost} shows the code for a generic contract host. It is able to host any contract formulated, as our escrow exchange contract is, as a function, taking one argument from each player and returning the outcome of the contract as a whole. But setting up a contract is tricky, as it involves a necessary asymmetry among the players. One of the players, say Bob, must initiate a new live contract instance, by sending the contract's code to the contract host. At this point, Bob is the only one who knows both this contract instance and that he'd like to invite Alice to participate in \emph{this} instance. If Bob simply sent to Alice a reference to those objects on the contract host that enables Alice to play, Alice would not know what she's received, since she received it from Bob whom she does not trust. She does trust the contract host, and these objects are on the contract host, but so are the objects corresponding to all the other contracts this host is initiating or running. The connection of Alice to this contract instance must be at Bob's initiation, but Alice's confidence that she's playing the contract she thinks she is much be rooted in her prior trust in the contract host.
+
+Our contract host is an object with two methods, {\tt setup} and {\tt play}. Bob sets up the contract instance by calling {\tt setup} with the source code for the contract function in question, e.g., {\tt escrowExchange}. At line 592, {\tt setup} returns an array of unique unforgeable tokens, one for each argument to the function. Bob's invitation to Alice communicates this token, the source code for the contract he wishes Alice to play, the argument index indicating what side of the contract Alice is to play, and the contract host in question.
+
+If Alice decides she'd like to play this contract, she formulates her argument object as above, and sends it in a {\tt play} request to the contract host along with the token, the alleged contract source code, and the alleged side she is to play. If all of this checks out, and this token has not previously been redeemed, then this token gets used up and Alice's argument is remembered until the arguments for the other players arrive, and Alice receives a promise for the outcome of the contract. Once all arguments are present, the contract function is called and its result is used to resolve the previously returned promise.
+
+By redeeming the token, Alice has obtained the exclusive right to play a specific contract whose logic she knows, and whose play is expected to cause external effects. This right represents a different point in our taxonomy---it is exclusive, specific, assayable, and exercisable. 
+
+
 
 \section{A More Cooperative World?}
 
