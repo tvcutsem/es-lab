@@ -80,7 +80,7 @@ The fabric of the global economy is held together by contracts. A contract is an
 
 To realize this potential, smart contracts themselves need a distributed, secure, persistent, and ubiquitous computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts.
 
-We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by massive numbers of non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}\footnote{The official standards name for JavaScript is ``EcmaScript''.}. We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 41 lines of straightforward JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
+We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by massive numbers of non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}\footnote{The official standards name for JavaScript is ``EcmaScript''.}. We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 42 lines of straightforward JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
 
 \section{Why Dr. SES?}
 
@@ -430,7 +430,7 @@ Bob receives this request at the following {\tt buy} method:
   buy: (desc, paymentP) => {
     // do whatever with desc, look up $10 price
     return Q(paymentP).then(
-      p => (myPurse ! deposit(10, p)).then(
+      _ => (myPurse ! deposit(10, paymentP)).then(
         _ => good,
         // failure handling...
 \end{verbatim}
@@ -473,7 +473,15 @@ When Bob receives access to the payment purse, he doesn't know what it is except
 
 By sending a message to an object, one \emph{exercises} whatever erights to cause effects are provided by that object's public interface. By contrast, money is only valuable because it is valued by others. Money does not have any direct use-value.
 
-These four dimensions are only a start. It is not clear even that all 16 combinations are useful, but clearly many are. To have an expressive system of erights, we wish to be able to express many of these easily. But to have a small kernel, we wish to build directly on only the minimal set needed to be able to build the rest easily. Experiments so far, such as the Mint Maker, indicate that object-references are indeed a good choice of kernel eright.
+These four dimensions are only a start. Most of the resulting 16 kinds are useful. To have an expressive system of erights, we wish to be able to express many of these easily. But to have a small kernel, we wish to build directly on only the minimal set needed to be able to build the rest easily. Experiments so far, such as the Mint Maker, indicate that object-references are indeed a good choice of kernel eright.
+
+The participants in this scenario suffer two vulnerabilities that are less than ideal.
+\begin{itemize}
+\item Alice must risk her \$10 on the possibility of Bob's non-payment. We solve this with the next bit of code, the Escrow Exchange Contract, but at the price of exacerbating the next vulnerability.
+\item Alice and Bob's money are fully vulnerable to misbehavior by the bank. In the following escrow exchange scenario, Alice and Bob are more protected from each other, but at the price of vulnerability to three third-party services. We return to this issue below.
+\end{itemize}
+
+
 
 \section{The Escrow Exchange Contract}
 
@@ -481,14 +489,15 @@ These four dimensions are only a start. It is not clear even that all 16 combina
 \begin{lstlisting}[language=javascript]
 var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
   var makeEscrowPurseP = Q.join(srcPurseP ! makePurse, 
-                                dstPurseP ! makePurse);
+                                   dstPurseP ! makePurse);
   var escrowPurseP = makeEscrowPurseP ! ();
 
-  Q(decisionP).then(                              // setup phase 2
-    _      => { dstPurseP ! deposit(amount, escrowPurseP); },
+  Q.all([decisionP, escrowPurseP]).then(           // setup phase 2
+    _       => { dstPurseP ! deposit(amount, escrowPurseP); },
     reason => { srcPurseP ! deposit(amount, escrowPurseP); });
-
-  return escrowPurseP ! deposit(amount, srcPurseP);     // phase 1
+    
+  return Q(srcPurseP).then(                              // phase 1
+    _ => escrowPurseP ! deposit(amount, srcPurseP));
 };
 
 var failOnly = cancelP => Q(cancelP).then(
@@ -499,8 +508,8 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
   var decisionP = Q.promise(resolve => { decide = resolve; });
 
   decide(Q.race([Q.all([
-     transfer(decisionP, a.moneySrcP, b.moneyDstP, b.moneyNeeded),
-     transfer(decisionP, b.stockSrcP, a.stockDstP, a.stockNeeded)
+      transfer(decisionP, a.moneySrcP, b.moneyDstP, b.moneyNeeded),
+      transfer(decisionP, b.stockSrcP, a.stockDstP, a.stockNeeded)
     ]), 
     failOnly(a.cancelP), 
     failOnly(b.cancelP)]));
@@ -511,7 +520,36 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
 \label{escrowExchange}
 \end{figure}
 
+We explain the escrow exchange contract in terms of a scenario among five players, Alice, Bob, a Money Issuer running the code of Figure~\ref{makeMint}, a Stock Issuer also running the code of Figure~\ref{makeMint} but with the units representing shares of some particular stock, and an Escrow Exchange Agent running the code of Figure~\ref{escrowExchange}. Alice and Bob again do not trust each other. They wish to trade \$10 of Alice's money for 7 shares of Bob's stock, but in this case, neither is willing to risk their assets on the possibility of the other's non-delivery. They both trust the same Money Issuer with their money, the same Stock Issuer with their stock, and the same Escrow Exchange Agent with the rights to be traded. The Money Issuer, the Stock Issuer, and the Escrow Exchange agent each have no prior knowledge or trust in the others. Additionally, none of these trust Alice or Bob. The rest of the scenario as presented below examines only the consequences of Alice or Bob's misbehavior and assumes the other three run the code shown honestly. A full analysis of vulnerabilities should consider all combinations.
 
+Since the situation is now symmetric, we explain the progression of events from Alice's perspective. Alice's prior trust in each Issuer is represented as before---Alice holds a persistent reference to her main purse at each Issuer. Alice's prior trust in the escrow exchange agent is represented as the ability to provide the first ``{\tt a}'' argument in the call to {\tt escrowExchange} for which Bob is able to provide the second ``{\tt b}'' argument. For this specific interaction, Alice might creates this argument as follows:
+
+\begin{verbatim}
+  var canceller;
+  var a = def({
+    moneySrcP: myMoneyPurse ! makePurse(),
+    stockDstP: myStockPurse ! makePurse(),
+    stockNeeded: 7,
+    cancelP: Q.promise(resolve => { canceller = resolve; });
+  });
+  moneySrc ! deposit(10, myMoneyPurse);
+\end{verbatim}
+
+By a protocol whose details appear below, Alice sends this {\tt a} object to the escrow exchange agent, for it to use as the first argument in a call to {\tt escrowExchange}, which initiates this specific contract between Alice and Bob. The {\tt escrowExchange} function returns a promise for the outcome of the contract, which the escrow exchange agent returns to Alice. 
+
+If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to have been deposited into her {\tt a.stockDstP}. If this promise becomes rejected, the exchange failed, and she should expect her {\tt a.moneySrcP} to again hold her \$10. In the meantime, if she gets impatient and would rather cancel the exchange than continue waiting, she can call her {\tt cancelled} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.
+
+On lines 14 and 15 of Figure~\ref{escrowExchange} the {\tt escrowExchange} contract makes a {\tt decisionP} promise whose fulfillment or rejection represents its decision about whether the exchange must succeed or fail. It makes this decision by calling {\tt decide} with the outcome of a race between a {\tt Q.all} and two calls to {\tt failOnly}. Until a player cancels the exchange, the {\tt Q.race} can only be won by the {\tt Q.all}, which is where the exchange is proceeding.
+
+The arguments to {\tt Q.all} are the results of two calls to {\tt transfer}. The first call to transfer sets up activity whose purpose is to transfer money from Alice to Bob. The second call's purpose is to transfer stock from Bob to Alice. Each call to transfer returns a promise whose fulfillment or rejection indicates whether it has become confident that this one-way transfer of rights will succeed. If both transfers become confident (before any cancellations win the race), then the overall decision is to proceed. If either transfer indicates failure, by rejecting the promise it has returned, then, via {\tt Q.all}, the {\tt decisionP} promise becomes rejected.\footnote{This is the pattern for promise-based two phase commit enhanced with the possibility of cancellation, where the call to {\tt escrowExchange} creates a transaction coordinator, and each of its calls to {\tt transfer} create a participant.}
+
+Since the two calls to {\tt transfer} and symmetric, we examine only the first. The first phase of the transfer, on lines 8 and 9 of Figure~\ref{escrowExchange}, attempts to deposit Alice's money into an escrow purse mentioned only within this transfer. If this deposit succeeds, Alice's money has been escrowed, so the money portion of the exchange is now assured. If this deposit fails, then the exchange as a whole should be cancelled. So {\tt transfer} simply returns the promise for the outcome of this first deposit.
+
+The {\tt transfer} function sets up the second phase on lines 5, 6, and 7. Assume for now that {\tt makeEscrowP} is fulfilled. If the overall decision is that the exchange should succeed, then the success callback deposits Alice's escrowed money into Bob's account. Otherwise it refunds Alice's escrowed money.
+
+Only one mystery remains. How does the escrow agent obtain a fresh escrow purse at this money issuer, in order to be confident that it has obtained exclusive access to the money at stake? Since the escrow exchange agent has no prior knowledge or trust in the money issuer, it cannot become confident that the issuer is honest or even that the money it issues means anything. The question is meaningless. Instead, it must only obtain a fresh escrow purse whose veracity is \emph{mutually acceptable} to Alice and Bob.
+
+If it simply asks Alice's purse for a new empty purse ({\tt srcPurseP ! makePurse()}), Alice could return a dishonest purse that acknowledges deposit without transferring anything. Alice would then obtain Bob's stock for free. If it simply asks Bob's purse, then Bob could steal Alice's money during phase 1. Instead, it checks if their {\tt makePurse} methods are the very same function object---have the same object identity--by using {\tt Q.join} on promises for these two methods. This is why, on lines 3 and 7 of Figure~\ref{makeMint}, all purses of the same currency at the same back share the same function as their {\tt makePurse} method. If the {\tt Q.join} of these two methods fails, the either Alice was dishonest, Bob was dishonest, or they simply didn't have prior agreement on the same currency at the same money issuer.
 
 \section{The Contract Host}
 
