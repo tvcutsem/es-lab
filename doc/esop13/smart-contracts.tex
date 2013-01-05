@@ -86,11 +86,11 @@ We are working towards turning JavaScript into such a fabric. JavaScript is alre
 
 Dr. SES is a platform for distributed, resilient and secure computing, layered on top of EcmaScript. Why is each of these ingredients needed to achieve electronic rights and contracts?
 
-Dr. SES is layered on top of EcmaScript for two primary reasons. First is the ubiquity of the language. Due to its embedding in the browser, EcmaScript is available on a wide range of platforms. Second, because of this ubiquity, Javascript is widely adopted among programmers.
+Dr. SES is layered on top of EcmaScript for two primary reasons. First is the ubiquity of the language. Due to its embedding in the browser, EcmaScript is available on a wide range of platforms. Second, because of this ubiquity, JavaScript is widely adopted among programmers.
 
-In an architecture that aims to express electronic rights or contracts, security must play a key role. Dr. SES builds upon the object-capability paradigm. Capability principles are followed both to secure distributed objects as well as to secure the local execution environment. The latter allows Dr. SES programs to execute mobile code from untrusted parties without fear of granting excess privileges to that piece of code. This is especially relevant in the context of Javascript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that  depends on the ability to safely execute third-party code.
+In an architecture that aims to express electronic rights or contracts, security must play a key role. Dr. SES builds upon the object-capability paradigm. Capability principles are followed both to secure distributed objects as well as to secure the local execution environment. The latter allows Dr. SES programs to execute mobile code from untrusted parties without fear of granting excess privileges to that piece of code. This is especially relevant in the context of JavaScript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that  depends on the ability to safely execute third-party code.
 
-Javascript is not a distributed programming language. In the browser, a large number of APIs is available to scripts to communicate with servers and other frames, but these APIs are tedious to work with, and not designed with least-authority rules. That is why Dr. SES extends the Javascript language proper with a handful of features to support least-authority distributed programming at the level of individual objects.
+JavaScript is not a distributed programming language. In the browser, a large number of APIs is available to scripts to communicate with servers and other frames, but these APIs are tedious to work with, and not designed with least-authority rules. That is why Dr. SES extends the JavaScript language proper with a handful of features to support least-authority distributed programming at the level of individual objects.
 
 Finally, the resilience aspect of Dr. SES deals with the unavoidable issues of failure handling that come up in distributed systems.
 %It is widely appreciated that writing correct, bug-free code in the presence of arbitrary failures is hard. Dr. SES, then, tries to make it as easy as possible for non-experts to deal with distributed failures.
@@ -98,11 +98,11 @@ Server-side Dr. SES programs periodically checkpoint their entire state, so that
 
 %Objects and object references in Dr. SES are always persistent, meaning that they survive arbitrary failures by default.
 
-Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed programming in Javascript as effortless as possible. Given such a platform, it then becomes possible to implement contracts with very little code. This is precisely what we will demonstrate in the second part of this paper, after having explained Dr. SES in more detail.
+Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed programming in JavaScript as effortless as possible. Given such a platform, it then becomes possible to implement contracts with very little code. This is precisely what we will demonstrate in the second part of this paper, after having explained Dr. SES in more detail.
 
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
-The current JavaScript standard, EcmaScript 5 (ES5), enables the \emph{SES} library to easily enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. The \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system for distributed orthogonal persistence---resilient against many failures. We explain each below.
+The current JavaScript standard, EcmaScript 5 (ES5), enables the \emph{SES} library to easily enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. The \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures. We explain each below.
 
 \subsection{Just Enough JavaScript}
 
@@ -151,15 +151,15 @@ A record of functions hiding variables serves as an object of methods ({\tt getX
 
 \bnote{Tom}{I expanded this section to include an introduction to capability-based security. Please review.}
 
-SES is an object-capability-secure subset of Javascript. Historically, there have been two contrasting views on how to secure shared resources. In the ACL (access control list) approach, every time a resource is used, an access control check is performed, checking if the requestor holds the right to use the resource. In this paradigm, resources are often coarse-grained. In the capability-based approach, a capability represents the right to perform a set of operations on a specific, designated resource. The very fact that an operation was performed \emph{via} a capability is sufficient proof to the resource that the operation is authorized. In capability-based systems, both access rights and resources are mostly fine-grained.
+SES is an object-capability-secure subset of JavaScript. Historically, there have been two contrasting views on how to secure shared resources. In the ACL (access control list) approach, every time a resource is used, an access control check is performed, checking if the requestor holds the right to use the resource. In this paradigm, resources are often coarse-grained. In the capability-based approach, a capability represents the right to perform a set of operations on a specific, designated resource. The very fact that an operation was performed \emph{via} a capability is sufficient proof to the resource that the operation is authorized. In capability-based systems, both access rights and resources are mostly fine-grained.
 
 Object-capability security marries the ideas of capability-based security with standard object-oriented programming. An object reference represents the right to invoke only the public methods on a specific object.
 
-To secure a Javascript application using object-capability principles, we require two properties. First, a script (program) must be born powerless, i.e. there must be no powerful globally accessible objects, such as an \texttt{XMLHttpRequest} object that allows the script to communicate with the outside world. But if a script is born powerless, then how can it interact with the outside world at all? The answer is that the creator of the script may \emph{endow} the newborn script with references to some powerful objects at birth. This is how the script comes to obtain its first external object references.
+To secure a JavaScript application using object-capability principles, we require two properties. First, a script (program) must be born powerless, i.e. there must be no powerful globally accessible objects, such as an \texttt{XMLHttpRequest} object that allows the script to communicate with the outside world. But if a script is born powerless, then how can it interact with the outside world at all? The answer is that the creator of the script may \emph{endow} the newborn script with references to some powerful objects at birth. This is how the script comes to obtain its first external object references.
 
 Once a script obtains a reference to an external object, we must establish rules as to what the script can do with the object, and how the script can come to acquire further object references. The rules are familiar to any object-oriented programmer: an object reference should only grant the ability to invoke an object's public methods. The object's private state should be encapsulated. Thus, an object can only come to acquire new object references via argument and result passing.
 
-Javascript by itself is not an object-capability-secure language, because scripts are not born powerless (A Javascript environment is full of globally mutable state) and because plain Javascript objects are not encapsulated. From a security perspective, there were three problems with Javascript's objects:
+JavaScript by itself is not an object-capability-secure language, because scripts are not born powerless (A JavaScript environment is full of globally mutable state) and because plain JavaScript objects are not encapsulated. From a security perspective, there were three problems with JavaScript's objects:
 
 \begin{itemize}
 \item Records were fully mutable, allowing one client of a point to, for example, replace its {\tt getX} method, violating the assumptions of other clients. ES5 provides a {\tt freeze} primitive, used by the SES library to define the {\tt def} function for making a tamper proof object graph.
@@ -191,27 +191,27 @@ WeakMap
 
 \subsection{Q: Distributed JavaScript Objects}
 
-As stated in the introduction, to realize electronic rights, we need a distributed, secure, and persistent computational fabric. We have just seen how SES can secure a local Javascript environment. Here, we focus on how to link up multiple such secured Javascript environments into a distributed system.
+As stated in the introduction, to realize electronic rights, we need a distributed, secure, and persistent computational fabric. We have just seen how SES can secure a local JavaScript environment. Here, we focus on how to link up multiple such secured JavaScript environments into a distributed system.
 
 %Before jumping ahead to distributed programming, let us first turn to concurrent programming, which is an essential ingredient of distributed programming.
 
 \paragraph{Communicating Event-Loop Concurrency}
 
-On both the browser and the server, Javascript's de-facto concurrency model is based on ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. ``node.js'', the most popular server-side Javascript environment, is based on a similar model, although on the server the focus is less on UI and more on asynchronous networking and file I/O.
+On both the browser and the server, JavaScript's de-facto concurrency model is based on ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. ``node.js'', the most widespread server-side JavaScript environment, is based on a similar model, although on the server the focus is less on UI and more on asynchronous networking and file I/O.
 
-In its most general form, an event loop consists of an event queue and a set of event handlers. The event loop processes events one by one from its queue by dispatching to the appropriate event handler. In Javascript, event handlers are usually functions registered as callbacks on certain events (e.g. button clicks or incoming XHR responses).
+In its most general form, an event loop consists of an event queue and a set of event handlers. The event loop processes events one by one from its queue by dispatching to the appropriate event handler. In JavaScript, event handlers are usually functions registered as callbacks on certain events (e.g. button clicks or incoming XHR responses).
 
 The processing of a single event is called a \emph{turn} of the event loop. Processing an event usually entails calling a callback function, which then runs to completion, without any interruption. Thus, turns are the smallest unit of interleaving.
 
-A system of communicating event loops consists of multiple event loops (in the same or distributed address spaces) that communicate with each other solely by means of asynchronous message passing. The Web Workers API~\cite{webworkerspec} enables such communication among multiple isolated event loops within the same browser. On a distributed scale, a Javascript webpage communicating with a node.js server using asynchronous XHR requests or WebSockets~\cite{websocketsspec} is another example of two communicating event loops.
+A system of communicating event loops consists of multiple event loops (in the same or distributed address spaces) that communicate with each other solely by means of asynchronous message passing. The Web Workers API enables such communication among multiple isolated event loops within the same browser. On a distributed scale, a JavaScript webpage communicating with a node.js server using asynchronous XHR requests or WebSockets is another example of two communicating event loops.
 
 Dr. SES builds upon communicating event loops because this concurrency model provides adequate support for plan coordination~\cite{miller:strangers}. That is, the model makes it manageable for objects to maintain their invariants in the face of concurrent (interleaved) requests made by multiple clients.
 
-While Javascript environments already effectively support event loop concurrency, the ECMAScript language itself has no built-in support for concurrent or distributed programming. Dr. SES thus extends Javascript with a handful of features that enable programmers to more directly express distributed interactions between individual objects.
+While JavaScript environments already effectively support event loop concurrency, the ECMAScript language itself has no built-in support for concurrent or distributed programming. Dr. SES thus extends JavaScript with a handful of features that enable programmers to more directly express distributed interactions between individual objects.
 
 \paragraph{Promises}
 
-We introduce a new type of object, called a Promise, to represent both the outcome of asynchronous operations, as well as to represent remote object references. A normal Javascript direct reference may only designate an object within the same event loop. Only promises may come to designate objects in other event loops. A promise may be in one of several states:
+We introduce a new type of object, called a Promise, to represent both the outcome of asynchronous operations, as well as to represent remote object references. A normal JavaScript direct reference may only designate an object within the same event loop. Only promises may come to designate objects in other event loops. A promise may be in one of several states:
 
 \begin{description}
   \item[pending] when it is not yet determined what object the promise designates,
@@ -247,7 +247,7 @@ Promises may designate both local objects, and remote objects belonging to anoth
 
 However, if the promise comes to designate a remote object, it is not possible to resolve the promise to a local reference. Instead, one must interact with the remote object via the promise. Any such interaction must be asynchronous, to ensure that interaction between the event loops as a whole remains asynchronous.
 
-Javascript provides many operators to interact with an object. Here, we will focus on only three: method calls, function application, and reading the value of a property. Javascript has the familiar dot operator to express local, immediate method calls, such as \texttt{point.getX()}. We introduce a corresponding infix \texttt{!} operator (named the \emph{bang} or \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
+JavaScript provides many operators to interact with an object. Here, we will focus on only three: method calls, function application, and reading the value of a property. JavaScript has the familiar dot operator to express local, immediate method calls, such as \texttt{point.getX()}. We introduce a corresponding infix \texttt{!} operator (named the \emph{bang} or \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
 
 The \texttt{!} operator can be used anywhere the dot operator can be used. For instance, if \texttt{pointP} is a promise for a \texttt{point}, then \texttt{pointP ! getX()} denotes an eventual send, which enqueues a request to call the \texttt{getX()} method in the event loop of \texttt{point}. In addition, the syntax \texttt{fP ! (x,y)}, where \texttt{fP} is a promise designating a function \texttt{f}, enqueues a request to call \texttt{f(x,y)} in the event loop of \texttt{f}. The \texttt{!} operator is actually syntactic sugar for an explicit method call on the promise object:
 
@@ -269,7 +269,7 @@ A local reference to an object is guaranteed to be unique and unforgeable, and g
 
 A first difference, already explained above, is that remote references only carry eventual message sends, not immediate method calls. A second difference is that in a distributed setting, it is impossible to guarantee unique and unforgeable references, but we can come close.
 
-We represent remote object references as unguessable HTTPS URLs (also called YURLs or web-keys~\cite{mashing_with_permission}). Such a reference may look like \texttt{https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment segment (everything after the \texttt{\#}) is a random character string that uniquely identifies an object on the \texttt{example.com} server.
+We represent remote object references as unguessable HTTPS URLs (also called YURLs or web-keys~\cite{Close:Webkeys}). Such a reference may look like \texttt{https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment segment (everything after the \texttt{\#}) is a random character string that uniquely identifies an object on the \texttt{example.com} server.
 
 Such URLs form distributed cryptographic-capabilities. While such a URL is neither unique nor unforgeable, it nevertheless shares an important property with a local object reference: both are unguessable secrets. This implies that if you do not know the secret, you can only come to know it if somebody else who \emph{does} know the secret chooses to share it with you.
 
@@ -338,16 +338,28 @@ Q.join = (xP, yP) => {
 Electronic rights require a distributed, secure, and persistent computational fabric.
 We have already covered the distributed and secure aspects of Dr. SES. Here, we cover the final aspect of resilience against failures.
 
-To introduce resilience against failures, Dr. SES builds upon the Ken protocol~\cite{Yoo:CKen}. It offers to applications two primary features:
+\paragraph{Ken}
+To introduce resilience, Dr. SES builds upon a middleware named Ken~\cite{Yoo:CKen}. Ken offers to applications two primary features:
 
 \begin{description}
   \item[Reliable messaging] Ken provides primitives to reliably transmit a message exactly once to a recipient process. In addition, multiple messages sent to the same recipient are guaranteed to arrive in the same order (i.e. Ken ensures pair-wise FIFO message ordering).
-  \item[Distributed consistent snapshots] Ken provides to applications a persistent object heap. All objects allocated in this heap will survive arbitrary failures. Ken further ensures that the snapshots of distributed processes does not grow inconsistent. For example, it is impossible for the sender of a message to record in its snapshot that the message was successfully delivered, while the receiver has no record of having processed that message in its snapshot.
+  \item[Distributed consistent snapshots] Ken provides a persistent heap for storing application data. All objects stored in this heap will survive failures. Ken further ensures that the snapshots of two or more communicating processes do not grow inconsistent. For example, it is impossible for the sender of a message to record in its snapshot that the message was successfully delivered, while the receiver has no record of having processed that message in its snapshot.
 \end{description}
 
-In short, a Ken process can tolerate arbitrary failures in such a way that when an application is restarted after a crash, it is automatically restored to a state that is consistent with the state before the crash. To the process itself, it is as if the crash had never happened. To any of the process's communication partners, the process just seemed slow to respond.
+A Ken process can tolerate arbitrary failures in such a way that when an application is restarted after a crash, it is always restored to a previously consistent state. To the process itself, it is as if the crash had never happened. To any of the process's communication partners, the process just seemed slow to respond. A crash will never cause duplicate messages to be delivered, nor does it cause messages ``in flight'' to be lost.
 
-Ken is a protocol best implemented at the level of a virtual machine. Ken assumes communicating event loops, and so aligns well with Javascript's de-facto execution model. A Ken process is an event loop. The way that Ken achieves the above properties is simple, yet effective:
+\paragraph{NodeKen}
+For the purposes of Dr. SES, the Ken middleware is best integrated directly into the JavaScript runtime. Thus, all Javascript objects born in a Dr. SES environment layered on top of a Ken runtime are persistent by default. Also, any object reference spanning two such Dr. SES environments is persistent: it will survive failures of both the environment holding onto the reference, as well as failures of the environment containing the object designated by the reference.
+
+Further, thanks to the exactly-once message delivery guarantees, eventual message sends made using the \texttt{!} operator are highly reliable. One assumption that Ken does make is that all Ken processes eventually recover. To Ken, a permanently crashed client is indistinguishable from a very slow client. Thus, while Ken guarantees exactly-once message delivery, it is still up to the application to do its own failure handling if it does not receive a response within a given period of time (e.g. using timeouts).
+
+To date, there exist two implementations of the Ken protocol, one in C (CKen~\cite{Yoo:CKen}) and one in Java (WaterKen~\cite{Close:Waterken}). Our goal is to integrate node.js with Ken, leading to a platform we tentatively call NodeKen\footnote{At the time of writing, NodeKen does not yet exist. We are actively working on integrating the CKen implementation with the v8 JavaScript virtual machine, upon which node.js is based. See \url{https://github.com/supergillis/v8-ken}.}. NodeKen enables distributed orthogonal persistence of server-side JavaScript programs.
+
+At this point, we should clarify that it is not our aim to embed Ken into the browser. NodeKen would be a stand-alone Javascript environment, like node.js. This leads to two types of Dr. SES environments: Dr. SES in the browser runs in an emphemeral environment: this environment ceases to exist when the user navigates to a different page, or closes the page. Objects and object references in such environments are not persistent. Dr. SES on NodeKen runs in a persistent environment: all application state is persistent.
+
+Following the philosophy of WaterKen~\cite{Close:Waterken}, we expect it to be common for ephemeral and persistent Dr. SES environments to communicate with each other, where the ephemeral environment (inside the browser) primarily deals with UI and the persistent environment stores durable application state, a typical instance of the Model-View-Controller pattern. In the remainder of this paper, we assume that all Dr. SES code runs in a persistent Dr. SES environment.
+
+\paragraph{Implementation} We briefly sketch how Ken achieves distributed consistent snapshots. Ken assumes communicating event loops, and so aligns well with JavaScript's de-facto execution model. A Ken process is an event loop that executes application-level messages. In addition:
 
 \begin{itemize}
   \item During a turn, all outgoing messages are accumulated in an outgoing message queue. These messages are not yet released to the network.
@@ -358,20 +370,16 @@ Ken is a protocol best implemented at the level of a virtual machine. Ken assume
   \item Incoming messages are checked for duplicates. When a duplicate message is detected, it is dropped (not processed) and immediately acknowledged.
 \end{itemize}
 
-The snapshot of a Ken process consists of both the heap and the outgoing message queue. It does not include the runtime stack (which is guaranteed to be empty between turns) nor the incoming message queue.
-
 The key point is that outgoing messages are released, and incoming messages are acknowledged only \emph{after} the message has been fully processed by the receiver \emph{and} the heap state has been checkpointed.
 
-One assumption that Ken does make is that all Ken processes eventually recover. To Ken, a permanently crashed client is indistinguishable from a very slow client. Thus, while Ken guarantees exactly-once message delivery, it is still up to the application to do its own failure handling if it does not receive a response within a given timeout period.
+The snapshot of a Ken process consists of both the heap and the outgoing message queue. It does not include the runtime stack (which is guaranteed to be empty between turns) nor the incoming message queue.
 
-One objection against the Ken approach to checkpointing is that making a checkpoint after every event loop turn is too costly. The Ken implementation currently makes use of the OS virtual memory paging system to save to disk only those parts of the heap that have changed while processing a message. Furthermore, the availability of cheap low-latency non-volatile memory (such as solid-state drives) has driven down the cost of writing state to disk to the point that making micro-snapshots after every turn becomes practical.
-
-To date, there exist two implementations of the Ken protocol, one in C (CKen~\cite{Yoo:CKen}) and one in Java (WaterKen~\cite{waterken}). We are actively working towards integrating CKen with the v8 Javascript virtual machine\footnote{See \url{https://github.com/supergillis/v8-ken}.}. The longer-term goal is to integrate such a Ken-aware v8 runtime platform with node.js (which is built on v8), to arrive at what we call NodeKen. The key idea is to turn node.js into a Ken process, enabling distributed orthogonal persistence of server-side Javascript programs.
+Checkpointing a program's entire state after every event loop turn may be considered costly. The CKen implementation takes care to only store those parts of the heap to disk that are updated during a turn. Further, the availability of cheap low-latency non-volatile memory (such as solid-state drives) has driven down the cost of writing state to disk to the point that making micro-snapshots after every turn becomes practical.
 
 \paragraph{Ken and security}
-The Ken protocol guarantees distributed snapshots even in the face of mutual suspicion. There is nothing an adversarial process can do that will corrupt the distributed snapshots of benign processes.
+The Ken protocol guarantees distributed snapshots even among mutually suspicious machines. There is nothing an adversarial process can do that will corrupt the distributed snapshots of benign processes.
 
-The CKen implementation used to build NodeKen currently does not use an encrypted communications channel to deliver messages between Ken processes. Hence, the authenticity, integrity or confidentiality of incoming messages cannot be guaranteed. In NodeKen, our plan is to actively secure the communications channels between NodeKen processes using a cryptographic library\footnote{An outline of how this would work is available online: \url{http://www.eros-os.org/pipermail/cap-talk/2012-September/015386.html}}.
+The CKen implementation used to build NodeKen currently does not use an encrypted communications channel to deliver messages between Ken processes. Hence, the authenticity, integrity or confidentiality of incoming messages cannot be guaranteed. In NodeKen, our plan is to actively secure the communications channels between NodeKen processes using a cryptographic library\footnote{An outline of such a design, due to Brian Warner, is available online: \url{http://www.eros-os.org/pipermail/cap-talk/2012-September/015386.html}}.
 
 \section{Contracts use Electronic Rights}
 
@@ -616,7 +624,7 @@ This is not yet a satisfying fabric for smart contracting.\bnote{Tom}{What does 
 
 Figure~\ref{makeContractHost} shows the code for a generic contract host. It is able to host any contract formulated, as our escrow exchange contract is, as a function, taking one argument from each player and returning the outcome of the contract as a whole. But setting up a contract is tricky, as it involves a necessary asymmetry among the players. One of the players, say Bob, must initiate a new live contract instance, by sending the contract's code to the contract host. At this point, Bob is the only one who knows both this contract instance and that he'd like to invite Alice to participate in \emph{this} instance. If Bob simply sent to Alice a reference to those objects on the contract host that enables Alice to play, Alice would not know what she's received, since she received it from Bob whom she does not trust. She does trust the contract host, and these objects are on the contract host, but so are the objects corresponding to all the other contracts this host is initiating or running. The connection of Alice to this contract instance must be at Bob's initiation, but Alice's confidence that she's playing the contract she thinks she is much be rooted in her prior trust in the contract host.
 
-Our contract host is an object with two methods, {\tt setup} and {\tt play}. Bob sets up the contract instance by calling {\tt setup} with the source code for the contract function in question, e.g., {\tt escrowExchange}. At line 592, {\tt setup} returns an array of unique unforgeable tokens, one for each argument to the function. Bob's invitation to Alice communicates this token, the source code for the contract he wishes Alice to play, the argument index indicating what side of the contract Alice is to play, and the contract host in question.
+Our contract host is an object with two methods, {\tt setup} and {\tt play}. Bob sets up the contract instance by calling {\tt setup} with the source code for the contract function in question, e.g., {\tt escrowExchange}. At line 31, {\tt setup} returns an array of unique unforgeable tokens, one for each argument to the function. Bob's invitation to Alice communicates this token, the source code for the contract he wishes Alice to play, the argument index indicating what side of the contract Alice is to play, and the contract host in question.
 
 If Alice decides she'd like to play this contract, she formulates her argument object as above, and sends it in a {\tt play} request to the contract host along with the token, the alleged contract source code, and the alleged side she is to play. If all of this checks out, and this token has not previously been redeemed, then this token gets used up and Alice's argument is remembered until the arguments for the other players arrive, and Alice receives a promise for the outcome of the contract. Once all arguments are present, the contract function is called and its result is used to resolve the previously returned promise.
 
