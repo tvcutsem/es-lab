@@ -86,7 +86,7 @@ We are working towards turning JavaScript into such a fabric. JavaScript is alre
 
 Dr. SES is a platform for distributed, resilient and secure computing, layered on top of EcmaScript. Why is each of these ingredients needed to achieve electronic rights and contracts?
 
-Dr. SES is layered on top of EcmaScript for two primary reasons. First is the ubiquity of the language. Due to its embedding in the browser, EcmaScript is available on a wide range of platforms. Second, because of this ubiquity, Javascript is widely adopted among a broad developer audience.
+Dr. SES is layered on top of EcmaScript for two primary reasons. First is the ubiquity of the language. Due to its embedding in the browser, EcmaScript is available on a wide range of platforms. Second, because of this ubiquity, Javascript is widely adopted among programmers.
 
 In an architecture that aims to express electronic rights or contracts, security must play a key role. Dr. SES builds upon the object-capability paradigm. Capability principles are followed both to secure distributed objects as well as to secure the local execution environment. The latter allows Dr. SES programs to execute mobile code from untrusted parties without fear of granting excess privileges to that piece of code. This is especially relevant in the context of Javascript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that  depends on the ability to safely execute third-party code.
 
@@ -249,9 +249,7 @@ However, if the promise comes to designate a remote object, it is not possible t
 
 Javascript provides many operators to interact with an object. Here, we will focus on only three: method calls, function application, and reading the value of a property. Javascript has the familiar dot operator to express local, immediate method calls, such as \texttt{point.getX()}. We introduce a corresponding infix \texttt{!} operator (named the \emph{bang} or \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
 
-The \texttt{!} operator can be used anywhere the dot operator can be used. For instance, if \texttt{pointP} is a promise for a \texttt{point}, then \texttt{pointP ! getX()} denotes an eventual send, which enqueues a request to call the \texttt{getX()} method in the event loop of \texttt{point}. In addition, the syntax \texttt{fP ! (x,y)}, where \texttt{fP} is a promise designating a function \texttt{f}, enqueues a request to call \texttt{f(x,y)} in the event loop of \texttt{f}. The \texttt{!} operator is actually a thin veneer of syntactic sugar over a more explicit method call on the promise object:
-
-\bnote{Mark}{I added promise.get because the escrow exchange contract uses it to obtain the two makePurse functions to Q.join.}
+The \texttt{!} operator can be used anywhere the dot operator can be used. For instance, if \texttt{pointP} is a promise for a \texttt{point}, then \texttt{pointP ! getX()} denotes an eventual send, which enqueues a request to call the \texttt{getX()} method in the event loop of \texttt{point}. In addition, the syntax \texttt{fP ! (x,y)}, where \texttt{fP} is a promise designating a function \texttt{f}, enqueues a request to call \texttt{f(x,y)} in the event loop of \texttt{f}. The \texttt{!} operator is actually syntactic sugar for an explicit method call on the promise object:
 
 \begin{center}
   \begin{tabular}{|l|l|l|}
@@ -377,6 +375,8 @@ The CKen implementation used to build NodeKen currently does not use an encrypte
 
 \section{Contracts use Electronic Rights}
 
+\bnote{Tom}{We need glue text here to remind the reader why he's been reading all this stuff about Dr. SES, that we're done explaining it, and that we can now move on to use Dr. SES to build contracts.}
+
 \begin{figure}[htbp]
 \begin{minipage}{0.48\linewidth}
 \begin{lstlisting}[language=javascript]
@@ -442,21 +442,24 @@ Following {\tt deposit} sequentially, we see it
 \begin{enumerate}
 \item Uses {\tt Nat} to ensure that the new {\tt balance} would not overflow the range of reliably represented non-negative integers. Otherwise an error is thrown, breaking Bob's promise for the result of the deposit, and the good is not released back to Alice.
 \item Looks up the alleged payment purse in the {\tt amp} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error.
-\item If this lookup succeeds, it find {\tt amount => { balance = Nat(balance - amount); })} function that was registered with this payment purse when that payment purse was created. The {\tt balance} in that function refers to the payment purse's {\tt balance}. 
+\item If this lookup succeeds, it finds the {\tt amount => { balance = Nat(balance - amount); })} function that was registered with this payment purse when that payment purse was created. The {\tt balance} in that function refers to the payment purse's {\tt balance}. 
 \item After checking that the amount to be deposited is indeed a non-negative integer, this function is called to withdraw that amount from the payment purse.
 \item If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
 \item This is the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no potential locally observable failures remain.
-\item The assignment decrements the balance by the amount. This function now returns and we continue with rest of the {\tt deposit} method.
-\item The {\tt +=} increments the balance of purse being deposited into.
-\item The {\tt deposit} method implicitly returns undefined, fulfilling Bob's promise for the result if the deposit, triggering Bob to release the good to Alice in exchange.
+\item The assignment decrements the balance by the amount. This function now returns and we continue with the rest of the {\tt deposit} method.
+\item The {\tt +=} increments the balance of the purse being deposited into.
+\item The {\tt deposit} method implicitly returns undefined, fulfilling Bob's promise for the result of the deposit, triggering Bob to release the good to Alice in exchange.
 \end{enumerate}
 
 \bnote{Mark}{The reason I don't reuse the result of adding balance and amount, but rather re-add them, is to defend against an aliasing attack, where the same purse is used as receiver and argument.}
 
 \section{Towards a Taxonomy of Electronic Rights}
 
-The local unforgeable object reference and the remote unguessable object reference represent one kind of eright---the eright to invoke the public interface of the object it designates. The Mint Maker, building on object references as erights, builds a new kind of eright at a new level of abstraction, one having many of the properties of money. By contrasting these, we can begin to form a taxonomy of erights, and to understand how the layers of abstractions relate to each other. 
+The local unforgeable object reference and the remote unguessable object reference represent one kind of eright---the eright to invoke the public interface of the object it designates. The Mint Maker, building on object references as erights, builds a new kind of eright at a new level of abstraction, one having many of the properties of money. By contrasting these, we can begin to form a taxonomy of erights, and to understand how the layers of abstractions relate to each other:
 
+\bnote{Tom}{What does one call the rows in this table? Qualities? Properties? (of erights)}
+
+\begin{center}
 \begin{tabular}{ l l }
   Object reference & Money \\ \hline
   Shared & Exclusive \\
@@ -464,18 +467,19 @@ The local unforgeable object reference and the remote unguessable object referen
   Opaque & Assayable \\
   Exercisable & Symbolic \\
 \end{tabular}\\
+\end{center}
 
-When Alice sends the payment purse to Bob, she has \emph{shared} with Bob access to this purse object. If Bob's {\tt deposit} message to his main purse succeeds, Bob obtains \emph{exclusive} access to this money, denying Alice any further access.
+When Alice sends the payment purse to Bob, she has \emph{shared} with Bob access to this purse object. If Bob's {\tt deposit} message to his main purse succeeds, Bob obtains \emph{exclusive} access to the money in the purse, denying Alice any further access to that money.
 
-The reference to the payment purse designates a \emph{specific} object, this payment purse as opposed to any other. Whereas the counters in the purses represent only quantities of money (though still specific to a given currency at a given issuer). Bob doesn't care which of these \$s he gets, so long as he gets the amount he expects.
+The reference to the payment purse designates a \emph{specific} object, this payment purse as opposed to any other. Whereas the counters in the purses represent only quantities of money (though still specific to a given currency at a given issuer). Bob doesn't care which of these \$s he gets, so long as he gets the amount he expects. The money is \emph{fungible}.
 
-When Bob receives access to the payment purse, he doesn't know what it is except that it is some object that one of his clients chose to send him in this argument position. If his {\tt deposit} method succeeds, he knows exactly what money rights he has received.
+When Bob receives access to the payment purse, he doesn't know what it is except that it is some object that one of his clients chose to send him in this argument position (i.e. the object reference is \emph{opaque}). If his {\tt deposit} method succeeds, he knows exactly what money rights he has received (the money in the purse is \emph{assayable}).
 
-By sending a message to an object, one \emph{exercises} whatever erights to cause effects are provided by that object's public interface. By contrast, money is only valuable because it is valued by others. Money does not have any direct use-value.
+By sending a message to an object, one \emph{exercises} whatever erights to cause effects are provided by that object's public interface. By contrast, money is only valuable because it is valued by others. Money does not have any direct use-value, its value is \emph{symbolic}.
 
 These four dimensions are only a start. Most of the resulting 16 kinds are useful. To have an expressive system of erights, we wish to be able to express many of these easily. But to have a small kernel, we wish to build directly on only the minimal set needed to be able to build the rest easily. Experiments so far, such as the Mint Maker, indicate that object-references are indeed a good choice of kernel eright.
 
-The participants in this scenario suffer two vulnerabilities that are less than ideal.
+The participants in this scenario suffer two vulnerabilities that are less than ideal:
 \begin{itemize}
 \item Alice must risk her \$10 on the possibility of Bob's non-payment. We solve this with the next bit of code, the Escrow Exchange Contract, but at the price of exacerbating the next vulnerability.
 \item Alice and Bob's money are fully vulnerable to misbehavior by the bank. In the following escrow exchange scenario, Alice and Bob are more protected from each other, but at the price of vulnerability to three third-party services. We return to this issue below.
@@ -520,9 +524,9 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
 \label{escrowExchange}
 \end{figure}
 
-We explain the escrow exchange contract in terms of a scenario among five players, Alice, Bob, a Money Issuer running the code of Figure~\ref{makeMint}, a Stock Issuer also running the code of Figure~\ref{makeMint} but with the units representing shares of some particular stock, and an Escrow Exchange Agent running the code of Figure~\ref{escrowExchange}. Alice and Bob again do not trust each other. They wish to trade \$10 of Alice's money for 7 shares of Bob's stock, but in this case, neither is willing to risk their assets on the possibility of the other's non-delivery. They both trust the same Money Issuer with their money, the same Stock Issuer with their stock, and the same Escrow Exchange Agent with the rights to be traded. The Money Issuer, the Stock Issuer, and the Escrow Exchange agent each have no prior knowledge or trust in the others. Additionally, none of these trust Alice or Bob. The rest of the scenario as presented below examines only the consequences of Alice or Bob's misbehavior and assumes the other three run the code shown honestly. A full analysis of vulnerabilities should consider all combinations.
+We explain the escrow exchange contract in terms of a scenario among five players, Alice, Bob, a Money Issuer running the code of Figure~\ref{makeMint}, a Stock Issuer also running the code of Figure~\ref{makeMint} but with the units representing shares of some particular stock, and an Escrow Exchange Agent running the code of Figure~\ref{escrowExchange}\bnote{Tom}{A visual illustration like in the slide ``The Five Players'' might be useful.}. Alice and Bob again do not trust each other. They wish to trade \$10 of Alice's money for 7 shares of Bob's stock, but in this case, neither is willing to risk their assets on the possibility of the other's non-delivery. They both trust the same Money Issuer with their money, the same Stock Issuer with their stock, and the same Escrow Exchange Agent with the rights to be traded. The Money Issuer, the Stock Issuer, and the Escrow Exchange agent each have no prior knowledge or trust in the others. Additionally, none of these trust Alice or Bob. The rest of the scenario as presented below examines only the consequences of Alice or Bob's misbehavior and assumes the other three run the code shown honestly. A full analysis of vulnerabilities should consider all combinations.
 
-Since the situation is now symmetric, we explain the progression of events from Alice's perspective. Alice's prior trust in each Issuer is represented as before---Alice holds a persistent reference to her main purse at each Issuer. Alice's prior trust in the escrow exchange agent is represented as the ability to provide the first ``{\tt a}'' argument in the call to {\tt escrowExchange} for which Bob is able to provide the second ``{\tt b}'' argument. For this specific interaction, Alice might creates this argument as follows:
+Since the situation is now symmetric, we explain the progression of events from Alice's perspective. Alice's prior trust in each Issuer is represented as before---Alice holds a persistent reference to her main purse at each Issuer. Alice's prior trust in the escrow exchange agent is represented as the ability to provide the first ``{\tt a}'' argument in the call to {\tt escrowExchange} for which Bob is able to provide the second ``{\tt b}'' argument. For this specific interaction, Alice might create this argument as follows:
 
 \begin{verbatim}
   var canceller;
@@ -541,19 +545,20 @@ If this outcome promise becomes fulfilled, the exchange succeeded,  she should e
 
 On lines 14 and 15 of Figure~\ref{escrowExchange} the {\tt escrowExchange} contract makes a {\tt decisionP} promise whose fulfillment or rejection represents its decision about whether the exchange must succeed or fail. It makes this decision by calling {\tt decide} with the outcome of a race between a {\tt Q.all} and two calls to {\tt failOnly}. Until a player cancels the exchange, the {\tt Q.race} can only be won by the {\tt Q.all}, which is where the exchange is proceeding.
 
-The arguments to {\tt Q.all} are the results of two calls to {\tt transfer}. The first call to transfer sets up activity whose purpose is to transfer money from Alice to Bob. The second call's purpose is to transfer stock from Bob to Alice. Each call to transfer returns a promise whose fulfillment or rejection indicates whether it has become confident that this one-way transfer of rights will succeed. If both transfers become confident (before any cancellations win the race), then the overall decision is to proceed. If either transfer indicates failure, by rejecting the promise it has returned, then, via {\tt Q.all}, the {\tt decisionP} promise becomes rejected.\footnote{This is the pattern for promise-based two phase commit enhanced with the possibility of cancellation, where the call to {\tt escrowExchange} creates a transaction coordinator, and each of its calls to {\tt transfer} create a participant.}
+The arguments to {\tt Q.all} are the results of two calls to {\tt transfer}. The first call to {\tt transfer} sets up activity whose purpose is to transfer money from Alice to Bob. The second call's purpose is to transfer stock from Bob to Alice. Each call to transfer returns a promise whose fulfillment or rejection indicates whether it has become confident that this one-way transfer of rights will succeed. If both transfers become confident (before any cancellations win the race), then the overall decision is to proceed. If either transfer indicates failure, by rejecting the promise it has returned, then, via {\tt Q.all}, the {\tt decisionP} promise becomes rejected.\footnote{This is the pattern for promise-based two phase commit enhanced with the possibility of cancellation, where the call to {\tt escrowExchange} creates a transaction coordinator, and each of its calls to {\tt transfer} create a participant.}
 
-Since the two calls to {\tt transfer} and symmetric, we examine only the first. The first phase of the transfer, on lines 8 and 9 of Figure~\ref{escrowExchange}, attempts to deposit Alice's money into an escrow purse mentioned only within this transfer. If this deposit succeeds, Alice's money has been escrowed, so the money portion of the exchange is now assured. If this deposit fails, then the exchange as a whole should be cancelled. So {\tt transfer} simply returns the promise for the outcome of this first deposit.
+Since the two calls to {\tt transfer} are symmetric, we examine only the first. The first phase of the transfer, on lines 8 and 9 of Figure~\ref{escrowExchange}, attempts to deposit Alice's money into an escrow purse mentioned only within this transfer. If this deposit succeeds, Alice's money has been escrowed, so the money portion of the exchange is now assured. If this deposit fails, then the exchange as a whole should be cancelled. So {\tt transfer} simply returns the promise for the outcome of this first deposit.
 
 The {\tt transfer} function sets up the second phase on lines 5, 6, and 7. Assume for now that {\tt makeEscrowP} is fulfilled. If the overall decision is that the exchange should succeed, then the success callback deposits Alice's escrowed money into Bob's account. Otherwise it refunds Alice's escrowed money.
 
 Only one mystery remains. How does the escrow agent obtain a fresh escrow purse at this money issuer, in order to be confident that it has obtained exclusive access to the money at stake? Since the escrow exchange agent has no prior knowledge or trust in the money issuer, it cannot become confident that the issuer is honest or even that the money it issues means anything. The question is meaningless. Instead, it must only obtain a fresh escrow purse whose veracity is \emph{mutually acceptable} to Alice and Bob.
 
-If it simply asks Alice's purse for a new empty purse ({\tt srcPurseP ! makePurse()}), Alice could return a dishonest purse that acknowledges deposit without transferring anything. Alice would then obtain Bob's stock for free. If it simply asks Bob's purse, then Bob could steal Alice's money during phase 1. Instead, it checks if their {\tt makePurse} methods are the very same function object---have the same object identity--by using {\tt Q.join} on promises for these two methods. This is why, on lines 3 and 7 of Figure~\ref{makeMint}, all purses of the same currency at the same back share the same function as their {\tt makePurse} method. If the {\tt Q.join} of these two methods fails, the either Alice was dishonest, Bob was dishonest, or they simply didn't have prior agreement on the same currency at the same money issuer.
+If it simply asks Alice's purse for a new empty purse ({\tt srcPurseP ! makePurse()}), Alice could return a dishonest purse that acknowledges deposit without transferring anything. Alice would then obtain Bob's stock for free. If it simply asks Bob's purse, then Bob could steal Alice's money during phase 1. Instead, it checks if their {\tt makePurse} methods are the very same function object---have the same object identity--by using {\tt Q.join} on promises for these two methods. This is why, on lines 3 and 7 of Figure~\ref{makeMint}, all purses of the same currency at the same bank share the same function as their {\tt makePurse} method. If the {\tt Q.join} of these two methods fails, the either Alice was dishonest, Bob was dishonest, or they simply didn't have prior agreement on the same currency at the same money issuer.
 
 
 
 \section{The Contract Host}
+\label{sec:contract_host}
 
 \begin{figure}[htbp]
 \begin{lstlisting}[language=javascript]
@@ -600,7 +605,7 @@ var makeContractHost = () => {
 \label{makeContractHost}
 \end{figure}
 
-This is not yet a satisfying fabric for smart contracting. To engage in the escrow exchange contract, Alice and Bob had to agree on the issuers, which is unsurprising since they need to agree on the nature of rights exchanged by the contract. And they had to agree on an escrow exchange agent to honestly run the escrow exchange contract specifically. For a contract as general as this, perhaps that is not a problem. But if Alice and Bob negotiate a custom contract specialized to their needs, they should not expect to find a mutually trusted third party specializing in running this particular contract. Rather, it should be adequate for them to agree on:
+This is not yet a satisfying fabric for smart contracting.\bnote{Tom}{What does ``this'' refer to here?} To engage in the escrow exchange contract, Alice and Bob had to agree on the issuers, which is unsurprising since they need to agree on the nature of rights exchanged by the contract. And they had to agree on an escrow exchange agent to honestly run the escrow exchange contract specifically. For a contract as general as this, perhaps that is not a problem. But if Alice and Bob negotiate a custom contract specialized to their needs, they should not expect to find a mutually trusted third party specializing in running this particular contract. Rather, it should be adequate for them to agree on:
 
 \begin{itemize}
 \item The issuers of each of the rights at stake.
