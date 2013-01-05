@@ -392,7 +392,9 @@ var makeMint = () => {
         Nat(balance + amount);
         amp.get(src)(Nat(amount)); 
         balance += amount; 
-      } 
+      },
+      thenDeposit: (amount, srcP) =>
+        Q(srcP).then(src => purse.deposit(amount, src))
     });
     amp.set(purse, 
              amount => { balance = Nat(balance - amount); });
@@ -429,10 +431,9 @@ Bob receives this request at the following {\tt buy} method:
 \begin{verbatim}
   buy: (desc, paymentP) => {
     // do whatever with desc, look up $10 price
-    return Q(paymentP).then(
-      _ => (myPurse ! deposit(10, paymentP)).then(
-        _ => good,
-        // failure handling...
+    return (myPurse ! thenDeposit(10, paymentP)).then(
+      _ => good,
+      // failure handling...
 \end{verbatim}
 
 Bob's {\tt buy} method handles a message from untrusted clients such as Alice, and thus it does not know what objects Alice actually provided as the arguments. In particular, Bob has no idea if his {\tt paymentP} parameter actually designates a purse, whether it is a purse at this bank, of this currency, and of adequate funds. Even if he knew all these conditions were true at the moment, since Bob doesn't know whether Alice still retains access to it, Bob wouldn't know the funds would still be there by the time he deposits it. He delegates all these problems to the bank with the {\tt deposit} request above. If the bank's deposit method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then the success callback of the second {\tt then} above gets called, returning the {\tt good}, resolving Alice's pending {\tt goodP} promise.
@@ -496,12 +497,11 @@ var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
                                    dstPurseP ! makePurse);
   var escrowPurseP = makeEscrowPurseP ! ();
 
-  Q.all([decisionP, escrowPurseP]).then(           // setup phase 2
-    _       => { dstPurseP ! deposit(amount, escrowPurseP); },
-    reason => { srcPurseP ! deposit(amount, escrowPurseP); });
+  Q(decisionP).then(                                    // setup phase 2
+    _       => { dstPurseP ! thenDeposit(amount, escrowPurseP); },
+    reason => { srcPurseP ! thenDeposit(amount, escrowPurseP); });
     
-  return Q(srcPurseP).then(                              // phase 1
-    _ => escrowPurseP ! deposit(amount, srcPurseP));
+  return escrowPurseP ! thenDeposit(amount, srcPurseP);  // phase 1
 };
 
 var failOnly = cancelP => Q(cancelP).then(
