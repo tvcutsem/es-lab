@@ -54,6 +54,13 @@
 \lst@AddToHook{OnEmptyLine}{\addtocounter{lstnumber}{-1}}% Remove line number increment from listings
 \makeatother
 
+\usepackage{hyperref}
+\newcommand{\myurl}[1]{{\href{http://#1}{\texttt{#1}}}}
+\newcommand{\myurlt}[2]{{\href{http://#1~#2}{\tt #1{\twiddle}#2}}}
+\newcommand{\myurlh}[3]{{\href{http://#1#3}{\tt #1#2#3}}}
+
+
+
 \begin{document}
 \sloppypar
 
@@ -370,7 +377,7 @@ Checkpointing a program's entire state after every event loop turn may be consid
 \paragraph{Ken and security}
 The Ken protocol guarantees distributed snapshots even among mutually suspicious machines. There is nothing an adversarial process can do that will corrupt the distributed snapshots of benign processes.
 
-The CKen implementation used to build NodeKen currently does not use an encrypted communications channel to deliver messages between Ken processes. Hence, the authenticity, integrity or confidentiality of incoming messages cannot be guaranteed. In NodeKen, our plan is to actively secure the communications channels between NodeKen processes using a cryptographic library\footnote{An outline of such a design, due to Brian Warner, is available online: \url{http://www.eros-os.org/pipermail/cap-talk/2012-September/015386.html}}.
+The CKen implementation used to build NodeKen currently does not use an encrypted communications channel to deliver messages between Ken processes. Hence, the authenticity, integrity or confidentiality of incoming messages cannot be guaranteed. In NodeKen, our plan is to actively secure the communications channels between NodeKen processes using a cryptographic library\footnote{An outline of such a design, due to Brian Warner, is available online: \myurl{eros-os.org/pipermail/cap-talk/2012-September/015386.html}}.
 
 \section{Contracts use Electronic Rights}
 
@@ -418,7 +425,7 @@ Figure~\ref{makeMint}  is our implementation of a money-like rights issuer, usin
 
 What do these initial conditions mean in terms of a configuration of persistent objects? Say Alice owns (or is) a set of objects on machine A, Bob on machine B, and the bank on machine C. In order for Alice to be able to make a {\tt buy} request of Bob, we assume one of Alice's objects already has a remote reference to one of Bob's objects. Alice's trust of the bank with her money is represented by a remote reference to an object within the bank representing Alice's account at the bank. We refer to such objects as \emph{purses}. The one representing Alice's account is Alice's \emph{main purse}. And likewise for Bob. Where do these initial account purses come from?
 
-For each currency the bank wishes to manage, the bank calls {\tt makeMint()} once to get a {\tt mint} function for making purses holding units of that currency. When Alice opens an account with, say \$100 in cash, the bank calls {\tt mint(100)} on its \$ mint, to make Alice's main purse. The bank then gives Alice a persistent remote reference to this object within the bank.
+For each currency the bank wishes to manage, the bank calls {\tt makeMint()} once to get a {\tt mint} function for making purses holding units of that currency. When Alice opens an account with, say \$100 in cash, the bank calls {\tt mint(100)} on its \$ mint, to make Alice's main purse. The bank then gives Alice a persistent remote reference to this purse object within the bank.
 
 For Alice to pay Bob, she sets up a \emph{payment purse}, deposits \$10 into it from her main purse, and sends it to Bob in a buy request, together with a description of what she wishes to buy.
 \begin{verbatim}
@@ -427,7 +434,10 @@ For Alice to pay Bob, she sets up a \emph{payment purse}, deposits \$10 into it 
   var goodP = ackP.then(_ => bobP ! buy(desc, paymentP));
 \end{verbatim}
 
+On the diagram in Figure~\ref{makeMint}, each {\tt makeMint} call results in a layer with its own {\tt mint}, {\tt amp} pair. Each {\tt mint} call results in a nested layer with its own {\tt purse}, {\tt decr}, {\tt balance} triple. The {\tt decr} of the diagram corresponds to the anonymous decrement function on line 17 of the code. We see on line 16 and 17 of the code that each {\tt purse} to {\tt decr} mapping is also entered into the {\tt amp} table shared by all purses of the same currency. Alice's main purse is on the bottom purse layer. Bob's is on the top layer. Alice's payment purse, being sent to Bob in the buy message, is in the middle layer.
+
 Bob receives this request at the following {\tt buy} method:
+
 \begin{verbatim}
   buy: (desc, paymentP) => {
     // do whatever with desc, look up $10 price
@@ -436,23 +446,22 @@ Bob receives this request at the following {\tt buy} method:
       // failure handling...
 \end{verbatim}
 
-Bob's {\tt buy} method handles a message from untrusted clients such as Alice, and thus it does not know what objects Alice actually provided as the arguments. In particular, Bob has no idea if his {\tt paymentP} parameter actually designates a purse, whether it is a purse at this bank, of this currency, and of adequate funds. Even if he knew all these conditions were true at the moment, since Bob doesn't know whether Alice still retains access to it, Bob wouldn't know the funds would still be there by the time he deposits it. He delegates all these problems to the bank with the {\tt deposit} request above. If the bank's deposit method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then the success callback of the {\tt then} above gets called, returning the {\tt good}, resolving Alice's pending {\tt goodP} promise.
+Bob's {\tt buy} method handles a message from untrusted clients such as Alice, and thus it does not know what objects Alice actually provided as the arguments. In particular, Bob has no idea if his {\tt paymentP} parameter actually designates a purse, whether it is a purse at this bank, of this currency, and of adequate funds. Even if he knew all these conditions were true at the moment, since Bob doesn't know whether Alice still retains access to it, Bob wouldn't know the funds would still be there by the time he deposits it. He delegates all these problems to the bank with the {\tt depositWhen} request above. If the bank's {\tt depositWhen} method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then the success callback of the {\tt then} above gets called, returning the {\tt good}, resolving Alice's pending {\tt goodP} promise.
 
-\bnote{Mark}{I know that I'm saying *way* too much. But it's easier to generate and trim than to try to say just enough directly.}
-Following {\tt deposit} sequentially, we see it
+Following the {\tt depositWhen} method on line 13 sequentially, we see it
 \begin{enumerate}
-\item Uses {\tt Nat} to ensure that the new {\tt balance} would not overflow the range of reliably represented non-negative integers. Otherwise an error is thrown, breaking Bob's promise for the result of the deposit, and the good is not released back to Alice.
-\item Looks up the alleged payment purse in the {\tt amp} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error.
-\item If this lookup succeeds, it finds the {\tt amount => { balance = Nat(balance - amount); })} function that was registered with this payment purse when that payment purse was created. The {\tt balance} in that function refers to the payment purse's {\tt balance}. 
-\item After checking that the amount to be deposited is indeed a non-negative integer, this function is called to withdraw that amount from the payment purse.
-\item If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
-\item This is the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no potential locally observable failures remain.
-\item The assignment decrements the balance by the amount. This function now returns and we continue with the rest of the {\tt deposit} method.
-\item The {\tt +=} increments the balance of the purse being deposited into.
-\item The {\tt deposit} method implicitly returns undefined, fulfilling Bob's promise for the result of the deposit, triggering Bob to release the good to Alice in exchange.
+\item[14] Uses {\tt then} to register a callback for calling this purse's own {\tt deposit} method \emph{when} the argument promise has been fulfilled. The {\tt depositWhen} method returns a promise for what the {\tt deposit} method will return.
+\item[9] {\tt deposit} uses {\tt Nat} to ensure that the new {\tt balance} would not overflow the range of reliably represented non-negative integers. Otherwise an error is thrown, breaking Bob's promise for the result of the deposit, and the good is not released back to Alice.
+\item[10] Looks up the alleged payment purse in the {\tt amp} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error.
+\item[16] If this lookup succeeds, it finds the anonymous decrement function on the same layer as this purse, for decrementing that purse's {\tt balance}. 
+\item[10] After checking that the amount to be deposited is indeed a non-negative integer, this function is called to withdraw that amount from the payment purse.
+\item[17] If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
+\item[17] This is the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no potential locally observable failures remain.
+\item[17] The assignment decrements the balance by the amount. This function now returns and we continue with the rest of the {\tt deposit} method.
+\item[11] The {\tt +=} increments the balance of the purse being deposited into.
+\item[12] The {\tt deposit} method implicitly returns undefined, fulfilling Bob's promise for the result of the {\tt depositWhen}, triggering Bob to release the good to Alice in exchange.
 \end{enumerate}
 
-\bnote{Mark}{The reason I don't reuse the result of adding balance and amount, but rather re-add them, is to defend against an aliasing attack, where the same purse is used as receiver and argument.}
 
 \section{Towards a Taxonomy of Electronic Rights}
 
@@ -507,8 +516,8 @@ var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
   return escrowPurseP ! depositWhen(amount, srcPurseP);  // phase 1
 };
 
-var failOnly = cancelP => Q(cancelP).then(
-  cancel => { throw cancel; });
+var failOnly = cancellationP => Q(cancellationP).then(
+  cancellation => { throw cancellation; });
 
 var escrowExchange = (a, b) => { // a from Alice, b from Bob
   var decide;
@@ -518,8 +527,8 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
       transfer(decisionP, a.moneySrcP, b.moneyDstP, b.moneyNeeded),
       transfer(decisionP, b.stockSrcP, a.stockDstP, a.stockNeeded)
     ]), 
-    failOnly(a.cancelP), 
-    failOnly(b.cancelP)]));
+    failOnly(a.cancellationP), 
+    failOnly(b.cancellationP)]));
   return decisionP;
 };
 \end{lstlisting}
@@ -532,19 +541,19 @@ We explain the escrow exchange contract in terms of a scenario among five player
 Since the situation is now symmetric, we explain the progression of events from Alice's perspective. Alice's prior trust in each Issuer is represented as before---Alice holds a persistent reference to her main purse at each Issuer. Alice's prior trust in the escrow exchange agent is represented as the ability to provide the first ``{\tt a}'' argument in the call to {\tt escrowExchange} for which Bob is able to provide the second ``{\tt b}'' argument. For this specific interaction, Alice might create this argument as follows:
 
 \begin{verbatim}
-  var canceller;
+  var cancel;
   var a = Q.passByCopy({
     moneySrcP: myMoneyPurse ! makePurse(),
     stockDstP: myStockPurse ! makePurse(),
     stockNeeded: 7,
-    cancelP: Q.promise(resolve => { canceller = resolve; });
+    cancellationP: Q.promise(r => { cancel = r; });
   });
   moneySrc ! deposit(10, myMoneyPurse);
 \end{verbatim}
 
 By a protocol whose details appear below, Alice sends this {\tt a} object to the escrow exchange agent, for it to use as the first argument in a call to {\tt escrowExchange}, which initiates this specific contract between Alice and Bob. The {\tt escrowExchange} function returns a promise for the outcome of the contract, which the escrow exchange agent returns to Alice. 
 
-If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to have been deposited into her {\tt a.stockDstP}. If this promise becomes rejected, the exchange failed, and she should expect her {\tt a.moneySrcP} to again hold her \$10. In the meantime, if she gets impatient and would rather cancel the exchange than continue waiting, she can call her {\tt canceller} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.
+If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to have been deposited into her {\tt a.stockDstP}. If this promise becomes rejected, the exchange failed, and she should expect her {\tt a.moneySrcP} to again hold her \$10. In the meantime, if she gets impatient and would rather cancel the exchange than continue waiting, she can call her {\tt cancel} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.
 
 On lines 13 and 14 of Figure~\ref{escrowExchange} the {\tt escrowExchange} contract makes a {\tt decisionP} promise whose fulfillment or rejection represents its decision about whether the exchange must succeed or fail. It makes this decision by calling {\tt decide} with the outcome of a race between a {\tt Q.all} and two calls to {\tt failOnly}. Until a player cancels the exchange, the {\tt Q.race} can only be won by the {\tt Q.all}, which is where the exchange is proceeding.
 
