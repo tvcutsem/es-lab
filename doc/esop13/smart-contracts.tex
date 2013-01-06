@@ -58,8 +58,7 @@
 \sloppypar
 
 
-\title{Distributed Electronic Rights in JavaScript:\\
-A Progress Report}
+\title{Distributed Electronic Rights in JavaScript}
 
 \author{Mark S. Miller\inst{1} \and Tom Van Cutsem\inst{2} \and Bill Tulloh\inst{3} }
 
@@ -70,19 +69,22 @@ A Progress Report}
 \begin{abstract}
 
 Smart Contracts are cool. \bnote{Mark}{need a real abstract}
+\bnote{Mark}{Explain that it is a Progress Report here rather than in title.}
 
 \keywords{security, distributed objects, capabilities, smart contracts}
 \end{abstract}
 
 \section{Smart Contracts for the Rest of Us}
 
+\bnote{Mark}{Higher order contracts as special case of Smart Contracts}
+
 The fabric of the global economy is held together by contracts. A contract is an agreed arrangement for cooperation between mutually suspicious parties. But existing contracts are ambiguous, jurisdictions-specific, and written, interpreted, and adjudicated only by expensive experts. \emph{Smart contracts} are contract-like arrangements expressed in program code, where the behavior of the program enforces the terms of the ``contract''\cite{szabo1997formalizing}. Though not a substitute for legal contracts, they can provide some of the benefits of contracts for fine-grain, jurisdiction-free, and automated arrangements for which legal contracts are impractical.
 
 To realize this potential, smart contracts themselves need a distributed, secure, persistent, and ubiquitous computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts.
 
-We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by massive numbers of non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}\footnote{The official standards name for JavaScript is ``EcmaScript''.}. We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 42 lines of straightforward JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
+We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by massive numbers of non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}\footnote{The official standards name for JavaScript is ``EcmaScript''.}. We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 42 lines of JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
 
-\section{Why Dr. SES?}
+\section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
 Dr. SES is a platform for distributed, resilient and secure computing, layered on top of EcmaScript. Why is each of these ingredients needed to achieve electronic rights and contracts?
 
@@ -98,27 +100,19 @@ Server-side Dr. SES programs periodically checkpoint their entire state, so that
 
 %Objects and object references in Dr. SES are always persistent, meaning that they survive arbitrary failures by default.
 
+The current JavaScript standard, EcmaScript 5 (ES5), enables the \emph{SES} library to easily enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. The \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures. We explain each below.
+
 Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed programming in JavaScript as effortless as possible. Given such a platform, it then becomes possible to implement contracts with very little code. This is precisely what we will demonstrate in the second part of this paper, after having explained Dr. SES in more detail.
 
-\section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
-The current JavaScript standard, EcmaScript 5 (ES5), enables the \emph{SES} library to easily enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. The \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures. We explain each below.
 
 \subsection{Just Enough JavaScript}
 
 JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. 
 
-For the sake of brevity, this paper borrows two syntactic conveniences proposed for ES6, \emph{rest arguments}(``{\tt \ldots}'') and \emph{arrow functions}(``{\tt =>}''), and one proposed for ES7, the \emph{eventual-send operator}(``{\tt !}''). Expanding away these three conveniences, all the code here is working ES5 code, and is available at \\
+For the sake of brevity, this paper borrows one syntactic convenience proposed for ES6, \emph{arrow functions}(``{\tt =>}''), and one proposed for ES7, the \emph{eventual-send operator}(``{\tt !}''). Expanding away these conveniences, all the code here is working ES5 code, and is available at \\
 {\tt code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} \\
 and its {\tt contract} subdirectory.
-
-\paragraph{Rest arguments.} ES6 provides ``{\tt \ldots}'' as a syntactic convenience for applying a function to an array of arguments. The following three lines are equivalent, but the second line is of historic interest only.
-
-\begin{verbatim}
-  foo(3, 5)                 // normal fixed arity function call
-  foo.apply(void 0, [3, 5]) // old way to apply to an array
-  foo(...[3, 5])            // ES6 rest args used in this paper
-\end{verbatim}
 
 \paragraph{Arrow functions.} The following five lines all define a one parameter function which returns double its parameter. All bind a local variable named ``{\tt double}'' to this function. The first two lines are of historic interest only. This paper uses only the arrow function syntax of the last three lines.
 
@@ -155,7 +149,7 @@ SES is an object-capability-secure subset of JavaScript. Historically, there hav
 
 Object-capability security marries the ideas of capability-based security with standard object-oriented programming. An object reference represents the right to invoke only the public methods on a specific object.
 
-To secure a JavaScript application using object-capability principles, we require two properties. First, a script (program) must be born powerless, i.e. there must be no powerful globally accessible objects, such as an \texttt{XMLHttpRequest} object that allows the script to communicate with the outside world. But if a script is born powerless, then how can it interact with the outside world at all? The answer is that the creator of the script may \emph{endow} the newborn script with references to some powerful objects at birth. This is how the script comes to obtain its first external object references.
+To secure a JavaScript application using object-capability principles, we require two properties. First, a script (program) must be born powerless, i.e. there must be no powerful globally accessible objects, such as an {\tt XMLHttpRequest} object that allows the script to communicate with the outside world. But if a script is born powerless, then how can it interact with the outside world at all? The answer is that the creator of the script may \emph{endow} the newborn script with references to some powerful objects at birth. This is how the script comes to obtain its first external object references.
 
 Once a script obtains a reference to an external object, we must establish rules as to what the script can do with the object, and how the script can come to acquire further object references. The rules are familiar to any object-oriented programmer: an object reference should only grant the ability to invoke an object's public methods. The object's private state should be encapsulated. Thus, an object can only come to acquire new object references via argument and result passing.
 
@@ -180,14 +174,11 @@ var makePoint = (x, y) => {
 
 A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables serves as a \emph{defensible} object. An object is ``defensible'' if it can be straightforwardly coded to be \emph{defensively consistent}\cite{RobustComposition}, i.e., it can defend its own invariants and provide correct service to its well behaved clients despite arbitrary or malicious misbehavior by its other clients. Our revised {\tt makePoint} above makes defensively consistent points.
 
-Other SES elements: 
+\bnote{Mark}{Other SES elements:}
 All effects only by using references.
 No powerful references by default -- all implicitly shared objects are transitively immutable. 
 
-def
-confine
-Nat
-WeakMap
+\bnote{Mark}{def. confine, Nat, WeakMap}
 
 \subsection{Q: Distributed JavaScript Objects}
 
@@ -221,21 +212,21 @@ We introduce a new type of object, called a Promise, to represent both the outco
 
 A fulfilled or rejected promise is also called a resolved promise.
 
-The function \texttt{Q(target)} returns a fulfilled promise designating the \texttt{target} object. If \texttt{target} is already a promise, that same promise is returned.
+The function {\tt Q(target)} returns a promise for {\tt target}. If {\tt target} is already a promise, that same promise is returned. Otherwise, {\tt Q(target)} returns a fulfilled promise designating {\tt target}.
 
-Promise objects provide a method called \texttt{then} that allows eventual access to the promise's resolution. Its signature is:
+Promise objects provide a method called {\tt then} that allows eventual access to the promise's resolution. Its signature is:
 
 \begin{verbatim}
 promise.then(success(v) => result, failure(e) => result) => resultP
 \end{verbatim}
 
-This registers the functions \texttt{success} and \texttt{failure} to be called back in a later turn, when \texttt{promise} is resolved. If the promise was fulfilled with a value \texttt{v}, then \texttt{success(v)} is called. If the promise was rejected with an error \texttt{e}, then \texttt{failure(e)} is called.
+This registers the functions {\tt success} and {\tt failure} to be called back in a later turn, when {\tt promise} is resolved. If the promise was fulfilled with a value {\tt v}, then {\tt success(v)} is called. If the promise was rejected with an error {\tt e}, then {\tt failure(e)} is called.
 
-\texttt{then} itself returns \texttt{resultP}, a promise for either of the callbacks' \texttt{result} value. If the callback itself throws an error, that error is used to reject \texttt{resultP}. This propagation of errors along chains of dependent promises is called promise contagion~\cite{miller:strangers}, and it is the asynchronous equivalent of propagating exceptions up the call stack.
+{\tt then} itself returns {\tt resultP}, a promise for either of the callbacks' {\tt result} value. If the callback itself throws an error, that error is used to reject {\tt resultP}. This propagation of errors along chains of dependent promises is called rejected promise contagion~\cite{miller:strangers}, and it is the asynchronous analogue of propagating exceptions up the call stack.
 
-The \texttt{failure} callback is optional. If missing, then rejecting \texttt{promise} will automatically eventually reject \texttt{resultP} with the same reason.
+The {\tt failure} callback is optional. If missing, then rejecting {\tt promise} will automatically eventually reject {\tt resultP} with the same reason.
 
-To make matters more concrete, if \texttt{pointP} is a promise for a local \texttt{point} object, we may construct a derived point as follows:
+To make matters more concrete, if {\tt pointP} is a promise for a local {\tt point} object, we may construct a derived point as follows:
 
 \begin{verbatim}
 var newP = pointP.then((point) => point.add(makePoint(1,2)); });
@@ -243,22 +234,22 @@ var newP = pointP.then((point) => point.add(makePoint(1,2)); });
 
 \paragraph{Immediate call and eventual send}
 
-Promises may designate both local objects, and remote objects belonging to another event loop. If the promise comes to designate a local object (or a primitive value), that value can be accessed via the \texttt{.then} method.
+Promises may designate both local objects, and remote objects belonging to another event loop. If the promise comes to designate a local object (or a primitive value), that value can be accessed via the {\tt .then} method.
 
 However, if the promise comes to designate a remote object, it is not possible to resolve the promise to a local reference. Instead, one must interact with the remote object via the promise. Any such interaction must be asynchronous, to ensure that interaction between the event loops as a whole remains asynchronous.
 
-JavaScript provides many operators to interact with an object. Here, we will focus on only three: method calls, function application, and reading the value of a property. JavaScript has the familiar dot operator to express local, immediate method calls, such as \texttt{point.getX()}. We introduce a corresponding infix \texttt{!} operator (named the \emph{bang} or \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
+JavaScript provides many operators to interact with an object. Here, we will focus on only three: method calls, function application, and reading the value of a property. JavaScript has the familiar dot operator to express local, immediate method calls, such as {\tt point.getX()}. We introduce a corresponding infix {\tt !} operator (named the \emph{bang} or \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
 
-The \texttt{!} operator can be used anywhere the dot operator can be used. For instance, if \texttt{pointP} is a promise for a \texttt{point}, then \texttt{pointP ! getX()} denotes an eventual send, which enqueues a request to call the \texttt{getX()} method in the event loop of \texttt{point}. In addition, the syntax \texttt{fP ! (x,y)}, where \texttt{fP} is a promise designating a function \texttt{f}, enqueues a request to call \texttt{f(x,y)} in the event loop of \texttt{f}. The \texttt{!} operator is actually syntactic sugar for an explicit method call on the promise object:
+The {\tt !} operator can be used anywhere the dot operator can be used. For instance, if {\tt pointP} is a promise for a {\tt point}, then {\tt pointP ! getX()} denotes an eventual send, which enqueues a request to call the {\tt getX()} method in the event loop of {\tt point}. In addition, the syntax {\tt fP ! (x,y)}, where {\tt fP} is a promise designating a function {\tt f}, enqueues a request to call {\tt f(x,y)} in the event loop of {\tt f}. The {\tt !} operator is actually syntactic sugar for an explicit method call on the promise object:
 
 \begin{center}
   \begin{tabular}{|l|l|l|}
   \hline
   Immediate syntax & Eventual syntax & Expansion \\
   \hline
-  \texttt{p.m(x,y)} & \texttt{p ! m(x,y)} & \texttt{Q(p).send("m",x,y)} \\
-  \texttt{p(x,y)} & \texttt{p ! (x,y)} & \texttt{Q(p).send(undefined,x,y)}\\
-  \texttt{p.m} & \texttt{p ! m} & \texttt{Q(p).get("m")}\\
+  {\tt p.m(x,y)} & {\tt p ! m(x,y)} & {\tt Q(p).send("m",x,y)} \\
+  {\tt p(x,y)} & {\tt p ! (x,y)} & {\tt Q(p).send(undefined,x,y)}\\
+  {\tt p.m} & {\tt p ! m} & {\tt Q(p).get("m")}\\
   \hline
   \end{tabular} 
 \end{center}
@@ -269,23 +260,23 @@ A local reference to an object is guaranteed to be unique and unforgeable, and g
 
 A first difference, already explained above, is that remote references only carry eventual message sends, not immediate method calls. A second difference is that in a distributed setting, it is impossible to guarantee unique and unforgeable references, but we can come close.
 
-We represent remote object references as unguessable HTTPS URLs (also called YURLs or web-keys~\cite{Close:Webkeys}). Such a reference may look like \texttt{https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment segment (everything after the \texttt{\#}) is a random character string that uniquely identifies an object on the \texttt{example.com} server.
+We represent remote object references as unguessable HTTPS URLs (also called web-keys~\cite{Close:Webkeys}). Such a reference may look like {\tt https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment segment (everything after the {\tt \#}) is a random character string that uniquely identifies an object on the {\tt example.com} server.
 
-Such URLs form distributed cryptographic-capabilities. While such a URL is neither unique nor unforgeable, it nevertheless shares an important property with a local object reference: both are unguessable secrets. This implies that if you do not know the secret, you can only come to know it if somebody else who \emph{does} know the secret chooses to share it with you.
+We use unguessable secrets for remote object references because of a crucial property that secrets have in common with object references: If you do not know an unguessable secrets, you can only come to know it if somebody else who knows the secret chooses to share it with you.
 
 \paragraph{Promise combinators}
 
-Just like it is useful to compose individual functions into a composite function, it is often useful to combine multiple individual promises into a single promise whose outcome depends on the individual promises. To construct such promise combinators, a final primitive is needed for programmers to define promises with a custom resolution strategy. This primitive is called \texttt{Q.promise}, and it has the following signature:
+Just like it is useful to compose individual functions into a composite function, it is often useful to combine multiple individual promises into a single promise whose outcome depends on the individual promises. To construct such promise combinators, a final primitive is needed for programmers to define promises with a custom resolution strategy. This primitive is called {\tt Q.promise}, and it has the following signature:
 
 \begin{verbatim}
 Q.promise( f(resolve,reject) => () ) => promise
 \end{verbatim}
 
-\texttt{Q.promise} makes a fresh promise, where the promise is initially pending. It immediately calls the argument function \texttt{f} with two functions, conventionally named \texttt{resolve} and \texttt{reject}, that can be used to either fulfil or reject this new promise explicitly.
+{\tt Q.promise} makes a fresh promise, where the promise is initially pending. It immediately calls the argument function {\tt f} with two functions, conventionally named {\tt resolve} and {\tt reject}, that can be used to either fulfil or reject this new promise explicitly.
 
-We now use \texttt{Q.promise} to define a small set of promise combinators that we will come to rely upon later, when introducing the escrow exchange contract.
+We now use {\tt Q.promise} to define a small set of promise combinators that we will come to rely upon later, when introducing the escrow exchange contract.
 
-\paragraph{Q.race} Given an array of promises \texttt{answerPs}, \texttt{Q.race(answerPs)} returns a promise for the resolution of whichever promise we notice has completed first.
+\paragraph{Q.race} Given an array of promises {\tt answerPs}, {\tt Q.race(answerPs)} returns a promise for the resolution of whichever promise we notice has completed first.
 
 \begin{verbatim}
 Q.race = (answerPs) => {
@@ -297,7 +288,7 @@ Q.race = (answerPs) => {
 };
 \end{verbatim}
 
-For example, the call \texttt{Q.race([xP,yP]).then((v) => { print(v); })} will cause either the value of \texttt{xP} or \texttt{yP} to be printed to the screen, whichever resolves first. If neither resolves, then neither does the promise returned by \texttt{Q.race}. If the first promise to resolve is rejected, the promise returned by \texttt{Q.race} is rejected with the same reason.
+For example, the call {\tt Q.race([xP,yP]).then((v) => { print(v); })} will cause either the value of {\tt xP} or {\tt yP} to be printed to the screen, whichever resolves first. If neither resolves, then neither does the promise returned by {\tt Q.race}. If the first promise to resolve is rejected, the promise returned by {\tt Q.race} is rejected with the same reason.
 
 \paragraph{Q.all} It is often useful to collect several promised answers, in order to react either when all the answers are ready or when any of the promises becomes rejected.
 
@@ -317,9 +308,9 @@ Q.all = (answerPs) => {
 };  
 \end{verbatim}
 
-For example, given \texttt{sumP = Q.all([xP,yP]).then(([x,y]) => x+y)}, if both \texttt{xP} and \texttt{yP} resolve to a number, \texttt{sumP} resolves to their sum. If neither resolves, then neither does \texttt{sumP}. If either \texttt{xP} or \texttt{yP} is rejected, \texttt{sumP} is rejected with the same reason.
+For example, given {\tt sumP = Q.all([xP,yP]).then(([x,y]) => x+y)}, if both {\tt xP} and {\tt yP} resolve to a number, {\tt sumP} resolves to their sum. If neither resolves, then neither does {\tt sumP}. If either {\tt xP} or {\tt yP} is rejected, {\tt sumP} is rejected with the same reason.
 
-\paragraph{Q.join} Join is our eventual equality operation. \texttt{Q.join(xP,yP)} takes two promises \texttt{xP} and \texttt{yP} and returns a joined promise. Any messages sent to this joined promise are only delivered if \texttt{xP} and \texttt{yP} eventually come to designate the same target object. If this is the case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
+\paragraph{Q.join} Join is our eventual equality operation. {\tt Q.join(xP,yP)} takes two promises {\tt xP} and {\tt yP} and returns a joined promise. Any messages sent to this joined promise are only delivered if {\tt xP} and {\tt yP} eventually come to designate the same target object. If this is the case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
 
 \begin{verbatim}
 Q.join = (xP, yP) => {
@@ -332,6 +323,8 @@ Q.join = (xP, yP) => {
   });
 };
 \end{verbatim}
+
+\bnote{Mark}{{\tt Q.passByCopy}}
 
 \subsection{NodeKen: Distributed Orthogonal Persistence}
 
@@ -351,7 +344,7 @@ A Ken process can tolerate arbitrary failures in such a way that when an applica
 \paragraph{NodeKen}
 For the purposes of Dr. SES, the Ken middleware is best integrated directly into the JavaScript runtime. Thus, all Javascript objects born in a Dr. SES environment layered on top of a Ken runtime are persistent by default. Also, any object reference spanning two such Dr. SES environments is persistent: it will survive failures of both the environment holding onto the reference, as well as failures of the environment containing the object designated by the reference.
 
-Further, thanks to the exactly-once message delivery guarantees, eventual message sends made using the \texttt{!} operator are highly reliable. One assumption that Ken does make is that all Ken processes eventually recover. To Ken, a permanently crashed client is indistinguishable from a very slow client. Thus, while Ken guarantees exactly-once message delivery, it is still up to the application to do its own failure handling if it does not receive a response within a given period of time (e.g. using timeouts).
+Further, thanks to the exactly-once message delivery guarantees, eventual message sends made using the {\tt !} operator are highly reliable. One assumption that Ken does make is that all Ken processes eventually recover. To Ken, a permanently crashed client is indistinguishable from a very slow client. Thus, while Ken guarantees exactly-once message delivery, it is still up to the application to do its own failure handling if it does not receive a response within a given period of time (e.g. using timeouts).
 
 To date, there exist two implementations of the Ken protocol, one in C (CKen~\cite{Yoo:CKen}) and one in Java (WaterKen~\cite{Close:Waterken}). Our goal is to integrate node.js with Ken, leading to a platform we tentatively call NodeKen\footnote{At the time of writing, NodeKen does not yet exist. We are actively working on integrating the CKen implementation with the v8 JavaScript virtual machine, upon which node.js is based. See \url{https://github.com/supergillis/v8-ken}.}. NodeKen enables distributed orthogonal persistence of server-side JavaScript programs.
 
@@ -401,7 +394,7 @@ var makeMint = () => {
         amp.get(src)(Nat(amount)); 
         balance += amount; 
       },
-      thenDeposit: (amount, srcP) =>
+      depositWhen: (amount, srcP) =>
         Q(srcP).then(src => purse.deposit(amount, src))
     });
     amp.set(purse, 
@@ -424,7 +417,7 @@ Contracts generally manipulate rights. The parties to the contract each bring th
 
 Figure~\ref{makeMint}  is our implementation of a money-like rights issuer, using only elements of Dr. SES explained above. To explain how it works, it is best to start with how it is used. Say Alice wishes to buy something from Bob for \$10. The three parties involved would be Alice, Bob, and a \$ issuer, which we will informally call a bank. The starting assumptions are that Alice and Bob do not trust each other, the bank does not trust either Alice or Bob, and Alice and Bob trust the bank with their money but with nothing else. In this scenario, Alice is willing to risk her \$10 on the possibility of Bob's non-delivery. But Bob wants to be sure he's been paid before he releases the good in exchange.
 
-What do these initial conditions mean in terms of a configuration of persistent objects? Say Alice owns (or is) a set of objects on machine A, Bob on machine B, and the bank on machine C. In order for Alice to be able to make a {\tt buy} request of Bob, we assume one of Alice's objects already has a remote reference to an object of Bob's objects. Alice's trust of the bank with her money is represented by a remote reference to an object within the bank representing Alice's account at the bank. We refer to such objects as \emph{purses}. The one representing Alice's account is Alice's \emph{main purse}. And likewise for Bob. Where do these initial account purses come from?
+What do these initial conditions mean in terms of a configuration of persistent objects? Say Alice owns (or is) a set of objects on machine A, Bob on machine B, and the bank on machine C. In order for Alice to be able to make a {\tt buy} request of Bob, we assume one of Alice's objects already has a remote reference to one of Bob's objects. Alice's trust of the bank with her money is represented by a remote reference to an object within the bank representing Alice's account at the bank. We refer to such objects as \emph{purses}. The one representing Alice's account is Alice's \emph{main purse}. And likewise for Bob. Where do these initial account purses come from?
 
 For each currency the bank wishes to manage, the bank calls {\tt makeMint()} once to get a {\tt mint} function for making purses holding units of that currency. When Alice opens an account with, say \$100 in cash, the bank calls {\tt mint(100)} on its \$ mint, to make Alice's main purse. The bank then gives Alice a persistent remote reference to this object within the bank.
 
@@ -439,12 +432,12 @@ Bob receives this request at the following {\tt buy} method:
 \begin{verbatim}
   buy: (desc, paymentP) => {
     // do whatever with desc, look up $10 price
-    return (myPurse ! thenDeposit(10, paymentP)).then(
+    return (myPurse ! depositWhen(10, paymentP)).then(
       _ => good,
       // failure handling...
 \end{verbatim}
 
-Bob's {\tt buy} method handles a message from untrusted clients such as Alice, and thus it does not know what objects Alice actually provided as the arguments. In particular, Bob has no idea if his {\tt paymentP} parameter actually designates a purse, whether it is a purse at this bank, of this currency, and of adequate funds. Even if he knew all these conditions were true at the moment, since Bob doesn't know whether Alice still retains access to it, Bob wouldn't know the funds would still be there by the time he deposits it. He delegates all these problems to the bank with the {\tt deposit} request above. If the bank's deposit method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then the success callback of the second {\tt then} above gets called, returning the {\tt good}, resolving Alice's pending {\tt goodP} promise.
+Bob's {\tt buy} method handles a message from untrusted clients such as Alice, and thus it does not know what objects Alice actually provided as the arguments. In particular, Bob has no idea if his {\tt paymentP} parameter actually designates a purse, whether it is a purse at this bank, of this currency, and of adequate funds. Even if he knew all these conditions were true at the moment, since Bob doesn't know whether Alice still retains access to it, Bob wouldn't know the funds would still be there by the time he deposits it. He delegates all these problems to the bank with the {\tt deposit} request above. If the bank's deposit method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then the success callback of the {\tt then} above gets called, returning the {\tt good}, resolving Alice's pending {\tt goodP} promise.
 
 \bnote{Mark}{I know that I'm saying *way* too much. But it's easier to generate and trim than to try to say just enough directly.}
 Following {\tt deposit} sequentially, we see it
@@ -490,7 +483,7 @@ These four dimensions are only a start. Most of the resulting 16 kinds are usefu
 
 The participants in this scenario suffer two vulnerabilities that are less than ideal:
 \begin{itemize}
-\item Alice must risk her \$10 on the possibility of Bob's non-payment. We solve this with the next bit of code, the Escrow Exchange Contract, but at the price of exacerbating the next vulnerability.
+\item Alice must risk her \$10 on the possibility of Bob's non-delivery. We solve this with the next bit of code, the Escrow Exchange Contract, but at the price of exacerbating the next vulnerability.
 \item Alice and Bob's money are fully vulnerable to misbehavior by the bank. In the following escrow exchange scenario, Alice and Bob are more protected from each other, but at the price of vulnerability to three third-party services. We return to this issue below.
 \end{itemize}
 
@@ -499,6 +492,9 @@ The participants in this scenario suffer two vulnerabilities that are less than 
 \section{The Escrow Exchange Contract}
 
 \begin{figure}[htbp]
+\begin{center}
+\includegraphics[scale=0.3]{cyclic-circuit.pdf}
+\end{center}
 \begin{lstlisting}[language=javascript]
 var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
   var makeEscrowPurseP = Q.join(srcPurseP ! makePurse, 
@@ -506,10 +502,10 @@ var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
   var escrowPurseP = makeEscrowPurseP ! ();
 
   Q(decisionP).then(                                    // setup phase 2
-    _       => { dstPurseP ! thenDeposit(amount, escrowPurseP); },
-    reason => { srcPurseP ! thenDeposit(amount, escrowPurseP); });
+    _       => { dstPurseP ! depositWhen(amount, escrowPurseP); },
+    reason => { srcPurseP ! depositWhen(amount, escrowPurseP); });
     
-  return escrowPurseP ! thenDeposit(amount, srcPurseP);  // phase 1
+  return escrowPurseP ! depositWhen(amount, srcPurseP);  // phase 1
 };
 
 var failOnly = cancelP => Q(cancelP).then(
@@ -532,13 +528,15 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
 \label{escrowExchange}
 \end{figure}
 
+\bnote{Mark}{Need circuit diagram of cyclic dependency}
+
 We explain the escrow exchange contract in terms of a scenario among five players, Alice, Bob, a Money Issuer running the code of Figure~\ref{makeMint}, a Stock Issuer also running the code of Figure~\ref{makeMint} but with the units representing shares of some particular stock, and an Escrow Exchange Agent running the code of Figure~\ref{escrowExchange}\bnote{Tom}{A visual illustration like in the slide ``The Five Players'' might be useful.}. Alice and Bob again do not trust each other. They wish to trade \$10 of Alice's money for 7 shares of Bob's stock, but in this case, neither is willing to risk their assets on the possibility of the other's non-delivery. They both trust the same Money Issuer with their money, the same Stock Issuer with their stock, and the same Escrow Exchange Agent with the rights to be traded. The Money Issuer, the Stock Issuer, and the Escrow Exchange agent each have no prior knowledge or trust in the others. Additionally, none of these trust Alice or Bob. The rest of the scenario as presented below examines only the consequences of Alice or Bob's misbehavior and assumes the other three run the code shown honestly. A full analysis of vulnerabilities should consider all combinations.
 
 Since the situation is now symmetric, we explain the progression of events from Alice's perspective. Alice's prior trust in each Issuer is represented as before---Alice holds a persistent reference to her main purse at each Issuer. Alice's prior trust in the escrow exchange agent is represented as the ability to provide the first ``{\tt a}'' argument in the call to {\tt escrowExchange} for which Bob is able to provide the second ``{\tt b}'' argument. For this specific interaction, Alice might create this argument as follows:
 
 \begin{verbatim}
   var canceller;
-  var a = def({
+  var a = Q.passByCopy({
     moneySrcP: myMoneyPurse ! makePurse(),
     stockDstP: myStockPurse ! makePurse(),
     stockNeeded: 7,
@@ -553,22 +551,23 @@ If this outcome promise becomes fulfilled, the exchange succeeded,  she should e
 
 On lines 14 and 15 of Figure~\ref{escrowExchange} the {\tt escrowExchange} contract makes a {\tt decisionP} promise whose fulfillment or rejection represents its decision about whether the exchange must succeed or fail. It makes this decision by calling {\tt decide} with the outcome of a race between a {\tt Q.all} and two calls to {\tt failOnly}. Until a player cancels the exchange, the {\tt Q.race} can only be won by the {\tt Q.all}, which is where the exchange is proceeding.
 
-The arguments to {\tt Q.all} are the results of two calls to {\tt transfer}. The first call to {\tt transfer} sets up activity whose purpose is to transfer money from Alice to Bob. The second call's purpose is to transfer stock from Bob to Alice. Each call to transfer returns a promise whose fulfillment or rejection indicates whether it has become confident that this one-way transfer of rights will succeed. If both transfers become confident (before any cancellations win the race), then the overall decision is to proceed. If either transfer indicates failure, by rejecting the promise it has returned, then, via {\tt Q.all}, the {\tt decisionP} promise becomes rejected.\footnote{This is the pattern for promise-based two phase commit enhanced with the possibility of cancellation, where the call to {\tt escrowExchange} creates a transaction coordinator, and each of its calls to {\tt transfer} create a participant.}
+The arguments to {\tt Q.all} are the results of two calls to {\tt transfer}. The first call to {\tt transfer} sets up activity whose purpose is to transfer money from Alice to Bob. The second call's purpose is to transfer stock from Bob to Alice. Each call to transfer returns a promise whose fulfillment or rejection indicates whether it has become confident that this one-way transfer of erights will succeed. If both transfers become confident (before any cancellations win the race), then the overall decision is to proceed. If either transfer indicates failure, by rejecting the promise it has returned, then, via {\tt Q.all}, the {\tt decisionP} promise becomes rejected.\footnote{This is the pattern for promise-based two phase commit enhanced with the possibility of cancellation, where the call to {\tt escrowExchange} creates a transaction coordinator, and each of its calls to {\tt transfer} creates a participant.}
+
+\bnote{Mark}{explain security issue solved by failOnly}
 
 Since the two calls to {\tt transfer} are symmetric, we examine only the first. The first phase of the transfer, on lines 8 and 9 of Figure~\ref{escrowExchange}, attempts to deposit Alice's money into an escrow purse mentioned only within this transfer. If this deposit succeeds, Alice's money has been escrowed, so the money portion of the exchange is now assured. If this deposit fails, then the exchange as a whole should be cancelled. So {\tt transfer} simply returns the promise for the outcome of this first deposit.
 
-The {\tt transfer} function sets up the second phase on lines 5, 6, and 7. Assume for now that {\tt makeEscrowP} is fulfilled. If the overall decision is that the exchange should succeed, then the success callback deposits Alice's escrowed money into Bob's account. Otherwise it refunds Alice's escrowed money.
+The {\tt transfer} function sets up the second phase on lines 5, 6, and 7. If the overall decision is that the exchange should succeed, then the success callback deposits Alice's escrowed money into Bob's account. Otherwise it refunds Alice's escrowed money.
 
-Only one mystery remains. How does the escrow agent obtain a fresh escrow purse at this money issuer, in order to be confident that it has obtained exclusive access to the money at stake? Since the escrow exchange agent has no prior knowledge or trust in the money issuer, it cannot become confident that the issuer is honest or even that the money it issues means anything. The question is meaningless. Instead, it must only obtain a fresh escrow purse whose veracity is \emph{mutually acceptable} to Alice and Bob.
+Only one mystery remains. How does the escrow agent obtain a fresh escrow purse at this money issuer, in order to be confident that it has obtained exclusive access to the money at stake? Since the escrow exchange agent has no prior knowledge or trust in the money issuer, it cannot become confident that the issuer is honest or even that the money it issues means anything. The question is meaningless. Instead, it only needs to obtain a fresh escrow purse whose veracity is \emph{mutually acceptable} to Alice and Bob.
 
 If it simply asks Alice's purse for a new empty purse ({\tt srcPurseP ! makePurse()}), Alice could return a dishonest purse that acknowledges deposit without transferring anything. Alice would then obtain Bob's stock for free. If it simply asks Bob's purse, then Bob could steal Alice's money during phase 1. Instead, it checks if their {\tt makePurse} methods are the very same function object---have the same object identity--by using {\tt Q.join} on promises for these two methods. This is why, on lines 3 and 7 of Figure~\ref{makeMint}, all purses of the same currency at the same bank share the same function as their {\tt makePurse} method. If the {\tt Q.join} of these two methods fails, the either Alice was dishonest, Bob was dishonest, or they simply didn't have prior agreement on the same currency at the same money issuer.
-
-
 
 \section{The Contract Host}
 \label{sec:contract_host}
 
 \begin{figure}[htbp]
+\begin{minipage}[t]{0.48\linewidth}
 \begin{lstlisting}[language=javascript]
 var makeContractHost = () => {
   var amp = WeakMap();
@@ -576,11 +575,11 @@ var makeContractHost = () => {
   return def({
     setup: contractSrc => {
       contractSrc = ''+contractSrc;
-      var contract = confine(contractSrc, {Q: Q});
-      var resolve;
-      var resultP = Q.promise(r => { resolve = r; });
       var tokens = [];
       var argPs = [];
+      var resolve;
+      var resultP = Q.promise(r => { resolve = r; });
+      var contract = confine(contractSrc, {Q: Q});
 
       var addParam = (i, token) => {
         tokens[i] = token;
@@ -591,7 +590,7 @@ var makeContractHost = () => {
             throw new Error('unexpected contract: '+contractSrc);
           }
           if (i !== allegedI) {
-            throw new Error('unexpected player number: '+i);
+            throw new Error('unexpected side: '+i);
           }
           amp.delete(token);
           resolveArg(arg);
@@ -601,7 +600,7 @@ var makeContractHost = () => {
       for (var i = 0; i < contract.length; i++) {
         addParam(i, def({}));
       }
-      resolve(Q.all(argPs).then(args => contract(...args)));
+      resolve(Q.all(argPs).then(args => contract.apply(undefined, args)));
       return tokens;
     },
     play: (tokenP, allegedSrc, allegedI, arg) => Q(tokenP).then(
@@ -609,6 +608,11 @@ var makeContractHost = () => {
   });
 };
 \end{lstlisting}
+\end{minipage}
+\begin{minipage}[t]{0.48\linewidth}
+\vspace{0pt}
+\includegraphics[scale=0.28]{5players.pdf}
+\end{minipage}
 \caption{The Contract Host}
 \label{makeContractHost}
 \end{figure}
@@ -632,7 +636,10 @@ By redeeming the token, Alice obtains the exclusive right to play a specific con
 
 
 
-\section{A More Cooperative World?}
+\section{Future Directions}
+
+\bnote{Mark}{bitcoin, verification}
+
 
 \bibliographystyle{splncs}
 % \bibliographystyle{alpha}
