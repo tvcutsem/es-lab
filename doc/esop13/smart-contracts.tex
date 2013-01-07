@@ -258,14 +258,12 @@ JavaScript provides many operators to interact with an object. Here, we will foc
 The {\tt !} operator can be used anywhere the dot operator can be used. For instance, if {\tt pointP} is a promise for a {\tt point}, then {\tt pointP ! getX()} denotes an eventual send, which enqueues a request to call the {\tt getX()} method in the event loop of {\tt point}. In addition, the syntax {\tt fP ! (x,y)}, where {\tt fP} is a promise designating a function {\tt f}, enqueues a request to call {\tt f(x,y)} in the event loop of {\tt f}. The {\tt !} operator is actually syntactic sugar for an explicit method call on the promise object itself:
 
 \begin{center}
-  \begin{tabular}{|l|l|l|}
-  \hline
+  \begin{tabular}{ l|l|l }
   Immediate syntax & Eventual syntax & Expansion \\
   \hline
   {\tt p.m(x,y)} & {\tt p ! m(x,y)} & {\tt Q(p).send("m",x,y)} \\
   {\tt p(x,y)} & {\tt p ! (x,y)} & {\tt Q(p).fcall(x,y)}\\
   {\tt p.m} & {\tt p ! m} & {\tt Q(p).get("m")}\\
-  \hline
   \end{tabular} 
 \end{center}
 
@@ -279,7 +277,7 @@ We serialize pass-by-reference objects using unguessable HTTPS URLs (also called
 
 \paragraph{Q.passByCopy} 
 
-To override this default, calling {\tt Q.passByCopy(record)} will mark the record as pass-by-copy, so that the record itself will be shallow copied to the destination, resulting in a record with the same property names. The values of these properties themselves get serialized according to these same argument passing rules, etc.
+To override this default, calling {\tt Q.passByCopy(record)} will mark the record as pass-by-copy, so that the record itself will be shallow copied to the destination, resulting in a record with the same property names. The values of these properties themselves get serialized according to these same argument passing rules.
 
 \paragraph{Q.promise}
 
@@ -446,7 +444,7 @@ This success callback {\tt deposit} method implicitly returns undefined, fulfill
 The local unforgeable object reference and the remote unguessable object reference represent one kind of eright---the eright to invoke the public interface of the object it designates. The \emph{mint maker}, building on object references as erights, builds a new kind of eright at a new level of abstraction, one having many of the properties of money. By contrasting these, we can begin to form a taxonomy of erights, and to understand how the layers of abstractions relate to each other. This comparison suggests at least the following four dimensions on which erights may differ.
 
 \begin{center}
-\begin{tabular}{ l l }
+\begin{tabular}{ l|l }
   Object reference & Money \\ \hline
   Shared & Exclusive \\
   Specific & Fungible \\
@@ -629,7 +627,7 @@ By redeeming the token, Alice obtains the exclusive right to play a specific con
 
 Our mint maker is, of course, less than a realistic bank or money system in many ways. Most severe is that Alice's money is \emph{fully vulnerable} to the mint maker's misbehavior, without even the ability to demonstrate such misbehavior to others, to recover losses. Many electronic money systems do better on auditability, but are still ``trusted'' third party services that might misbehave, damaging its clients. A money system, to be useful, must be widely used. A widely used ``trusted'' third party is a central point of failure for a large community.
 
-Better would be to avoid vulnerability to such a central point of failure in the first place. Bitcoin~\ref{nakamoto2008bitcoin} is a virtual issuer, synthesized by cryptographic means among its participants. Rather than rely on a possible malicious third party, Bitcoin arranges a complex system of incentives among the participants, such that the composition of their self-interested behavior within the protocol \emph{should} result in a virtual issuer that is adequately non-subvertable. The game theory has yet to be fully understood, but it is being used at scale, with much value at stake, and has survived many attempted attacks.
+Better would be to avoid vulnerability to such a central point of failure in the first place. Bitcoin~\cite{nakamoto2008bitcoin} is a virtual issuer, synthesized by cryptographic means among its participants. Rather than rely on a possible malicious third party, Bitcoin arranges a complex system of incentives among the participants, such that the composition of their self-interested behavior within the protocol \emph{should} result in a virtual issuer that is adequately non-subvertable. The game theory has yet to be fully understood, but it is being used at scale, with much value at stake, and has survived many attempted attacks.
 
 A first line of research would explore the possible interface between a Bitcoin-like system and Dr. SES. Could a mint-maker-like face be put on Bitcoin, so that it could plug into the escrow exchange agent shown above? However, the escrow exchange agent is itself a third party that Alice and Bob are vulnerable to. Can a Bitcoin-like system enable Alice and Bob to synthesize an escrow exchange agent they can both trust without trusting each other? The Bitcoin system already has some "instructions" built into it, specifically intended for supporting smart contracts. But these are currently unused, until their implications are better understood. Can the escrow exchange contract be practically compiled into such instructions? In this paper, we have purposely stayed within an extremely small subset of JavaScript. If such an expressive but small language can be compiled into instructions that a Bitcoin-like system can support, could we synthesize a generic contract host, able to host arbitrary contracts written in this language?
 
@@ -637,7 +635,7 @@ A first line of research would explore the possible interface between a Bitcoin-
 
 Previous efforts~\cite{spiessens2007patterns,murray2010analysing} have performed automated verification of the security of several ocap patterns, once expressed in a programming-language independent formalism. Ankur Taly built ENCAP verification system~\cite{taly2011automated} and used it specifically to verify the security of ocap security patterns expressed in concrete SES code. Other researchers have suggested adapting separation logic or ownership types to ocap reasoning. However, the patterns shown here are a bit more complex than those verified to date.
 
-More important, none of these verification systems is in general use, or even understandable by non-specialists. Non-expert programmers reason about the correctness of their programs all the time, but in an informal way best represented as prose arguments. However, as we've seen here, the prose arguments for security can be tricky compared to the those for functionality, mistakes are more likely, and testing is almost useless at identifying holes. In order to really enable non-experts to write smart contracts, such tools need to be made understandable and easily usable by those ignorant of the theories on which they are based.
+More important, none of these verification systems is in general use, or even understandable by non-specialists. Non-expert programmers reason about the correctness of their programs all the time, but in an informal way best represented as prose arguments. However, as we've seen here, the prose arguments for security can be tricky compared to the those for functionality, mistakes are more likely, and testing is almost useless at identifying holes. In order to enable non-experts to write smart contracts, such tools need to be made understandable and easily usable by those ignorant of the theories on which they are based.
 
 
 
