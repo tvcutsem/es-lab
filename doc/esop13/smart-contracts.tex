@@ -5,7 +5,7 @@
 \usepackage{graphicx}
 
 \newboolean{showcomments}
-\setboolean{showcomments}{true}
+\setboolean{showcomments}{false}
 \ifthenelse{\boolean{showcomments}}
   {\newcommand{\bnote}[2]{
 	\fbox{\bfseries\sffamily\scriptsize#1}
@@ -85,11 +85,11 @@ Smart Contracts are cool. \bnote{Mark}{need a real abstract}
 
 The fabric of the global economy is held together by contracts. A contract is an agreed arrangement for cooperation between mutually suspicious parties. But existing contracts are ambiguous, jurisdictions-specific, and written, interpreted, and adjudicated only by expensive experts. \emph{Smart contracts} are contract-like arrangements expressed in program code, where the behavior of the program enforces the terms of the ``contract''\cite{szabo1997formalizing}. Though not a substitute for legal contracts, they can provide some of the benefits of contracts for fine-grain, jurisdiction-free, and automated arrangements for which legal contracts are impractical.\footnote{
 %
-Although \emph{types as contracts}~\cite{DBLP:journals/computer/Meyer92} and \emph{higher order contracts}~\cite{findler2002contracts} can be seen as very special cases of smart contracts, their purpose is typically different: catching bugs during development rather than protection from misbehavior in the wild.}
+Although \emph{types as contracts}~\cite{DBLP:journals/computer/Meyer92} and \emph{higher order contracts}~\cite{findler2002contracts} can be seen as very special cases of smart contracts, their purpose is typically different: locating bugs during development rather than protection from misbehavior in the wild.}
 
 To realize this potential, smart contracts themselves need a distributed, secure, persistent, and ubiquitous computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts.
 
-We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by massive numbers of non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}.\footnote{
+We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by many non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}.\footnote{
 %
 The official standards name for JavaScript is ``EcmaScript''.
 %
@@ -97,7 +97,7 @@ The official standards name for JavaScript is ``EcmaScript''.
 
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
-Dr. SES is a platform for distributed, resilient and secure computing, layered on top of EcmaScript. How do these ingredients support electronic rights and contracts?
+Dr. SES is a platform for distributed, resilient and secure computing, layered on EcmaScript. How do these ingredients support electronic rights and contracts?
 
 Dr. SES is layered on top of EcmaScript for two primary reasons. First is the ubiquity of the language. Due to its embedding in the browser, EcmaScript is available on a wide range of platforms. Second, because of this ubiquity, JavaScript is widely adopted among programmers.
 
@@ -193,7 +193,17 @@ A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexic
 All effects only by using references.
 No powerful references by default -- all implicitly shared objects are transitively immutable. 
 
-\bnote{Mark}{def, confine, Nat, WeakMap}
+
+\begin{description}
+\item[{\tt def(obj)}] xx
+
+\item[{\tt confine(src, env)}] xx
+
+\item[{\tt Nat(allegedNumber)}] xx
+
+\item[{\tt var amp = WeakMap()}] xx
+
+\end{description}
 
 \subsection{Q: Distributed JavaScript Objects}
 
@@ -275,33 +285,23 @@ Primitive values such as strings and number are \emph{pass-by-copy}---when passe
 
 We serialize pass-by-reference objects using unguessable HTTPS URLs (also called web-keys~\cite{Close:Webkeys}). Such a reference may look like {\tt https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment (everything after the {\tt \#}) is a random character string that uniquely identifies an object on the {\tt example.com} server. We use unguessable secrets for remote object references because of a key similarity between secrets and object references: If you do not know an unguessable secrets, you can only come to know it if somebody else who knows the secret chooses to share it with you.
 
-\paragraph{Q.passByCopy} 
+\begin{description}
+\item[{\tt Q.passByCopy(record)}] will override this default, marking {\tt record} as pass-by-copy, so that the record will be shallow copied to the destination, resulting in a record with the same property names. The values of these properties get serialized according to these same argument passing rules.
 
-To override this default, calling {\tt Q.passByCopy(record)} will mark the record as pass-by-copy, so that the record itself will be shallow copied to the destination, resulting in a record with the same property names. The values of these properties themselves get serialized according to these same argument passing rules.
+\item[{\tt Q.promise( (resolve,reject) => (...) )}] makes a fresh promise which is initially pending. It immediately calls the argument function with two functions, conventionally named {\tt resolve} and {\tt reject}, that can be used to either resolve or reject this new promise explicitly. 
 
-\paragraph{Q.promise}
+\end{description}
 
-Just like it is useful to compose individual functions into a composite function, it is often useful to combine multiple individual promises into a single promise whose outcome depends on the individual promises. To construct such promise combinators, the {\tt Q.promise} function is used to define promises with a custom resolution strategy.
 
-\begin{verbatim}
-Q.promise( f(resolve,reject) => () ) => promise
-\end{verbatim}
+Just like it is useful to compose individual functions into a composite function, it is often useful to combine multiple individual promises into a single promise whose outcome depends on the individual promises. To construct such promise combinators, the {\tt Q.promise} function is used to define promises with a custom resolution strategy. The Q library provides some useful combinators we use later in the escrow exchange contract:
 
-{\tt Q.promise} makes a fresh promise which is initially pending. It immediately calls the argument function {\tt f} with two functions, conventionally named {\tt resolve} and {\tt reject}, that can be used to either fulfil or reject this new promise explicitly. 
+\begin{description}
+\item[{\tt Q.race(answerPs)}] takes an array of promises, {\tt answerPs}, and returns a promise for the resolution of whichever promise we notice has resolved first. For example, {\tt Q.race([xP,yP]).then(v => print(v))} will cause either the value of {\tt xP} or {\tt yP} to be printed, whichever resolves first. If neither resolves, then neither does the promise returned by {\tt Q.race}. If the first promise to resolve is rejected, the promise returned by {\tt Q.race} is rejected with the same reason.
 
-Using the above elements, the Q library defines a the following convenience functions we use later in the escrow exchange contract.
+\item[{\tt Q.all(answerPs)}] takes an array of promises and returns a promise for an array of their fulfilled values. We often need to collect several promised answers, in order to react either when \emph{all} the answers are ready or when \emph{any} of them becomes rejected. Given {\tt sumP = Q.all([xP,yP]).then(([x,y]) => x+y)}, if both {\tt xP} and {\tt yP} are fulfilled with numbers, {\tt sumP} is fulfilled with their sum. If neither resolves, neither does {\tt sumP}. If either {\tt xP} or {\tt yP} is rejected, {\tt sumP} is rejected with the same reason.
 
-\paragraph{Q.race} 
-
-Given an array of promises {\tt answerPs}, {\tt Q.race(answerPs)} returns a promise for the resolution of whichever promise we notice has resolved first. For example, the call {\tt Q.race([xP,yP]).then((v) => { print(v); })} will cause either the value of {\tt xP} or {\tt yP} to be printed to the screen, whichever resolves first. If neither resolves, then neither does the promise returned by {\tt Q.race}. If the first promise to resolve is rejected, the promise returned by {\tt Q.race} is rejected with the same reason.
-
-\paragraph{Q.all} 
-
-It is often useful to collect several promised answers, in order to react either when all the answers are ready or when any of the promises becomes rejected. For example, given {\tt sumP = Q.all([xP,yP]).then(([x,y]) => x+y)}, if both {\tt xP} and {\tt yP} resolve to a number, {\tt sumP} resolves to their sum. If neither resolves, then neither does {\tt sumP}. If either {\tt xP} or {\tt yP} is rejected, {\tt sumP} is rejected with the same reason.
-
-\paragraph{Q.join} 
-
-Join is our eventual equality operation. {\tt Q.join(xP,yP)} takes two promises {\tt xP} and {\tt yP} and returns a joined promise. Any messages sent to this joined promise are only delivered if {\tt xP} and {\tt yP} eventually come to designate the same target object. In this case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
+\item[{\tt Q.join(xP,yP)}] takes two promises and returns a promise for the one object they both designate. Join is our eventual equality operation. Any messages sent to this joined promise are only delivered if {\tt xP} and {\tt yP} eventually come to designate the same target object. In this case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
+\end{description}
 
 
 \subsection{NodeKen: Distributed Orthogonal Persistence}
@@ -365,7 +365,7 @@ An outline of such a design, due to Brian Warner, is available online: \myurl{er
 
 \section{Contracts use Electronic Rights}
 
-\begin{figure}[htbp]
+\begin{figure}[t]
 \begin{minipage}[t]{0.48\linewidth}
 \begin{lstlisting}[language=javascript]
 var makeMint = () => {
@@ -448,7 +448,7 @@ The local unforgeable object reference and the remote unguessable object referen
   Object reference & Money \\ \hline
   Shared & Exclusive \\
   Specific & Fungible \\
-  Opaque & Assayable \\
+  Opaque & Measurable \\
   Exercisable & Symbolic \\
 \end{tabular}\\
 \end{center}
@@ -457,7 +457,7 @@ When Alice sends the payment purse to Bob, she has \emph{shared} with Bob access
 
 The reference to the payment purse designates a \emph{specific} object, this payment purse as opposed to any other. Whereas the counters in the purses represent only quantities of money (though still specific to a given currency at a given issuer). Bob doesn't care which of these \$s he gets, so long as he gets the amount he expects. The money is \emph{fungible}.
 
-When Bob receives access to the payment purse, he doesn't know what it is except that it is some object that one of his clients chose to send him in this argument position (i.e. the object reference is \emph{opaque}). If his {\tt deposit} method succeeds, he knows exactly what money rights he has received (the money in the purse is \emph{assayable}).
+When Bob receives access to the payment purse, he doesn't know what it is except that it is some object that one of his clients chose to send him in this argument position (i.e. the object reference is \emph{opaque}). If his {\tt deposit} method succeeds, he knows exactly what money rights he has received (the money in the purse is \emph{measurable}).
 
 By sending a message to an object, one \emph{exercises} whatever erights to cause effects are provided by that object's public interface. By contrast, money is only valuable because it is valued by others. Money does not have any direct use-value, its value is \emph{symbolic}.
 
@@ -618,7 +618,7 @@ Our contract host is an object with two methods, {\tt setup} and {\tt play}. Bob
 
 If Alice decides she'd like to play this contract, she formulates her argument object as above, and sends it in a {\tt play} request to the contract host along with the token, the alleged contract source code, and the alleged side she is to play. If all of this checks out, and this token has not previously been redeemed, then this token gets used up and Alice's argument is remembered until the arguments for the other players arrive, and Alice receives a promise for the outcome of the contract. Once all arguments are present, the contract function is called and its result is used to resolve the previously returned promise.
 
-By redeeming the token, Alice obtains the exclusive right to play a specific contract whose logic she knows, and whose play she expects to cause external effects. This eright is exclusive, specific, assayable, and exercisable. 
+By redeeming the token, Alice obtains the exclusive right to play a specific contract whose logic she knows, and whose play she expects to cause external effects. This eright is exclusive, specific, measurable, and exercisable. 
 
 \section{Future Directions}
 \label{futureDirections}
@@ -629,7 +629,7 @@ Our mint maker is, of course, less than a realistic bank or money system in many
 
 Better would be to avoid vulnerability to such a central point of failure in the first place. Bitcoin~\cite{nakamoto2008bitcoin} is a virtual issuer, synthesized by cryptographic means among its participants. Rather than rely on a possible malicious third party, Bitcoin arranges a complex system of incentives among the participants, such that the composition of their self-interested behavior within the protocol \emph{should} result in a virtual issuer that is adequately non-subvertable. The game theory has yet to be fully understood, but it is being used at scale, with much value at stake, and has survived many attempted attacks.
 
-A first line of research would explore the possible interface between a Bitcoin-like system and Dr. SES. Could a mint-maker-like face be put on Bitcoin, so that it could plug into the escrow exchange agent shown above? However, the escrow exchange agent is itself a third party that Alice and Bob are vulnerable to. Can a Bitcoin-like system enable Alice and Bob to synthesize an escrow exchange agent they can both trust without trusting each other? The Bitcoin system already has some "instructions" built into it, specifically intended for supporting smart contracts. But these are currently unused, until their implications are better understood. Can the escrow exchange contract be practically compiled into such instructions? In this paper, we have purposely stayed within an extremely small subset of JavaScript. If such an expressive but small language can be compiled into instructions that a Bitcoin-like system can support, could we synthesize a generic contract host, able to host arbitrary contracts written in this language?
+One line of research would explore the possible interface between a Bitcoin-like system and Dr. SES. Could a mint-maker-like face be put on Bitcoin, so that it could plug into our escrow exchange agent? But even then, the escrow exchange agent is itself a third party that Alice and Bob are vulnerable to. Can a Bitcoin-like system enable Alice and Bob to synthesize an escrow exchange agent they can both trust without trusting each other? The Bitcoin system already has some "instructions" built into it, specifically intended for supporting smart contracts. But these are currently unused until their implications are better understood. Can the escrow exchange contract be practically compiled into such instructions? In this paper, we have purposely stayed within an extremely small subset of JavaScript. If such an expressive but small language can be compiled into instructions that a Bitcoin-like system can support, could we synthesize a generic contract host, able to host arbitrary contracts written in this language?
 
 \paragraph{Formal verification} 
 
