@@ -3,6 +3,7 @@
 \usepackage{ifthen}
 \usepackage{amssymb}
 \usepackage{graphicx}
+\usepackage{mdwlist} % for compact enumeration, e.g. itemize*
 
 \newboolean{showcomments}
 \setboolean{showcomments}{false}
@@ -192,11 +193,11 @@ Once a script obtains a reference to an external object, we must establish rules
 
 JavaScript by itself is not an object-capability-secure language, because scripts are not born powerless (A JavaScript environment is full of globally mutable state) and because plain JavaScript objects are not encapsulated. From a security perspective, there were three problems with JavaScript's objects:
 
-\begin{itemize}
+\begin{itemize*}
 \item Records were fully mutable, allowing one client of a point to, for example, replace its {\tt getX} method, violating the assumptions of other clients. ES5 provides a {\tt freeze} primitive, used by the SES library to define the {\tt def} function for making a tamper proof object graph.
 \item ES3 had six violations of static scoping. Three are fixed unconditionally by ES5. In addition, ES5 provides a \emph{strict mode}, enabled by the {\tt "use strict";} directive shown below, which fixes the remaining three violations. (Throughout the rest of this paper, strict mode is assumed without further notation.)  
 \item Even aside from these scoping violations, ES3 functions were not encapsulated. However, ES5 strict functions are fully encapsulated.
-\end{itemize}
+\end{itemize*}
 
 \begin{verbatim}
 "use strict";
@@ -251,11 +252,11 @@ While JavaScript environments already effectively support event loop concurrency
 
 We introduce a new type of object, called a Promise, to represent both the outcome of asynchronous operations, as well as to represent remote object references. A normal JavaScript direct reference may only designate an object within the same event loop. Only promises may come to designate objects in other event loops. A promise may be in one of several states:
 
-\begin{description}
+\begin{description*}
   \item[pending] when it is not yet determined what object the promise designates,
   \item[fulfilled] when it is resolved to successfully designate some object,
   \item[rejected] when it will never designate an object, for an alleged reason represented by an associated error.
-\end{description}
+\end{description*}
 
 A fulfilled or rejected promise is also called a \emph{resolved} promise.
 
@@ -307,23 +308,23 @@ Primitive values such as strings and number are \emph{pass-by-copy}---when passe
 
 We serialize pass-by-reference objects using unguessable HTTPS URLs (also called web-keys~\cite{Close:Webkeys}). Such a reference may look like {\tt https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment (everything after the {\tt \#}) is a random character string that uniquely identifies an object on the {\tt example.com} server. We use unguessable secrets for remote object references because of a key similarity between secrets and object references: If you do not know an unguessable secrets, you can only come to know it if somebody else who knows the secret chooses to share it with you.
 
-\begin{description}
+\begin{description*}
 \item[{\tt Q.passByCopy(record)}] will override this default, marking {\tt record} as pass-by-copy, so that the record will be shallow copied to the destination, resulting in a record with the same property names. The values of these properties get serialized according to these same argument passing rules.
 
 \item[{\tt Q.promise( (resolve,reject) => (...) )}] returns a fresh promise which is initially pending. It immediately calls the argument function with two functions, conventionally named {\tt resolve} and {\tt reject}, that can be used to either resolve or reject this new promise explicitly. 
 
-\end{description}
+\end{description*}
 
 
 Just like it is useful to compose individual functions into a composite function, it is often useful to combine multiple individual promises into a single promise whose outcome depends on the individual promises. To construct such promise combinators, the {\tt Q.promise} function is used to define promises with a custom resolution strategy. The Q library provides some useful combinators we use later in the escrow exchange contract:
 
-\begin{description}
+\begin{description*}
 \item[{\tt Q.race(answerPs)}] takes an array of promises, {\tt answerPs}, and returns a promise for the resolution of whichever promise we notice has resolved first. For example, {\tt Q.race([xP,yP]).then(v => print(v))} will cause either the value of {\tt xP} or {\tt yP} to be printed, whichever resolves first. If neither resolves, then neither does the promise returned by {\tt Q.race}. If the first promise to resolve is rejected, the promise returned by {\tt Q.race} is rejected with the same reason.
 
 \item[{\tt Q.all(answerPs)}] takes an array of promises and returns a promise for an array of their fulfilled values. We often need to collect several promised answers, in order to react either when \emph{all} the answers are ready or when \emph{any} of them becomes rejected. Given {\tt sumP = Q.all([xP,yP]).then(([x,y]) => x+y)}, if both {\tt xP} and {\tt yP} are fulfilled with numbers, {\tt sumP} is fulfilled with their sum. If neither resolves, neither does {\tt sumP}. If either {\tt xP} or {\tt yP} is rejected, {\tt sumP} is rejected with the same reason.
 
 \item[{\tt Q.join(xP,yP)}] takes two promises and returns a promise for the one object they both designate. Join is our eventual equality operation. Any messages sent to this joined promise are only delivered if {\tt xP} and {\tt yP} eventually come to designate the same target object. In this case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
-\end{description}
+\end{description*}
 
 
 \subsection{NodeKen: Distributed Orthogonal Persistence}
@@ -335,10 +336,10 @@ We have already covered the distributed and secure aspects of Dr. SES. Here, we 
 
 To introduce resilience, Dr. SES builds upon the Ken platform~\cite{Yoo:CKen}. Ken offers to applications two primary features:
 
-\begin{description}
+\begin{description*}
   \item[Reliable messaging] Ken provides primitives to reliably transmit a message exactly once to a recipient process. In addition, multiple messages sent to the same recipient are guaranteed to arrive in the same order (i.e. Ken ensures pair-wise FIFO message ordering).
   \item[Distributed consistent snapshots] Ken provides a persistent heap for storing application data. All objects stored in this heap will survive failures. Ken further ensures that the snapshots of two or more communicating processes do not grow inconsistent. For example, it is impossible for the sender of a message to record in its snapshot that the message was successfully delivered, while the receiver has no record of having processed that message in its snapshot.
-\end{description}
+\end{description*}
 
 A Ken process can tolerate arbitrary failures in such a way that when an application is restarted after a crash, it is always restored to a previously consistent state. To the process itself, it is as if the crash had never happened. To any of the process's communication partners, the process just seemed slow to respond. A crash will never cause duplicate messages to be delivered, nor does it cause messages ``in flight'' to be lost.
 
@@ -362,14 +363,14 @@ Following the philosophy of WaterKen~\cite{Close:Waterken}, we expect it to be c
 
 We briefly sketch how Ken achieves distributed consistent snapshots. Ken assumes communicating event loops, and so aligns well with JavaScript's de-facto execution model. A Ken process is an event loop that executes application-level messages. In addition:
 
-\begin{itemize}
+\begin{itemize*}
   \item During a turn, all outgoing messages are accumulated in an outgoing message queue. These messages are not yet released to the network.
   \item At the end of each turn, make a checkpoint of the persistent heap and of all outgoing unacknowledged messages.
   \item After the end-of-turn checkpoint is made, release any new outgoing messages to the network and acknowledge the message processed this turn.
   \item Outgoing messages are numbered with a sequence number (for duplicate detection and message ordering).
   \item Unacknowledged outgoing messages are periodically retried (with exponential back-off) until an acknowledgement is received.
   \item Incoming messages are checked for duplicates. When a duplicate message is detected, it is dropped (not processed) and immediately acknowledged.
-\end{itemize}
+\end{itemize*}
 
 The key point is that outgoing messages are released, and incoming messages are acknowledged only \emph{after} the message has been fully processed by the receiver \emph{and} the heap state has been checkpointed.
 
