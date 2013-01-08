@@ -105,15 +105,15 @@ Dr. SES is layered on top of EcmaScript for two primary reasons. First is the ub
 
 JavaScript is not a distributed programming language. In the browser, a large number of APIs are available to scripts to communicate with servers and other frames, but these APIs are tedious to work with, and not designed with least-authority rules. That is why Dr. SES builds on the Q library to extend the JavaScript language proper with a handful of features to support least-authority distributed programming at the level of individual objects and messages.
 
-In an architecture that aims to express electronic rights or contracts, security must play a key role. Dr. SES builds upon the Q library to support distributed cryptographic capabilities, and upon the SES library to support local object-capabilities. The latter allows Dr. SES programs to execute mobile code from untrusted parties without fear of granting excess privileges to that piece of code. This is especially relevant in the context of JavaScript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that  depends on the ability to safely execute third-party code.
+In an architecture that aims to express electronic rights or contracts, security must play a key role. Dr. SES builds upon the Q library to support distributed cryptographic capabilities, and upon the SES library to support local object-capabilities. The latter allows Dr. SES programs to execute mobile code from untrusted parties without fear of granting excess privileges to that piece of code. This is especially relevant in the context of JavaScript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that  depends on the ability to safely execute third-party code on servers.
 
 Finally, the resilience aspect of Dr. SES deals with the unavoidable issues of failure handling that come up in distributed systems.
 %It is widely appreciated that writing correct, bug-free code in the presence of arbitrary failures is hard. Dr. SES, then, tries to make it as easy as possible for non-experts to deal with distributed failures.
-Server-side Dr. SES programs periodically checkpoint their state, so that in the event of a failure, the program can always recover to a previously consistent state. Such Dr. SES programs can survive failures without effort on the part of the programmer. Dr. SES will be building on the \emph{NodeKen} project, which is layering the NodeJS server-side JavaScript implementation onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures.
+Server-side Dr. SES programs periodically checkpoint their state, so that in the event of a failure, the program can always recover to a previously consistent state. Such Dr. SES programs can survive failures without effort on the part of the programmer. Dr. SES will be building on the \emph{NodeKen} project, which is layering the NodeJS server-side JavaScript platform onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures.
 
 %Objects and object references in Dr. SES are always persistent, meaning that they survive arbitrary failures by default.
 
-Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed programming in JavaScript as effortless as possible. Given such a platform, it then becomes possible to implement contracts with very little code. This is precisely what we will demonstrate in the second part of this paper, after having explained Dr. SES in more detail.
+Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed secure programming in JavaScript as effortless as possible. Given such a platform, it then becomes possible to implement contracts with very little code. This is precisely what we will demonstrate in the second part of this paper, after explaining Dr. SES in more detail.
 
 
 
@@ -208,7 +208,7 @@ A fulfilled or rejected promise is also called a \emph{resolved} promise.
 \begin{description*}
 \item[{\tt var tP = Q(target)}] assigns to {\tt tP} a promise for {\tt target}. If {\tt target} is already a promise, that same promise is assigned. Otherwise, {\tt tP} is a fulfilled promise designating {\tt target}.
 
-\item[{\tt var resultP = tP.then( (v) => result1, (e) => result2 )}] provides eventual access to {\tt tP}'s resolution. It takes two callback arguments, a success callback and an optional failure callback. It registers these callbacks to be called back in a later turn after the promise is resolved. If the promise was fulfilled with a value {\tt v}, then {\tt success(v)} is called. If the promise was rejected with an error {\tt e}, then {\tt failure(e)} is called. {\tt resultP} is a promise for either of the callbacks' {\tt result} value. 
+\item[{\tt var resultP = tP.then( (v) => result1, (e) => result2 )}] provides eventual access to {\tt tP}'s resolution. The {\tt then} method takes two callback arguments, a success callback and an optional failure callback. It registers these callbacks to be called back in a later turn after the promise is resolved. If the promise was fulfilled with a value {\tt v}, then {\tt success(v)} is called. If the promise was rejected with an error {\tt e}, then {\tt failure(e)} is called. {\tt resultP} is a promise for the invoked callback's {\tt result} value. 
 \end{description*}
 
 If the callback invoked by {\tt then} throws an error, that error is used to reject {\tt resultP}. This propagation of errors along chains of dependent promises is called rejected promise contagion~\cite{miller:strangers}, and it is the asynchronous analogue of propagating exceptions up the call stack. If the failure callback is missing,  rejecting {\tt tP} will automatically eventually reject {\tt resultP} with the same reason.
@@ -250,7 +250,7 @@ Primitive values such as strings and number are \emph{pass-by-copy}---when passe
 We serialize pass-by-reference objects using unguessable HTTPS URLs (also called web-keys~\cite{Close:Webkeys}). Such a reference may look like {\tt https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment (everything after the {\tt \#}) is a random character string that uniquely identifies an object on the {\tt example.com} server. We use unguessable secrets for remote object references because of a key similarity between secrets and object references: If you do not know an unguessable secrets, you can only come to know it if somebody else who knows the secret chooses to share it with you.
 
 \begin{description*}
-\item[{\tt Q.passByCopy(record)}] will override this default, marking {\tt record} as pass-by-copy, so that the record will be shallow-copied to the destination, resulting in a record with the same property names. The values of these properties get serialized according to these same argument passing rules.
+\item[{\tt Q.passByCopy(record)}] will override the pass-by-reference default, marking {\tt record} as pass-by-copy. The record will then be shallow-copied to the destination, making a record with the same property names. The values of these properties get serialized according to these same argument passing rules.
 
 \item[{\tt Q.promise( (resolve,reject) => (...) )}] returns a fresh promise which is initially pending. It immediately calls the argument function with two functions, conventionally named {\tt resolve} and {\tt reject}, that can be used to either resolve or reject this new promise explicitly. 
 
@@ -405,7 +405,7 @@ For Alice to pay Bob, she sets up a \emph{payment purse}, deposits \$10 into it 
   var goodP = ackP.then(_ => bobP ! buy(desc, paymentP));
 \end{verbatim}
 
-On the diagram in Figure~\ref{makeMint}, each {\tt makeMint} call results in a layer with its own {\tt mint}, {\tt amp} pair. Each {\tt mint} call results in a nested layer with its own {\tt purse}, {\tt decr}, {\tt balance} triple. On line 16 of the code that each {\tt purse} to {\tt decr} mapping is also entered into the {\tt amp} table shared by all purses of the same currency. Alice's main purse is on the bottom purse layer. Bob's is on the top layer. Alice's payment purse, being sent to Bob in the buy message, is in the middle layer.
+On the diagram in Figure~\ref{makeMint}, each {\tt makeMint} call results in a layer with its own ({\tt mint}, {\tt amp}) pair representing a distinct currency. Each {\tt mint} call results in a nested layer with its own ({\tt purse}, {\tt decr}, {\tt balance}) triple. On line 16 of the code, we see that each {\tt purse} to {\tt decr} mapping is also entered into the {\tt amp} table shared by all purses of the same currency. Alice's main purse is on the bottom purse layer. Bob's is on the top layer. Alice's payment purse, being sent to Bob in the buy message, is in the middle layer.
 
 Bob receives this request at the following {\tt buy} method:
 
@@ -417,15 +417,15 @@ Bob receives this request at the following {\tt buy} method:
       // failure handling...
 \end{verbatim}
 
-Bob's {\tt buy} method handles a message from untrusted clients such as Alice, and thus it does not know what objects Alice actually provided as the arguments. In particular, Bob has no idea if his {\tt paymentP} parameter actually designates a purse, whether it is a purse at this bank, of this currency, and of adequate funds. Even if he knew all these conditions were true at the moment, since Bob doesn't know whether Alice still retains access to it, Bob wouldn't know the funds would still be there by the time he deposits it. He delegates all these problems to the bank with the {\tt deposit} request above. If the bank's {\tt deposit} method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then the success callback of the {\tt then} above gets called, returning the {\tt good}, resolving Alice's pending {\tt goodP} promise.
+Bob's {\tt buy} method handles a message from untrusted clients such as Alice, and thus it does not know what object Alice actually provided as the payment argument. At this point, the purse provided by Alice is \emph{specific}---it is the specific object Alice designated, but to Bob it is \emph{opaque}. In particular, Bob has no idea if his {\tt paymentP} parameter actually designates a purse, whether it is a purse at this bank, of this currency, and with adequate funds. Even if he knew all these conditions were true at the moment, since Bob doesn't know whether Alice \emph{shares} access to it, Bob wouldn't know the funds would still be there by the time he deposits it. He delegates all these problems to the bank with the {\tt deposit} request above. 
+
+If the bank's {\tt deposit} method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then Bob knows he has obtained \emph{exclusive} access to a \emph{fungible} and \emph{measurable} quantity of a given currency at a given bank. In this case, the success callback of the {\tt then} above gets called, returning the {\tt good}, resolving Alice's pending {\tt goodP} promise.
 
 The interesting work done by {\tt deposit} starts on line 11, where {\tt deposit} looks up the alleged payment purse in the {\tt amp} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error. If this lookup succeeds, it finds the {\tt decr} function for decrementing that purse's {\tt balance}, which it calls with the amount to withdraw. If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
 
-This is the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no potential locally observable failures remain.
-The assignment decrements the payment purse's {\tt balance} by {\tt amount}, and {\tt decr} returns.
-Line 12 increments the balance of the purse being deposited into.
+This is the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no locally observable failure possibilities remain. The assignment decrements the payment purse's {\tt balance} by {\tt amount}, and {\tt decr} returns. Line 12 increments the balance of the purse being deposited into.
 
-This success callback {\tt deposit} method implicitly returns undefined, fulfilling Bob's promise for the result of the {\tt deposit}, triggering Bob to release the good to Alice in exchange.
+This success callback in the {\tt deposit} method implicitly returns undefined, fulfilling Bob's promise for the result of the {\tt deposit}, triggering Bob to release the good to Alice in exchange.
 
 
 
