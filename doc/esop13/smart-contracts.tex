@@ -103,17 +103,15 @@ Dr. SES is a platform for distributed, resilient and secure computing, layered o
 
 Dr. SES is layered on top of EcmaScript for two primary reasons. First is the ubiquity of the language. Due to its embedding in the browser, EcmaScript is available on a wide range of platforms. Second, because of this ubiquity, JavaScript is widely adopted among programmers.
 
-In an architecture that aims to express electronic rights or contracts, security must play a key role. Dr. SES builds upon the object-capability paradigm. Capability principles are followed both to secure distributed objects as well as to secure the local execution environment. The latter allows Dr. SES programs to execute mobile code from untrusted parties without fear of granting excess privileges to that piece of code. This is especially relevant in the context of JavaScript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that  depends on the ability to safely execute third-party code.
+JavaScript is not a distributed programming language. In the browser, a large number of APIs are available to scripts to communicate with servers and other frames, but these APIs are tedious to work with, and not designed with least-authority rules. That is why Dr. SES builds on the Q library to extend the JavaScript language proper with a handful of features to support least-authority distributed programming at the level of individual objects and messages.
 
-JavaScript is not a distributed programming language. In the browser, a large number of APIs is available to scripts to communicate with servers and other frames, but these APIs are tedious to work with, and not designed with least-authority rules. That is why Dr. SES extends the JavaScript language proper with a handful of features to support least-authority distributed programming at the level of individual objects.
+In an architecture that aims to express electronic rights or contracts, security must play a key role. Dr. SES builds upon the Q library to support distributed cryptographic capabilities, and upon the SES library to support local object-capabilities. The latter allows Dr. SES programs to execute mobile code from untrusted parties without fear of granting excess privileges to that piece of code. This is especially relevant in the context of JavaScript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that  depends on the ability to safely execute third-party code.
 
 Finally, the resilience aspect of Dr. SES deals with the unavoidable issues of failure handling that come up in distributed systems.
 %It is widely appreciated that writing correct, bug-free code in the presence of arbitrary failures is hard. Dr. SES, then, tries to make it as easy as possible for non-experts to deal with distributed failures.
-Server-side Dr. SES programs periodically checkpoint their entire state, so that in the event of a failure, the program can always recover to a previously consistent state. Such Dr. SES programs can survive failures without any effort on the part of the programmer.
+Server-side Dr. SES programs periodically checkpoint their state, so that in the event of a failure, the program can always recover to a previously consistent state. Such Dr. SES programs can survive failures without effort on the part of the programmer. Dr. SES will be building on the \emph{NodeKen} project, which is layering the NodeJS server-side JavaScript implementation onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures.
 
 %Objects and object references in Dr. SES are always persistent, meaning that they survive arbitrary failures by default.
-
-The current JavaScript standard, EcmaScript 5 (ES5), enables the \emph{SES} library to efficiently enforce local object-capability security rules on newly loaded JavaScript code. The \emph{Q} library turns JavaScript into a securable distributed object system, spanning both browsers and servers. The \emph{NodeKen} project is layering the Node server-side JavaScript implementation onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures. We explain each below.
 
 Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed programming in JavaScript as effortless as possible. Given such a platform, it then becomes possible to implement contracts with very little code. This is precisely what we will demonstrate in the second part of this paper, after having explained Dr. SES in more detail.
 
@@ -156,22 +154,22 @@ A record of functions hiding variables serves as an object of methods ({\tt getX
 
 \subsection{SES: Securing JavaScript}
 
-SES is an object-capability~\cite{RobustComposition} subset of ES5, plus a small library of supporting functions partially enumerated below. A normal object-oriented programming language with unforgeable object references (protected pointers) designating encapsulated objects is almost an object-capability language. In both, an object reference grants the right to invoke the public interface of the object it designates. A message sent on a reference both exercises this right and grants the receiving object to right to invoke the passed arguments. 
+In an object-oriented programming language with unforgeable object references (protected pointers) and encapsulated objects, an object reference grants the right to invoke the public interface of the object it designates. A message sent on a reference both exercises this right and grants the receiving object to right to invoke the passed arguments. 
 
-In an object-capability language, an object can cause effects on the world outside itself \emph{only} by using the references it holds. Some objects might cause effects while others are transitively immutable or \emph{powerless}. A reference to a non-powerless object is a \emph{capability}. An object must not be given any capabilities by default. Any references it has implicit access to, such as by language-provided global variables, must be powerless. Under these rules, granted references are the \emph{sole} representation of permission.
+In an \emph{object-capability language}~\cite{RobustComposition}, an object can cause effects on the world outside itself \emph{only} by using the references it holds. Some objects are transitively immutable or \emph{powerless}~\cite{Mettler:EECS-2012-244}, while others might cause effects. A reference to a non-powerless object is a \emph{capability}. An object must not be given any capabilities by default. Any references it has implicit access to, such as by language-provided global variables, must be powerless. Under these rules, granted references are the \emph{sole} representation of permission.
 
-The steps from ES5 to SES are are detailed at~\cite{taly2011automated}. Briefly, SES code is lexically scoped, and SES functions are truly encapsulated. SES denies access to global variables not on its whitelist. The variables on its whitelist (which includes all globals defined by ES5) it makes unassignable, and all state transitively reachable from these variables is transitively frozen, rendering all implicit access powerless. SES has a formal semantics supporting automated verification of security properties~\cite{taly2011automated}. 
+\emph{Secure EcmaScript} (SES) is an object-capability subset of ES5, plus a small library of supporting functions partially enumerated below. SES code is lexically scoped and SES functions are truly encapsulated. SES denies access to global variables not on its whitelist. Those on its whitelist (including all globals defined by ES5) it makes unassignable, and it transitively freezes all state transitively reachable from these variables, rendering all implicit access powerless. 
 
-SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is \emph{defensively consistent} when it can defend its own invariants and provide correct service to its well behaved clients, despite arbitrary or malicious misbehavior by its other clients.
+SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is \emph{defensively consistent} when it can defend its own invariants and provide correct service to its well behaved clients, despite arbitrary or malicious misbehavior by its other clients. SES has a formal semantics supporting automated verification of security properties of SES code~\cite{taly2011automated}. The SES library provides the following functions.
 
 \begin{description}
-\item[{\tt def(obj)}] mnemonically ``defines a defensible object''. To support defensive consistency, the {\tt def} function freezes its argument and all objects transitively reachable from its argument by traversal of public properties, rendering the immediate API surface of this object \emph{tamper proof}. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} returned {\tt def}'ed its points by saying ``{\tt return~def(\{\ldots\});}'', it would make defensively consistent points.
+\item[{\tt def(obj)}] mnemonically ``defines a defensible object''. To support defensive consistency, the {\tt def} function freezes its argument and all objects transitively reachable from its argument by traversal of public properties, rendering the immediate API surface of this object tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\});}'', it would make defensively consistent points.
 
-\item[{\tt Nat(allegedNumber)}] tests whether {\tt allegedNumber} is indeed a primitive number, and whether it represents an non-negative integer, a natural number, within the contiguous range of exactly representable natural numbers in JavaScript. If so, it return {\tt allegedNumber}. Otherwise it throws an error.
+\item[{\tt Nat(allegedNumber)}] tests whether {\tt allegedNumber} is indeed a primitive number, and whether it is a non-negative integer (a natural number) within the contiguous range of exactly representable integers in JavaScript. If so, it return {\tt allegedNumber}. Otherwise it throws an error.
 
 \item[{\tt var amp = WeakMap()}] assigns to {\tt amp} a new empty weak map. WeakMaps are proposed for ES6 and emulated by SES until then. Ignoring space usage, {\tt amp} is simply an object-identity-keyed table. {\tt amp.set(obj, val)} associates {\tt obj}'s identity as key with {\tt val} as value. {\tt amp.get(obj)} returns {\tt val}. {\tt amp.has(obj)} returns true. {\tt amp.delete(obj)} removes this entry. These methods use only the {\tt obj}'s identity without interacting with {\tt obj}.
 
-\item[{\tt confine(exprSrc, endowments)}] takes the source code string for a SES expression and an {\tt endowments} record. It evaluates the expression in a lexical environment consisting the the SES whitelisted (powerless) global variables and the properties of this endowments record. For example, {\tt confine(`x~+~y',~\{x:~3,~y:~6\})} returns 9.
+\item[{\tt confine(exprSrc, endowments)}] takes the source code string for a SES expression and an {\tt endowments} record. It evaluates the expression in a lexical environment consisting the the SES whitelisted (powerless) global variables and the properties of this endowments record. For example, {\tt confine(`x~+~y',~\{x:~3,~y:~6\})} returns 9. 
 
 
 \end{description}
@@ -183,13 +181,13 @@ As stated in the introduction, to realize electronic rights, we need a distribut
 
 \paragraph{Communicating Event-Loop Concurrency}
 
-On both the browser and the server, JavaScript's de-facto concurrency model is based on ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. ``node.js'', the most widespread server-side JavaScript environment, is based on a similar model, although on the server the focus is less on UI and more on asynchronous networking and file I/O.
+On both the browser and the server, JavaScript's de-facto concurrency model is based on ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. NodeJS, the most widespread server-side JavaScript environment, is based on a similar model, although on the server the focus is less on UI and more on asynchronous networking and file I/O.
 
 In its most general form, an event loop consists of an event queue and a set of event handlers. The event loop processes events one by one from its queue by dispatching to the appropriate event handler. In JavaScript, event handlers are usually functions registered as callbacks on certain events (e.g. button clicks or incoming XHR responses).
 
 The processing of a single event is called a \emph{turn} of the event loop. Processing an event usually entails calling a callback function, which then runs to completion, without any interruption. Thus, turns are the smallest unit of interleaving.
 
-A system of communicating event loops consists of multiple event loops (in the same or distributed address spaces) that communicate with each other solely by means of asynchronous message passing. The Web Workers API enables such communication among multiple isolated event loops within the same browser. On a distributed scale, a JavaScript webpage communicating with a node.js server using asynchronous XHR requests or WebSockets is another example of two communicating event loops.
+A system of communicating event loops consists of multiple event loops (in the same or distributed address spaces) that communicate with each other solely by means of asynchronous message passing. The Web Workers API enables such communication among multiple isolated event loops within the same browser. On a distributed scale, a JavaScript webpage communicating with a NodeJS server using asynchronous XHR requests or WebSockets is another example of two communicating event loops.
 
 Dr. SES builds upon communicating event loops because this concurrency model provides adequate support for plan coordination~\cite{miller:strangers}. That is, the model makes it manageable for objects to maintain their invariants in the face of concurrent (interleaved) requests made by multiple clients.
 
@@ -207,25 +205,21 @@ We introduce a new type of object, called a Promise, to represent both the outco
 
 A fulfilled or rejected promise is also called a \emph{resolved} promise.
 
-The function {\tt Q(target)} returns a promise for {\tt target}. If {\tt target} is already a promise, that same promise is returned. Otherwise, {\tt Q(target)} returns a fulfilled promise designating {\tt target}.
+\begin{description*}
+\item[{\tt var tP = Q(target)}] assigns to {\tt tP} a promise for {\tt target}. If {\tt target} is already a promise, that same promise is assigned. Otherwise, {\tt tP} is a fulfilled promise designating {\tt target}.
 
-Promise objects provide a method called ``{\tt then}'' that allows eventual access to the promise's resolution. Its signature is:
+\item[{\tt var resultP = tP.then( (v) => result1, (e) => result2 )}] provides eventual access to {\tt tP}'s resolution. It takes two callback arguments, a success callback and an optional failure callback. It registers these callbacks to be called back in a later turn after the promise is resolved. If the promise was fulfilled with a value {\tt v}, then {\tt success(v)} is called. If the promise was rejected with an error {\tt e}, then {\tt failure(e)} is called. {\tt resultP} is a promise for either of the callbacks' {\tt result} value. 
+\end{description*}
 
-\begin{verbatim}
-promise.then(success(v) => result, failure(e) => result) => resultP
-\end{verbatim}
+If the callback invoked by {\tt then} throws an error, that error is used to reject {\tt resultP}. This propagation of errors along chains of dependent promises is called rejected promise contagion~\cite{miller:strangers}, and it is the asynchronous analogue of propagating exceptions up the call stack. If the failure callback is missing,  rejecting {\tt tP} will automatically eventually reject {\tt resultP} with the same reason.
 
-This registers the functions {\tt success} and {\tt failure} to be called back in a later turn, when {\tt promise} is resolved. If the promise was fulfilled with a value {\tt v}, then {\tt success(v)} is called. If the promise was rejected with an error {\tt e}, then {\tt failure(e)} is called.
-
-{\tt then} itself returns {\tt resultP}, a promise for either of the callbacks' {\tt result} value. If the callback itself throws an error, that error is used to reject {\tt resultP}. This propagation of errors along chains of dependent promises is called rejected promise contagion~\cite{miller:strangers}, and it is the asynchronous analogue of propagating exceptions up the call stack.
-
-The {\tt failure} callback is optional. If missing, then rejecting {\tt promise} will automatically eventually reject {\tt resultP} with the same reason.
-
-To make matters more concrete, if {\tt pointP} is a promise for a local {\tt point} object, we may construct a derived point as follows:
+To make matters more concrete, if {\tt pointP} is a promise for a local {\tt point} object, we may construct a derived point promise as follows:
 
 \begin{verbatim}
-var newP = pointP.then((point) => point.add(makePoint(1,2)); });
+var newP = pointP.then((point) => point.add(makePoint(1,2)));
 \end{verbatim}
+
+
 
 \paragraph{Immediate call and eventual send}
 
@@ -256,7 +250,7 @@ Primitive values such as strings and number are \emph{pass-by-copy}---when passe
 We serialize pass-by-reference objects using unguessable HTTPS URLs (also called web-keys~\cite{Close:Webkeys}). Such a reference may look like {\tt https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment (everything after the {\tt \#}) is a random character string that uniquely identifies an object on the {\tt example.com} server. We use unguessable secrets for remote object references because of a key similarity between secrets and object references: If you do not know an unguessable secrets, you can only come to know it if somebody else who knows the secret chooses to share it with you.
 
 \begin{description*}
-\item[{\tt Q.passByCopy(record)}] will override this default, marking {\tt record} as pass-by-copy, so that the record will be shallow copied to the destination, resulting in a record with the same property names. The values of these properties get serialized according to these same argument passing rules.
+\item[{\tt Q.passByCopy(record)}] will override this default, marking {\tt record} as pass-by-copy, so that the record will be shallow-copied to the destination, resulting in a record with the same property names. The values of these properties get serialized according to these same argument passing rules.
 
 \item[{\tt Q.promise( (resolve,reject) => (...) )}] returns a fresh promise which is initially pending. It immediately calls the argument function with two functions, conventionally named {\tt resolve} and {\tt reject}, that can be used to either resolve or reject this new promise explicitly. 
 
@@ -296,13 +290,13 @@ For the purposes of Dr. SES, the Ken platform is best integrated directly into t
 
 Further, thanks to the exactly-once message delivery guarantees, eventual message sends made using the {\tt !} operator are highly reliable. One assumption that Ken does make is that all Ken processes eventually recover. To Ken, a permanently crashed client is indistinguishable from a very slow client. Thus, while Ken guarantees exactly-once message delivery, it is still up to the application to do its own failure handling if it does not receive a response within a given period of time (e.g. using timeouts).
 
-To date, there exist two implementations of the Ken protocol, one in C (CKen~\cite{Yoo:CKen}) and one in Java (WaterKen~\cite{Close:Waterken}). Our goal is to integrate node.js with Ken, leading to a platform we tentatively call NodeKen.\footnote{
+To date, there exist two implementations of the Ken protocol, one in C (CKen~\cite{Yoo:CKen}) and one in Java (WaterKen~\cite{Close:Waterken}). Our goal is to integrate NodeJS with Ken, leading to a platform we tentatively call NodeKen.\footnote{
 %
-At the time of writing, NodeKen does not yet exist. We are actively working on integrating the CKen implementation with the v8 JavaScript virtual machine, upon which node.js is based. See \url{https://github.com/supergillis/v8-ken}.
+At the time of writing, NodeKen does not yet exist. We are actively working on integrating the CKen implementation with the v8 JavaScript virtual machine, upon which NodeJS is based. See \url{https://github.com/supergillis/v8-ken}.
 %
 } NodeKen enables distributed orthogonal persistence of server-side JavaScript programs.
 
-At this point, we should clarify that it is not our aim to embed Ken into the browser. NodeKen would be a stand-alone Javascript environment, like node.js. This leads to two types of Dr. SES environments: Dr. SES in the browser runs in an ephemeral environment: this environment ceases to exist when the user navigates to a different page, or closes the page. Objects and object references in such environments are not persistent. Dr. SES on NodeKen runs in a persistent environment: all application state is persistent.
+At this point, we should clarify that it is not our aim to embed Ken into the browser. NodeKen would be a stand-alone Javascript environment, like NodeJS. This leads to two types of Dr. SES environments: Dr. SES in the browser runs in an ephemeral environment: this environment ceases to exist when the user navigates to a different page, or closes the page. Objects and object references in such environments are not persistent. Dr. SES on NodeKen runs in a persistent environment: all application state is persistent.
 
 Following the philosophy of WaterKen~\cite{Close:Waterken}, we expect it to be common for ephemeral and persistent Dr. SES environments to communicate with each other, where the ephemeral environment (inside the browser) primarily deals with UI and the persistent environment stores durable application state, a distributed form of the Model-View-Controller pattern. In the remainder of this paper, we assume that all Dr. SES code runs in a persistent Dr. SES environment.
 
