@@ -131,11 +131,11 @@ JavaScript is a complex language, but this paper depends only on a small subset 
 The following five lines all define a one parameter function which returns twice its parameter. All bind a local variable named ``{\tt double}'' to this function. The first two lines are of historic interest only. This paper uses only the arrow function syntax of the last three lines.
 
 \begin{lstlisting}[language=JavaScript,numbers=none]
-  function double(n) { return n+n; }        // old function decl
+  function double(n) { return n+n; }                   // old function decl
   var double = function(n) { return n+n; }; // old function expr
-  var double = (n) => { return n+n; };   // ES6 arrow function
-  var double = (n) => n+n;    // non-"{" expr implicitly returned
-  var double = n => n+n;      // parens optional if one param
+  var double = (n) => { return n+n; };                 // ES6 arrow function
+  var double = (n) => n+n;               // non-"{" expr implicitly returned
+  var double = n => n+n;                 // parens optional if one param
 \end{lstlisting}
 
 \paragraph{Records.} 
@@ -459,11 +459,11 @@ This success callback in the {\tt deposit} method implicitly returns undefined, 
 \begin{lstlisting}[language=javascript]
 var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
   var makeEscrowPurseP = Q.join(srcPurseP ! makePurse, 
-                                   dstPurseP ! makePurse);
+                                          dstPurseP ! makePurse);
   var escrowPurseP = makeEscrowPurseP ! ();
 
   Q(decisionP).then(                                    // setup phase 2
-    _       => { dstPurseP ! deposit(amount, escrowPurseP); },
+    _        => { dstPurseP ! deposit(amount, escrowPurseP); },
     reason => { srcPurseP ! deposit(amount, escrowPurseP); });
     
   return escrowPurseP ! deposit(amount, srcPurseP);  // phase 1
@@ -512,7 +512,7 @@ By a protocol whose details appear below, Alice sends this ``{\tt a}'' object to
 
 If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to have been deposited into her {\tt a.stockDstP}. If this promise becomes rejected, the exchange failed, and she should expect her \$10 to promptly\footnote{
 %
-``promptly'' in this usage might still be arbitrarily delayed by crashed machines and partitioned networks. This particular case is prompt once the money issuer is reachable from the escrow exchange agent.
+``promptly'' in this usage might still be arbitrarily delayed by certain crashed machines and network partitions. This particular case is prompt once the money issuer is reachable from the escrow exchange agent.
 %
 } reappear in her {\tt a.moneySrcP}. In the meantime, if she gets impatient and would rather not continue waiting, she can call her {\tt cancel} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.\footnote{
 %
