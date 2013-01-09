@@ -93,7 +93,7 @@ We are working towards turning JavaScript into such a fabric. JavaScript is alre
 %
 The official standards name for JavaScript is ``EcmaScript''.
 %
-} We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 42 lines of JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
+} We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 42 lines of JavaScript code. We also present a generic contract host, able to host this contract and others, in only 37 lines.
 
 Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed secure programming in JavaScript as effortless as possible. Aside from any other utility that these smart contracts have, they serve as a challenge problem for any general purpose secure distributed programming platform. Much of the design of Dr. SES
 %
@@ -104,13 +104,9 @@ was shaped by examining what was needed to be able to express such contracts thi
 
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
-Dr. SES is a platform for distributed, resilient and secure computing, layered on EcmaScript. How do these ingredients support electronic rights and contracts?
+Dr. SES is a platform for distributed, resilient and secure computing, layered on JavaScript. How do these ingredients support electronic rights and contracts?
 
-Dr. SES is layered on top of EcmaScript because it is widely deployed, used, and understood.
-\bnote{Tom}{Preceding sentence feels lost. Transition too abrupt?}
-
-JavaScript is not a distributed programming language. In the browser, a large number of APIs are available to scripts to communicate with servers and other frames, but these APIs do not operate at the level of individual objects. That is why Dr. SES builds on the Q library to extend the JavaScript language proper with a handful of features to support least-authority distributed programming at the level of individual objects and messages.
-\bnote{Tom}{Least-authority: explain or remove?}
+The participants in a contract are typically represented by mutually suspicious machines communicating over open networks. JavaScript is not a distributed programming language. In the browser, a large number of APIs are available to scripts to communicate with servers and other frames, but these APIs do not operate at the level of individual objects. That is why Dr. SES builds on the Q library \bnote{Mark}{merge best of Kris' and Mark's Q library} to extend the JavaScript language proper with a handful of features to support distributed programming at the level of individual objects and messages.
 
 In an architecture that aims to express electronic rights or contracts, security must play a key role. Dr. SES builds upon the Q library to support distributed cryptographic capabilities, and upon the SES library to support local object-capabilities. The latter allows Dr. SES programs to safely execute mobile code from untrusted parties.
 % without fear of granting excess privileges to that piece of code.
@@ -127,8 +123,8 @@ Server-side Dr. SES programs periodically checkpoint their state, so that in the
 
 \subsection{Just Enough JavaScript}
 
-JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. For the sake of brevity, this paper borrows one syntactic convenience proposed for ES6, \emph{arrow functions}~(``{\tt =>}''), and one proposed for ES7, the \emph{eventual-send operator}~(``{\tt !}'').\bnote{Tom}{ES6,ES7: ES5 abbreviation no longer introduced. Also, dependency on strict-mode?}
- Expanding away these conveniences, all the code here is working ES5 code, and is available at \myurl{code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} and its {\tt contract} subdirectory.
+JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. For the sake of brevity, this paper borrows one syntactic convenience proposed for ES6, \emph{arrow functions}~(``{\tt =>}''), and one proposed for ES7, the \emph{eventual-send operator}~(``{\tt !}'').\bnote{Tom}{ES6,ES7: ES5 abbreviation no longer introduced. Also, dependency on strict-mode? All code in this paper in ES5-strict}
+ Expanding away these conveniences, all the code here is working ES5 strict-mode code, and is available at \myurl{code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} and its {\tt contract} subdirectory.
 
 \paragraph{Arrow functions.} 
 
@@ -191,9 +187,9 @@ SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is
 
 \item[{\tt Nat(allegedNumber)}] tests whether {\tt allegedNumber} is indeed a primitive number, and whether it is a non-negative integer (a natural number) within the contiguous range of exactly representable integers in JavaScript. If so, it returns {\tt allegedNumber}. Otherwise it throws an error.
 
-\item[{\tt var amp = WeakMap()}] assigns to {\tt amp} a new empty weak map. WeakMaps are an ES6 extension (emulated by SES on ES5 browsers). Ignoring space usage, {\tt amp} is simply an object-identity-keyed table. {\tt amp.set(obj, val)} associates {\tt obj}'s identity as key with {\tt val} as value, so {\tt amp.get(obj)} returns {\tt val}, {\tt amp.has(obj)} returns true, and {\tt amp.delete(obj)} removes this entry. These methods use only {\tt obj}'s identity without interacting with {\tt obj}.
+\item[{\tt var m = WeakMap()}] assigns to {\tt m} a new empty weak map. WeakMaps are an ES6 extension (emulated by SES on ES5 browsers). Ignoring space usage, {\tt m} is simply an object-identity-keyed table. {\tt m.set(obj, val)} associates {\tt obj}'s identity as key with {\tt val} as value, so {\tt m.get(obj)} returns {\tt val}, {\tt m.has(obj)} returns true, and {\tt m.delete(obj)} removes this entry. These methods use only {\tt obj}'s identity without interacting with {\tt obj}.
 
-\item[{\tt confine(exprSrc, endowments)}] takes the source code string for a SES expression and an {\tt endowments} record. It evaluates the expression in a lexical environment consisting of the SES whitelisted (powerless) global variables and the properties of this endowments record. For example, {\tt confine(`x~+~y',~\{x:~3,~y:~6\})} returns 9.
+\item[{\tt confine(exprSrc, endowments)}] takes the source code string for a SES expression and an {\tt endowments} record. It evaluates the expression in a new lexical environment consisting of the SES whitelisted (powerless) global variables and the properties of this endowments record. For example, {\tt confine(`x~+~y',~\{x:~3,~y:~6\})} returns 9. \bnote{Mark}{can't define new top level variables}
 
 
 \end{description}
@@ -376,13 +372,19 @@ The local unforgeable object reference and the remote unguessable reference repr
 Object references as rights have certain properties that distinguish them from the more familiar rights in society. These differences highlight certain dimensions in which rights can differ. Object references are sharable, specific, opaque, and exercisable. We contrast this with money~\cite{fox_property_2008} as a right that is exclusive, fungible, measurable, and symbolic.
 
 
-\section{Contracts use Electronic Rights}
+\section{Money as an Electronic Right}
+
+Contracts generally manipulate rights. The participants in a contract each bring to it those rights the contract will manipulate. The logic of the contract together with the decisions of the players determines which derived rights they each walk away with. The simplest example is a direct trade. Since half the rights exchanged in most trades are money, we start with money. 
+
+Figure~\ref{makeMint}  is our implementation of a money-like rights issuer, using only elements of Dr. SES explained above. To explain how it works, it is best to start with how it is used. Say Alice wishes to buy something from Bob for \$10. The three parties involved would be Alice, Bob, and a \$ issuer, which we will informally call a bank. The starting assumptions are that Alice and Bob do not trust each other, the bank does not trust either Alice or Bob, and Alice and Bob trust the bank with their money but with nothing else. In this scenario, Alice is willing to risk her \$10 on the possibility of Bob's non-delivery. But Bob wants to be sure he's been paid before he releases the good in exchange.
+
+What do these relationships mean in terms of a configuration of persistent objects? Say Alice owns (or is) a set of objects on machine A, Bob on machine B, and the bank on machine C. In order for Alice to make a {\tt buy} request of Bob, we assume one of Alice's objects already has a remote reference to one of Bob's objects. Alice's trust of the bank with her money is represented by a remote reference to an object within the bank representing Alice's account at the bank. We refer to such objects as \emph{purses}. The one for Alice's account is Alice's \emph{main purse}. And likewise for Bob. Where do these initial account purses come from?
 
 \begin{figure}[t]
 \begin{minipage}[t]{0.54\linewidth}
 \begin{lstlisting}[language=javascript]
 var makeMint = () => {
-  var amp = WeakMap();
+  var m = WeakMap();
   var makePurse = () => mint(0);
   
   var mint = balance => {
@@ -392,12 +394,12 @@ var makeMint = () => {
       deposit: (amount, srcP) =>
         Q(srcP).then(src => {
           Nat(balance + amount);
-          amp.get(src)(Nat(amount)); 
+          m.get(src)(Nat(amount)); 
           balance += amount;
         }),
     });
     var decr = amount => { balance = Nat(balance - amount); };
-    amp.set(purse, decr);
+    m.set(purse, decr);
     return purse;
   };
   return mint;
@@ -412,12 +414,6 @@ var makeMint = () => {
 \label{makeMint}
 \end{figure}
 
-Contracts generally manipulate rights. The participants in a contract each bring to it those rights the contract will manipulate. The logic of the contract together with the decisions of the players determines which derived rights they each walk away with. The simplest example is a direct trade. Since half the rights exchanged in most trades are money, we start with money. 
-
-Figure~\ref{makeMint}  is our implementation of a money-like rights issuer, using only elements of Dr. SES explained above. To explain how it works, it is best to start with how it is used. Say Alice wishes to buy something from Bob for \$10. The three parties involved would be Alice, Bob, and a \$ issuer, which we will informally call a bank. The starting assumptions are that Alice and Bob do not trust each other, the bank does not trust either Alice or Bob, and Alice and Bob trust the bank with their money but with nothing else. In this scenario, Alice is willing to risk her \$10 on the possibility of Bob's non-delivery. But Bob wants to be sure he's been paid before he releases the good in exchange.
-
-What do these relationships mean in terms of a configuration of persistent objects? Say Alice owns (or is) a set of objects on machine A, Bob on machine B, and the bank on machine C. In order for Alice to make a {\tt buy} request of Bob, we assume one of Alice's objects already has a remote reference to one of Bob's objects. Alice's trust of the bank with her money is represented by a remote reference to an object within the bank representing Alice's account at the bank. We refer to such objects as \emph{purses}. The one for Alice's account is Alice's \emph{main purse}. And likewise for Bob. Where do these initial account purses come from?
-
 For each currency the bank wishes to manage, the bank calls {\tt makeMint()} once to get a {\tt mint} function for making purses holding units of that currency. When Alice opens an account with, say \$100 in cash, the bank calls {\tt mint(100)} on its \$ mint, to make Alice's main purse. The bank then gives Alice a persistent remote reference to this purse object within the bank.
 
 For Alice to pay Bob, she sets up a \emph{payment purse}, deposits \$10 into it from her main purse, and sends it to Bob in a buy request, together with a description of what she wishes to buy.
@@ -427,7 +423,7 @@ For Alice to pay Bob, she sets up a \emph{payment purse}, deposits \$10 into it 
   var goodP = ackP.then(_ => bobP ! buy(desc, paymentP));
 \end{lstlisting}
 
-On the diagram in Figure~\ref{makeMint}, each {\tt makeMint} call results in a layer with its own ({\tt mint}, {\tt amp}) pair representing a distinct currency. Each {\tt mint} call results in a nested layer with its own ({\tt purse}, {\tt decr}, {\tt balance}) triple. On line 16 of the code, we see that each {\tt purse} to {\tt decr} mapping is also entered into the {\tt amp} table shared by all purses of the same currency. Alice's main purse is on the bottom purse layer. Bob's is on the top layer. Alice's payment purse, being sent to Bob in the buy message, is in the middle layer.
+On the diagram in Figure~\ref{makeMint}, each {\tt makeMint} call results in a layer with its own ({\tt mint}, {\tt m}) pair representing a distinct currency. Each {\tt mint} call results in a nested layer with its own ({\tt purse}, {\tt decr}, {\tt balance}) triple. On line 16 of the code, we see that each {\tt purse} to {\tt decr} mapping is also entered into the {\tt m} table shared by all purses of the same currency. Alice's main purse is on the bottom purse layer. Bob's is on the top layer. Alice's payment purse, being sent to Bob in the buy message, is in the middle layer.
 
 Bob receives this request at the following {\tt buy} method:
 
@@ -443,7 +439,7 @@ Bob's {\tt buy} method handles a message from untrusted clients such as Alice, a
 
 If the bank's {\tt deposit} method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then Bob knows he has obtained \emph{exclusive} access to a \emph{fungible} and \emph{measurable} quantity of a given currency at a given bank. In this case, the success callback of the {\tt .then} above gets called, returning the {\tt good}, resolving Alice's pending {\tt goodP} promise.
 
-The interesting work done by {\tt deposit} starts on line 11, where {\tt deposit} looks up the alleged payment purse in the {\tt amp} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error. If this lookup succeeds, it finds the {\tt decr} function for decrementing that purse's {\tt balance}, which it calls with the amount to withdraw. If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
+The interesting work done by {\tt deposit} starts on line 11, where {\tt deposit} looks up the alleged payment purse in the {\tt m} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error. If this lookup succeeds, it finds the {\tt decr} function for decrementing that purse's {\tt balance}, which it calls with the amount to withdraw. If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
 
 This is the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no locally observable failure possibilities remain. The assignment decrements the payment purse's {\tt balance} by {\tt amount}, and {\tt decr} returns. Line 12 increments the balance of the purse being deposited into.
 
@@ -517,7 +513,7 @@ On lines 13 and 14 of Figure~\ref{escrowExchange} the {\tt escrowExchange} contr
 
 The arguments to {\tt Q.all} are the results of two calls to {\tt transfer}. The first call to {\tt transfer} sets up activity whose purpose is to transfer money from Alice to Bob. The second call's purpose is to transfer stock from Bob to Alice. Each call to transfer returns a promise whose fulfillment or rejection indicates whether it has become confident that this one-way transfer of erights would succeed. If both transfers become confident (before any cancellations win the race), then the overall decision is to proceed. If either transfer indicates failure, by rejecting the promise it has returned, then, via {\tt Q.all}, {\tt decisionP} becomes rejected.\footnote{
 %
-This is the pattern for promise-based two phase commit enhanced with the possibility of cancellation, where the call to {\tt escrowExchange} creates a transaction coordinator, and each of its calls to {\tt transfer} creates a participant.}
+This pattern implements two phase commit enhanced with the possibility of cancellation, where the call to {\tt escrowExchange} creates a transaction coordinator, and each of its calls to {\tt transfer} creates a participant.}
 
 We do not feed the cancellation promises directly into the race, as Alice could then fulfill the cancellation promise, causing the race to signal a decision to proceed with the exchange, even though Alice's money has not been escrowed, potentially giving Bob's stock to Alice for free. Instead, once the cancellation promise has been either fulfilled or rejected, the promise returned by {\tt failOnly} will only become rejected. Only the {\tt Q.all} can win the race with a success.
 
@@ -533,10 +529,10 @@ If it simply asks Alice's purse for a new empty purse ({\tt srcPurseP ! makePurs
 \label{sec:contract_host}
 
 \begin{figure}[htbp]
-\begin{minipage}[t]{0.56\linewidth}
+\begin{minipage}[t]{0.52\linewidth}
 \begin{lstlisting}[language=javascript]
 var makeContractHost = () => {
-  var amp = WeakMap();
+  var m = WeakMap();
 
   return def({
     setup: contractSrc => {
@@ -551,14 +547,14 @@ var makeContractHost = () => {
         tokens[i] = token;
         var resolveArg;
         argPs[i] = Q.promise(r => { resolveArg = r; });
-        amp.set(token, (allegedSrc, allegedI, arg) => {
+        m.set(token, (allegedSrc, allegedI, arg) => {
           if (contractSrc !== allegedSrc) {
             throw new Error('unexpected contract: '+contractSrc);
           }
           if (i !== allegedI) {
             throw new Error('unexpected side: '+i);
           }
-          amp.delete(token);
+          m.delete(token);
           resolveArg(arg);
           return resultP;
         });
@@ -566,18 +562,19 @@ var makeContractHost = () => {
       for (var i = 0; i < contract.length; i++) {
         addParam(i, def({}));
       }
-      resolve(Q.all(argPs).then(args => contract.apply(undefined, args)));
+      resolve(Q.all(argPs).then(
+        args => contract.apply(undefined, args)));
       return tokens;
     },
     play: (tokenP, allegedSrc, allegedI, arg) => Q(tokenP).then(
-      token => amp.get(token)(allegedSrc, allegedI, arg))
+      token => m.get(token)(allegedSrc, allegedI, arg))
   });
 };
 \end{lstlisting}
 \end{minipage}
 \begin{minipage}[t]{0.48\linewidth}
 \vspace{0pt}
-\includegraphics[scale=0.28]{5players.pdf}
+\includegraphics[scale=0.26]{5players.pdf}
 \end{minipage}
 \caption{The Contract Host}
 \label{makeContractHost}
@@ -596,7 +593,7 @@ To engage in the escrow exchange contract, Alice and Bob had to agree on the iss
 
 Figure~\ref{makeContractHost} shows the code for a generic contract host. It is able to host any contract formulated, as our escrow exchange contract is, as a function, taking one argument from each player and returning the outcome of the contract as a whole. But setting up a contract is tricky, as it involves a necessary asymmetry among the players. One of the players, say Bob, must initiate a new live contract instance, by sending the contract's code to the contract host. At this point, Bob is the only one who knows both this contract instance and that he'd like to invite Alice to participate in \emph{this} instance. If Bob simply sent to Alice a reference to those objects on the contract host that enables Alice to play, Alice would not know what she's received, since she received it from Bob whom she does not trust. She does trust the contract host, and these objects are on the contract host, but so are the objects corresponding to all the other contracts this host is initiating or running. The connection of Alice to this contract instance must be at Bob's initiation, but Alice's confidence that she's playing the contract she thinks she is much be rooted in her prior trust in the contract host.
 
-Our contract host is an object with two methods, {\tt setup} and {\tt play}. Bob sets up the contract instance by calling {\tt setup} with the source code for the contract function in question, e.g., {\tt escrowExchange}. At line 31, {\tt setup} returns an array of unique unforgeable tokens, one for each argument to the function. Bob's invitation to Alice communicates this token, the source code for the contract he wishes Alice to play, the argument index indicating what side of the contract Alice is to play, and the contract host in question.
+Our contract host is an object with two methods, {\tt setup} and {\tt play}. Bob sets up the contract instance by calling {\tt setup} with the source code for the contract function in question, e.g., {\tt escrowExchange}. At line 32, {\tt setup} returns an array of unique unforgeable tokens, one for each argument to the function. Bob's invitation to Alice communicates this token, the source code for the contract he wishes Alice to play, the argument index indicating what side of the contract Alice is to play, and the contract host in question.
 
 If Alice decides she'd like to play this contract, she formulates her argument object as above, and sends it in a {\tt play} request to the contract host along with the token, the alleged contract source code, and the alleged side she is to play. If all of this checks out, and this token has not previously been redeemed, then this token gets used up and Alice's argument is remembered until the arguments for the other players arrive, and Alice receives a promise for the outcome of the contract. Once all arguments are present, the contract function is called and its result is used to resolve the previously returned promise.
 
