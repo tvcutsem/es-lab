@@ -74,10 +74,9 @@
 \maketitle    
 
 \begin{abstract}
-Smart Contracts are an electronic form of contract that allows mutually suspicious parties to cooperate safely. Such contracts must be expressed in a computational medium, a programming language. This paper is concerned with how such contracts can be specified elegantly and executed safely in JavaScript.
+Smart Contracts are an electronic form of contract that enable mutually suspicious parties to cooperate safely. Such contracts must be expressed in a computational medium, a programming language. This paper is concerned with how such contracts can be specified elegantly and executed safely in JavaScript.
 
-Smart contracts need a distributed, secure, persistent, and ubiquitous computational fabric. JavaScript provides the ubiquity, but it must be significantly extended to deal with the other aspects. In the first part of this paper, we report on our progress in turning JavaScript into such a fabric. Subsequently, assuming such a platform, we describe an electronic escrow exchange contract implemented in 42 lines of JavaScript code.
-\bnote{Mark}{Explain that it is a Progress Report here rather than in title.}
+Smart contracts need a distributed, secure, persistent, and ubiquitous computational fabric. JavaScript provides the ubiquity, but it must be significantly extended to deal with the other aspects. The first part of this paper is a progress report on our efforts to turn JavaScript into such a fabric. Subsequently, assuming such a platform, we describe an electronic escrow exchange contract implemented in 42 lines of JavaScript code.
 
 \keywords{security, distributed objects, capabilities, smart contracts}
 \end{abstract}
@@ -95,11 +94,12 @@ The official standards name for JavaScript is ``EcmaScript''.
 %
 } We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 42 lines of JavaScript code. We also present a generic contract host, able to host this contract and others, in only 37 lines.
 
-Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed secure programming in JavaScript as effortless as possible. Aside from any other utility that these smart contracts have, they serve as a challenge problem for any general purpose secure distributed programming platform. Much of the design of Dr. SES
+Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed secure programming in JavaScript as effortless as possible. But much of the design of Dr. SES
 %
 %and its predecessors~\cite{tribble:joule,miller:ode,Close:Waterken} 
 %
-was shaped by examining what was needed to be able to express such contracts this simply. 
+was shaped by examining what was needed to be able to express smart contracts simply. Taking a rights-based approach to local and distributed computing, we believe we designed a better general purpose platform as well as one naturally suited for expressing new kinds of rights and contracts.
+
 \bnote{Tom}{Should we give an overview of the paper here?}
 
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
@@ -510,11 +510,11 @@ Since the situation is now symmetric, we explain the progression of events from 
 
 By a protocol whose details appear below, Alice sends this ``{\tt a}'' object to the escrow exchange agent, for it to use as the first argument in a call to {\tt escrowExchange}, which initiates this specific contract between Alice and Bob. The {\tt escrowExchange} function returns a promise for the outcome of the contract, which the escrow exchange agent returns to Alice. 
 
-If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to have been deposited into her {\tt a.stockDstP}. If this promise becomes rejected, the exchange failed, and she should expect her \$10 to promptly\footnote{
+If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to have been deposited into her {\tt a.stockDstP}. If this promise becomes rejected, the exchange failed, and she should expect her \$10 to reappear in her {\tt a.moneySrcP} promptly\footnote{
 %
-``promptly'' in this usage might still be arbitrarily delayed by certain crashed machines and network partitions. This particular case is prompt once the money issuer is reachable from the escrow exchange agent.
+Once the money issuer is reachable from the escrow exchange agent.
 %
-} reappear in her {\tt a.moneySrcP}. In the meantime, if she gets impatient and would rather not continue waiting, she can call her {\tt cancel} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.\footnote{
+}. In the meantime, if she gets impatient and would rather not continue waiting, she can call her {\tt cancel} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.\footnote{
 %
 Once the escrow exchange agent is reachable from Alice. 
 }
