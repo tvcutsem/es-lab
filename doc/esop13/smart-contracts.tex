@@ -95,6 +95,13 @@ The official standards name for JavaScript is ``EcmaScript''.
 %
 } We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 42 lines of JavaScript code. We also present a generic contract host, able to host this contract and others, in only 36 lines.
 
+Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed secure programming in JavaScript as effortless as possible. Aside from any other utility that these smart contracts have, they serve as a challenge problem for any general purpose secure distributed programming platform. Much of the design of Dr. SES
+%
+%and its predecessors~\cite{tribble:joule,miller:ode,Close:Waterken} 
+%
+was shaped by examining what was needed to be able to express such contracts this simply. 
+
+
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
 
 Dr. SES is a platform for distributed, resilient and secure computing, layered on EcmaScript. How do these ingredients support electronic rights and contracts?
@@ -111,7 +118,6 @@ Server-side Dr. SES programs periodically checkpoint their state, so that in the
 
 %Objects and object references in Dr. SES are always persistent, meaning that they survive arbitrary failures by default.
 
-Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed secure programming in JavaScript as effortless as possible. Given such a platform, it then becomes possible to implement contracts with very little code. This is precisely what we will demonstrate in the second part of this paper, after explaining Dr. SES in more detail.
 
 
 
