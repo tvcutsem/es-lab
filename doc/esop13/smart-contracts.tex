@@ -163,7 +163,7 @@ The remainder of Dr. SES can be seen as just extending this object model across 
 \begin{description*}
 \item[SES] Don't worry about script injection. Mobile code can't do anything it isn't authorized to do. Functions and objects are encapsulated. Objects can invoke objects they have a reference to, but cannot tamper with those objects.
 
-\item{Q} Don't worry about memory races or deadlocks, they can't happen. Objects can be local or remote. You already use the familiar infix dot (``{\tt .}'') to access the object on its left \emph{immediately}, as in {\tt pt.getX()}. Anywhere you can write a dot, you can use ``{\tt !}'' to access that object \emph{eventually}, as in {\tt pt ! getX()}. Eventual operations return promises for what the answer will be. If the object is remote or a promise, you can only use ``{!}'' on it.
+\item[Q] Don't worry about memory races or deadlocks, they can't happen. Objects can be local or remote. You already use the familiar infix dot (``{\tt .}'') to access the object on its left \emph{immediately}, as in {\tt pt.getX()}. Anywhere you can write a dot, you can use ``{\tt !}'' to access that object \emph{eventually}, as in {\tt pt ! getX()}. Eventual operations return promises for what the answer will be. If the object is remote or a promise, you can only use ``{!}'' on it.
 
 \item[NodeKen] Don't worry about network partitions or machine crashes. Once the machine comes back up, everything keeps going, so a crash and restart is just a very long (possibly infinite) pause. Likewise, a partitioned network is just a slow network waiting to heal. Once things come back up, every message ever sent will be delivered in order exactly once.
 \end{description*}
@@ -290,57 +290,52 @@ We serialize pass-by-reference objects using unguessable HTTPS URLs (also called
 
 Rights, to be useful, must persist over time. Since object-references are our representation of rights, object references and the objects they designate must persist as well. We have already covered the distributed and secure aspects of Dr. SES. Here, we cover the final aspect of resilience against failures.
 
-\paragraph{Ken}
-
-To introduce resilience, Dr. SES builds upon the Ken platform~\cite{Yoo:CKen}. Ken offers to applications two primary features:
+To introduce resilience, Dr. SES builds upon the Ken middleware~\cite{Yoo:CKen}. Ken assumes applications are represented as distributed communicating event loops, and so aligns well with JavaScript's de-facto execution model. A Ken process is an event loop that executes application-level messages. In addition, Ken provides:
 
 \begin{description*}
-  \item[Reliable messaging] Ken provides primitives to reliably transmit a message exactly once to a recipient process. In addition, multiple messages sent to the same recipient are guaranteed to arrive in the same order (i.e. Ken ensures pair-wise FIFO message ordering).
-  \item[Distributed consistent snapshots] Ken provides a persistent heap for storing application data. All objects stored in this heap will survive failures. Ken further ensures that the snapshots of two or more communicating processes do not grow inconsistent. For example, it is impossible for the sender of a message to record in its snapshot that the message was successfully delivered, while the receiver has no record of having processed that message in its snapshot.
+  \item[Distributed consistent snapshots] Ken provides a persistent heap for storing application data. All objects stored in this heap are persistent. Ken ensures that the snapshots of two or more communicating processes cannot grow inconsistent, by recording messages in flight as part of a process' snapshot.
+%For example, it is impossible for the sender of a message to record in its snapshot that the message was successfully delivered, while the receiver has no record of having processed that message in its snapshot.
+  \item[Reliable messaging] Under the assumption that all Ken processes eventually recover, all messages transmitted between Ken processes are delivered exactly once, in FIFO order. A permanently crashed Ken process is indistinguishable from a very slow process. It is thus still up to the application to do its own failure handling if it does not receive a response within a given period of time.
 \end{description*}
 
-A Ken process can tolerate arbitrary failures in such a way that when an application is restarted after a crash, it is always restored to a previously consistent state. To the process itself, it is as if the crash had never happened. To any of the process's communication partners, the process just seemed slow to respond. A crash will never cause duplicate messages to be delivered, nor does it cause messages ``in flight'' to be lost.
+A set of Ken processes can tolerate arbitrary failures in such a way that when a process is restarted after a crash, it is always restored to a previously consistent state. To the crashed process itself, it is as if the crash had never happened. To any of the process's communication partners, the process just seemed slow to respond. A crash will never cause messages to be dropped or delivered twice.
 
-\paragraph{NodeKen}
-
-For the purposes of Dr. SES, the Ken platform is best integrated directly into the JavaScript runtime. Thus, all Javascript objects born in a Dr. SES environment layered on top of a Ken runtime are persistent by default. Also, any object reference spanning two such Dr. SES environments is persistent: it will survive failures of both the environment holding onto the reference, as well as failures of the environment containing the object designated by the reference.
-
-Further, thanks to the exactly-once message delivery guarantees, eventual message sends made using the {\tt !} operator are highly reliable. One assumption that Ken does make is that all Ken processes eventually recover. To Ken, a permanently crashed client is indistinguishable from a very slow client. Thus, while Ken guarantees exactly-once message delivery, it is still up to the application to do its own failure handling if it does not receive a response within a given period of time (e.g. using timeouts).
-
-To date, there exist two implementations of the Ken protocol, one in C (CKen~\cite{Yoo:CKen}) and one in Java (WaterKen~\cite{Close:Waterken}). Our goal is to integrate NodeJS with Ken, leading to a platform we tentatively call NodeKen.\footnote{
+To achieve orthogonal persistence of JavaScript programs, the Ken middleware must be integrated with the JavaScript runtime. NodeKen is our attempt at layering the NodeJS runtime on top of Ken.\footnote{
 %
-At the time of writing, NodeKen does not yet exist. We are actively working on integrating the CKen implementation with the v8 JavaScript virtual machine, upon which NodeJS is based. See \url{https://github.com/supergillis/v8-ken}.
+At the time of writing, NodeKen does not yet exist. We are actively working on integrating Ken with the v8 JavaScript virtual machine, upon which NodeJS is based. See \url{https://github.com/supergillis/v8-ken}.
 %
-} NodeKen enables distributed orthogonal persistence of server-side JavaScript programs.
+} NodeKen can then be used as a stand-alone JavaScript environment to run persistent server-side Dr. SES programs. It is not our aim to embed Ken into the browser. This leads to two types of Dr. SES environments: Dr. SES in the browser runs in an ephemeral environment: this environment ceases to exist when the user navigates to a different page, or closes the page. Objects and object references in such environments are not persistent. 
 
-At this point, we should clarify that it is not our aim to embed Ken into the browser. NodeKen would be a stand-alone Javascript environment, like NodeJS. This leads to two types of Dr. SES environments: Dr. SES in the browser runs in an ephemeral environment: this environment ceases to exist when the user navigates to a different page, or closes the page. Objects and object references in such environments are not persistent. Dr. SES on NodeKen runs in a persistent environment: all application state is persistent.
+By contrast, Dr. SES on NodeKen runs in a persistent environment. JavaScript objects born in such an environment are persistent by default, as are object references spanning two persistent Dr. SES environments. Eventual message sends made using the {\tt !} operator over persistent references are reliable.
 
-Following the philosophy of WaterKen~\cite{Close:Waterken}, we expect it to be common for ephemeral and persistent Dr. SES environments to communicate with each other, where the ephemeral environment (inside the browser) primarily deals with UI and the persistent environment stores durable application state, a distributed form of the Model-View-Controller pattern. In the remainder of this paper, we assume that all Dr. SES code runs in a persistent Dr. SES environment.
+% it will survive failures of both the environment holding onto the reference, as well as failures of the environment containing the object designated by the reference.
+
+%To date, there exist two implementations of Ken, one in C~\cite{Yoo:CKen} and one in Java (WaterKen~\cite{Close:Waterken}).
+
+Following the philosophy of WaterKen~\cite{Close:Waterken}, a Java web server similarly layered on top of Ken, we expect it to be common for ephemeral and persistent Dr. SES environments to communicate with each other, where the ephemeral environment (inside the browser) primarily deals with UI and the persistent environment stores durable application state, a distributed form of the Model-View-Controller pattern. In the remainder of this paper, we assume that all Dr. SES code runs in a persistent Dr. SES environment.
 
 \paragraph{Implementation} 
 
-We briefly sketch how Ken achieves distributed consistent snapshots. Ken assumes communicating event loops, and so aligns well with JavaScript's de-facto execution model. A Ken process is an event loop that executes application-level messages. In addition:
+Ken achieves distributed consistent snapshots as follows:
 
 \begin{itemize*}
-  \item During a turn, all outgoing messages are accumulated in an outgoing message queue. These messages are not yet released to the network.
+  \item During a turn, accumulate all outgoing messages in an outgoing message queue. These messages are not yet released to the network.
   \item At the end of each turn, make a checkpoint of the persistent heap and of all outgoing unacknowledged messages.
   \item After the end-of-turn checkpoint is made, release any new outgoing messages to the network and acknowledge the message processed this turn.
-  \item Outgoing messages are numbered with a sequence number (for duplicate detection and message ordering).
-  \item Unacknowledged outgoing messages are periodically retried (with exponential back-off) until an acknowledgement is received.
-  \item Incoming messages are checked for duplicates. When a duplicate message is detected, it is dropped (not processed) and immediately acknowledged.
+  \item Number outgoing messages with a sequence number (for duplicate detection and message ordering).
+  \item Periodically retry sending unacknowledged outgoing messages (with exponential back-off) until an acknowledgement is received.
+  \item Check incoming messages for duplicates. When a duplicate message is detected, it is dropped (not processed) and immediately acknowledged.
 \end{itemize*}
 
-The key point is that outgoing messages are released, and incoming messages are acknowledged only \emph{after} the message has been fully processed by the receiver \emph{and} the heap state has been checkpointed.
+The key point is that outgoing messages are released, and incoming messages are acknowledged only \emph{after} the message has been fully processed by the receiver \emph{and} the heap state has been checkpointed. The snapshot of a Ken process consists of both the heap and the outgoing message queue. It does not include the runtime stack (which is always empty between turns) nor the incoming message queue.
 
-The snapshot of a Ken process consists of both the heap and the outgoing message queue. It does not include the runtime stack (which is guaranteed to be empty between turns) nor the incoming message queue.
-
-Checkpointing a program's entire state after every event loop turn may be considered costly. The CKen implementation takes care to only store those parts of the heap to disk that are updated during a turn. Further, the availability of cheap low-latency non-volatile memory (such as solid-state drives) has driven down the cost of writing state to ``disk'' to the point that making micro-snapshots after every turn becomes practical.
+Checkpointing a program's entire state after every event loop turn may be considered costly. Ken takes care to only store those parts of the heap to disk that are updated during a turn. Further, the availability of cheap low-latency non-volatile memory (such as solid-state drives) has driven down the cost of writing state to ``disk'' to the point that making micro-snapshots after every turn becomes practical.
 
 \paragraph{Ken and security}
 
-The Ken protocol guarantees distributed snapshots even among mutually suspicious machines. There is nothing an adversarial process can do that will corrupt the distributed snapshots of benign processes.
+The Ken protocol guarantees distributed snapshots even among mutually suspicious machines. An adversarial process cannot corrupt the distributed snapshots of benign processes.
 
-The CKen implementation used to build NodeKen currently does not use an encrypted communications channel to deliver messages between Ken processes. Hence, the authenticity, integrity or confidentiality of incoming messages cannot be guaranteed. In NodeKen, our plan is to actively secure the communications channels between NodeKen processes using a cryptographic library\footnote{
+The implementation of Ken underlying NodeKen currently does not use an encrypted communications channel to deliver messages between Ken processes. Hence, the authenticity, integrity or confidentiality of incoming messages cannot be guaranteed. In NodeKen, our plan is to actively secure the communications channels between NodeKen processes using a cryptographic library\footnote{
 %
 An outline of such a design, due to Brian Warner, is available online: \myurl{eros-os.org/pipermail/cap-talk/2012-September/015386.html}}.
 
