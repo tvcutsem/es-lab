@@ -61,7 +61,6 @@
 \newcommand{\myurlt}[2]{{\href{http://#1~#2}{\tt #1{\twiddle}#2}}}
 \newcommand{\myurlh}[3]{{\href{http://#1#3}{\tt #1#2#3}}}
 
-
 \begin{document}
 \sloppypar
 
@@ -247,7 +246,7 @@ To make matters more concrete, if {\tt pointP} is a promise for a local {\tt poi
 var newP = pointP.then((point) => point.add(makePoint(1,2)));
 \end{lstlisting}
 
-Just like it is useful to compose individual functions into a composite function, it is often useful to combine multiple individual promises into a single promise whose outcome depends on the individual promises. To construct such promise combinators, the {\tt Q.promise} function is used to define promises with a custom resolution strategy. The Q library provides some useful combinators\footnote{These are easily built from the above primitives. Their implementation can be found at \url{http://wiki.ecmascript.org/doku.php?id=strawman:concurrency}.} we use later in the escrow exchange contract:
+Just like it is useful to compose individual functions into a composite function, it is often useful to combine multiple individual promises into a single promise whose outcome depends on the individual promises. To construct such promise combinators, the {\tt Q.promise} function is used to define promises with a custom resolution strategy. The Q library provides some useful combinators\footnote{These are easily built from the above primitives. Their implementation can be found at \myurl{wiki.ecmascript.org/doku.php?id=strawman:concurrency}.} we use later in the escrow exchange contract:
 
 \begin{description*}
 \item[{\tt Q.race(answerPs)}] takes an array of promises, {\tt answerPs}, and returns a promise for the resolution of whichever promise we notice has resolved first. For example, {\tt Q.race([xP,yP]).then(v => print(v))} will cause either the value of {\tt xP} or {\tt yP} to be printed, whichever resolves first. If neither resolves, then neither does the promise returned by {\tt Q.race}. If the first promise to resolve is rejected, the promise returned by {\tt Q.race} is rejected with the same reason.
@@ -380,7 +379,7 @@ Object references as rights have certain properties that distinguish them from t
 \section{Contracts use Electronic Rights}
 
 \begin{figure}[t]
-\begin{minipage}[t]{0.48\linewidth}
+\begin{minipage}[t]{0.54\linewidth}
 \begin{lstlisting}[language=javascript]
 var makeMint = () => {
   var amp = WeakMap();
@@ -534,7 +533,7 @@ If it simply asks Alice's purse for a new empty purse ({\tt srcPurseP ! makePurs
 \label{sec:contract_host}
 
 \begin{figure}[htbp]
-\begin{minipage}[t]{0.48\linewidth}
+\begin{minipage}[t]{0.56\linewidth}
 \begin{lstlisting}[language=javascript]
 var makeContractHost = () => {
   var amp = WeakMap();
