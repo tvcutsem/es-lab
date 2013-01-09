@@ -258,7 +258,7 @@ Promises may designate both local objects, and remote objects belonging to anoth
 
 However, if the promise comes to designate a remote object, it is not possible to resolve the promise to a local reference. Instead, one must interact with the remote object via the promise. Any such interaction must be asynchronous, to ensure that interaction between the event loops as a whole remains asynchronous.
 
-JavaScript provides many operators to interact with an object. Here, we will focus on only three: method calls, function calls, and reading the value of a property. JavaScript has the familiar dot operator to express local, immediate method calls, such as {\tt point.getX()}. We introduce a corresponding infix {\tt !} operator (named the \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
+JavaScript provides many operators to interact with an object. Here, we will focus on only three: method calls, function calls, and reading the value of a property. JavaScript has the familiar dot operator to express local, immediate method calls, such as {\tt point.getX()}. We introduce a corresponding infix ``{\tt !}'' operator (named the \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
 
 The {\tt !} operator can be used anywhere the dot operator can be used. If {\tt pointP} is a promise for a {\tt point}, then {\tt pointP ! getX()} denotes an eventual send, which enqueues a request to call the {\tt getX()} method in the event loop of {\tt point}. The syntax {\tt fP ! (x,y)}, where {\tt fP} is a promise designating a function {\tt f}, enqueues a request to call {\tt f(x,y)} in the event loop of {\tt f}. The {\tt !} operator is actually syntactic sugar for calling a method on the promise object itself:
 
@@ -290,7 +290,7 @@ We serialize pass-by-reference objects using unguessable HTTPS URLs (also called
 
 Rights, to be useful, must persist over time. Since object-references are our representation of rights, object references and the objects they designate must persist as well. We have already covered the distributed and secure aspects of Dr. SES. Here, we cover the final aspect of resilience against failures.
 
-To introduce resilience, Dr. SES builds upon the Ken middleware~\cite{Yoo:CKen}. Ken assumes applications are represented as distributed communicating event loops, and so aligns well with JavaScript's de-facto execution model. A Ken process is an event loop that executes application-level messages. In addition, Ken provides:
+To introduce resilience, Dr. SES builds upon the Ken platform~\cite{Yoo:CKen}. Ken assumes applications are represented as distributed communicating event loops, and so aligns well with JavaScript's de-facto execution model. A Ken process is an event loop that executes application-level messages. In addition, Ken provides:
 
 \begin{description*}
   \item[Distributed consistent snapshots] Ken provides a persistent heap for storing application data. All objects stored in this heap are persistent. Ken ensures that the snapshots of two or more communicating processes cannot grow inconsistent, by recording messages in flight as part of a process' snapshot.
@@ -300,19 +300,19 @@ To introduce resilience, Dr. SES builds upon the Ken middleware~\cite{Yoo:CKen}.
 
 A set of Ken processes can tolerate arbitrary failures in such a way that when a process is restarted after a crash, it is always restored to a previously consistent state. To the crashed process itself, it is as if the crash had never happened. To any of the process's communication partners, the process just seemed slow to respond. A crash will never cause messages to be dropped or delivered twice.
 
-To achieve orthogonal persistence of JavaScript programs, the Ken middleware must be integrated with the JavaScript runtime. NodeKen is our attempt at layering the NodeJS runtime on top of Ken.\footnote{
+To achieve orthogonal persistence of JavaScript programs, the Ken platform must be integrated with the JavaScript runtime. NodeKen is our attempt at layering the NodeJS runtime on top of Ken.\footnote{
 %
 At the time of writing, NodeKen does not yet exist. We are actively working on integrating Ken with the v8 JavaScript virtual machine, upon which NodeJS is based. See \url{https://github.com/supergillis/v8-ken}.
 %
 } NodeKen can then be used as a stand-alone JavaScript environment to run persistent server-side Dr. SES programs. It is not our aim to embed Ken into the browser. This leads to two types of Dr. SES environments: Dr. SES in the browser runs in an ephemeral environment: this environment ceases to exist when the user navigates to a different page, or closes the page. Objects and object references in such environments are not persistent. 
 
-By contrast, Dr. SES on NodeKen runs in a persistent environment. JavaScript objects born in such an environment are persistent by default, as are object references spanning two persistent Dr. SES environments. Eventual message sends made using the {\tt !} operator over persistent references are reliable.
+By contrast, Dr. SES on NodeKen runs in a persistent environment. JavaScript objects born in such an environment are persistent by default, as are object references spanning two persistent Dr. SES environments. Eventual message sends made using the ``{\tt !}'' operator over persistent references are reliable.
 
 % it will survive failures of both the environment holding onto the reference, as well as failures of the environment containing the object designated by the reference.
 
 %To date, there exist two implementations of Ken, one in C~\cite{Yoo:CKen} and one in Java (WaterKen~\cite{Close:Waterken}).
 
-Following the philosophy of WaterKen~\cite{Close:Waterken}, a Java web server similarly layered on top of Ken, we expect it to be common for ephemeral and persistent Dr. SES environments to communicate with each other, where the ephemeral environment (inside the browser) primarily deals with UI and the persistent environment stores durable application state, a distributed form of the Model-View-Controller pattern. In the remainder of this paper, we assume that all Dr. SES code runs in a persistent Dr. SES environment.
+Following the philosophy of WaterKen~\cite{Close:Waterken}, the persistent Java web server where the Ken ideas originated, we expect it to be common for ephemeral and persistent Dr. SES environments to communicate with each other, where the ephemeral environment (inside the browser) primarily deals with UI and the persistent environment stores durable application state, a distributed form of the Model-View-Controller pattern. In the remainder of this paper, we assume that all Dr. SES code runs in persistent Dr. SES environments.
 
 \paragraph{Implementation} 
 
@@ -327,7 +327,7 @@ Ken achieves distributed consistent snapshots as follows:
   \item Check incoming messages for duplicates. When a duplicate message is detected, it is dropped (not processed) and immediately acknowledged.
 \end{itemize*}
 
-The key point is that outgoing messages are released, and incoming messages are acknowledged only \emph{after} the message has been fully processed by the receiver \emph{and} the heap state has been checkpointed. The snapshot of a Ken process consists of both the heap and the outgoing message queue. It does not include the runtime stack (which is always empty between turns) nor the incoming message queue.
+The key point is that outgoing messages are released, and incoming messages are acknowledged, only \emph{after} the message has been fully processed by the receiver \emph{and} the heap state has been checkpointed. The snapshot of a Ken process consists of both the heap and the outgoing message queue. It does not include the runtime stack (which is always empty between turns) nor the incoming message queue.
 
 Checkpointing a program's entire state after every event loop turn may be considered costly. Ken takes care to only store those parts of the heap to disk that are updated during a turn. Further, the availability of cheap low-latency non-volatile memory (such as solid-state drives) has driven down the cost of writing state to ``disk'' to the point that making micro-snapshots after every turn becomes practical.
 
@@ -335,9 +335,9 @@ Checkpointing a program's entire state after every event loop turn may be consid
 
 The Ken protocol guarantees distributed snapshots even among mutually suspicious machines. An adversarial process cannot corrupt the distributed snapshots of benign processes.
 
-The implementation of Ken underlying NodeKen currently does not use an encrypted communications channel to deliver messages between Ken processes. Hence, the authenticity, integrity or confidentiality of incoming messages cannot be guaranteed. In NodeKen, our plan is to actively secure the communications channels between NodeKen processes using a cryptographic library\footnote{
+The implementation of Ken underlying NodeKen currently does not use an encrypted communications channel to deliver messages between Ken processes. Hence, the authenticity, integrity or confidentiality of incoming messages cannot be guaranteed. In NodeKen, our plan is to actively secure the communications channels between NodeKen processes using a cryptographic library.\footnote{
 %
-An outline of such a design, due to Brian Warner, is available online: \myurl{eros-os.org/pipermail/cap-talk/2012-September/015386.html}}.
+An outline of such a design, due to Brian Warner, is available online: \myurl{eros-os.org/pipermail/cap-talk/2012-September/015386.html}}
 
 Now that we've seen the elements of Dr. SES, we can proceed to explain how to use it to build electronic rights and smart contracts.
 
@@ -510,7 +510,14 @@ Since the situation is now symmetric, we explain the progression of events from 
 
 By a protocol whose details appear below, Alice sends this ``{\tt a}'' object to the escrow exchange agent, for it to use as the first argument in a call to {\tt escrowExchange}, which initiates this specific contract between Alice and Bob. The {\tt escrowExchange} function returns a promise for the outcome of the contract, which the escrow exchange agent returns to Alice. 
 
-If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to have been deposited into her {\tt a.stockDstP}. If this promise becomes rejected, the exchange failed, and she should expect her {\tt a.moneySrcP} to again hold her \$10. In the meantime, if she gets impatient and would rather not continue waiting, she can call her {\tt cancel} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.
+If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to have been deposited into her {\tt a.stockDstP}. If this promise becomes rejected, the exchange failed, and she should expect her \$10 to promptly\footnote{
+%
+``promptly'' in this usage might still be arbitrarily delayed by crashed machines and partitioned networks. This particular case is prompt once the money issuer is reachable from the escrow exchange agent.
+%
+} reappear in her {\tt a.moneySrcP}. In the meantime, if she gets impatient and would rather not continue waiting, she can call her {\tt cancel} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.\footnote{
+%
+Once the escrow exchange agent is reachable from Alice. 
+}
 
 On lines 13 and 14 of Figure~\ref{escrowExchange} the {\tt escrowExchange} contract makes a {\tt decisionP} promise whose fulfillment or rejection represents its decision about whether the exchange must succeed or fail. It makes this decision by calling {\tt decide} with the outcome of a race between a {\tt Q.all} and two calls to {\tt failOnly}. Until a player cancels the exchange, the {\tt Q.race} can only be won by the {\tt Q.all}, which is where the exchange is proceeding.
 
