@@ -194,7 +194,7 @@ In an \emph{object-capability} (ocap) language~\cite{RobustComposition}, an obje
 SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is \emph{defensively consistent} when it can defend its own invariants and provide correct service to its well behaved clients, despite arbitrary or malicious misbehavior by its other clients. SES has a formal semantics supporting automated verification of some security properties of SES code~\cite{taly2011automated}. The SES library provides the following functions.
 
 \begin{description}
-\item[{\tt def(obj)}]  ``defines'' a ``defensible object''. To support defensive consistency, the {\tt def} function makes the properties its argument read-only, likewise for all objects transitively reachable from there by reading properties. As a result, this subgraph of objects is effectively tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\})}'', it would make defensively consistent points.
+\item[{\tt def(obj)}]  ``defines'' a ``defensible object''. To support defensive consistency, the {\tt def} function makes the properties of its argument read-only, likewise for all objects transitively reachable from there by reading properties. As a result, this subgraph of objects is effectively tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\})}'', it would make defensively consistent points.
 
 \item[{\tt Nat(allegedNumber)}] tests whether {\tt allegedNumber} is indeed a primitive number, and whether it is a non-negative integer (a natural number) within the contiguous range of exactly representable integers in JavaScript. If so, it returns {\tt allegedNumber}. Otherwise it throws an error.
 
@@ -446,15 +446,15 @@ Bob receives this request at the following {\tt buy} method:
   buy: (desc, paymentP) => {
     // do whatever with desc, look up $10 price
     return (myPurse ! deposit(10, paymentP)).then(
-      _ => good,
-      // failure handling...
+      _ => good);
+  }
 \end{lstlisting}
 
 Bob's {\tt buy} method handles a message from untrusted clients such as Alice, and thus it does not know what object Alice actually provided as the payment argument. At this point, the purse provided by Alice is \emph{specific}---it is the specific object Alice designated, but to Bob it also is \emph{opaque}. In particular, Bob has no idea if his {\tt paymentP} parameter actually designates a purse, whether it is a purse at this bank, of this currency, and with adequate funds. Even if he knew all these conditions were true at the moment, due to the \emph{shareable} nature of argument passing, Bob wouldn't know the funds would still be there by the time he deposits it. Alice may have retained a reference to it. He delegates all these problems to the bank with the {\tt deposit} request above. 
 
-If the bank's {\tt deposit} method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then Bob knows he has obtained \emph{exclusive} access to a \emph{fungible} and \emph{measurable} quantity of a given currency at a given bank. In this case, the success callback of the {\tt .then} above gets called, returning the {\tt good}, resolving Alice's pending {\tt goodP} promise.
+If the bank's {\tt deposit} method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then Bob knows he has obtained \emph{exclusive} access to a \emph{fungible} and \emph{measurable} quantity of a given currency at a given bank. In this case, the success callback of the {\tt .then} above gets called, returning the {\tt good}, fulfilling Alice's pending {\tt goodP} promise.
 
-The interesting work done by {\tt deposit} starts on line 11, where {\tt deposit} looks up the alleged payment purse in the {\tt m} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error. If this lookup succeeds, it finds the {\tt decr} function for decrementing that purse's {\tt balance}, which it calls with the amount to withdraw. If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
+The interesting work done by {\tt deposit} starts on line 11, where {\tt deposit} looks up the alleged payment purse in the {\tt m} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error, rejecting Bob's promise for the result of the deposit, rejecting Alice's {\tt goodP}. If this lookup succeeds, it finds the {\tt decr} function for decrementing that purse's {\tt balance}, which it calls with the amount to withdraw. If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
 
 This is the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no locally observable failure possibilities remain. The assignment decrements the payment purse's {\tt balance} by {\tt amount}, and {\tt decr} returns. Line 12 increments the balance of the purse being deposited into.
 
@@ -523,7 +523,7 @@ By a protocol whose details appear below, Alice sends this ``{\tt a}'' object to
 
 If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to be deposited into her {\tt a.stockDstP} promptly.\footnote{
 %
-By "promptly", we mean, once the relevant machines are up, processes restarted, and reachable to each other over the network.
+By "promptly", we mean, once the relevant machines are up, processes running, and reachable to each other over the network.
 %
 } If this promise becomes rejected, the exchange failed, and she should expect her \$10 to reappear in her {\tt a.moneySrcP} promptly. In the meantime, if she gets impatient and would rather not continue waiting, she can call her {\tt cancel} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.
 
