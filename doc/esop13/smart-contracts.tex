@@ -87,7 +87,11 @@ The fabric of the global economy is held together by contracts. A contract is an
 
 To realize this potential, smart contracts themselves need a distributed, secure, persistent, and ubiquitous computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts.
 
-We are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by many non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}.\footnote{
+We\footnote{
+%
+Including many collaborators over many years. See the acknowledgements.
+%
+} are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by many non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}.\footnote{
 %
 The official standards name for JavaScript is ``EcmaScript''.
 %
@@ -165,17 +169,17 @@ A record of functions hiding variables serves as an object of methods ({\tt getX
 \subsection{Just Enough Dr. SES}
 \label{enoughdrses}
 
-The remainder of Dr. SES can be seen as just extending this object model across time and space (persistent and distributed) without many of the nasty hazards that experienced programmers have learned to put up with. The top down reader, and the programmer who learns first by doing, only needs the following oversimplified statements about Dr. SES on a first read, before skipping ahead to the second half of the paper, starting in section~\ref{towardErights}. When reading the smart contract code there, refer back to the more detailed Dr. SES descriptions below as needed. 
+Dr. SES extends this object model across time and space (persistent and distributed) without many of the nasty hazards that experienced programmers have learned to tolerate. The top down reader, and the programmer who learns first by doing, only needs the following oversimplified statements about Dr. SES on a first read, before skipping ahead to the second half of the paper starting in section~\ref{towarderights}. When reading the smart contract code there, refer back to the more detailed Dr. SES descriptions below as needed. 
 
 \begin{description*}
 \item[SES] Don't worry about script injection. Mobile code can't do anything it isn't authorized to do. Functions and objects are encapsulated. Objects can invoke objects they have a reference to, but cannot tamper with those objects.
 
-\item[Q] Don't worry about memory races or deadlocks, they can't happen. Objects can be local or remote. You already use the familiar infix dot (``{\tt .}'') to access the object on its left \emph{immediately}, as in {\tt pt.getX()}. Anywhere you can write a dot, you can use ``{\tt !}'' to access that object \emph{eventually}, as in {\tt pt ! getX()}. Eventual operations return promises for what the answer will be. If the object is remote or a promise, you can only use ``{!}'' on it.
+\item[Q] Don't worry about memory races or deadlocks, they can't happen. Objects can be local or remote. You already use the familiar infix dot (``{\tt .}'') to access the object on its left \emph{immediately}, as in {\tt pt.getX()}. Anywhere you can write a dot, you can use ``{\tt !}'' to access that object \emph{eventually}, as in {\tt pt~!~getX()}. Eventual operations return promises for what the answer will be. If the object is remote or a promise, you can only use ``{\tt !}'' on it.
 
 \item[NodeKen] Don't worry about network partitions or machine crashes. Once the machine comes back up, everything keeps going, so a crash and restart is just a very long (possibly infinite) pause. Likewise, a partitioned network is just a slow network waiting to heal. Once things come back up, every message ever sent will be delivered in order exactly once.
 \end{description*}
 
-This should be adequate to understand the functionality of the smart contract code when things go well. Of course, the whole point of erights and smart contracts is to also limit the damage when things go badly. This still requires a careful reading of the following sections.
+This should be adequate to understand the functionality of the smart contract code when things go well. Of course, much of the point of erights and smart contracts is to limit the damage when things go badly. This still requires a careful reading of the following sections.
  
 
 \subsection{SES: Securing JavaScript}
@@ -183,14 +187,14 @@ This should be adequate to understand the functionality of the smart contract co
 
 In an object-oriented language with unforgeable object references (protected pointers) and encapsulated objects, an object reference grants the right to invoke the public interface of the object it designates. A message sent on a reference both exercises this right and grants to the receiving object the right to invoke the passed arguments. 
 
-In an \emph{object-capability} (ocap) language~\cite{RobustComposition}, an object can cause effects on the world outside itself \emph{only} by using the references it holds. Some objects are transitively immutable or \emph{powerless}~\cite{Mettler:EECS-2012-244}, while others might cause effects. An object must not be given any references that enable effects by default. Any references it has implicit access to, such as language-provided global variables, must be powerless. Under these rules, granted references are the \emph{sole} representation of permission.
+In an \emph{object-capability} (ocap) language~\cite{RobustComposition}, an object can cause effects on the world outside itself \emph{only} by using the references it holds. Some objects are transitively immutable or \emph{powerless}~\cite{Mettler:EECS-2012-244}, while others might cause effects. An object must not be given any powerful references by default. Any references it has implicit access to, such as language-provided global variables, must be powerless. Under these rules, granted references are the \emph{sole} representation of permission.
 
-\emph{Secure EcmaScript} (SES) is an ocap subset of ES5. SES code is lexically scoped and SES functions are encapsulated. SES denies access to global variables not on its whitelist. Those on its whitelist (including all globals defined by ES5) are unassignable, and all objects transitively reachable from these are immutable, rendering all implicit access powerless. 
+\emph{Secure EcmaScript} (SES) is an ocap subset of ES5. SES is lexically scoped, its functions are encapsulated, and only the global variables on its whitelist (including all globals defined by ES5) as accessible. Those globals  are unassignable, and all objects transitively reachable from them are immutable, rendering all implicit access powerless. 
 
 SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is \emph{defensively consistent} when it can defend its own invariants and provide correct service to its well behaved clients, despite arbitrary or malicious misbehavior by its other clients. SES has a formal semantics supporting automated verification of some security properties of SES code~\cite{taly2011automated}. The SES library provides the following functions.
 
 \begin{description}
-\item[{\tt def(obj)}]  ``defines'' a ``defensible object''. To support defensive consistency, the {\tt def} function freezes its argument (makes its properties read-only) and freezes all objects transitively reachable from there by reading properties. As a result, this subgraph of objects is effectively tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\})}'', it would make defensively consistent points.
+\item[{\tt def(obj)}]  ``defines'' a ``defensible object''. To support defensive consistency, the {\tt def} function makes the properties its argument read-only, likewise for all objects transitively reachable from there by reading properties. As a result, this subgraph of objects is effectively tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\})}'', it would make defensively consistent points.
 
 \item[{\tt Nat(allegedNumber)}] tests whether {\tt allegedNumber} is indeed a primitive number, and whether it is a non-negative integer (a natural number) within the contiguous range of exactly representable integers in JavaScript. If so, it returns {\tt allegedNumber}. Otherwise it throws an error.
 
@@ -621,7 +625,11 @@ By redeeming the token, Alice obtains the exclusive right to play a specific con
 
 \bnote{Mark}{write conclusions}
 
+\section*{Acknowledgements}
 
+\bnote{Mark}{write acks}
+
+Cajadores, Tyler Close, TC39, Terence Kelley, Kris Kowal, Terry Stanley
 
 
 \bibliographystyle{splncs}
