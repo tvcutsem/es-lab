@@ -279,7 +279,7 @@ The {\tt !} operator can be used anywhere the dot operator can be used. If {\tt 
 
 \paragraph{Remote object references}
 
-A local reference to an object is guaranteed to be unique and unforgeable, and only grants access to the public interface of the designated object. When a promise comes to designate a remote object, the promise effectively becomes a remote object reference. A remote reference only carries eventual message sends, not immediate method calls. Whereas local references are unforgeable, for remote references over open networks, we use \emph{unguessability} to approximate \emph{unforgeability}.
+A local reference to an object is guaranteed to be unique and unforgeable, and only grants access to the public interface of the designated object. When a promise comes to designate a remote object, the promise effectively becomes a remote object reference. A remote reference only carries eventual message sends, not immediate method calls. Whereas local references are unforgeable, for remote references over open networks, we use unguessability to approximate unforgeability.
 
 Primitive values such as strings and numbers are \emph{pass-by-copy}---when passed as arguments or returned as results in remote messages, their contents are serialized and unserialized. JavaScript arrays default to pass-by-copy. All other objects and functions default to \emph{pass-by-reference}---when passed as an argument or returned result, information needed to access them is serialized, which is unserialized into a remote reference for sending messages back to this object itself.
 
@@ -357,7 +357,7 @@ Rights help people coordinate plans and resolve conflicts over use of resources.
 
 All computational systems must address the problem of open access. Global mutable state creates a tragedy of the commons: since anyone can access and change it, no one can safely rely on it. Use conflicts arise from both intentional (malicious), and unintentional (bugs) actions. Preventing use conflict over shared state is one of the main challenges designers face in building computational systems.
 
-Historically, two broad strategies for avoiding the tragedy of the commons have emerged: a governance strategy and a property rights strategy~\cite{smith_exclusion_2002}. The governance approach solves the open access problem by restricting access to members and regulating each member's use of the shared resource. The property rights approach divides ownership of the resource among the individuals and creates abstract rules that govern the exchange of rights between owners.These approaches have their analogues in computational systems: ocap systems pursue a property rights strategy, while access control lists implement a governance strategy.
+Historically, two broad strategies for avoiding the tragedy of the commons have emerged: a governance strategy and a property rights strategy~\cite{smith_exclusion_2002}. The governance approach solves the open access problem by restricting access to members and regulating each member's use of the shared resource. The property rights approach divides ownership of the resource among the individuals and creates abstract rules that govern the exchange of rights between owners. These approaches have their analogues in computational systems: ocap systems pursue a property rights strategy, while access control lists implement a governance strategy.
 
 Access control lists solve the open access problem by denying unauthorized users access, and specifying access rights for authorized users. Great effort is put into perimeter security (firewalls, antivirus, intrusion detection, and the like) to keep unauthorized users out, while detailed access control lists regulate use by authorized users.
 
@@ -509,7 +509,7 @@ Since the situation is now symmetric, we explain the progression of events from 
     stockNeeded: 7,
     cancellationP: Q.promise(r => { cancel = r; });
   });
-  moneySrc ! deposit(10, myMoneyPurse);
+  a.moneySrcP ! deposit(10, myMoneyPurse);
 \end{lstlisting}
 
 By a protocol whose details appear below, Alice sends this ``{\tt a}'' object to the escrow exchange agent, for it to use as the first argument in a call to {\tt escrowExchange}, which initiates this specific contract between Alice and Bob. The {\tt escrowExchange} function returns a promise for the outcome of the contract, which the escrow exchange agent returns to Alice. 
