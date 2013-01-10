@@ -266,7 +266,7 @@ However, if the promise comes to designate a remote object, it is not possible t
 
 JavaScript provides many operators to interact with an object. Here, we will focus on only three: method calls, function calls, and reading the value of a property. JavaScript has the familiar dot operator to express local, immediate method calls, such as {\tt point.getX()}. We introduce a corresponding infix ``{\tt !}'' operator (named the \emph{eventually}) operator, which designates asynchronous, possibly remote interactions.
 
-The {\tt !} operator can be used anywhere the dot operator can be used. If {\tt pointP} is a promise for a {\tt point}, then {\tt pointP ! getX()} denotes an eventual send, which enqueues a request to call the {\tt getX()} method in the event loop of {\tt point}. The syntax {\tt fP ! (x,y)}, where {\tt fP} is a promise designating a function {\tt f}, enqueues a request to call {\tt f(x,y)} in the event loop of {\tt f}. The {\tt !} operator is actually syntactic sugar for calling a method on the promise object itself:
+The {\tt !} operator can be used anywhere the dot operator can be used. If {\tt pointP} is a promise for a {\tt point}, then {\tt pointP~!~getX()} denotes an eventual send, which enqueues a request to call the {\tt getX()} method in the event loop of {\tt point}. The syntax {\tt fP~!~(x,y)}, where {\tt fP} is a promise designating a function {\tt f}, enqueues a request to call {\tt f(x,y)} in the event loop of {\tt f}. The {\tt !} operator is actually syntactic sugar for calling a method on the promise object itself:
 
 \begin{center}
   \begin{tabular}{ l | l | l }
@@ -518,7 +518,7 @@ By a protocol whose details appear below, Alice sends this ``{\tt a}'' object to
 
 If this outcome promise becomes fulfilled, the exchange succeeded,  she should expect her {\tt a.moneySrcP} to be drained, and 7 shares of stock to be deposited into her {\tt a.stockDstP} promptly.\footnote{
 %
-By "promptly", we mean, once the relevant machines are up, processes running, and reachable to each other over the network.
+By "promptly" we mean, once the relevant machines are up, processes running, and reachable to each other over the network.
 %
 } If this promise becomes rejected, the exchange failed, and she should expect her \$10 to reappear in her {\tt a.moneySrcP} promptly. In the meantime, if she gets impatient and would rather not continue waiting, she can call her {\tt cancel} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.
 
@@ -536,7 +536,7 @@ The {\tt transfer} function sets up the second phase on lines 5, 6, and 7. If th
 
 Only one mystery remains. How does the escrow agent obtain a fresh escrow purse at this money issuer, in order to be confident that it has obtained exclusive access to the money at stake? Since the escrow exchange agent has no prior knowledge or trust in the money issuer, it cannot become confident that the issuer is honest or even that the money it issues means anything. The question is meaningless. Instead, it only needs to obtain a fresh escrow purse whose veracity is \emph{mutually acceptable} to Alice and Bob.
 
-If it simply asks Alice's purse for a new empty purse ({\tt srcPurseP ! makePurse()}), Alice could return a dishonest purse that acknowledges deposit without transferring anything. Alice would then obtain Bob's stock for free. If it simply asks Bob's purse, then Bob could steal Alice's money during phase 1. Instead, it checks if their {\tt makePurse} methods are the very same function object---have the same object identity---by using {\tt Q.join} on promises for these two methods. This is why, on lines 3 and 7 of Figure~\ref{makeMint}, all purses of the same currency at the same bank share the same function as their {\tt makePurse} method. If the {\tt Q.join} of these two methods fails, then either Alice was dishonest, Bob was dishonest, or they simply didn't have prior agreement on the same currency at the same money issuer.
+If the escrow contract simply asks Alice's purse for a new empty purse ({\tt srcPurseP~!~makePurse()}), Alice could return a dishonest purse that acknowledges deposit without transferring anything. Alice would then obtain Bob's stock for free. If it simply asks Bob's purse, then Bob could steal Alice's money during phase 1. Instead, it checks if their {\tt makePurse} methods are the very same function object---have the same object identity---by using {\tt Q.join} on promises for these two methods. This is why, on lines 3 and 7 of Figure~\ref{makeMint}, all purses of the same currency at the same bank share the same function as their {\tt makePurse} method. If the {\tt Q.join} of these two methods fails, then either Alice was dishonest, Bob was dishonest, or they simply didn't have prior agreement on the same currency at the same money issuer.
 
 \section{The Contract Host}
 \label{contracthost}
@@ -620,12 +620,11 @@ In human society, rights are a scalable means for organizing the complex coopera
 
 
 
-\section*{Acknowledgements}
+\paragraph{Acknowledgements}
 
-Many people contributed to the progress reported here, including the Google Caja group where SES started, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, Kris Kowal for the new Q. Thanks to Terry Stanley for suggestions improving this paper.
+Many people contributed to the progress reported here, including the Google Caja group where SES started, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, Kris Kowal for the new Q. 
 
-Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders. Thanks to Jack High for arranging earlier funding of Bill Tulloh. 
-
+Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders. Thanks to Terry Stanley for suggestions improving this paper.
 
 \bibliographystyle{splncs}
 % \bibliographystyle{alpha}
