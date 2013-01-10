@@ -186,7 +186,7 @@ In an \emph{object-capability} (ocap) language~\cite{RobustComposition}, an obje
 
 \emph{Secure EcmaScript} (SES) is an ocap subset of ES5. SES is lexically scoped, its functions are encapsulated, and only the global variables on its whitelist (including all globals defined by ES5) are accessible. Those globals  are unassignable, and all objects transitively reachable from them are immutable, rendering all implicit access powerless. 
 
-SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is \emph{defensively consistent} when it can defend its own invariants and provide correct service to its well behaved clients, despite arbitrary or malicious misbehavior by its other clients. SES has a formal semantics supporting automated verification of some security properties of SES code~\cite{taly2011automated}. The code in this paper uses the following functions from the SES library.
+SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is \emph{defensively consistent} when it can defend its own invariants and provide correct service to its well behaved clients, despite arbitrary or malicious misbehavior by its other clients. SES has a formal semantics supporting automated verification of some security properties of SES code~\cite{taly2011automated}. The code in this paper uses the following functions from the SES library:
 
 \begin{description}
 \item[{\tt def(obj)}]  ``defines'' a ``defensible object''. To support defensive consistency, the {\tt def} function makes the properties of its argument read-only, likewise for all objects transitively reachable from there by reading properties. As a result, this subgraph of objects is effectively tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\})}'', it would make defensively consistent points.
@@ -195,7 +195,7 @@ SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is
 
 \item[{\tt Nat(allegedNumber)}] tests whether {\tt allegedNumber} is indeed a primitive number, and whether it is a non-negative integer (a natural number) within the contiguous range of exactly representable integers in JavaScript. If so, it returns {\tt allegedNumber}. Otherwise it throws an error.
 
-\item[{\tt var m = WeakMap()}] enables \emph{rights amplification}~\cite{Jones:Thesis}. It assigns to {\tt m} a new empty weak map. WeakMaps are an ES6 extension (emulated by SES on ES5 browsers). Ignoring space usage, {\tt m} is simply an object-identity-keyed table. {\tt m.set(obj,val)} associates {\tt obj}'s identity as key with {\tt val} as value, so {\tt m.get(obj)} returns {\tt val}, and {\tt m.delete(obj)} removes this entry. These methods use only {\tt obj}'s identity without interacting with {\tt obj}.
+\item[{\tt var m = WeakMap()}] assigns to {\tt m} a new empty weak map. WeakMaps are an ES6 extension (emulated by SES on ES5 browsers) supporting \emph{rights amplification}~\cite{Jones:Thesis}. Ignoring space usage, {\tt m} is simply an object-identity-keyed table. {\tt m.set(obj,val)} associates {\tt obj}'s identity as key with {\tt val} as value, so {\tt m.get(obj)} returns {\tt val}, and {\tt m.delete(obj)} removes this entry. These methods use only {\tt obj}'s identity without interacting with {\tt obj}.
 
 
 \end{description}
@@ -216,13 +216,11 @@ The processing of a single event is called a \emph{turn} of the event loop. Proc
 
 A system of communicating event loops consists of multiple event loops (in the same or distributed address spaces) that communicate with each other solely by means of asynchronous message passing. The Web Workers API enables such communication among multiple isolated event loops within the same browser. A JavaScript webpage communicating with a NodeJS server using asynchronous XHR requests is an example of two distributed communicating event loops.
 
-Dr. SES builds upon communicating event loops because this concurrency model supports plan coordination~\cite{miller:strangers}. That is, the model makes it manageable for objects to maintain their invariants in the face of concurrent (interleaved) requests made by multiple clients.
-
-While JavaScript environments already effectively support event loop concurrency, the JavaScript language itself has no built-in support for concurrent or distributed programming. Q thus extends JavaScript with a handful of features that enable programmers to more directly express distributed interactions between individual objects.
+Communicating event loop concurrency makes it manageable for objects to maintain their invariants in the face of concurrent (interleaved) requests made by multiple clients~\cite{miller:strangers}. While JavaScript environments already support event loop concurrency, the JavaScript language itself has no support for concurrent or distributed programming. Q thus extends JavaScript with a handful of features that enable programmers to more directly express distributed interactions between individual objects.
 
 \paragraph{Promises}
 
-We introduce a new type of object, called a Promise, to represent both the outcome of asynchronous operations, as well as to represent remote object references. A normal JavaScript direct reference may only designate an object within the same event loop. Only promises may come to designate objects in other event loops. A promise may be in one of several states:
+We introduce a new type of object, called a Promise, to represent both the outcome of asynchronous operations, as well as remote references. A normal JavaScript direct reference may only designate an object within the same event loop. Only promises may designate objects in other event loops. A promise may be in one of several states:
 
 \begin{description*}
   \item[pending] when it is not yet determined what object the promise designates,
