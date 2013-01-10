@@ -21,7 +21,7 @@
 % Package for including code in the document
 \usepackage{listings}
 \lstdefinelanguage{javascript}{
-   morekeywords={break,do,instanceof,typeof,case,else,new,var,catch,finally,return, void, continue, for, switch, while, debugger, function, this, with, default, if, throw, delete, in, try, class, enum, extends, super, const, export, import, implements, let, private, public, interface, package,protected, static, yield},
+   morekeywords={break,do,instanceof,typeof,case,else,new,var,catch,finally,return, void, continue, for, switch, while, debugger, function, this, with, default, if, throw, in, try, class, enum, extends, super, const, export, import, implements, let, private, public, interface, package,protected, static, yield}, % delete
    keywordstyle=\ttfamily\bfseries,
    basicstyle=\ttfamily\small,
    ndkeywords={},
@@ -231,7 +231,7 @@ We introduce a new type of object, called a Promise, to represent both the outco
 
 \begin{description*}
   \item[pending] when it is not yet determined what object the promise designates,
-  \item[resolved] A fulfilled or rejected promise is also called a \emph{resolved} promise.
+  \item[resolved] when it is either fulfilled or rejected,
   \begin{description*}
     \item[fulfilled] when it is resolved to successfully designate some object,
     \item[rejected] when it will never designate an object, for an alleged reason represented by an associated error.
@@ -623,7 +623,8 @@ By redeeming the token, Alice obtains the exclusive right to play a specific con
 
 \section*{Acknowledgements}
 
-\bnote{Mark}{write acks: Cajadores, Tyler Close, TC39, Terence Kelley, Kris Kowal, Terry Stanley}
+\bnote{Mark}{write acks: Cajadores, Tyler Close, TC39, Terence Kelly, Kris Kowal, Terry Stanley}
+Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders.
 
 
 \bibliographystyle{splncs}
