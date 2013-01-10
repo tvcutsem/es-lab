@@ -325,6 +325,7 @@ Following the philosophy of Waterken~\cite{Close:Waterken}, the persistent Java 
 Ken achieves distributed consistent snapshots as follows:
 
 \begin{itemize*}
+\renewcommand{\labelitemi}{$\bullet$}
   \item During a turn, accumulate all outgoing messages in an outgoing message queue. These messages are not yet released to the network.
   \item At the end of each turn, make a checkpoint of the persistent heap and of all outgoing unacknowledged messages.
   \item After the end-of-turn checkpoint is made, release any new outgoing messages to the network and acknowledge the message processed this turn.
@@ -352,7 +353,7 @@ Now that we've seen the elements of Dr. SES, we can proceed to explain how to us
 
 The elements of Dr. SES demonstrate how JavaScript can be transformed into a distributed, secure, and resilient system. At its core is the recognition that object references represent a right to perform a set of operations on a specific, designated resource. This emphasis on distributed rights has its counterpart in society: a system of rights is society's answer to creating distributed, secure, and resilient commercial systems.
 
-Global commerce rests on a system of tradeable rights. This system is: ``\emph{the product of thousands of years of evolution. It is highly complex and embraces a multitude of actions, objects, and individuals. ... With minor exceptions, rights to take almost all conceivable actions with virtually all physical objects are fixed on identifiable individuals or firms at every instant of time. The books are kept up to date despite the burden imposed by dynamic forces, such as births and deaths, dissolutions, and new technology.}''~\cite{jensen_specific_1995}
+Global commerce rests on tradeable rights. This system is: ``\emph{the product of thousands of years of evolution. It is highly complex and embraces a multitude of actions, objects, and individuals. ... With minor exceptions, rights to take almost all conceivable actions with virtually all physical objects are fixed on identifiable individuals or firms at every instant of time. The books are kept up to date despite the burden imposed by dynamic forces, such as births and deaths, dissolutions, and new technology.}''~\cite{jensen_specific_1995}
 
 Rights help people coordinate plans and resolve conflicts over use of resources. Rights partition the space of actions to prevent conflict of interests and plan interference, thus enabling cooperative relationships despite mutual suspicion and competing goals~\cite{steiner_essay_1994}. This rights-based perspective can shed light on the problem of securing distributed computational systems.
 
@@ -448,7 +449,7 @@ Bob's {\tt buy} method handles a message from untrusted clients such as Alice, a
 
 If the bank's {\tt deposit} method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then Bob knows he has obtained \emph{exclusive} access to a \emph{fungible} and \emph{measurable} quantity of a given currency at a given bank. In this case, the success callback of the {\tt .then} above gets called, returning the {\tt good}, fulfilling Alice's pending {\tt goodP} promise.
 
-The interesting work done by {\tt deposit} starts on line 11, where {\tt deposit} looks up the alleged payment purse in the {\tt m} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error, rejecting Bob's promise for the result of the deposit, rejecting Alice's {\tt goodP}. If this lookup succeeds, it finds the {\tt decr} function for decrementing that purse's {\tt balance}, which it calls with the amount to withdraw. If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
+The interesting work starts on line 11, where {\tt deposit} looks up the alleged payment purse in the {\tt m} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error, rejecting Bob's promise for the result of the deposit, rejecting Alice's {\tt goodP}. If this lookup succeeds, it finds the {\tt decr} function for decrementing that purse's {\tt balance}, which it calls with the amount to withdraw. If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
 
 This is the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no locally observable failure possibilities remain. The assignment decrements the payment purse's {\tt balance} by {\tt amount}, and {\tt decr} returns. Line 12 increments the balance of the purse being deposited into.
 
@@ -597,6 +598,7 @@ Once Alice and Bob agree on a contract, how do they arrange for it to be run in 
 To engage in the escrow exchange contract, Alice and Bob had to agree on the issuers, which is unsurprising since they need to agree on the nature of rights exchanged by the contract. And they had to agree on an escrow exchange agent to honestly run the escrow exchange contract specifically. For a contract as general as this, perhaps that is not a problem. But if Alice and Bob negotiate a custom contract specialized to their needs, they should not expect to find a mutually trusted third party specializing in running this particular contract. Rather, it should be adequate for them to agree on:
 
 \begin{itemize}
+\renewcommand{\labelitemi}{$\bullet$}
 \item The issuers of each of the rights at stake.
 \item The source code of the contract.
 \item Who is to play which side of the contract.
