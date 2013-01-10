@@ -445,8 +445,7 @@ Bob receives this request at the following {\tt buy} method:
 \begin{lstlisting}[language=JavaScript,numbers=none]
   buy: (desc, paymentP) => {
     // do whatever with desc, look up $10 price
-    return (myPurse ! deposit(10, paymentP)).then(
-      _ => good);
+    return (myPurse ! deposit(10, paymentP)).then(_ => good);
   }
 \end{lstlisting}
 
