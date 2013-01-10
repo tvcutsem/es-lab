@@ -83,13 +83,9 @@ Contracts enable mutually suspicious parties to cooperate safely through the exc
 \section{Smart Contracts for the Rest of Us}
 \label{intro}
 
-The fabric of the global economy is held together by contracts. A contract is an agreed framework for the rearrangement of rights between mutually suspicious parties. 
-% kill next sentence if space needed
-But existing contracts are ambiguous, jurisdictions-specific, and written, interpreted, and adjudicated only by expensive experts. \emph{Smart contracts} are contract-like arrangements expressed in program code, where the behavior of the program enforces the terms of the ``contract''\cite{szabo1997formalizing}. Though not a substitute for legal contracts, they can provide some of the benefits of contracts for fine-grain, jurisdiction-free, and automated arrangements for which legal contracts are impractical.
+The fabric of the global economy is held together by contracts. A contract is an agreed framework for the rearrangement of rights between mutually suspicious parties. But existing contracts are ambiguous, jurisdictions-specific, and written, interpreted, and adjudicated only by expensive experts. \emph{Smart contracts} are contract-like arrangements expressed in program code, where the behavior of the program enforces the terms of the ``contract''\cite{szabo1997formalizing}. Though not a substitute for legal contracts, they can provide some of the benefits of contracts for fine-grain, jurisdiction-free, and automated arrangements for which legal contracts are impractical.
 
-To realize this potential, smart contracts need a distributed, secure, persistent, and ubiquitous computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts.
-
-We\footnote{
+To realize this potential, smart contracts need a distributed, secure, persistent, and ubiquitous computational fabric. To avoid merely substituting one set of expensive experts for another, non-experts should be able to write smart contracts understandable by other non-experts. We\footnote{
 %
 Including many collaborators over many years. See the acknowledgements.
 %
@@ -607,7 +603,7 @@ To engage in the escrow exchange contract, Alice and Bob had to agree on the iss
 \item A third party they mutually trust to run their agreed code, \emph{whatever it is}, honestly.
 \end{itemize}
 
-Figure~\ref{makeContractHost} shows the code for a generic contract host. It is able to host any contract formulated, as our escrow exchange contract is, as a function, taking one argument from each player and returning the outcome of the contract as a whole. Setting up a contract involves a necessary asymmetry among the players. One of the players, say Bob, must initiate a new live contract instance by sending the contract's code to the contract host. At this point, Bob is the only one who knows both this contract instance and that he'd like to invite Alice to participate in \emph{this} instance. If Bob simply sent to Alice a reference to those objects on the contract host that enables Alice to play, Alice would not know what she's received, since she received it from Bob whom she does not trust. She does trust the contract host, and these objects are on the contract host, but so are the objects corresponding to all the other contracts this host is initiating or running. The connection of Alice to this contract instance must be at Bob's initiation, but Alice's confidence that she's playing the contract she thinks she is must be rooted in her prior trust in the contract host.
+Figure~\ref{makeContractHost} shows the code for a generic contract host. It is able to host any contract formulated, as our escrow exchange contract is, as a function, taking one argument from each player and returning the outcome of the contract as a whole. Setting up a contract involves a necessary asymmetry among the players. One of the players, say Bob, must initiate a new live contract instance by sending the contract's code to the contract host. At this point, only Bob knows both this contract instance and that he'd like to invite Alice to participate in \emph{this} instance. If Bob simply sent to Alice references to those objects on the contract host that enable Alice to play, Alice would not know what she's received, since she received it from Bob whom she does not trust. She does trust the contract host, and these objects are on the contract host, but so are the objects corresponding to other contracts this host is initiating or running. Only Bob can connect Alice to this contract instance, but Alice's confidence that she's playing the contract she thinks she is must be rooted in her prior trust in the contract host.
 
 Our contract host is an object with two methods, {\tt setup} and {\tt play}. Bob sets up the contract instance by calling {\tt setup} with the source code for the contract function in question, e.g., {\tt escrowExchange}. At line 32, {\tt setup} returns an array of unique unforgeable tokens, one for each contract parameter. Bob's invitation to Alice includes this token, the source for the contract he wishes Alice to play, the argument index indicating what side of the contract Alice is to play, and the contract host in question.
 
@@ -618,15 +614,15 @@ By redeeming the token, Alice obtains the exclusive right to play a specific con
 \section*{Conclusions}
 \label{conclusions}
 
-In human society, rights are a scalable means for organizing the complex cooperative interactions of  decentralized agents with diverse interests. This perspective is helping us shape JavaScript into a distributed persistent secure programming language. We show how this platform would enable the expression of new kinds of rights and smart contracts \emph{simply}, supporting new kinds of cooperation among computational agents.
+In human society, rights are a scalable means for organizing the complex cooperative interactions of  decentralized agents with diverse interests. This perspective is helping us shape JavaScript into a distributed persistent secure programming language. We show how this platform would enable the expression of new kinds of rights and smart contracts \emph{simply}, supporting new forms of cooperation among computational agents.
 
 
 
 \section*{Acknowledgements}
 
-Many people contributed to the progress reported here, including the Google Caja project where SES started, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, Kris Kowal for the new Q. Thanks to Terry Stanley for suggestions improving this paper.
+Many people contributed to the progress reported here, including the Google Caja group where SES started, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, Kris Kowal for the new Q. Thanks to Terry Stanley for suggestions improving this paper.
 
-Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders. Thanks to Jack High for earlier funding of Bill Tulloh. 
+Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders. Thanks to Jack High for arranging earlier funding of Bill Tulloh. 
 
 
 \bibliographystyle{splncs}
