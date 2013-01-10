@@ -199,7 +199,7 @@ SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is
 
 \item[{\tt Nat(allegedNumber)}] tests whether {\tt allegedNumber} is indeed a primitive number, and whether it is a non-negative integer (a natural number) within the contiguous range of exactly representable integers in JavaScript. If so, it returns {\tt allegedNumber}. Otherwise it throws an error.
 
-\item[{\tt var m = WeakMap()}] enables \emph{rights amplification}~\cite{miller:logical-secrets}. It assigns to {\tt m} a new empty weak map. WeakMaps are an ES6 extension (emulated by SES on ES5 browsers). Ignoring space usage, {\tt m} is simply an object-identity-keyed table. {\tt m.set(obj,val)} associates {\tt obj}'s identity as key with {\tt val} as value, so {\tt m.get(obj)} returns {\tt val}, and {\tt m.delete(obj)} removes this entry. These methods use only {\tt obj}'s identity without interacting with {\tt obj}.
+\item[{\tt var m = WeakMap()}] enables \emph{rights amplification}~\cite{Jones:Thesis}. It assigns to {\tt m} a new empty weak map. WeakMaps are an ES6 extension (emulated by SES on ES5 browsers). Ignoring space usage, {\tt m} is simply an object-identity-keyed table. {\tt m.set(obj,val)} associates {\tt obj}'s identity as key with {\tt val} as value, so {\tt m.get(obj)} returns {\tt val}, and {\tt m.delete(obj)} removes this entry. These methods use only {\tt obj}'s identity without interacting with {\tt obj}.
 
 
 \end{description}
@@ -622,8 +622,9 @@ By redeeming the token, Alice obtains the exclusive right to play a specific con
 
 \section*{Acknowledgements}
 
-\bnote{Mark}{write acks: Cajadores, Tyler Close, TC39, Terence Kelly, Kris Kowal, Terry Stanley, Jack High (for funding Bill)}
-Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders.
+Many people contributed to the progress reported in this paper, including the Google Caja project where SES started, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, Kris Kowal for the new Q, and Terry Stanley for suggestions improving this paper.
+
+Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders. Thanks to Jack High for earlier funding of Bill Tulloh.
 
 
 \bibliographystyle{splncs}
@@ -631,3 +632,34 @@ Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders.
 \bibliography{common}
 
 \end{document}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
