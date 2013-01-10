@@ -110,13 +110,13 @@ The first half of this paper, section~\ref{drses}, explains the design of Dr. SE
 
 Dr. SES is a platform for distributed, resilient and secure computing, layered on JavaScript. How do these ingredients support erights and contracts?
 
-The participants in a contract are typically represented by mutually suspicious machines communicating over open networks. JavaScript is not a distributed programming language. In the browser, a large number of APIs are available to scripts to communicate with servers and other frames, but these APIs do not operate at the level of individual objects. That is why Dr. SES builds on the Q library\footnote{
+The participants in a contract are typically represented by mutually suspicious machines communicating over open networks. JavaScript is not a distributed programming language. In the browser, a large number of APIs are available to scripts to communicate with servers and other frames, but these APIs do not operate at the level of individual objects. Dr. SES builds on the Q library\footnote{
 %
 Once the \myurl{code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} and \url{https://github.com/kriskowal/q} implementations of Q are reconciled.
 %
-} to extend the JavaScript language proper with a handful of features to support distributed programming at the level of individual objects and messages.
+} to extend the JavaScript language with a handful of features to support distributed programming at the level of objects and messages.
 
-In an architecture that aims to express erights or contracts, security must play a key role. Dr. SES builds upon the Q library to support distributed cryptographic capabilities, and upon the SES library to support local object-capabilities. The latter allows Dr. SES programs to safely execute mobile code from untrusted parties.
+In an architecture that aims to express erights or contracts, security must play a key role. Dr. SES uses the Q library to support distributed cryptographic capabilities, and upon the SES library to support local object-capabilities. The latter allows Dr. SES programs to safely execute mobile code from untrusted parties.
 % without fear of granting excess privileges to that piece of code.
 This is especially relevant in the context of JavaScript, where mobile code is routinely sent from servers to clients. In Section~\ref{contracthost}, we will show an example that  depends on the ability to safely execute third-party code on servers.
 
@@ -174,7 +174,7 @@ Dr. SES extends this object model across time and space (persistent and distribu
 \item[NodeKen] Don't worry about network partitions or machine crashes. Once the machine comes back up, everything keeps going, so a crash and restart is just a very long (possibly infinite) pause. Likewise, a partitioned network is just a slow network waiting to heal. Once things come back up, every message ever sent will be delivered in order exactly once.
 \end{description*}
 
-This should be adequate to understand the functionality of the smart contract code when things go well. Of course, much of the point of erights and smart contracts is to limit the damage when things go badly. This still requires a careful reading of the following sections.
+This should be adequate to understand the functionality of the smart contract code when things go well. Of course, much of the point of erights and smart contracts is to limit the damage when things go badly. Understanding these risks does require a careful reading of the following sections.
  
 
 \subsection{SES: Securing JavaScript}
@@ -375,7 +375,7 @@ While object references represent a kind of eright, they differ in several respe
 
 In the next sections, we will show how, by building on object references as erights, we can create new kinds of erights at a new level of abstraction. We look first at how money can be implemented as a smart contract. Money differs from other forms of property in several ways~\cite{fox_property_2008}.  Here, we identify four dimensions in which money differs from object references as rights. Object references are shareable, specific, opaque, and exercisable, whereas money is exclusive, fungible, measurable, and symbolic.
 
-Unlike with object references that are shareable, money needs be exclusive to serve as medium of exchange. Bob does not consider himself paid by Alice until he knows that he has exclusive access to the funds. Object references are also specific; they designate a particular object. Money, on the other hand, is fungible. You care about having a certain quantity of a particular currency, not having a specific piece of currency. One dollar is as good as another. 
+Unlike with object references that are shareable, money needs to be exclusive to serve as medium of exchange. Bob does not consider himself paid by Alice until he knows that he has exclusive access to the funds. Object references are also specific; they designate a particular object. Money, on the other hand, is fungible. You care about having a certain quantity of a particular currency, not having a specific piece of currency. One dollar is as good as another. 
 
 Objects are opaque. The clients of an object can invoke it but don't necessarily know how it will react---that information is private to the object. By contrast, money is measurable. Bob must be able to determine that he really has a certain quantity of a particular currency. Finally, money, unlike object references, is not exercisable. The right you have when you have an object reference is the right to do something: the right to invoke the behavior of the object it designates. Money, however, has no direct use value; its value is symbolic. It has value only in exchange.
 
@@ -451,7 +451,7 @@ If the bank's {\tt deposit} method acknowledges a successful deposit, by fulfill
 
 The interesting work starts on line 11, where {\tt deposit} looks up the alleged payment purse in the {\tt m} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error, rejecting Bob's promise for the result of the deposit, rejecting Alice's {\tt goodP}. If this lookup succeeds, it finds the {\tt decr} function for decrementing that purse's {\tt balance}, which it calls with the amount to withdraw. If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
 
-This is the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no locally observable failure possibilities remain. The assignment decrements the payment purse's {\tt balance} by {\tt amount}, and {\tt decr} returns. Line 12 increments the balance of the purse being deposited into.
+We have now arrived at the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no locally observable failure possibilities remain. The assignment decrements the payment purse's {\tt balance} by {\tt amount}, and {\tt decr} returns. Line 12 increments the balance of the purse being deposited into.
 
 The success callback in the {\tt deposit} method implicitly returns undefined, fulfilling Bob's promise for the result of the {\tt deposit} request, triggering Bob to release the good to Alice in exchange.
 
@@ -616,7 +616,7 @@ By redeeming the token, Alice obtains the exclusive right to play a specific con
 \section*{Conclusions}
 \label{conclusions}
 
-In human society, rights are a scalable means for organizing the complex cooperative interactions of  decentralized agents with diverse interests. This perspective is helping us shape JavaScript into a distributed persistent secure programming language. We show how this platform would enable the expression of new kinds of rights and smart contracts \emph{simply}, supporting new forms of cooperation among computational agents.
+In human society, rights are a scalable means for organizing the complex cooperative interactions of decentralized agents with diverse interests. This perspective is helping us shape JavaScript into a distributed persistent secure programming language. We show how this platform would enable the expression of new kinds of rights and smart contracts \emph{simply}, supporting new kinds of cooperation among computational agents.
 
 
 
