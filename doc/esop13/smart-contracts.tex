@@ -108,7 +108,11 @@ The first half of this paper, section~\ref{drses}, explains the design of Dr. SE
 
 Dr. SES is a platform for distributed, resilient and secure computing, layered on JavaScript. How do these ingredients support erights and contracts?
 
-The participants in a contract are typically represented by mutually suspicious machines communicating over open networks. JavaScript is not a distributed programming language. In the browser, a large number of APIs are available to scripts to communicate with servers and other frames, but these APIs do not operate at the level of individual objects. That is why Dr. SES builds on the Q library \bnote{Mark}{merge best of Kris' and Mark's Q library} to extend the JavaScript language proper with a handful of features to support distributed programming at the level of individual objects and messages.
+The participants in a contract are typically represented by mutually suspicious machines communicating over open networks. JavaScript is not a distributed programming language. In the browser, a large number of APIs are available to scripts to communicate with servers and other frames, but these APIs do not operate at the level of individual objects. That is why Dr. SES builds on the Q library\footnote{
+%
+Once the \myurl{code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} and \url{https://github.com/kriskowal/q} implementations of Q are reconciled.
+%
+} to extend the JavaScript language proper with a handful of features to support distributed programming at the level of individual objects and messages.
 
 In an architecture that aims to express erights or contracts, security must play a key role. Dr. SES builds upon the Q library to support distributed cryptographic capabilities, and upon the SES library to support local object-capabilities. The latter allows Dr. SES programs to safely execute mobile code from untrusted parties.
 % without fear of granting excess privileges to that piece of code.
@@ -126,8 +130,7 @@ Server-side Dr. SES programs periodically checkpoint their state, so that in the
 \subsection{Just Enough JavaScript}
 \label{enoughjs}
 
-JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. For the sake of brevity, this paper borrows one syntactic convenience proposed for ES6, \emph{arrow functions}~(``{\tt =>}''), and one proposed for ES7, the \emph{eventual-send operator}~(``{\tt !}'').\bnote{Tom}{ES6,ES7: ES5 abbreviation no longer introduced. Also, dependency on strict-mode? All code in this paper in ES5-strict}
- Expanding away these conveniences, all the code here is working ES5 strict-mode code, and is available at \myurl{code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} and its {\tt contract} subdirectory.
+JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. As of this writing, the standard and ubiquitous version of JavaScript is EcmaScript 5 (ES5). For the sake of brevity, this paper borrows one syntactic convenience proposed for ES6, \emph{arrow functions}~(``{\tt =>}''), and one proposed for ES7, the \emph{eventual-send operator}~(``{\tt !}''). Expanding away these conveniences, all the code here is working ES5 code, and is available at \myurl{code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} and its {\tt contract} subdirectory.
 
 \paragraph{Arrow functions.} 
 
@@ -178,22 +181,22 @@ This should be adequate to understand the functionality of the smart contract co
 \subsection{SES: Securing JavaScript}
 \label{ses}
 
-In an object-oriented programming language with unforgeable object references (protected pointers) and encapsulated objects, an object reference grants the right to invoke the public interface of the object it designates. A message sent on a reference both exercises this right and grants to the receiving object the right to invoke the passed arguments. 
+In an object-oriented language with unforgeable object references (protected pointers) and encapsulated objects, an object reference grants the right to invoke the public interface of the object it designates. A message sent on a reference both exercises this right and grants to the receiving object the right to invoke the passed arguments. 
 
-In an \emph{object-capability} (ocap) language~\cite{RobustComposition}, an object can cause effects on the world outside itself \emph{only} by using the references it holds. Some objects are transitively immutable or \emph{powerless}~\cite{Mettler:EECS-2012-244}, while others might cause effects. An object must not be given any references that enable effects by default. Any references it has implicit access to, such as by language-provided global variables, must be powerless. Under these rules, granted references are the \emph{sole} representation of permission.
+In an \emph{object-capability} (ocap) language~\cite{RobustComposition}, an object can cause effects on the world outside itself \emph{only} by using the references it holds. Some objects are transitively immutable or \emph{powerless}~\cite{Mettler:EECS-2012-244}, while others might cause effects. An object must not be given any references that enable effects by default. Any references it has implicit access to, such as language-provided global variables, must be powerless. Under these rules, granted references are the \emph{sole} representation of permission.
 
-\emph{Secure EcmaScript} (SES) is an ocap subset of EcmaScript 5 (ES5), the ubiquitous version of JavaScript as of this writing. SES code is lexically scoped and SES functions are encapsulated. SES denies access to global variables not on its whitelist. Those on its whitelist (including all globals defined by ES5) are unassignable, and all objects transitively reachable from these are immutable, rendering all implicit access powerless. 
+\emph{Secure EcmaScript} (SES) is an ocap subset of ES5. SES code is lexically scoped and SES functions are encapsulated. SES denies access to global variables not on its whitelist. Those on its whitelist (including all globals defined by ES5) are unassignable, and all objects transitively reachable from these are immutable, rendering all implicit access powerless. 
 
 SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is \emph{defensively consistent} when it can defend its own invariants and provide correct service to its well behaved clients, despite arbitrary or malicious misbehavior by its other clients. SES has a formal semantics supporting automated verification of some security properties of SES code~\cite{taly2011automated}. The SES library provides the following functions.
 
 \begin{description}
-\item[{\tt def(obj)}]  ``defines'' a ``defensible object''. To support defensive consistency, the {\tt def} function freezes\bnote{Tom}{Explain freezing?} its argument and all objects transitively reachable from its argument by reading public properties, rendering this subgraph of objects tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\});}'', it would make defensively consistent points.
+\item[{\tt def(obj)}]  ``defines'' a ``defensible object''. To support defensive consistency, the {\tt def} function freezes its argument (makes its properties read-only) and freezes all objects transitively reachable from there by reading properties. As a result, this subgraph of objects is effectively tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\})}'', it would make defensively consistent points.
 
 \item[{\tt Nat(allegedNumber)}] tests whether {\tt allegedNumber} is indeed a primitive number, and whether it is a non-negative integer (a natural number) within the contiguous range of exactly representable integers in JavaScript. If so, it returns {\tt allegedNumber}. Otherwise it throws an error.
 
 \item[{\tt var m = WeakMap()}] assigns to {\tt m} a new empty weak map. WeakMaps are an ES6 extension (emulated by SES on ES5 browsers). Ignoring space usage, {\tt m} is simply an object-identity-keyed table. {\tt m.set(obj, val)} associates {\tt obj}'s identity as key with {\tt val} as value, so {\tt m.get(obj)} returns {\tt val}, {\tt m.has(obj)} returns true, and {\tt m.delete(obj)} removes this entry. These methods use only {\tt obj}'s identity without interacting with {\tt obj}.
 
-\item[{\tt confine(exprSrc, endowments)}] takes the source code string for a SES expression and an {\tt endowments} record. It evaluates the expression in a new lexical environment consisting of the SES whitelisted (powerless) global variables and the properties of this endowments record. For example, {\tt confine(`x~+~y',~\{x:~3,~y:~6\})} returns 9. \bnote{Mark}{can't define new top level variables}
+\item[{\tt confine(exprSrc, endowments)}] takes the source code string for a SES expression and an {\tt endowments} record. It evaluates the expression in a new global environment consisting of the SES whitelisted (powerless) global variables and the properties of this endowments record. For example, {\tt confine(`x~+~y',~\{x:~3,~y:~6\})} returns 9. Confined code cannot define new global variables.
 
 
 \end{description}
@@ -216,7 +219,7 @@ A system of communicating event loops consists of multiple event loops (in the s
 
 Dr. SES builds upon communicating event loops because this concurrency model provides adequate support for plan coordination~\cite{miller:strangers}. That is, the model makes it manageable for objects to maintain their invariants in the face of concurrent (interleaved) requests made by multiple clients.
 
-While JavaScript environments already effectively support event loop concurrency, the ECMAScript language itself has no built-in support for concurrent or distributed programming. Q thus extends JavaScript with a handful of features that enable programmers to more directly express distributed interactions between individual objects.
+While JavaScript environments already effectively support event loop concurrency, the JavaScript language itself has no built-in support for concurrent or distributed programming. Q thus extends JavaScript with a handful of features that enable programmers to more directly express distributed interactions between individual objects.
 
 \paragraph{Promises}
 
@@ -372,7 +375,9 @@ While object references represent a kind of eright, they differ in several respe
 
 In the next sections, we will show how, by building on object references as erights, we can create new kinds of erights at a new level of abstraction. We look first at how money can be implemented as a smart contract. Money differs from other forms of property in several ways~\cite{fox_property_2008}.  Here, we identify four dimensions in which money differs from object references as rights. Object references are shareable, specific, opaque, and exercisable, whereas money is exclusive, fungible, measurable, and symbolic.
 
-Unlike with object references that are shareable, money needs be exclusive to serve as medium of exchange. Bob does not consider himself paid by Alice until he knows that he has exclusive access to the funds. Object references are also specific; they designate a particular object. Money, on the other hand, is fungible. You care about having a certain quantity of a particular currency, not having a specific piece of currency. One dollar is as good as another. Money also needs to be measurable. Unlike with object references that are opaque, \bnote{Mark}{explain opaqueness} Bob must be able to determine that he really has a certain quantity of a particular currency. Finally, money, unlike object references, is not exercisable. The right you have when you have an object reference is the right to do something: the right to invoke the behavior of the object it designates. Money, however, has no direct use value; its value is symbolic. It has value only in exchange.
+Unlike with object references that are shareable, money needs be exclusive to serve as medium of exchange. Bob does not consider himself paid by Alice until he knows that he has exclusive access to the funds. Object references are also specific; they designate a particular object. Money, on the other hand, is fungible. You care about having a certain quantity of a particular currency, not having a specific piece of currency. One dollar is as good as another. 
+
+Objects are opaque. The clients of an object can invoke it but don't necessarily know how it will react---that information is private to the object. By contrast, money is measurable. Bob must be able to determine that he really has a certain quantity of a particular currency. Finally, money, unlike object references, is not exercisable. The right you have when you have an object reference is the right to do something: the right to invoke the behavior of the object it designates. Money, however, has no direct use value; its value is symbolic. It has value only in exchange.
 
 % Smart contracts enable the exchange of erights in computational systems. 
 
