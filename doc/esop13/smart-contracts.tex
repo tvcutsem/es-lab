@@ -74,15 +74,14 @@
 \maketitle    
 
 \begin{abstract}
-Smart Contracts are an electronic form of contract that enable mutually suspicious parties to cooperate safely. Such contracts must be expressed in a computational medium, a programming language. This paper is concerned with how such contracts can be specified elegantly and executed safely in JavaScript.
-
-Smart contracts need a distributed, secure, persistent, and ubiquitous computational fabric. JavaScript provides the ubiquity, but it must be significantly extended to deal with the other aspects. The first part of this paper is a progress report on our efforts to turn JavaScript into such a fabric. Subsequently, assuming such a platform, we describe an electronic escrow exchange contract implemented in 42 lines of JavaScript code.
+Contracts enable mutually suspicious parties to cooperate safely. Smart contracts are programs whose behavior enforces the terms of the contract. This paper shows how such contracts can be specified elegantly and executed safely, given an appropriate distributed, secure, persistent, and ubiquitous computational fabric. JavaScript provides the ubiquity but must be significantly extended to deal with the other aspects. The first part of this paper is a progress report on our efforts to turn JavaScript into this fabric. Assuming the platform we are building, we describe an escrow exchange contract implemented in 42 lines of JavaScript code.
 
 \keywords{security, distributed objects, capabilities, smart contracts}
 \end{abstract}
 
 
 \section{Smart Contracts for the Rest of Us}
+\label{intro}
 
 The fabric of the global economy is held together by contracts. A contract is an agreed arrangement for cooperation between mutually suspicious parties. But existing contracts are ambiguous, jurisdictions-specific, and written, interpreted, and adjudicated only by expensive experts. \emph{Smart contracts} are contract-like arrangements expressed in program code, where the behavior of the program enforces the terms of the ``contract''\cite{szabo1997formalizing}. Though not a substitute for legal contracts, they can provide some of the benefits of contracts for fine-grain, jurisdiction-free, and automated arrangements for which legal contracts are impractical.
 
@@ -92,25 +91,28 @@ We are working towards turning JavaScript into such a fabric. JavaScript is alre
 %
 The official standards name for JavaScript is ``EcmaScript''.
 %
-} We explain how it relates to today's JavaScript, and report on our progress building Dr. SES. To demonstrate that Dr. SES would be a suitable platform, we present a representative simple smart contract, \emph{secure distributed escrow exchange}, implemented in only 42 lines of JavaScript code. We also present a generic contract host, able to host this contract and others, in only 37 lines.
+} To demonstrate that Dr. SES would be a suitable platform, we present a representative smart contract, \emph{secure distributed escrow exchange}, implemented in only 42 lines of JavaScript code. We also present a generic contract host, able to host this contract and others, in only 37 lines.
 
 Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed secure programming in JavaScript as effortless as possible. But much of the design of Dr. SES
 %
 %and its predecessors~\cite{tribble:joule,miller:ode,Close:Waterken} 
 %
-was shaped by examining what was needed to be able to express smart contracts simply. Taking a rights-based approach to local and distributed computing, we believe we designed a better general purpose platform as well as one naturally suited for expressing new kinds of rights and contracts.
+was shaped by examining what we needed to express smart contracts simply. Taking a rights-based approach to local and distributed computing, we believe has led us to building a better general purpose platform as well as one naturally suited for expressing new kinds of rights and contracts.
 
-\bnote{Tom}{Should we give an overview of the paper here?}
+The first half of this paper, section~\ref{drses}, explains the design of Dr. SES and our progress building it.  After section~\ref{enoughdrses}, the rest can be skipped on a first read. Section~\ref{towarderights} explains how rights help organize complexity in society in a decentralized manner, addressing many of the problems we face building distributed systems. Section~\ref{money} explains a 20 line implementation of ``money''. Section~\ref{exchange} explains a 22 line escrow exchange contract. Section~\ref{contracthost} explains a 37 line generic contract host. Together, they demonstrate the expressive simplicity possible on this platform.
+
+
 
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
+\label{drses}
 
-Dr. SES is a platform for distributed, resilient and secure computing, layered on JavaScript. How do these ingredients support electronic rights and contracts?
+Dr. SES is a platform for distributed, resilient and secure computing, layered on JavaScript. How do these ingredients support erights and contracts?
 
 The participants in a contract are typically represented by mutually suspicious machines communicating over open networks. JavaScript is not a distributed programming language. In the browser, a large number of APIs are available to scripts to communicate with servers and other frames, but these APIs do not operate at the level of individual objects. That is why Dr. SES builds on the Q library \bnote{Mark}{merge best of Kris' and Mark's Q library} to extend the JavaScript language proper with a handful of features to support distributed programming at the level of individual objects and messages.
 
-In an architecture that aims to express electronic rights or contracts, security must play a key role. Dr. SES builds upon the Q library to support distributed cryptographic capabilities, and upon the SES library to support local object-capabilities. The latter allows Dr. SES programs to safely execute mobile code from untrusted parties.
+In an architecture that aims to express erights or contracts, security must play a key role. Dr. SES builds upon the Q library to support distributed cryptographic capabilities, and upon the SES library to support local object-capabilities. The latter allows Dr. SES programs to safely execute mobile code from untrusted parties.
 % without fear of granting excess privileges to that piece of code.
-This is especially relevant in the context of JavaScript, where mobile code is routinely sent from servers to clients. In Section~\ref{sec:contract_host}, we will show an example that  depends on the ability to safely execute third-party code on servers.
+This is especially relevant in the context of JavaScript, where mobile code is routinely sent from servers to clients. In Section~\ref{contracthost}, we will show an example that  depends on the ability to safely execute third-party code on servers.
 
 Finally, the resilience aspect of Dr. SES deals with the unavoidable issues of failure handling that come up in distributed systems. 
 %It is widely appreciated that writing correct, bug-free code in the presence of arbitrary failures is hard. Dr. SES, then, tries to make it as easy as possible for non-experts to deal with distributed failures.
@@ -122,6 +124,7 @@ Server-side Dr. SES programs periodically checkpoint their state, so that in the
 
 
 \subsection{Just Enough JavaScript}
+\label{enoughjs}
 
 JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. For the sake of brevity, this paper borrows one syntactic convenience proposed for ES6, \emph{arrow functions}~(``{\tt =>}''), and one proposed for ES7, the \emph{eventual-send operator}~(``{\tt !}'').\bnote{Tom}{ES6,ES7: ES5 abbreviation no longer introduced. Also, dependency on strict-mode? All code in this paper in ES5-strict}
  Expanding away these conveniences, all the code here is working ES5 strict-mode code, and is available at \myurl{code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} and its {\tt contract} subdirectory.
@@ -157,6 +160,7 @@ var pt = makePoint(3, 5).add(makePoint(2, 7));
 A record of functions hiding variables serves as an object of methods ({\tt getX, getY, add}) hiding instance variables ({\tt x, y}). The {\tt makePoint} function serves as a class-like factory for making new point instances.
 
 \subsection{Just Enough Dr. SES}
+\label{enoughdrses}
 
 The remainder of Dr. SES can be seen as just extending this object model across time and space (persistent and distributed) without many of the nasty hazards that experienced programmers have learned to put up with. The top down reader, and the programmer who learns first by doing, only needs the following oversimplified statements about Dr. SES on a first read, before skipping ahead to the second half of the paper, starting in section~\ref{towardErights}. When reading the smart contract code there, refer back to the more detailed Dr. SES descriptions below as needed. 
 
@@ -168,7 +172,7 @@ The remainder of Dr. SES can be seen as just extending this object model across 
 \item[NodeKen] Don't worry about network partitions or machine crashes. Once the machine comes back up, everything keeps going, so a crash and restart is just a very long (possibly infinite) pause. Likewise, a partitioned network is just a slow network waiting to heal. Once things come back up, every message ever sent will be delivered in order exactly once.
 \end{description*}
 
-This should be adequate to understand the functionality of the smart contract code when things go well. Of course, the whole point of electronic rights and smart contracts is to also limit the damage when things go badly. This still requires a careful reading of the following sections.
+This should be adequate to understand the functionality of the smart contract code when things go well. Of course, the whole point of erights and smart contracts is to also limit the damage when things go badly. This still requires a careful reading of the following sections.
  
 
 \subsection{SES: Securing JavaScript}
@@ -176,14 +180,14 @@ This should be adequate to understand the functionality of the smart contract co
 
 In an object-oriented programming language with unforgeable object references (protected pointers) and encapsulated objects, an object reference grants the right to invoke the public interface of the object it designates. A message sent on a reference both exercises this right and grants to the receiving object the right to invoke the passed arguments. 
 
-In an \emph{object-capability language}~\cite{RobustComposition}, an object can cause effects on the world outside itself \emph{only} by using the references it holds. Some objects are transitively immutable or \emph{powerless}~\cite{Mettler:EECS-2012-244}, while others might cause effects. A reference to a non-powerless object is a \emph{capability}. An object must not be given any capabilities by default. Any references it has implicit access to, such as by language-provided global variables, must be powerless. Under these rules, granted references are the \emph{sole} representation of permission.
+In an \emph{object-capability} (ocap) language~\cite{RobustComposition}, an object can cause effects on the world outside itself \emph{only} by using the references it holds. Some objects are transitively immutable or \emph{powerless}~\cite{Mettler:EECS-2012-244}, while others might cause effects. An object must not be given any references that enable effects by default. Any references it has implicit access to, such as by language-provided global variables, must be powerless. Under these rules, granted references are the \emph{sole} representation of permission.
 
-\emph{Secure EcmaScript} (SES) is an object-capability subset of ES5. SES code is lexically scoped and SES functions are encapsulated. SES denies access to global variables not on its whitelist. Those on its whitelist (including all globals defined by ES5) it makes unassignable, and it transitively freezes all state transitively reachable from these variables, rendering all implicit access powerless. 
+\emph{Secure EcmaScript} (SES) is an ocap subset of EcmaScript 5 (ES5), the ubiquitous version of JavaScript as of this writing. SES code is lexically scoped and SES functions are encapsulated. SES denies access to global variables not on its whitelist. Those on its whitelist (including all globals defined by ES5) are unassignable, and all objects transitively reachable from these are immutable, rendering all implicit access powerless. 
 
 SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is \emph{defensively consistent} when it can defend its own invariants and provide correct service to its well behaved clients, despite arbitrary or malicious misbehavior by its other clients. SES has a formal semantics supporting automated verification of some security properties of SES code~\cite{taly2011automated}. The SES library provides the following functions.
 
 \begin{description}
-\item[{\tt def(obj)}]  ``defines'' a ``defensible object''. To support defensive consistency, the {\tt def} function freezes\bnote{Tom}{Explain freezing?} its argument and all objects transitively reachable from its argument by reading public properties, rendering the immediate API surface of this object tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\});}'', it would make defensively consistent points.
+\item[{\tt def(obj)}]  ``defines'' a ``defensible object''. To support defensive consistency, the {\tt def} function freezes\bnote{Tom}{Explain freezing?} its argument and all objects transitively reachable from its argument by reading public properties, rendering this subgraph of objects tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\});}'', it would make defensively consistent points.
 
 \item[{\tt Nat(allegedNumber)}] tests whether {\tt allegedNumber} is indeed a primitive number, and whether it is a non-negative integer (a natural number) within the contiguous range of exactly representable integers in JavaScript. If so, it returns {\tt allegedNumber}. Otherwise it throws an error.
 
@@ -197,12 +201,12 @@ SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is
 \subsection{Q: Distributed JavaScript Objects}
 \label{Q}
 
-As stated in the introduction, to realize electronic rights, we need a distributed, secure, and persistent computational fabric. We have just seen how SES can secure a local JavaScript environment. Here, we focus on how to link up multiple secured JavaScript environments into a distributed system.
+As stated in the introduction, to realize erights, we need a distributed, secure, and persistent computational fabric. We have just seen how SES can secure a local JavaScript environment. Here, we focus on how to link up multiple secured JavaScript environments into a distributed system.
 
 
 \paragraph{Communicating Event-Loop Concurrency}
 
-On both the browser and the server, JavaScript's de-facto concurrency model is based on ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. NodeJS, the most widespread server-side JavaScript environment, is based on a similar model, although on the server the focus is less on UI and more on asynchronous networking and file I/O.
+On both the browser and the server, JavaScript's de-facto concurrency model is ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. NodeJS, the most widespread server-side JavaScript environment, is based on a similar model, although on the server the issue is asynchronous networking and file I/O rather than UI.
 
 In its most general form, an event loop consists of an event queue and a set of event handlers. The event loop processes events one by one from its queue by dispatching to the appropriate event handler. In JavaScript, event handlers are usually functions registered as callbacks on certain events (e.g. button clicks or incoming XHR responses).
 
@@ -220,11 +224,13 @@ We introduce a new type of object, called a Promise, to represent both the outco
 
 \begin{description*}
   \item[pending] when it is not yet determined what object the promise designates,
-  \item[fulfilled] when it is resolved to successfully designate some object,
-  \item[rejected] when it will never designate an object, for an alleged reason represented by an associated error.
+  \item[resolved] A fulfilled or rejected promise is also called a \emph{resolved} promise.
+  \begin{description*}
+    \item[fulfilled] when it is resolved to successfully designate some object,
+    \item[rejected] when it will never designate an object, for an alleged reason represented by an associated error.
+  \end{description*}
 \end{description*}
 
-A fulfilled or rejected promise is also called a \emph{resolved} promise.
 
 \begin{description*}
 \item[{\tt var tP = Q(target)}] assigns to {\tt tP} a promise for {\tt target}. If {\tt target} is already a promise, that same promise is assigned. Otherwise, {\tt tP} is a fulfilled promise designating {\tt target}.
@@ -234,22 +240,20 @@ A fulfilled or rejected promise is also called a \emph{resolved} promise.
 \item[{\tt var resultP = tP.then( (v) => result1, (e) => result2 )}] provides eventual access to {\tt tP}'s resolution. The {\tt .then} method takes two callback arguments, a \texttt{success} callback and an optional \texttt{failure} callback. It registers these callbacks to be called back in a later turn after {\tt tP} is resolved. If {\tt tP} was fulfilled with a value {\tt v}, then {\tt success(v)} is called. If {\tt tP} was rejected with an error {\tt e}, then {\tt failure(e)} is called. {\tt resultP} is a promise for the invoked callback's {\tt result} value. 
 \end{description*}
 
-If the callback invoked by {\tt .then} throws an error, that error is used to reject {\tt resultP}. This propagation of errors along chains of dependent promises is called rejected promise contagion~\cite{miller:strangers}, and it is the asynchronous analogue of propagating exceptions up the call stack. If the failure callback is missing,  rejecting {\tt tP} will eventually reject {\tt resultP} with the same reason.
-
-To make matters more concrete, if {\tt pointP} is a promise for a local {\tt point} object, we may construct a derived point promise as follows:
+If the callback invoked by {\tt .then} throws an error, that error is used to reject {\tt resultP}. This propagation of errors along chains of dependent promises is called rejected promise contagion~\cite{miller:strangers}, and it is the asynchronous analogue of propagating exceptions up the call stack. If the failure callback is missing,  rejecting {\tt tP} will eventually reject {\tt resultP} with the same reason. If {\tt pointP} is a promise for a local {\tt point} object, we may construct a derived point promise as follows:
 
 \begin{lstlisting}[language=JavaScript,numbers=none]
 var newP = pointP.then((point) => point.add(makePoint(1,2)));
 \end{lstlisting}
 
-Just like it is useful to compose individual functions into a composite function, it is often useful to combine multiple individual promises into a single promise whose outcome depends on the individual promises. To construct such promise combinators, the {\tt Q.promise} function is used to define promises with a custom resolution strategy. The Q library provides some useful combinators\footnote{These are easily built from the above primitives. Their implementation can be found at \myurl{wiki.ecmascript.org/doku.php?id=strawman:concurrency}.} we use later in the escrow exchange contract:
+Just like it is useful to compose individual functions into a composite function, it is often useful to compose individual promises into a single promise whose outcome depends on the individual promises. The Q library provides some useful combinator\footnote{These are easily built from the above primitives. Their implementation can be found at \myurl{wiki.ecmascript.org/doku.php?id=strawman:concurrency}.} functions we use later in the escrow exchange contract:
 
 \begin{description*}
 \item[{\tt Q.race(answerPs)}] takes an array of promises, {\tt answerPs}, and returns a promise for the resolution of whichever promise we notice has resolved first. For example, {\tt Q.race([xP,yP]).then(v => print(v))} will cause either the value of {\tt xP} or {\tt yP} to be printed, whichever resolves first. If neither resolves, then neither does the promise returned by {\tt Q.race}. If the first promise to resolve is rejected, the promise returned by {\tt Q.race} is rejected with the same reason.
 
 \item[{\tt Q.all(answerPs)}] takes an array of promises and returns a promise for an array of their fulfilled values. We often need to collect several promised answers, in order to react either when \emph{all} the answers are ready or when \emph{any} of them becomes rejected. Given {\tt sumP = Q.all([xP,yP]).then(([x,y]) => x+y)}, if both {\tt xP} and {\tt yP} are fulfilled with numbers, {\tt sumP} is fulfilled with their sum. If neither resolves, neither does {\tt sumP}. If either {\tt xP} or {\tt yP} is rejected, {\tt sumP} is rejected with the same reason.
 
-\item[{\tt Q.join(xP,yP)}] takes two promises and returns a promise for the one object they both designate. Join is our eventual equality operation. Any messages sent to this joined promise are only delivered if {\tt xP} and {\tt yP} eventually come to designate the same target object. In this case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
+\item[{\tt Q.join(xP,yP)}] takes two promises and returns a promise for the one object they both designate. Join is our eventual equality operation. Any messages sent to the joined promise are only delivered if {\tt xP} and {\tt yP} eventually come to designate the same target. In this case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
 \end{description*}
 
 \paragraph{Immediate call and eventual send}
@@ -312,7 +316,7 @@ By contrast, Dr. SES on NodeKen runs in a persistent environment. JavaScript obj
 
 %To date, there exist two implementations of Ken, one in C~\cite{Yoo:CKen} and one in Java (WaterKen~\cite{Close:Waterken}).
 
-Following the philosophy of WaterKen~\cite{Close:Waterken}, the persistent Java web server where the Ken ideas originated, we expect it to be common for ephemeral and persistent Dr. SES environments to communicate with each other, where the ephemeral environment (inside the browser) primarily deals with UI and the persistent environment stores durable application state, a distributed form of the Model-View-Controller pattern. In the remainder of this paper, we assume that all Dr. SES code runs in persistent Dr. SES environments.
+Following the philosophy of Waterken~\cite{Close:Waterken}, the persistent Java web server where the Ken ideas originated, we expect it to be common for ephemeral and persistent Dr. SES environments to communicate with each other, The ephemeral environment (inside the browser) primarily deals with UI and the persistent environment stores durable application state, a distributed form of the Model-View-Controller pattern. In the remainder of this paper, we assume that all Dr. SES code runs in persistent Dr. SES environments.
 
 \paragraph{Implementation} 
 
@@ -339,36 +343,34 @@ The implementation of Ken underlying NodeKen currently does not use an encrypted
 %
 An outline of such a design, due to Brian Warner, is available online: \myurl{eros-os.org/pipermail/cap-talk/2012-September/015386.html}}
 
-Now that we've seen the elements of Dr. SES, we can proceed to explain how to use it to build electronic rights and smart contracts.
+Now that we've seen the elements of Dr. SES, we can proceed to explain how to use it to build erights and smart contracts.
 
 \section{Toward Distributed Electronic Rights}
-\label{towardErights}
+\label{towarderights}
 
-Toward Distributed Electronic Rights
+The elements of Dr. SES demonstrate how JavaScript can be transformed into a distributed, secure, and resilient system. At its core is the recognition that object references represent a right to perform a set of operations on a specific, designated resource. This emphasis on distributed rights has its counterpart in society: a system of rights is society's answer to creating distributed, secure, and resilient commercial systems.
 
-The elements of Dr. SES demonstrate how JavaScript can be transformed into a distributed, secure, and resilient programming system. At its core is the recognition that object references, as capabilities, represent a right to perform a set of operations on a specific, designated resource. This emphasis on distributed rights has its counterpart in society: a system of rights is society's answer to creating distributed, secure, and resilient commercial systems.
-
-Global commerce rests on a system of tradeable rights. This system is: ``the product of thousands of years of evolution. It is highly complex and embraces a multitude of actions, objects, and individuals. ... With minor exceptions, rights to take almost all conceivable actions with virtually all physical objects are fixed on identifiable individuals or firms at every instant of time. The books are kept up to date despite the burden imposed by dynamic forces, such as births and deaths, dissolutions, and new technology.''~\cite{jensen_specific_1995}
+Global commerce rests on a system of tradeable rights. This system is: ``\emph{the product of thousands of years of evolution. It is highly complex and embraces a multitude of actions, objects, and individuals. ... With minor exceptions, rights to take almost all conceivable actions with virtually all physical objects are fixed on identifiable individuals or firms at every instant of time. The books are kept up to date despite the burden imposed by dynamic forces, such as births and deaths, dissolutions, and new technology.}''~\cite{jensen_specific_1995}
 
 Rights help people coordinate plans and resolve conflicts over use of resources. Rights partition the space of actions to prevent conflict of interests and plan interference, thus enabling cooperative relationships despite mutual suspicion and competing goals~\cite{steiner_essay_1994}. This rights-based perspective can shed light on the problem of securing distributed computational systems.
 
 All computational systems must address the problem of open access. Global mutable state creates a tragedy of the commons: since anyone can access and change it, no one can safely rely on it. Use conflicts arise from both intentional (malicious), and unintentional (bugs) actions. Preventing use conflict over shared state is one of the main challenges designers face in building computational systems.
 
-Historically, two broad strategies for avoiding the tragedy of the commons have emerged: a governance strategy and a property rights strategy~\cite{smith_exclusion_2002}. The governance approach solves the open access problem by restricting access to members and regulating each member's use of the shared resource. The property rights approach divides ownership of the resource among the individuals and creates abstract rules that govern the exchange of rights between owners.These approaches have their analogues in computational systems: object capability systems pursue a property rights strategy, while access control lists implement a governance strategy.
+Historically, two broad strategies for avoiding the tragedy of the commons have emerged: a governance strategy and a property rights strategy~\cite{smith_exclusion_2002}. The governance approach solves the open access problem by restricting access to members and regulating each member's use of the shared resource. The property rights approach divides ownership of the resource among the individuals and creates abstract rules that govern the exchange of rights between owners.These approaches have their analogues in computational systems: ocap systems pursue a property rights strategy, while access control lists implement a governance strategy.
 
 Access control lists solve the open access problem by denying access by unauthorized users, and specifying access rights for authorized users. Great effort is put into perimeter security (firewalls, antivirus, intrusion detection, and the like) to keep unauthorized users out, while detailed access control lists regulate use by authorized users.
 
 Governance regimes have proved successful in managing shared resources in many situations~\cite{ostrom_governing_1990}. However, they tend to break down under increasing complexity. As the number of users and types of use increases, the ability of governance systems to limit external access and manage internal use breaks down. Perimeter security can no longer cope with the pressure for increased access, and access control lists cannot keep up with dynamic requests for changes in access rights.
 
-The property rights strategy deals with increasing complexity by implementing a decentralized system of individual rights. Rights are used to partition the commons into separate domains under the control of specific agents who can decide its use, as long as the use is consistent with the rights of others. Instead of attempting to exclude non-members at the perimeter, the property strategy brings all agents under a common set of abstract rules that determine how rights are initially acquired, transferred, and protected~\cite{hayek_law_1973}. Individual rights define the boundaries within which agents can act free of interference from others. Contracts enable the exchange of rights across these protected domains.  
+The property rights strategy deals with increasing complexity by implementing a decentralized system of individual rights. Rights are used to partition the commons into separate domains under the control of specific agents who can decide its use, as long as the use is consistent with the rights of others. Instead of excluding non-members at the perimeter, the property strategy brings all agents under a common set of abstract rules that determine how rights are initially acquired, transferred, and protected~\cite{hayek_law_1973}. Individual rights define the boundaries within which agents can act free of interference from others. Contracts enable the exchange of rights across these protected domains.  
 
-The object-capability approach can be seen as analogous to an individual rights approach to coordinating action in society. The local unforgeable object reference and the remote unguessable reference represent one kind of eright ? the right to invoke the public interface of the object it designates. In object capability systems, these references bundle authority with designation~\cite{Hardy88Deputy}. Like property rights, they are possessory rights: possession of the capability is all that is required for its use, its use is at the discretion of the possessing entity, and the entity holding the capability is free to transfer the capabilities it holds to others~\cite{mossoff_what_2003}.
+The ocap approach can be seen as analogous to an individual rights approach to coordinating action in society. The local unforgeable object reference and the remote unguessable reference represent one kind of eright---the right to invoke the public interface of the object it designates. In ocap systems, references bundle authority with designation~\cite{Hardy88Deputy}. Like property rights, they are possessory rights: possession of the reference is all that is required for its use, its use is at the discretion of the possessing entity, and the entity holding the reference is free to transfer it to others~\cite{mossoff_what_2003}.
 
-The private law system of property, contract, and tort brings resources into a system of rights. Property law determines the initial acquisition of rights; contract law governs the transfer of rights; and tort law protects rights from interference (Epstein: 1995). Object capability systems follow a similar logic: the rules of object creation ensure that objects are created with only the rights they need (no ambient authority), the ``Granovetter'' rules of message passing govern the transfer of rights, and object encapsulation protects rights from interference~\cite{RobustComposition}.
+The private law system of property, contract, and tort brings resources into a system of rights. Property law determines the initial acquisition of rights; contract law governs the transfer of rights; and tort law protects rights from interference (Epstein: 1995). Ocap systems follow a similar logic: the rules of object creation make it easy to create objects with only the rights they need, the message passing rules govern the transfer of rights, and encapsulation protects rights from interference~\cite{RobustComposition}.
 
 While object references represent a kind of eright, they differ in several respects from more familiar rights in society. For example, object references are typically shared. When Alice gives Bob a reference to an object, she is transferring a copy of the reference thereby sharing access to the object. In society, transfers of rights usually take the form of a transfer of exclusive access due to the rivalrous nature of physical objects. I give up my access to my car when I transfer title to you. Exclusive rights is the default in the physical world; complex legal frameworks are needed to enable sharing (partnerships, corporations, easements, and so forth). Computational systems face the opposite tradeoff: sharing is easy, but exclusivity is hard.
 
-In the next sections, we will show how, by building on object references as erights, we can create new kinds of erights at a new level of abstraction. We look first at how money transfers can be implemented as a smart contract. Money differs from other forms of property in several distinct ways~\cite{fox_property_2008}.  Here, we identify four dimensions in which money differs from object references as rights. Object references are shareable, specific, opaque, and exercisable, whereas money is exclusive, fungible, measurable, and symbolic.
+In the next sections, we will show how, by building on object references as erights, we can create new kinds of erights at a new level of abstraction. We look first at how money can be implemented as a smart contract. Money differs from other forms of property in several ways~\cite{fox_property_2008}.  Here, we identify four dimensions in which money differs from object references as rights. Object references are shareable, specific, opaque, and exercisable, whereas money is exclusive, fungible, measurable, and symbolic.
 
 Unlike with object references that are shareable, money needs be exclusive to serve as medium of exchange. Bob does not consider himself paid by Alice until he knows that he has exclusive access to the funds. Object references are also specific; they designate a particular object. Money, on the other hand, is fungible. You care about having a certain quantity of a particular currency, not having a specific piece of currency. One dollar is as good as another. Money also needs to be measurable. Unlike with object references that are opaque, \bnote{Mark}{explain opaqueness} Bob must be able to determine that he really has a certain quantity of a particular currency. Finally, money, unlike object references, is not exercisable. The right you have when you have an object reference is the right to do something: the right to invoke the behavior of the object it designates. Money, however, has no direct use value; its value is symbolic. It has value only in exchange.
 
@@ -378,6 +380,7 @@ Contracts generally manipulate rights. The participants in a contract each bring
 
 
 \section{Money as an Electronic Right}
+\label{money}
 
 Figure~\ref{makeMint}  is our implementation of a money-like rights issuer, using only elements of Dr. SES explained above. To explain how it works, it is best to start with how it is used. Say Alice wishes to buy something from Bob for \$10. The three parties involved would be Alice, Bob, and a \$ issuer, which we will informally call a bank. The starting assumptions are that Alice and Bob do not trust each other, the bank does not trust either Alice or Bob, and Alice and Bob trust the bank with their money but with nothing else. In this scenario, Alice is willing to risk her \$10 on the possibility of Bob's non-delivery. But Bob wants to be sure he's been paid before he releases the good in exchange.
 
@@ -426,7 +429,7 @@ For Alice to pay Bob, she sets up a \emph{payment purse}, deposits \$10 into it 
   var goodP = ackP.then(_ => bobP ! buy(desc, paymentP));
 \end{lstlisting}
 
-On the diagram in Figure~\ref{makeMint}, each {\tt makeMint} call results in a layer with its own ({\tt mint}, {\tt m}) pair representing a distinct currency. Each {\tt mint} call results in a nested layer with its own ({\tt purse}, {\tt decr}, {\tt balance}) triple. On line 16 of the code, we see that each {\tt purse} to {\tt decr} mapping is also entered into the {\tt m} table shared by all purses of the same currency. Alice's main purse is on the bottom purse layer. Bob's is on the top layer. Alice's payment purse, being sent to Bob in the buy message, is in the middle layer.
+On the diagram in Figure~\ref{makeMint}, each {\tt makeMint} call creates a layer with its own ({\tt mint}, {\tt m}) pair representing a distinct currency. Each {\tt mint} call creates a nested layer with its own ({\tt purse}, {\tt decr}, {\tt balance}) triple. On line 16 of the code, each {\tt purse} to {\tt decr} mapping is also entered into the {\tt m} table shared by all purses of the same currency. Alice's main purse is on the bottom purse layer. Bob's is on the top layer. Alice's payment purse, being sent to Bob in the buy message, is in the middle layer.
 
 Bob receives this request at the following {\tt buy} method:
 
@@ -451,6 +454,7 @@ This success callback in the {\tt deposit} method implicitly returns undefined, 
 
 
 \section{The Escrow Exchange Contract}
+\label{exchange}
 
 \begin{figure}[htbp]
 \begin{center}
@@ -489,13 +493,11 @@ var escrowExchange = (a, b) => { // a from Alice, b from Bob
 \label{escrowExchange}
 \end{figure}
 
-In the mint maker scenario, it is unfortunate that Alice must risk her \$10 on the possibility of Bob's non-delivery. We now introduce an escrow exchange contract that implements an \emph{all or nothing} trade.
-
-We explain the escrow exchange contract in terms of a scenario among five players, Alice, Bob, a money issuer running the code of Figure~\ref{makeMint}, a stock issuer also running the code of Figure~\ref{makeMint} but with the units representing shares of some particular stock, and an escrow exchange agent running the code of Figure~\ref{escrowExchange}. The diagram at the top of Figure~\ref{makeContractHost} shows the initial relationships, with the escrow exchange agent in the role of contract host.
+In the mint maker scenario, it is unfortunate that Alice must risk her \$10 on the possibility of Bob's non-delivery. We now introduce an escrow exchange contract that implements an \emph{all or nothing} trade. We explain the escrow exchange contract in terms of a scenario among five players, Alice, Bob, a money issuer running the code of Figure~\ref{makeMint}, a stock issuer also running the code of Figure~\ref{makeMint} but with the units representing shares of some particular stock, and an escrow exchange agent running the code of Figure~\ref{escrowExchange}. The diagram at the top of Figure~\ref{makeContractHost} shows the initial relationships, with the escrow exchange agent in the role of contract host.
 
 Alice and Bob again do not trust each other. They wish to trade \$10 of Alice's money for 7 shares of Bob's stock, but in this case, neither is willing to risk their assets on the possibility of the other's non-delivery. They both trust the same money issuer with their money, the same stock issuer with their stock, and the same escrow exchange agent with the rights to be traded. The money issuer, the stock issuer, and the escrow exchange agent each have no prior knowledge or trust in the others. Additionally, none of these trust Alice or Bob. The rest of the scenario as presented below examines only the consequences of Alice or Bob's misbehavior and assumes the other three run the code shown honestly. A full analysis of vulnerabilities should consider all combinations.
 
-Since the situation is now symmetric, we explain the progression of events from Alice's perspective. Alice's prior trust in each issuer is represented as before---Alice holds a persistent reference to her main purse at each issuer. Alice's prior trust in the escrow exchange agent is represented as the ability to provide the first ``{\tt a}'' argument in the call to {\tt escrowExchange} (Figure~\ref{escrowExchange}, line 12) for which Bob is able to provide the second ``{\tt b}'' argument. For this specific interaction, Alice might create this argument as follows:
+Since the situation is now symmetric, we explain the progression of events from Alice's perspective. Alice's prior trust in each issuer is represented as before---Alice holds a persistent reference to her main purse at each issuer. Alice's prior trust in the escrow exchange agent is represented as the ability to provide the first ``{\tt a}'' argument in the call to {\tt escrowExchange} (Figure~\ref{escrowExchange}, line 12) for which Bob is able to provide the second ``{\tt b}'' argument. Alice might create this argument as follows:
 
 \begin{lstlisting}[language=JavaScript,numbers=none]
   var cancel;
@@ -536,7 +538,7 @@ Only one mystery remains. How does the escrow agent obtain a fresh escrow purse 
 If it simply asks Alice's purse for a new empty purse ({\tt srcPurseP ! makePurse()}), Alice could return a dishonest purse that acknowledges deposit without transferring anything. Alice would then obtain Bob's stock for free. If it simply asks Bob's purse, then Bob could steal Alice's money during phase 1. Instead, it checks if their {\tt makePurse} methods are the very same function object---have the same object identity--by using {\tt Q.join} on promises for these two methods. This is why, on lines 3 and 7 of Figure~\ref{makeMint}, all purses of the same currency at the same bank share the same function as their {\tt makePurse} method. If the {\tt Q.join} of these two methods fails, then either Alice was dishonest, Bob was dishonest, or they simply didn't have prior agreement on the same currency at the same money issuer.
 
 \section{The Contract Host}
-\label{sec:contract_host}
+\label{contracthost}
 
 \begin{figure}[htbp]
 \begin{minipage}[t]{0.52\linewidth}
@@ -598,18 +600,19 @@ To engage in the escrow exchange contract, Alice and Bob had to agree on the iss
 \item The issuers of each of the rights at stake.
 \item The source code of the contract.
 \item Who is to play which side of the contract.
-\item A third party that they mutually trust to run their agreed code, \emph{whatever it is}, honestly.
+\item A third party they mutually trust to run their agreed code, \emph{whatever it is}, honestly.
 \end{itemize}
 
 Figure~\ref{makeContractHost} shows the code for a generic contract host. It is able to host any contract formulated, as our escrow exchange contract is, as a function, taking one argument from each player and returning the outcome of the contract as a whole. But setting up a contract is tricky, as it involves a necessary asymmetry among the players. One of the players, say Bob, must initiate a new live contract instance, by sending the contract's code to the contract host. At this point, Bob is the only one who knows both this contract instance and that he'd like to invite Alice to participate in \emph{this} instance. If Bob simply sent to Alice a reference to those objects on the contract host that enables Alice to play, Alice would not know what she's received, since she received it from Bob whom she does not trust. She does trust the contract host, and these objects are on the contract host, but so are the objects corresponding to all the other contracts this host is initiating or running. The connection of Alice to this contract instance must be at Bob's initiation, but Alice's confidence that she's playing the contract she thinks she is much be rooted in her prior trust in the contract host.
 
-Our contract host is an object with two methods, {\tt setup} and {\tt play}. Bob sets up the contract instance by calling {\tt setup} with the source code for the contract function in question, e.g., {\tt escrowExchange}. At line 32, {\tt setup} returns an array of unique unforgeable tokens, one for each argument to the function. Bob's invitation to Alice communicates this token, the source code for the contract he wishes Alice to play, the argument index indicating what side of the contract Alice is to play, and the contract host in question.
+Our contract host is an object with two methods, {\tt setup} and {\tt play}. Bob sets up the contract instance by calling {\tt setup} with the source code for the contract function in question, e.g., {\tt escrowExchange}. At line 32, {\tt setup} returns an array of unique unforgeable tokens, one for each contract parameter. Bob's invitation to Alice includes this token, the source for the contract he wishes Alice to play, the argument index indicating what side of the contract Alice is to play, and the contract host in question.
 
-If Alice decides she'd like to play this contract, she formulates her argument object as above, and sends it in a {\tt play} request to the contract host along with the token, the alleged contract source code, and the alleged side she is to play. If all of this checks out, and this token has not previously been redeemed, then this token gets used up and Alice's argument is remembered until the arguments for the other players arrive, and Alice receives a promise for the outcome of the contract. Once all arguments are present, the contract function is called and its result is used to resolve the previously returned promise.
+If Alice decides she'd like to play this contract, she formulates her argument object as above, and sends it in a {\tt play} request to the contract host along with the token, the alleged contract source code, and the alleged side she is to play. If all of this checks out and this token has not previously been redeemed, then this token gets used up and Alice's argument is held until the arguments for the other players arrive, and Alice receives a promise for the outcome of the contract. Once all arguments arrive, the contract function is called and its result is used to resolve the previously returned promise.
 
 By redeeming the token, Alice obtains the exclusive right to play a specific contract whose logic she knows, and whose play she expects to cause external effects. This eright is exclusive, specific, measurable, and exercisable. 
 
 \section{Conclusions}
+\label{conclusions}
 
 \bnote{Mark}{write conclusions}
 
