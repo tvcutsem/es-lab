@@ -104,11 +104,11 @@ The first half of this paper, section~\ref{drses}, explains the design of Dr. SE
 \section{Dr. SES: Distributed Resilient Secure EcmaScript}
 \label{drses}
 
-Dr. SES is a platform for distributed, resilient and secure computing, layered on JavaScript. How do these ingredients support erights and contracts?
+Dr. SES is a platform for distributed, resilient, and secure computing, layered on JavaScript. How do these ingredients support erights and contracts?
 
 The participants in a contract are typically represented by mutually suspicious machines communicating over open networks. JavaScript is not a distributed programming language. In the browser, a large number of APIs are available to scripts to communicate with servers and other frames, but these APIs do not operate at the level of individual objects. Dr. SES builds on the Q library\footnote{
 %
-Once the \myurl{code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} and \url{https://github.com/kriskowal/q} implementations of Q are reconciled.
+Once the \myurl{es-lab.googlecode.com/svn/trunk/src/ses/makeQ.js}, \cite{tyler:websend}, and \url{https://github.com/kriskowal/q} implementations of Q are reconciled.
 %
 } to extend the JavaScript language with a handful of features to support distributed programming at the level of objects and messages.
 
@@ -185,7 +185,7 @@ In an \emph{object-capability} (ocap) language~\cite{RobustComposition}, an obje
 SES supports \emph{defensive consistency}~\cite{RobustComposition}. An object is \emph{defensively consistent} when it can defend its own invariants and provide correct service to its well behaved clients, despite arbitrary or malicious misbehavior by its other clients. SES has a formal semantics supporting automated verification of some security properties of SES code~\cite{taly2011automated}. The code in this paper uses the following functions from the SES library:
 
 \begin{description}
-\item[{\tt def(obj)}]  ``defines'' a ``defensible object''. To support defensive consistency, the {\tt def} function makes the properties of its argument read-only, likewise for all objects transitively reachable from there by reading properties. As a result, this subgraph of objects is effectively tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\})}'', it would make defensively consistent points.
+\item[{\tt def(obj)}]  \emph{def}ines a \emph{def}ensible object. To support defensive consistency, the {\tt def} function makes the properties of its argument read-only, likewise for all objects transitively reachable from there by reading properties. As a result, this subgraph of objects is effectively tamper proof. A \emph{tamper-proof} record of \emph{encapsulated} functions hiding \emph{lexical} variables is a \emph{defensible object}. In SES, if {\tt makePoint} called {\tt def} on the points it returns by saying ``{\tt return~def(\{\ldots\})}'', it would make defensively consistent points.
 
 \item[{\tt confine(exprSrc, endowments)}] enables safe mobile code. The {\tt confine} function takes the source code string for a SES expression and an {\tt endowments} record. It evaluates the expression in a new global environment consisting of the SES whitelisted (powerless) global variables and the properties of this endowments record. For example, {\tt confine(`x~+~y',~\{x:~3,~y:~6\})} returns 9.
 
@@ -216,7 +216,7 @@ Communicating event loop concurrency makes it manageable for objects to maintain
 
 \paragraph{Promises}
 
-We introduce a new type of object, called a Promise, to represent both the outcome of asynchronous operations, as well as remote references. A normal JavaScript direct reference may only designate an object within the same event loop. Only promises may designate objects in other event loops. A promise may be in one of several states:
+We introduce a new type of object, a promise, to represent both the outcome of asynchronous operations as well as remote references~\cite{liskov:promises}. A normal JavaScript direct reference may only designate an object within the same event loop. Only promises designate objects in other event loops. A promise may be in one of several states:
 
 \begin{description*}
   \item[pending] when it is not yet determined what object the promise designates,
@@ -279,7 +279,7 @@ A local reference to an object is guaranteed to be unique and unforgeable, and o
 
 Primitive values such as strings and numbers are \emph{pass-by-copy}---when passed as arguments or returned as results in remote messages, their contents are serialized and unserialized. JavaScript arrays default to pass-by-copy. All other objects and functions default to \emph{pass-by-reference}---when passed as an argument or returned result, information needed to access them is serialized, which is unserialized into a remote reference for sending messages back to this object itself.
 
-Over the RESTful transport, we serialize pass-by-reference objects using unguessable HTTPS URLs (also called web-keys~\cite{Close:Webkeys}). Such a reference may look like {\tt https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment (everything after the {\tt \#}) is a random character string that uniquely identifies an object on the {\tt example.com} server. We use unguessable secrets for remote object references because of a key similarity between secrets and object references: If you do not know an unguessable secret, you can only come to know it if somebody else who knows the secret chooses to share it with you.
+Over the RESTful transport~\cite{tyler:websend}, we serialize pass-by-reference objects using unguessable HTTPS URLs (also called web-keys~\cite{Close:Webkeys}). Such a reference may look like {\tt https://www.example.com/app/\#mhbqcmmva5ja3}, where the fragment (everything after the {\tt \#}) is a random character string that uniquely identifies an object on the {\tt example.com} server. We use unguessable secrets for remote object references because of a key similarity between secrets and object references: If you do not know an unguessable secret, you can only come to know it if somebody else who knows the secret chooses to share it with you.
 
 \begin{description*}
 \item[{\tt Q.passByCopy(record)}] will override the pass-by-reference default, marking {\tt record} as pass-by-copy. The record will then be shallow-copied to the destination, making a record with the same property names. The values of these properties get serialized according to these same argument passing rules.
