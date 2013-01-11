@@ -76,7 +76,7 @@
 \begin{abstract}
 Contracts enable mutually suspicious parties to cooperate safely through the exchange of rights. Smart contracts are programs whose behavior enforces the terms of the contract. This paper shows how such contracts can be specified elegantly and executed safely, given an appropriate distributed, secure, persistent, and ubiquitous computational fabric. JavaScript provides the ubiquity but must be significantly extended to deal with the other aspects. The first part of this paper is a progress report on our efforts to turn JavaScript into this fabric. To demonstrate the suitability of this design, we describe an escrow exchange contract implemented in 42 lines of JavaScript code.
 
-\keywords{security, distributed objects, capabilities, smart contracts}
+\keywords{security, distributed objects, object-capabilities, smart contracts}
 \end{abstract}
 
 
@@ -91,15 +91,11 @@ Including many collaborators over many years. See the acknowledgements.
 %
 } are working towards turning JavaScript into such a fabric. JavaScript is already understood and used by many non-expert programmers. We call our target JavaScript platform \emph{Dr. SES} for \emph{Distributed Resilient Secure EcmaScript}.\footnote{
 %
-The official standards name for JavaScript is ``EcmaScript''.
+The official standards name for JavaScript is ``ECMAScript''.
 %
 } 
 
-Dr. SES is not specifically tied to electronic rights or contracts per se. Its focus is to make distributed secure programming in JavaScript as effortless as possible. But much of the design of Dr. SES
-%
-%and its predecessors~\cite{tribble:joule,miller:ode,Close:Waterken} 
-%
-was shaped by examining what we need to express smart contracts simply. Taking a rights-based approach to local and distributed computing, we believe, has led us to building a better general purpose platform as well as one naturally suited for expressing new kinds of rights and contracts.
+Dr. SES is not specifically tied to electronic rights (erights) or smart contracts per se. Its focus is to make distributed secure programming in JavaScript as effortless as possible. But much of the design of Dr. SES and its predecessors~\cite{tribble:joule,miller:ode,Close:Waterken} was shaped by examining what we need to express smart contracts simply. Taking a rights-based approach to local and distributed computing, we believe, has led us to building a better general purpose platform as well as one naturally suited for expressing new kinds of erights and contracts.
 
 The first half of this paper, section~\ref{drses}, explains the design of Dr. SES and our progress building it.  After section~\ref{enoughdrses}, the rest can be skipped on a first read. Section~\ref{towarderights} explains how rights help organize complexity in society in a decentralized manner, addressing many of the problems we face building distributed systems. Section~\ref{money} examines an implementation of ``money''. Section~\ref{exchange} examines an escrow exchange contract. Section~\ref{contracthost} examines a generic contract host, able to host this contract and others. Together, they demonstrate the simplicity and expressiveness of Dr. SES.
 
@@ -122,7 +118,7 @@ This is especially relevant in the context of JavaScript, where mobile code is r
 
 Finally, the resilience aspect of Dr. SES deals with the unavoidable issues of failure handling that come up in distributed systems. 
 %It is widely appreciated that writing correct, bug-free code in the presence of arbitrary failures is hard. Dr. SES, then, tries to make it as easy as possible for non-experts to deal with distributed failures.
-Server-side Dr. SES programs periodically checkpoint their state, so that in the event of a failure, the program can always recover from a previously consistent state. Such Dr. SES programs can survive failures without effort on the part of the programmer. Dr. SES will be building on the \emph{NodeKen} project, which is layering the NodeJS server-side JavaScript platform onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures.
+Server-side Dr. SES programs periodically checkpoint their state, so that in the event of a failure, the program can always recover from a previously consistent state. Such Dr. SES programs can survive failures without effort on the part of the programmer. Dr. SES will be building on the \emph{NodeKen} project, which is layering the Node.js server-side JavaScript platform onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures.
 
 %Objects and object references in Dr. SES are always persistent, meaning that they survive arbitrary failures by default.
 
@@ -130,7 +126,7 @@ Server-side Dr. SES programs periodically checkpoint their state, so that in the
 \subsection{Just Enough JavaScript}
 \label{enoughjs}
 
-JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. As of this writing, the standard and ubiquitous version of JavaScript is EcmaScript 5 (ES5). For the sake of brevity, this paper borrows one syntactic convenience proposed for ES6, \emph{arrow functions}~(``{\tt =>}''), and one proposed for ES7, the \emph{eventual-send operator}~(``{\tt !}''). Expanding away these conveniences, all the code here is working ES5 code, and is available at \myurl{code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} and its {\tt contract} subdirectory.
+JavaScript is a complex language, but this paper depends only on a small subset with two core constructs, \emph{functions} and \emph{records}. As of this writing, the standard and ubiquitous version of JavaScript is ECMAScript 5 (ES5). For the sake of brevity, this paper borrows one syntactic convenience proposed for ES6, \emph{arrow functions}~(``{\tt =>}''), and one proposed for ES7, the \emph{eventual-send operator}~(``{\tt !}''). Expanding away these conveniences, all the code here is working ES5 code, and is available at \myurl{code.google.com/p/es-lab/source/browse/trunk/src/ses/\#ses} and its {\tt contract} subdirectory.
 
 \paragraph{Arrow functions.} 
 
@@ -138,9 +134,9 @@ The following four lines all define a one parameter function which returns twice
 
 \begin{lstlisting}[language=JavaScript,numbers=none]
   var double = function(n) { return n+n; }; // old function expr
-  var double = (n) => { return n+n; };                 // ES6 arrow function
-  var double = (n) => n+n;               // non-"{" expr implicitly returned
-  var double = n => n+n;                 // parens optional if one param
+  var double = (n) => { return n+n; };                    // ES6 arrow function
+  var double = (n) => n+n;                      // non-``{'' expr implicitly returned
+  var double = n => n+n;                        // parens optional if one param
 \end{lstlisting}
 
 \paragraph{Records.} 
@@ -164,7 +160,7 @@ A record of functions hiding variables serves as an object of methods ({\tt getX
 \subsection{Basic Concepts of Dr. SES}
 \label{enoughdrses}
 
-Dr. SES extends this object model across time and space (persistent and distributed), while relieving programmers of many of the typical worries associated with building secure distributed resilient systems. The non-expert programmer can begin with the following oversimplified understanding of Dr. SES:
+Dr. SES extends this object model across time and space (persistence and distribution), while relieving programmers of many of the typical worries associated with building secure distributed resilient systems. The non-expert programmer can begin with the following oversimplified understanding of Dr. SES:
 
 \begin{description*}
 \item[SES] Don't worry about script injection. Mobile code can't do anything it isn't authorized to do. Functions and objects are encapsulated. Objects can invoke objects they have a reference to, but cannot tamper with those objects.
@@ -180,9 +176,9 @@ This should be adequate to understand the functionality of the smart contract co
 \subsection{SES: Securing JavaScript}
 \label{ses}
 
-In an object-oriented language with unforgeable object references (protected pointers) and encapsulated objects, an object reference grants the right to invoke the public interface of the object it designates. A message sent on a reference both exercises this right and grants to the receiving object the right to invoke the passed arguments. 
+In a memory-safe object language with unforgeable object references (protected pointers) and encapsulated objects, an object reference grants the right to invoke the public interface of the object it designates. A message sent on a reference both exercises this right and grants to the receiving object the right to invoke the passed arguments. 
 
-In an \emph{object-capability} (ocap) language~\cite{RobustComposition}, an object can cause effects on the world outside itself \emph{only} by using the references it holds. Some objects are transitively immutable or \emph{powerless}~\cite{Mettler:EECS-2012-244}, while others might cause effects. An object must not be given any powerful references by default. Any references it has implicit access to, such as language-provided global variables, must be powerless. Under these rules, granted references are the \emph{sole} representation of permission.
+In an \emph{object-capability} (ocap) language~\cite{RobustComposition}, an object can cause effects on the world outside itself \emph{only} by using the references it holds. Some objects are transitively immutable or \emph{powerless}~\cite{Mettler:EECS-2012-244}, while others might cause effects. An object must not be given any powerful references by default; any references it has implicit access to, such as language-provided global variables, must be powerless. Under these rules, granted references are the \emph{sole} representation of permission.
 
 \emph{Secure EcmaScript} (SES) is an ocap subset of ES5. SES is lexically scoped, its functions are encapsulated, and only the global variables on its whitelist (including all globals defined by ES5) are accessible. Those globals  are unassignable, and all objects transitively reachable from them are immutable, rendering all implicit access powerless. 
 
@@ -208,13 +204,13 @@ To realize erights, we need a distributed, secure, and persistent computational 
 
 \paragraph{Communicating Event-Loop Concurrency}
 
-On both the browser and the server, JavaScript's de-facto concurrency model is ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. NodeJS, the most widespread server-side JavaScript environment, is based on a similar model, although on the server the issue is asynchronous networking and file I/O rather than UI.
+On both the browser and the server, JavaScript's de-facto concurrency model is ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. Node.js, the most widespread server-side JavaScript environment, is based on a similar model, although on the server the issue is asynchronous networking and file I/O rather than UI.
 
 In its most general form, an event loop consists of an event queue and a set of event handlers. The event loop processes events one by one from its queue by dispatching to the appropriate event handler. In JavaScript, event handlers are usually functions registered as callbacks on certain events (e.g. button clicks or incoming XHR responses).
 
 The processing of a single event is called a \emph{turn} of the event loop. Processing an event usually entails calling a callback function, which then runs to completion without interruption. Thus, turns are the smallest unit of interleaving.
 
-A system of communicating event loops consists of multiple event loops (in the same or distributed address spaces) that communicate with each other solely by means of asynchronous message passing. The Web Workers API enables such communication among multiple isolated event loops within the same browser. A JavaScript webpage communicating with a NodeJS server using asynchronous XHR requests is an example of two distributed communicating event loops.
+A system of communicating event loops consists of multiple event loops (in the same or distributed address spaces) that communicate with each other solely by means of asynchronous message passing. The Web Workers API enables such communication among multiple isolated event loops within the same browser. A JavaScript webpage communicating with a Node.js server using asynchronous XHR requests is an example of two distributed communicating event loops.
 
 Communicating event loop concurrency makes it manageable for objects to maintain their invariants in the face of concurrent (interleaved) requests made by multiple clients~\cite{miller:strangers}. While JavaScript environments already support event loop concurrency, the JavaScript language itself has no support for concurrent or distributed programming. Q thus extends JavaScript with a handful of features that enable programmers to more directly express distributed interactions between individual objects.
 
@@ -251,7 +247,7 @@ Just like it is useful to compose individual functions into a composite function
 \begin{description*}
 \item[{\tt Q.race(answerPs)}] takes an array of promises, {\tt answerPs}, and returns a promise for the resolution of whichever promise we notice has resolved first. For example, {\tt Q.race([xP,yP]).then(v => print(v))} will cause either the value of {\tt xP} or {\tt yP} to be printed, whichever resolves first. If neither resolves, then neither does the promise returned by {\tt Q.race}. If the first promise to resolve is rejected, the promise returned by {\tt Q.race} is rejected with the same reason.
 
-\item[{\tt Q.all(answerPs)}] takes an array of promises and returns a promise for an array of their fulfilled values. We often need to collect several promised answers, in order to react either when \emph{all} the answers are ready or when \emph{any} of them become rejected. Given {\tt sumP = Q.all([xP,yP]).then(([x,y]) => x+y)}, if both {\tt xP} and {\tt yP} are fulfilled with numbers, {\tt sumP} is fulfilled with their sum. If neither resolves, neither does {\tt sumP}. If either {\tt xP} or {\tt yP} is rejected, {\tt sumP} is rejected with the same reason.
+\item[{\tt Q.all(answerPs)}] takes an array of promises and returns a promise for an array of their fulfilled values. We often need to collect several promised answers, in order to react either when \emph{all} the answers are ready or when \emph{any} of them become rejected. Given {\tt var~sumP~=~Q.all([xP,yP]).then(([x,y])~=>~x+y)}, if both {\tt xP} and {\tt yP} are fulfilled with numbers, {\tt sumP} is fulfilled with their sum. If neither resolves, neither does {\tt sumP}. If either {\tt xP} or {\tt yP} is rejected, {\tt sumP} is rejected with the same reason.
 
 \item[{\tt Q.join(xP,yP)}] takes two promises and returns a promise for the one object they both designate. {\tt Q.join} is our eventual equality operation. Any messages sent to the joined promise are only delivered if {\tt xP} and {\tt yP} eventually come to designate the same target. In this case, all messages are eventually delivered to that target and the joined promise itself eventually becomes fulfilled to designate that target. Otherwise, all these messages are discarded with the usual rejected promise contagion.
 \end{description*}
@@ -267,7 +263,7 @@ JavaScript provides many operators to interact with an object. Here, we will foc
 The {\tt !} operator can be used anywhere the dot operator can be used. If {\tt pointP} is a promise for a {\tt point}, then {\tt pointP~!~getX()} denotes an eventual send, which enqueues a request to call the {\tt getX()} method in the event loop of {\tt point}. The syntax {\tt fP~!~(x,y)}, where {\tt fP} is a promise designating a function {\tt f}, enqueues a request to call {\tt f(x,y)} in the event loop of {\tt f}. The {\tt !} operator is actually syntactic sugar for calling a method on the promise object itself:
 
 \begin{center}
-  \begin{tabular}{ l | l | l }
+  \begin{tabular}{ l @{\hskip 12pt} l @{\hskip 12pt} l }
   Immediate syntax & Eventual syntax & Expansion \\
   \hline
   {\tt p.m(x,y)} & {\tt p ! m(x,y)} & {\tt Q(p).send("m",x,y)} \\
@@ -304,11 +300,11 @@ To introduce resilience, Dr. SES builds upon the Ken platform~\cite{Yoo:CKen}. K
 
 A set of Ken processes can tolerate arbitrary failures in such a way that when a process is restarted after a crash, it is always restored to a previously consistent state. To the crashed process itself, it is as if the crash had never happened. To any of the process's communication partners, the process just seemed slow to respond. A crash will never cause messages to be dropped or delivered twice.
 
-To achieve orthogonal persistence of JavaScript programs, the Ken platform must be integrated with the JavaScript runtime. NodeKen is our attempt at layering the NodeJS runtime on top of Ken.\footnote{
+To achieve orthogonal persistence of JavaScript programs, the Ken platform must be integrated with the JavaScript runtime. NodeKen is our attempt at layering the Node.js runtime on top of Ken.\footnote{
 %
-At the time of writing, NodeKen does not yet exist. We are actively working on integrating Ken with the v8 JavaScript virtual machine, upon which NodeJS is based. See \url{https://github.com/supergillis/v8-ken}.
+At the time of writing, NodeKen does not yet exist. We are actively working on integrating Ken with the v8 JavaScript virtual machine, upon which Node.js is based. See \url{https://github.com/supergillis/v8-ken}.
 %
-} NodeKen can then be used as a stand-alone JavaScript environment to run persistent server-side Dr. SES programs. It is not our aim to embed Ken into the browser. This leads to two types of Dr. SES environments: Dr. SES in the browser runs in an ephemeral environment: this environment ceases to exist when the user navigates to a different page, or closes the page. Objects and object references in such environments are not persistent. 
+} NodeKen can then be used as a stand-alone JavaScript environment to run persistent server-side Dr. SES programs. It is not our aim to embed Ken into the browser. This leads to two types of Dr. SES environments: Dr. SES in the browser runs in an ephemeral environment that ceases to exist when the user navigates to a different page, or closes the page. Objects and object references in such environments are not persistent. 
 
 By contrast, Dr. SES on NodeKen runs in a persistent environment. JavaScript objects born in such an environment are persistent by default, as are object references spanning two persistent Dr. SES environments. Eventual message sends made using the ``{\tt !}'' operator over persistent references are reliable.
 
@@ -355,7 +351,7 @@ Global commerce rests on tradeable rights. This system is: ``\emph{the product o
 
 Rights help people coordinate plans and resolve conflicts over use of resources. Rights partition the space of actions to prevent conflict of interests and plan interference, thus enabling cooperative relationships despite mutual suspicion and competing goals~\cite{steiner_essay_1994}. This rights-based perspective can shed light on the problem of securing distributed computational systems.
 
-All computational systems must address the problem of open access. Global mutable state creates a tragedy of the commons: since anyone can access and change it, no one can safely rely on it. Use conflicts arise from both intentional (malicious), and unintentional (bugs) actions. Preventing use conflict over shared state is one of the main challenges designers face in building computational systems.
+All computational systems must address the problem of open access. Global mutable state creates a tragedy of the commons: since anyone can access and change it, no one can safely rely on it. Use conflicts arise from both intentional (malicious) and unintentional (buggy) actions. Preventing use conflict over shared state is one of the main challenges designers face in building computational systems.
 
 Historically, two broad strategies for avoiding the tragedy of the commons have emerged: a governance strategy and a property rights strategy~\cite{smith_exclusion_2002}. The governance approach solves the open access problem by restricting access to members and regulating each member's use of the shared resource. The property rights approach divides ownership of the resource among the individuals and creates abstract rules that govern the exchange of rights between owners. These approaches have their analogues in computational systems: ocap systems pursue a property rights strategy, while access control lists implement a governance strategy.
 
@@ -375,7 +371,7 @@ In the next sections, we will show how, by building on object references as erig
 
 Unlike with object references that are shareable, money needs to be exclusive to serve as medium of exchange. Bob does not consider himself paid by Alice until he knows that he has exclusive access to the funds. Object references are also specific; they designate a particular object. Money, on the other hand, is fungible. You care about having a certain quantity of a particular currency, not having a specific piece of currency. One dollar is as good as another. 
 
-Objects are opaque. The clients of an object can invoke it but don't necessarily know how it will react---that information is private to the object. By contrast, money is measurable. Bob must be able to determine that he really has a certain quantity of a particular currency. Finally, money, unlike object references, is not exercisable. The right you have when you have an object reference is the right to do something: the right to invoke the behavior of the object it designates. Money, however, has no direct use value; its value is symbolic. It has value only in exchange.
+Objects are opaque. The clients of an object can invoke it but don't necessarily know how it will react---that information is private to the object. By contrast, money is measurable. Bob must be able to determine that he really has a certain quantity of a particular currency. Finally, money, unlike object references, is never exercisable. The right you have when you have an object reference is the right to do something: the right to invoke the behavior of the object it designates. Money, however, has no direct use value; its value is symbolic. It has value only in exchange.
 
 % Smart contracts enable the exchange of erights in computational systems. 
 
@@ -620,9 +616,9 @@ In human society, rights are a scalable means for organizing the complex coopera
 
 \paragraph{Acknowledgements}
 
-Many people contributed to the progress reported here, including the Google Caja group where SES started, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, Kris Kowal for the new Q. 
+Many people contributed to the progress reported here, including the e-lang community for refining ocap-based smart contracting, the Google Caja group where SES started, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, and Kris Kowal for the new Q. 
 
-Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders. Thanks to Terry Stanley for suggestions improving this paper.
+Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders. Thanks to Terry Stanley and Kevin Reid for suggestions improving this paper.
 
 \bibliographystyle{splncs}
 % \bibliographystyle{alpha}
