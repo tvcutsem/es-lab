@@ -93,7 +93,7 @@ Including many collaborators over many years. See the acknowledgements.
 %
 The official standards name for JavaScript is ``ECMAScript''.
 %
-} 
+}
 
 Dr. SES is not specifically tied to electronic rights (erights) or smart contracts per se. Its focus is to make distributed secure programming in JavaScript as effortless as possible. But much of the design of Dr. SES and its predecessors~\cite{tribble:joule,miller:ode,Close:Waterken} was shaped by examining what we need to express smart contracts simply. Taking a rights-based approach to local and distributed computing, we believe, has led us to building a better general purpose platform as well as one naturally suited for expressing new kinds of erights and contracts.
 
@@ -290,12 +290,12 @@ Over the RESTful transport, we serialize pass-by-reference objects using unguess
 
 Rights, to be useful, must persist over time. Since object-references are our representation of rights, object references and the objects they designate must persist as well. We have already covered the distributed and secure aspects of Dr. SES. Here, we cover the final aspect of resilience against failures.
 
-To introduce resilience, Dr. SES builds upon the Ken platform~\cite{Yoo:CKen}. Ken assumes applications are represented as distributed communicating event loops, and so aligns well with JavaScript's de-facto execution model. A Ken process is an event loop that executes application-level messages. In addition, Ken provides:
+To introduce resilience, Dr. SES builds upon the Ken platform~\cite{Yoo:CKen}. Ken applications are distributed communicating event loops, which aligns well with JavaScript's de-facto execution model. The event loop of a Ken process invokes application-level code to process incoming messages (one turn, i.e., one event loop iteration, per message). In addition, Ken provides:
 
 \begin{description*}
   \item[Distributed consistent snapshots] Ken provides a persistent heap for storing application data. All objects stored in this heap are persistent. Ken ensures that the snapshots of two or more communicating processes cannot grow inconsistent, by recording messages in flight as part of a process' snapshot.
 %For example, it is impossible for the sender of a message to record in its snapshot that the message was successfully delivered, while the receiver has no record of having processed that message in its snapshot.
-  \item[Reliable messaging] Under the assumption that all Ken processes eventually recover, all messages transmitted between Ken processes are delivered exactly once, in FIFO order. A permanently crashed Ken process is indistinguishable from a very slow process. It is thus still up to the application to do its own failure handling if it does not receive a response within a given period of time.
+  \item[Reliable messaging] Under the assumption that all Ken processes eventually recover, all messages transmitted between Ken processes are delivered exactly once, in FIFO order. A permanently crashed Ken process is indistinguishable from a very slow process. To deal with such situations, applications may still want to do their own failure handling using time-outs.  
 \end{description*}
 
 A set of Ken processes can tolerate arbitrary failures in such a way that when a process is restarted after a crash, it is always restored to a previously consistent state. To the crashed process itself, it is as if the crash had never happened. To any of the process's communication partners, the process just seemed slow to respond. A crash will never cause messages to be dropped or delivered twice.
@@ -321,7 +321,7 @@ Ken achieves distributed consistent snapshots as follows:
 \begin{itemize*}
 \renewcommand{\labelitemi}{$\bullet$}
   \item During a turn, accumulate all outgoing messages in an outgoing message queue. These messages are not yet released to the network.
-  \item At the end of each turn, make a checkpoint of the persistent heap and of all outgoing unacknowledged messages.
+  \item At the end of each turn, make an (incremental) checkpoint of the persistent heap and of all outgoing messages.
   \item After the end-of-turn checkpoint is made, release any new outgoing messages to the network and acknowledge the message processed this turn.
   \item Number outgoing messages with a sequence number (for duplicate detection and message ordering).
   \item Periodically retry sending unacknowledged outgoing messages (with exponential back-off) until an acknowledgement is received.
