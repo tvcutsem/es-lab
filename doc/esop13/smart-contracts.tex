@@ -322,7 +322,7 @@ Ken achieves distributed consistent snapshots as follows:
 \renewcommand{\labelitemi}{$\bullet$}
   \item During a turn, accumulate all outgoing messages in an outgoing message queue. These messages are not yet released to the network.
   \item At the end of each turn, make an (incremental) checkpoint of the persistent heap and of all outgoing messages.
-  \item After the end-of-turn checkpoint is made, release any new outgoing messages to the network and acknowledge the message processed this turn.
+  \item After the end-of-turn checkpoint is made, release any new outgoing messages to the network and acknowledge the incoming message processed by this turn.
   \item Number outgoing messages with a sequence number (for duplicate detection and message ordering).
   \item Periodically retry sending unacknowledged outgoing messages (with exponential back-off) until an acknowledgement is received.
   \item Check incoming messages for duplicates. When a duplicate message is detected, it is dropped (not processed) and immediately acknowledged.
@@ -349,7 +349,7 @@ The elements of Dr. SES demonstrate how JavaScript can be transformed into a dis
 
 Global commerce rests on tradeable rights. This system is: ``\emph{the product of thousands of years of evolution. It is highly complex and embraces a multitude of actions, objects, and individuals. ... With minor exceptions, rights to take almost all conceivable actions with virtually all physical objects are fixed on identifiable individuals or firms at every instant of time. The books are kept up to date despite the burden imposed by dynamic forces, such as births and deaths, dissolutions, and new technology.}''~\cite{jensen_specific_1995}
 
-Rights help people coordinate plans and resolve conflicts over use of resources. Rights partition the space of actions to prevent conflict of interests and plan interference, thus enabling cooperative relationships despite mutual suspicion and competing goals~\cite{steiner_essay_1994}. This rights-based perspective can shed light on the problem of securing distributed computational systems.
+Rights help people coordinate plans and resolve conflicts over use of resources. Rights partition the space of actions to avoid interference between separately formulated plans, thus enabling cooperative relationships despite mutual suspicion and competing goals~\cite{steiner_essay_1994}. This rights-based perspective can shed light on the problem of securing distributed computational systems.
 
 All computational systems must address the problem of open access. Global mutable state creates a tragedy of the commons: since anyone can access and change it, no one can safely rely on it. Use conflicts arise from both intentional (malicious) and unintentional (buggy) actions. Preventing use conflicts over shared state is one of the main challenges designers face in building computational systems.
 
