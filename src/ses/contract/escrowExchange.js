@@ -12,36 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-define('contract/escrowExchange', ['Q'], function(Q) {
+define('contract/escrowExchange', ['Q'], function(Q)
+{
+  "use strict";
 
-  return function escrowExchange(argA, argB) { // argA from Alice, argB from Bob
-  
-    function failOnly(cancelP) {
-      return Q(cancelP).then(function(cancel) { throw cancel; });
-    }
-  
-    function transfer(decisionP, srcPurseP, dstPurseP, amount) {
-      var makeEscrowPurseP = Q.join(Q(srcPurseP).get('makePurse'), 
+
+  var escrowExchange = function(a, b) { // a from Alice, b from Bob
+
+
+    var transfer = function(decisionP, srcPurseP, dstPurseP, amount) {
+      var makeEscrowPurseP = Q.join(Q(srcPurseP).get('makePurse'),
                                     Q(dstPurseP).get('makePurse'));
-      var escrowPurseP = Q(makeEscrowPurseP).send();
-  
-      Q(decisionP).then(function(_) {                        // setup phase 2
-        Q(dstPurseP).send('deposit', amount, escrowPurseP);
-      }, function(reason) {
-        Q(srcPurseP).send('deposit', amount, escrowPurseP);
-      });
-  
-      return Q(escrowPurseP).send('deposit', amount, srcPurseP);   // phase 1
+      var escrowPurseP = Q(makeEscrowPurseP).fcall();
+
+      Q(decisionP).then(                                    // setup phase 2
+        function(_) { Q(dstPurseP).send('deposit', amount, escrowPurseP); },
+        function(_) { Q(srcPurseP).send('deposit', amount, escrowPurseP); });
+
+      return Q(escrowPurseP).send('deposit', amount, srcPurseP);  // phase 1
     };
 
-    return Q.promise(function(resolve) {
-      resolve(Q.race([Q.all([
-          transfer(d.promise, argA.moneySrcP, argB.moneyDstP, argB.moneyNeeded),
-          transfer(d.promise, argB.stockSrcP, argA.stockDstP, argA.stockNeeded)
-        ]),
-        failOnly(argA.cancelP),
-        failOnly(argB.cancelP)
-      ]));
-    });
-  }
+    var failOnly = function(cancellationP) { return Q(cancellationP).then(
+      function(cancellation) { throw cancellation; }); };
+
+
+
+    var decide;
+    var decisionP = Q.promise(function(resolve) { decide = resolve; });
+
+    decide(Q.race([Q.all([
+        transfer(decisionP, a.moneySrcP, b.moneyDstP, b.moneyNeeded),
+        transfer(decisionP, b.stockSrcP, a.stockDstP, a.stockNeeded)
+      ]),
+      failOnly(a.cancellationP),
+      failOnly(b.cancellationP)]));
+    return decisionP;
+  };
+
+  return escrowExchange;
 });

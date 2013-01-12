@@ -13,20 +13,22 @@
 // limitations under the License.
 
 var makeMint = () => {
-  var amp = WeakMap();
+  var m = WeakMap();
   var makePurse = () => mint(0);
+  
   var mint = balance => {
     var purse = def({
       getBalance: () => balance,
       makePurse: makePurse,
-      deposit: (amount, src) => {
-        Nat(balance + amount);
-        amp.get(src)(Nat(amount)); 
-        balance += amount; 
-      } 
+      deposit: (amount, srcP) =>
+        Q(srcP).then(src => {
+          Nat(balance + amount);
+          m.get(src)(Nat(amount)); 
+          balance += amount;
+        })
     });
-    amp.set(purse, 
-            amount => { balance = Nat(balance - amount); });
+    var decr = amount => { balance = Nat(balance - amount); };
+    m.set(purse, decr);
     return purse;
   };
   return mint;

@@ -130,13 +130,13 @@ JavaScript is a complex language, but this paper depends only on a small subset 
 
 \paragraph{Arrow functions.} 
 
-The following four lines all define a one parameter function which returns twice its parameter. All bind a local variable named ``{\tt double}'' to this function. This paper uses only the arrow function syntax of the last three lines.
+The following four lines all define a one parameter function which returns twice its parameter. All bind a local variable named ``{\tt twice}'' to this function. This paper uses only the arrow function syntax of the last three lines.
 
 \begin{lstlisting}[language=JavaScript,numbers=none]
-  var double = function(n) { return n+n; }; // old function expr
-  var double = (n) => { return n+n; };                    // ES6 arrow function
-  var double = (n) => n+n;                      // non-``{'' expr implicitly returned
-  var double = n => n+n;                        // parens optional if one param
+  var twice = function(n) { return n+n; };                 // old function expr
+  var twice = (n) => { return n+n; };                      // ES6 arrow function
+  var twice = (n) => n+n;                      // non-``{'' expr implicitly returned
+  var twice = n => n+n;                        // parens optional if one param
 \end{lstlisting}
 
 \paragraph{Records.} 
@@ -401,7 +401,7 @@ var makeMint = () => {
           Nat(balance + amount);
           m.get(src)(Nat(amount)); 
           balance += amount;
-        }),
+        })
     });
     var decr = amount => { balance = Nat(balance - amount); };
     m.set(purse, decr);
@@ -465,8 +465,8 @@ var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
   var escrowPurseP = makeEscrowPurseP ! ();
 
   Q(decisionP).then(                                    // setup phase 2
-    _        => { dstPurseP ! deposit(amount, escrowPurseP); },
-    reason => { srcPurseP ! deposit(amount, escrowPurseP); });
+    _ => { dstPurseP ! deposit(amount, escrowPurseP); },
+    _ => { srcPurseP ! deposit(amount, escrowPurseP); });
     
   return escrowPurseP ! deposit(amount, srcPurseP);  // phase 1
 };

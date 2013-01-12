@@ -78,51 +78,50 @@ define('contract/makeContractHost', ['Q'], function(Q) {
    *   // Contract participant
    *   function invite(tokenP, allegedChessSrc, allegedSide) {
    *     check(allegedChessSrc, allegedSide);
-   *     const outcomeP = contractHostP ! 
+   *     const outcomeP = contractHostP !
    *         play(tokenP, allegedChessSrc, allegedSide, arg);
    *   }
    * </pre>
    */
-  return function makeContractHost() {
-    var amp = WeakMap();
+  var makeContractHost = function() {
+    var m = WeakMap();
 
     return def({
       setup: function(contractSrc) {
         contractSrc = ''+contractSrc;
-        var contract = confine(contractSrc, {Q: Q});
-        var result = Q.defer();
         var tokens = [];
         var argPs = [];
+        var resolve;
+        var resultP = Q.promise(function(r) { resolve = r; });
+        var contract = confine(contractSrc, {Q: Q});
 
-        function addParam(i, token, argPair) {
+        var addParam = function(i, token) {
           tokens[i] = token;
-          argPs[i] = argPair.promise;
-          amp.set(token, def(function(allegedSrc, allegedI, arg) {
+          var resolveArg;
+          argPs[i] = Q.promise(function(r) { resolveArg = r; });
+          m.set(token, function(allegedSrc, allegedI, arg) {
             if (contractSrc !== allegedSrc) {
-              throw new Error('unexpected contract: ' + contractSrc);
+              throw new Error('unexpected contract: '+contractSrc);
             }
             if (i !== allegedI) {
-              throw new Error('unexpected player number: ' + i);
+              throw new Error('unexpected side: '+i);
             }
-            amp.delete(token);
-            argPair.resolve(arg);
-            return result.promise;
-          }));
-        }
+            m.delete(token);
+            resolveArg(arg);
+            return resultP;
+          });
+        };
         for (var i = 0; i < contract.length; i++) {
-          addParam(i, def({}), Q.defer());
+          addParam(i, def({}));
         }
-
-        result.resolve(Q.all(argPs).then(function(args) {
-          return contract.apply(void 0, args);
-        }));
+        resolve(Q.all(argPs).then(
+          function(args) { return contract.apply(undefined, args); }));
         return tokens;
       },
-      play: function(tokenP, allegedSrc, allegedI, arg) {
-        return Q(tokenP).then(function(token) {
-          return amp.get(token)(allegedSrc, allegedI, arg);
-        });
-      }
+      play: function(tokenP, allegedSrc, allegedI, arg) { return Q(tokenP).then(
+        function(token) { return m.get(token)(allegedSrc, allegedI, arg); }); }
     });
   };
+
+  return makeContractHost;
 });

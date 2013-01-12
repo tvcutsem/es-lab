@@ -72,29 +72,29 @@
  * </pre>
  */
 var makeContractHost = () => {
-  var amp = WeakMap();
+  var m = WeakMap();
 
   return def({
     setup: contractSrc => {
       contractSrc = ''+contractSrc;
-      var contract = confine(contractSrc, {Q: Q});
-      var resolve;
-      var resultP = Q.promise(r => { resolve = r; });
       var tokens = [];
       var argPs = [];
+      var resolve;
+      var resultP = Q.promise(r => { resolve = r; });
+      var contract = confine(contractSrc, {Q: Q});
 
       var addParam = (i, token) => {
         tokens[i] = token;
         var resolveArg;
         argPs[i] = Q.promise(r => { resolveArg = r; });
-        amp.set(token, (allegedSrc, allegedI, arg) => {
+        m.set(token, (allegedSrc, allegedI, arg) => {
           if (contractSrc !== allegedSrc) {
-            throw new Error('unexpected contract: ' + contractSrc);
+            throw new Error('unexpected contract: '+contractSrc);
           }
           if (i !== allegedI) {
-            throw new Error('unexpected player number: ' + i);
+            throw new Error('unexpected side: '+i);
           }
-          amp.delete(token);
+          m.delete(token);
           resolveArg(arg);
           return resultP;
         });
@@ -102,11 +102,11 @@ var makeContractHost = () => {
       for (var i = 0; i < contract.length; i++) {
         addParam(i, def({}));
       }
-
-      resolve(Q.all(argPs).then(args => contract(...args)));
+      resolve(Q.all(argPs).then(
+        args => contract.apply(undefined, args)));
       return tokens;
     },
     play: (tokenP, allegedSrc, allegedI, arg) => Q(tokenP).then(
-      token => amp.get(token)(allegedSrc, allegedI, arg))
+      token => m.get(token)(allegedSrc, allegedI, arg))
   });
 };

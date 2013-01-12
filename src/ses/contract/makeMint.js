@@ -17,26 +17,27 @@ define('contract/makeMint', [], function() {
   var def = cajaVM.def;
   var Nat = cajaVM.Nat;
 
-  return function makeMint() {
-  
-    var amp = WeakMap();
-    function makePurse() { return mint(0); }
+  var makeMint = function() {
+    var m = WeakMap();
+    var makePurse = function() { return mint(0); };
 
-    return def(function mint(balance) {
+    var mint = function(balance) {
       var purse = def({
         getBalance: function() { return balance; },
         makePurse: makePurse,
-        deposit: function(amount, src) {
-          Nat(balance + amount);
-          amp.get(src)(Nat(amount));
-          balance += amount;
-        }
+        deposit: function(amount, srcP) {
+          return Q(srcP).then(function(src) {
+            Nat(balance + amount);
+            m.get(src)(Nat(amount));
+            balance += amount;
+          }); }
       });
-      function decr(amount) {
-        balance = Nat(balance - amount);
-      }
-      amp.set(purse, decr);
+      var decr = function(amount) { balance = Nat(balance - amount); };
+      m.set(purse, decr);
       return purse;
-    });
-  }
+    };
+    return mint;
+  };
+
+  return makeMint;
 });
