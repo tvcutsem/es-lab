@@ -464,7 +464,7 @@ var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
                                           dstPurseP ! makePurse);
   var escrowPurseP = makeEscrowPurseP ! ();
 
-  Q(decisionP).then(                                    // setup phase 2
+  Q(decisionP).then(                                          // setup phase 2
     _ => { dstPurseP ! deposit(amount, escrowPurseP); },
     _ => { srcPurseP ! deposit(amount, escrowPurseP); });
     
@@ -474,7 +474,7 @@ var transfer = (decisionP, srcPurseP, dstPurseP, amount) => {
 var failOnly = cancellationP => Q(cancellationP).then(
   cancellation => { throw cancellation; });
 
-var escrowExchange = (a, b) => { // a from Alice, b from Bob
+var escrowExchange = (a, b) => {                  // a from Alice, b from Bob
   var decide;
   var decisionP = Q.promise(resolve => { decide = resolve; });
 

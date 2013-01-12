@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-define('contract/escrowExchange', ['Q'], function(Q)
-{
+define('contract/escrowExchange', ['Q'], function(Q) {
   "use strict";
 
+  var escrowExchange = function(a, b) {          // a from Alice, b from Bob
+    var decide;
+    var decisionP = Q.promise(function(resolve) { decide = resolve; });
 
-  var escrowExchange = function(a, b) { // a from Alice, b from Bob
-
-
-    var transfer = function(decisionP, srcPurseP, dstPurseP, amount) {
+    var transfer = function(srcPurseP, dstPurseP, amount) {
       var makeEscrowPurseP = Q.join(Q(srcPurseP).get('makePurse'),
                                     Q(dstPurseP).get('makePurse'));
       var escrowPurseP = Q(makeEscrowPurseP).fcall();
@@ -35,14 +34,9 @@ define('contract/escrowExchange', ['Q'], function(Q)
     var failOnly = function(cancellationP) { return Q(cancellationP).then(
       function(cancellation) { throw cancellation; }); };
 
-
-
-    var decide;
-    var decisionP = Q.promise(function(resolve) { decide = resolve; });
-
     decide(Q.race([Q.all([
-        transfer(decisionP, a.moneySrcP, b.moneyDstP, b.moneyNeeded),
-        transfer(decisionP, b.stockSrcP, a.stockDstP, a.stockNeeded)
+        transfer(a.moneySrcP, b.moneyDstP, b.moneyNeeded),
+        transfer(b.stockSrcP, a.stockDstP, a.stockNeeded)
       ]),
       failOnly(a.cancellationP),
       failOnly(b.cancellationP)]));

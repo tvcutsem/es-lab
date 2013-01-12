@@ -12,6 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
+
+
+
+
+
+
+
+
+
+
+
 /**
  * A contract host as a mutually trusted third party for honestly
  * running whatever smart contract code its customers agree on.
@@ -56,8 +68,7 @@
  * <p>Each player, on receiving the token, alleged game source, and
  * alleged argument index, would first decide (e.g., with the {@code
  * check} function below) whether this is a game they would be
- * interested in playing. If so, the redeem the token to get a
- * function they can invoke to provide their argument, in order to
+ * interested in playing. If so, the redeem the token to
  * start playing their side of the game -- but only if the contract
  * host verifies that they are playing the side of the game that
  * they think they are.

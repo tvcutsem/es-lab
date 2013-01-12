@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-define('contract/makeMint', [], function() {
+define('contract/makeMint', ['Q'], function(Q) {
   "use strict";
   var def = cajaVM.def;
   var Nat = cajaVM.Nat;

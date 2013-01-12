@@ -58,18 +58,17 @@ define('contract/makeContractHost', ['Q'], function(Q) {
    *
    * <pre>
    *   // Contract initiator
-   *   const tokensP = contractHostP ! setup(chessSrc);
-   *   const whiteTokenP = tokensP ! [0];
-   *   const blackTokenP = tokensP ! [1];
-   *   whitePlayer ! invite(whiteTokenP, chessSrc, 0);
-   *   blackPlayer ! invite(blackTokenP, chessSrc, 1);
+   *   var tokensP = Q(contractHostP).send('setup', chessSrc);
+   *   var whiteTokenP = Q(tokensP).get(0);
+   *   var blackTokenP = Q(tokensP).get(1);
+   *   Q(whitePlayer).send('invite', whiteTokenP, chessSrc, 0);
+   *   Q(blackPlayer).send('invite', blackTokenP, chessSrc, 1);
    * </pre>
    *
    * <p>Each player, on receiving the token, alleged game source, and
    * alleged argument index, would first decide (e.g., with the {@code
    * check} function below) whether this is a game they would be
-   * interested in playing. If so, the redeem the token to get a
-   * function they can invoke to provide their argument, in order to
+   * interested in playing. If so, the redeem the token to
    * start playing their side of the game -- but only if the contract
    * host verifies that they are playing the side of the game that
    * they think they are.
@@ -78,8 +77,8 @@ define('contract/makeContractHost', ['Q'], function(Q) {
    *   // Contract participant
    *   function invite(tokenP, allegedChessSrc, allegedSide) {
    *     check(allegedChessSrc, allegedSide);
-   *     const outcomeP = contractHostP !
-   *         play(tokenP, allegedChessSrc, allegedSide, arg);
+   *     var outcomeP = Q(contractHostP).send(
+   *         'play', tokenP, allegedChessSrc, allegedSide, arg);
    *   }
    * </pre>
    */
