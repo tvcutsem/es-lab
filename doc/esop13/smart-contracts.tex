@@ -112,7 +112,7 @@ Once the \myurl{es-lab.googlecode.com/svn/trunk/src/ses/makeQ.js}, \cite{tyler:w
 %
 } to extend the JavaScript language with a handful of features to support distributed programming at the level of objects and messages.
 
-In an architecture that aims to express erights or contracts, security must play a key role. Dr. SES uses the Q library to support distributed cryptographic capabilities, and uses the SES library to support local object-capabilities. The latter allows Dr. SES programs to safely execute mobile code from untrusted parties.
+In an architecture that aims to express erights or contracts, security must play a key role. Dr. SES uses the Q library to support distributed cryptographic capabilities, and builds on the SES library to support local object-capabilities. The latter allows Dr. SES programs to safely execute mobile code from untrusted parties.
 % without fear of granting excess privileges to that piece of code.
 This is especially relevant in the context of JavaScript, where mobile code is routinely sent from servers to clients. In Section~\ref{contracthost}, we will show an example that  depends on the ability to safely execute third-party code on servers.
 
@@ -387,7 +387,7 @@ Figure~\ref{makeMint}  is our implementation of a money-like rights issuer, usin
 What do these relationships mean in terms of a configuration of persistent objects? Say Alice owns (or is) a set of objects on machine A, Bob on machine B, and the bank on machine C. In order for Alice to make a {\tt buy} request of Bob, we assume one of Alice's objects already has a remote reference to one of Bob's objects. Alice's trust of the bank with her money is represented by a remote reference to an object within the bank representing Alice's account at the bank. We refer to such objects as \emph{purses}. The one for Alice's account is Alice's \emph{main purse}. And likewise for Bob. Where do these initial account purses come from?
 
 \begin{figure}[t]
-\begin{minipage}[t]{0.54\linewidth}
+\begin{minipage}[t]{0.51\linewidth}
 \begin{lstlisting}[language=javascript]
 var makeMint = () => {
   var m = WeakMap();
@@ -414,7 +414,7 @@ var makeMint = () => {
 \end{minipage}
 \begin{minipage}[t]{0.48\linewidth}
 \vspace{0pt}
-\includegraphics[scale=0.3]{bw-mint.pdf}
+\includegraphics[scale=0.33]{bw-mint.pdf}
 \end{minipage}
 \caption{The Mint Maker}
 \label{makeMint}
