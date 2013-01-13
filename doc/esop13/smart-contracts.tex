@@ -495,7 +495,11 @@ In the mint maker scenario, it is unfortunate that Alice must risk her \$10 on t
 
 Alice and Bob again do not trust each other. They wish to trade \$10 of Alice's money for 7 shares of Bob's stock, but in this case, neither is willing to risk their assets on the possibility of the other's non-delivery. They both trust the same money issuer with their money, the same stock issuer with their stock, and the same escrow exchange agent with the rights to be traded. The money issuer, the stock issuer, and the escrow exchange agent each have no prior knowledge or trust in the others. Additionally, none of these trust Alice or Bob. The rest of the scenario as presented below examines only the consequences of Alice or Bob's misbehavior and assumes the other three run the code shown honestly. A full analysis of vulnerabilities should consider all combinations.
 
-Since the situation is now symmetric, we explain the progression of events from Alice's perspective. Alice's prior trust in each issuer is represented as before---Alice holds a persistent reference to her main purse at each issuer. Alice's prior trust in the escrow exchange agent is represented as the ability to provide the first ``{\tt a}'' argument in the call to {\tt escrowExchange} (Figure~\ref{escrowExchange}, line 12) for which Bob is able to provide the second ``{\tt b}'' argument. Alice might create this argument as follows:
+Since the situation is now symmetric, we explain the progression of events from Alice's perspective. Alice's prior trust in each issuer is represented as before---Alice holds a persistent reference to her main purse at each issuer. Alice's prior trust in the escrow exchange agent is represented as the ability to provide the first ``{\tt a}'' argument in the call to {\tt escrowExchange} (Figure~\ref{escrowExchange}, line 12) for which Bob is able to provide the second ``{\tt b}'' argument. 
+
+\newpage
+
+Alice might create this argument as follows:
 
 \begin{lstlisting}[language=JavaScript,numbers=none]
   var cancel;
@@ -503,7 +507,7 @@ Since the situation is now symmetric, we explain the progression of events from 
     moneySrcP: myMoneyPurse ! makePurse(),
     stockDstP: myStockPurse ! makePurse(),
     stockNeeded: 7,
-    cancellationP: Q.promise(r => { cancel = r; });
+    cancellationP: Q.promise(r => { cancel = r; })
   });
   a.moneySrcP ! deposit(10, myMoneyPurse);
 \end{lstlisting}
@@ -613,12 +617,14 @@ By redeeming the token, Alice obtains the exclusive right to play a specific con
 In human society, rights are a scalable means for organizing the complex cooperative interactions of decentralized agents with diverse interests. This perspective is helping us shape JavaScript into a distributed resilient secure programming language. We show how this platform would enable the expression of new kinds of rights and smart contracts \emph{simply}, supporting new forms of cooperation among computational agents.
 
 
-
 \paragraph{Acknowledgements}
 
-Many people contributed to the progress reported here, including the e-lang community for refining ocap-based smart contracting, the Google Caja group where SES started, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, and Kris Kowal for the new Q. 
+Many people contributed to the progress reported here, including the e-lang community for refining ocap-based smart contracting, the Google Caja group for SES's birth and deployment, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, and Kris Kowal for the new Q. 
 
 Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders. Thanks to Terry Stanley, Kevin Reid, and Terence Kelly for suggestions improving this paper.
+
+\newpage
+
 
 \bibliographystyle{splncs}
 % \bibliographystyle{alpha}
