@@ -112,13 +112,13 @@ Once the \myurl{es-lab.googlecode.com/svn/trunk/src/ses/makeQ.js}, \cite{tyler:w
 %
 } to extend the JavaScript language with a handful of features to support distributed programming at the level of objects and messages.
 
-In an architecture that aims to express erights or contracts, security must play a key role. Dr. SES uses the Q library to support distributed cryptographic capabilities, and upon the SES library to support local object-capabilities. The latter allows Dr. SES programs to safely execute mobile code from untrusted parties.
+In an architecture that aims to express erights or contracts, security must play a key role. Dr. SES uses the Q library to support distributed cryptographic capabilities, and uses the SES library to support local object-capabilities. The latter allows Dr. SES programs to safely execute mobile code from untrusted parties.
 % without fear of granting excess privileges to that piece of code.
 This is especially relevant in the context of JavaScript, where mobile code is routinely sent from servers to clients. In Section~\ref{contracthost}, we will show an example that  depends on the ability to safely execute third-party code on servers.
 
 Finally, the resilience aspect of Dr. SES deals with the unavoidable issues of failure handling that come up in distributed systems. 
 %It is widely appreciated that writing correct, bug-free code in the presence of arbitrary failures is hard. Dr. SES, then, tries to make it as easy as possible for non-experts to deal with distributed failures.
-Server-side Dr. SES programs periodically checkpoint their state, so that in the event of a failure, the program can always recover from a previously consistent state. Such Dr. SES programs can survive failures without effort on the part of the programmer. Dr. SES will be building on the \emph{NodeKen} project, which is layering the Node.js server-side JavaScript platform onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures.
+Server-side Dr. SES programs periodically checkpoint their state, so that in the event of a failure, the program can always recover from a previously consistent state. Such Dr. SES programs can survive failures without effort on the part of the programmer. Dr. SES builds on the \emph{NodeKen} project, which is layering the Node.js server-side JavaScript platform onto the Ken system~\cite{Yoo:CKen} for distributed orthogonal persistence---resilient against many failures.
 
 %Objects and object references in Dr. SES are always persistent, meaning that they survive arbitrary failures by default.
 
@@ -165,12 +165,13 @@ Dr. SES extends this object model across time and space (persistence and distrib
 \begin{description*}
 \item[SES] Don't worry about script injection. Mobile code can't do anything it isn't authorized to do. Functions and objects are encapsulated. Objects can invoke objects they have a reference to, but cannot tamper with those objects.
 
-\item[Q] Don't worry about memory races or deadlocks, they can't happen. Objects can be local or remote. You already use the familiar infix dot (``{\tt .}'') to access the object on its left \emph{immediately}, as in {\tt pt.getX()}. Anywhere you can write a dot, you can use ``{\tt !}'' to access that object \emph{eventually}, as in {\tt pt~!~getX()}. Eventual operations return promises for what the answer will be. If the object is remote or a promise, you can only use ``{\tt !}'' on it.
+\item[Q] Don't worry about memory races or deadlocks, they can't happen. Objects can be local or remote. 
+The familiar infix dot (``{\tt .}'') in {\tt pt.getX()}  accesses the {\tt pt} object \emph{immediately}. Q adds the bang ``{\tt !}''  to access an object \emph{eventually}. Anywhere you can write a dot, you can use ``{\tt !}'' as in {\tt pt~!~getX()}. Eventual operations return promises for what the answer will be. If the object is remote or a promise, you can only use ``{\tt !}'' on it.
 
 \item[NodeKen] Don't worry about network partitions or machine crashes. Once the machine comes back up, everything keeps going, so a crash and restart is just a very long (possibly infinite) pause. Likewise, a partitioned network is just a slow network waiting to heal. Once things come back up, every message ever sent will be delivered in order exactly once.
 \end{description*}
 
-This should be adequate to understand the functionality of the smart contract code when things go well. Of course, much of the point of erights and smart contracts is to limit the damage when things go badly. Understanding these risks does require a careful reading of the following sections.
+The above should be adequate to understand the functionality of the smart contract code when things go well. Of course, much of the point of erights and smart contracts is to limit the damage when things go badly. Understanding these risks does require a careful reading of the following sections.
  
 
 \subsection{SES: Securing JavaScript}
@@ -204,7 +205,7 @@ To realize erights, we need a distributed, secure, and persistent computational 
 
 \paragraph{Communicating Event-Loop Concurrency}
 
-On both the browser and the server, JavaScript's de-facto concurrency model is ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. Node.js, the most widespread server-side JavaScript environment, is based on a similar model, although on the server the issue is asynchronous networking and file I/O rather than UI.
+JavaScript's de-facto concurrency model, on both the browser and the server,  is ``shared nothing'' \emph{communicating event loops}. In the browser, every frame of a web page has its own event loop, which is used both for updating the UI (i.e. rendering HTML) and for executing scripts. Node.js, the most widespread server-side JavaScript environment, is based on a similar model, although on the server the issue is asynchronous networking and file I/O rather than UI.
 
 In its most general form, an event loop consists of an event queue and a set of event handlers. The event loop processes events one by one from its queue by dispatching to the appropriate event handler. In JavaScript, event handlers are usually functions registered as callbacks on certain events (e.g. button clicks or incoming XHR responses).
 
@@ -288,7 +289,7 @@ Over the RESTful transport~\cite{tyler:websend}, we serialize pass-by-reference 
 \subsection{NodeKen: Distributed Orthogonal Persistence}
 \label{NodeKen}
 
-Rights, to be useful, must persist over time. Since object-references are our representation of rights, object references and the objects they designate must persist as well. We have already covered the distributed and secure aspects of Dr. SES. Here, we cover the final aspect of resilience against failures.
+Rights, to be useful, must persist over time. Since object-references are our representation of rights, object references and the objects they designate must persist as well. We have already covered the distributed and secure aspects of Dr. SES. Here, we cover resilience against failures.
 
 To introduce resilience, Dr. SES builds upon the Ken platform~\cite{Yoo:CKen}. Ken applications are distributed communicating event loops, which aligns well with JavaScript's de-facto execution model. The event loop of a Ken process invokes application-level code to process incoming messages (one turn, i.e., one event loop iteration, per message). In addition, Ken provides:
 
@@ -369,13 +370,13 @@ While object references represent a kind of eright, they differ in several respe
 
 In the next sections, we will show how, by building on object references as erights, we can create new kinds of erights at a new level of abstraction. We look first at how money can be implemented as a smart contract. Money differs from other forms of property in several ways~\cite{fox_property_2008}.  Here, we identify four dimensions in which money differs from object references as rights. Object references are shareable, specific, opaque, and exercisable, whereas money is exclusive, fungible, measurable, and symbolic.
 
-Unlike with object references that are shareable, money needs to be exclusive to serve as medium of exchange. Bob does not consider himself paid by Alice until he knows that he has exclusive access to the funds. Object references are also specific; they designate a particular object. Money, on the other hand, is fungible. You care about having a certain quantity of a particular currency, not having a specific piece of currency. One dollar is as good as another. 
+By contrast with object references that are shareable, money needs to be exclusive to serve as medium of exchange. Bob does not consider himself paid by Alice until he knows that he has exclusive access to the funds. Object references are also specific; they designate a particular object. Money, on the other hand, is fungible. You care about having a certain quantity of a particular currency, not having a specific piece of currency. One dollar is as good as another. 
 
 Objects are opaque. The clients of an object can invoke it but don't necessarily know how it will react---that information is private to the object. By contrast, money is measurable. Bob must be able to determine that he really has a certain quantity of a particular currency. Finally, money, unlike object references, is never exercisable. The right you have when you have an object reference is the right to do something: the right to invoke the behavior of the object it designates. Money, however, has no direct use value; its value is symbolic. It has value only in exchange.
 
 % Smart contracts enable the exchange of erights in computational systems. 
 
-Contracts generally manipulate rights. The participants in a contract each bring to it those rights the contract will manipulate~\cite{barnett_consent_1986}. The logic of the contract together with the decisions of the participants determines which derived rights they each walk away with. The simplest example is a direct trade. Since half the rights exchanged in most trades are money, we start with money.
+Contracts manipulate rights. The participants in a contract each bring to it those rights the contract will manipulate~\cite{barnett_consent_1986}. The logic of the contract together with the decisions of the participants determines which derived rights they each walk away with. The simplest example is a direct trade. Since half the rights exchanged in most trades are money, we start with money.
 
 
 \section{Money as an Electronic Right}
@@ -491,7 +492,7 @@ var escrowExchange = (a, b) => {                  // a from Alice, b from Bob
 \label{escrowExchange}
 \end{figure}
 
-In the mint maker scenario, it is unfortunate that Alice must risk her \$10 on the possibility of Bob's non-delivery. We now introduce an escrow exchange contract that implements an \emph{all or nothing} trade. We explain the escrow exchange contract in terms of a scenario among five players, Alice, Bob, a money issuer running the code of Figure~\ref{makeMint}, a stock issuer also running the code of Figure~\ref{makeMint} but with the units representing shares of some particular stock, and an escrow exchange agent running the code of Figure~\ref{escrowExchange}. The diagram at the top of Figure~\ref{makeContractHost} shows the initial relationships, with the escrow exchange agent in the role of contract host.
+In the mint maker scenario, Alice must risk her \$10 on the possibility of Bob's non-delivery. We now introduce an escrow exchange contract that implements an \emph{all or nothing} trade. We explain the escrow exchange contract in terms of a scenario among five players: Alice, Bob, a money issuer (running the code of Figure~\ref{makeMint}), a stock issuer (also running the code of Figure~\ref{makeMint} but with the units representing shares of some particular stock), and an escrow exchange agent (running the code of Figure~\ref{escrowExchange}). The diagram at the top of Figure~\ref{makeContractHost} shows the initial relationships, with the escrow exchange agent in the role of contract host.
 
 Alice and Bob again do not trust each other. They wish to trade \$10 of Alice's money for 7 shares of Bob's stock, but in this case, neither is willing to risk their assets on the possibility of the other's non-delivery. They both trust the same money issuer with their money, the same stock issuer with their stock, and the same escrow exchange agent with the rights to be traded. The money issuer, the stock issuer, and the escrow exchange agent each have no prior knowledge or trust in the others. Additionally, none of these trust Alice or Bob. The rest of the scenario as presented below examines only the consequences of Alice or Bob's misbehavior and assumes the other three run the code shown honestly. A full analysis of vulnerabilities should consider all combinations.
 
@@ -520,9 +521,9 @@ By "promptly" we mean, once the relevant machines are up, processes running, and
 %
 } If this promise becomes rejected, the exchange failed, and she should expect her \$10 to reappear in her {\tt a.moneySrcP} promptly. In the meantime, if she gets impatient and would rather not continue waiting, she can call her {\tt cancel} function with her alleged reason for walking away. Once she does so, the exchange will then either succeed or fail promptly.
 
-On lines 13 and 14 of Figure~\ref{escrowExchange} the {\tt escrowExchange} contract makes a {\tt decisionP} promise whose fulfillment or rejection represents its decision about whether the exchange must succeed or fail. It makes this decision by calling {\tt decide} with the outcome of a race between a {\tt Q.all} and two calls to {\tt failOnly}. Until a player cancels the exchange, the {\tt Q.race} can only be won by the {\tt Q.all}, which is where the exchange is proceeding.
+On lines 13 and 14 of Figure~\ref{escrowExchange} the {\tt escrowExchange} contract makes a {\tt decisionP} promise whose fulfillment or rejection represents its decision about whether the exchange must succeed or fail. It makes this decision by calling {\tt decide} with the outcome of a race between a {\tt Q.all} and two calls to {\tt failOnly}. Until a player cancels the exchange, the {\tt Q.race} can only be won by the {\tt Q.all}, where the exchange is proceeding.
 
-The arguments to {\tt Q.all} are the results of two calls to {\tt transfer}. The first call to {\tt transfer} sets up activity whose purpose is to transfer money from Alice to Bob. The second call's purpose is to transfer stock from Bob to Alice. Each call to transfer returns a promise whose fulfillment or rejection indicates whether it has become confident that this one-way transfer of erights would succeed. If both transfers become confident (before any cancellations win the race), then the overall decision is to proceed. If either transfer indicates failure, by rejecting the promise it has returned, then, via {\tt Q.all}, {\tt decisionP} becomes rejected.\footnote{
+The arguments to {\tt Q.all} are the results of two calls to {\tt transfer}. The first call to {\tt transfer} sets up an arrangement of objects whose purpose is to transfer money from Alice to Bob. The second call's purpose is to transfer stock from Bob to Alice. Each call to transfer returns a promise whose fulfillment or rejection indicates whether it has become confident that this one-way transfer of erights would succeed. If both transfers become confident (before any cancellations win the race), then the overall decision is to proceed. If either transfer indicates failure, by rejecting the promise it has returned, then, via {\tt Q.all}, {\tt decisionP} becomes rejected.\footnote{
 %
 This pattern implements two phase commit enhanced with the possibility of cancellation, where the call to {\tt escrowExchange} creates a transaction coordinator, and each of its calls to {\tt transfer} creates a participant.}
 
@@ -534,7 +535,7 @@ The {\tt transfer} function sets up the second phase on lines 5, 6, and 7. If th
 
 Only one mystery remains. How does the escrow agent obtain a fresh escrow purse at this money issuer, in order to be confident that it has obtained exclusive access to the money at stake? Since the escrow exchange agent has no prior knowledge or trust in the money issuer, it cannot become confident that the issuer is honest or even that the money it issues means anything. The question is meaningless. Instead, it only needs to obtain a fresh escrow purse whose veracity is \emph{mutually acceptable} to Alice and Bob.
 
-If the escrow contract simply asks Alice's purse for a new empty purse ({\tt srcPurseP~!~makePurse()}), Alice could return a dishonest purse that acknowledges deposit without transferring anything. Alice would then obtain Bob's stock for free. If it simply asks Bob's purse, then Bob could steal Alice's money during phase 1. Instead, it checks if their {\tt makePurse} methods are the very same function object---have the same object identity---by using {\tt Q.join} on promises for these two methods. This is why, on lines 3 and 7 of Figure~\ref{makeMint}, all purses of the same currency at the same bank share the same function as their {\tt makePurse} method. If the {\tt Q.join} of these two methods fails, then either Alice was dishonest, Bob was dishonest, or they simply didn't have prior agreement on the same currency at the same money issuer.
+If the escrow contract simply asks Alice's purse for a new empty purse ({\tt srcPurseP~!~makePurse()}), Alice could return a dishonest purse that acknowledges deposit without transferring anything. Alice would then obtain Bob's stock for free. If it simply asks Bob's purse, then Bob could steal Alice's money during phase 1. Instead, it checks if their {\tt makePurse} methods have the same object identity by using {\tt Q.join} on promises for these two methods. This is why, on lines 3 and 7 of Figure~\ref{makeMint}, all purses of the same currency at the same bank share the same function as their {\tt makePurse} method. If the {\tt Q.join} of these two methods fails, then either Alice was dishonest, Bob was dishonest, or they simply didn't have prior agreement on the same currency at the same money issuer.
 
 \section{The Contract Host}
 \label{contracthost}
@@ -593,7 +594,7 @@ var makeContractHost = () => {
 
 Once Alice and Bob agree on a contract, how do they arrange for it to be run in a mutually trusted manner?
 
-To engage in the escrow exchange contract, Alice and Bob had to agree on the issuers, which is unsurprising since they need to agree on the nature of rights exchanged by the contract. And they had to agree on an escrow exchange agent to honestly run the escrow exchange contract specifically. For a contract as general as this, perhaps that is not a problem. But if Alice and Bob negotiate a custom contract specialized to their needs, they should not expect to find a mutually trusted third party specializing in running this particular contract. Rather, it should be adequate for them to agree on:
+To engage in the escrow exchange contract, Alice and Bob had to agree on the issuers, which is unsurprising since they need to agree on the nature of rights exchanged by the contract. And they had to agree on an escrow exchange agent to honestly run this specific escrow exchange contract. For a contract as reusable as this, perhaps that is not a problem. But if Alice and Bob negotiate a custom contract specialized to their needs, they should not expect to find a mutually trusted third party specializing in running this particular contract. Rather, it should be sufficient for them to agree on:
 
 \begin{itemize}
 \renewcommand{\labelitemi}{$\bullet$}
@@ -619,7 +620,7 @@ In human society, rights are a scalable means for organizing the complex coopera
 
 \paragraph{Acknowledgements}
 
-Many people contributed to the progress reported here, including the e-lang community for refining ocap-based smart contracting, the Google Caja group for SES's birth and deployment, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, and Kris Kowal for the new Q. 
+Many people contributed to the progress reported here, including the e-lang community for refining ocap-based smart contracting, the Google Caja group for SES's growth and deployment, TC39 for making ES5 and successors friendly to ocaps, Tyler Close for the first Ken and Q, Terence Kelly for the new Ken, and Kris Kowal for the new Q. 
 
 Tom Van Cutsem is a post-doctoral fellow of the Research Foundation, Flanders. Thanks to Terry Stanley, Kevin Reid, and Terence Kelly for suggestions improving this paper.
 

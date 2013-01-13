@@ -15,10 +15,18 @@
 
 define('contract/makeBob', ['Q', 'contract/escrowExchange'],
        function(Q, escrowExchange) {
+  "use strict";
+  var def = cajaVM.def;
 
   var makeBob = function(myMoneyPurse, myStockPurse, contractHostP) {
     var escrowSrc = ''+escrowExchange;
     var myPurse = myMoneyPurse;
+
+    var check = function(allegedSrc, allegedSide) {
+      // for testing purposes, alice and bob are willing to play
+      // any side of any contract, so that the failure we're testing
+      // is in the contractHost's checking
+    };
 
     var bob = def({
       /**
@@ -29,10 +37,12 @@ define('contract/makeBob', ['Q', 'contract/escrowExchange'],
        */
       buy: function(desc, paymentP) {
         var amount;
+        var good;
         desc = ''+desc;
         switch (desc) {
           case 'shoe': {
             amount = 10;
+            good = 'If it fits, ware it.';
             break;
           }
           default: {
@@ -49,8 +59,8 @@ define('contract/makeBob', ['Q', 'contract/escrowExchange'],
         var tokensP = Q(contractHostP).send('setup', escrowSrc);
         var aliceTokenP = Q(tokensP).get(0);
         var bobTokenP   = Q(tokensP).get(1);
-        Q(aliceP).send('invite', aliceTokenP, escrowSrc, 0);
-        Q(bob   ).send('invite', bobTokenP,   escrowSrc, 1);
+               Q(aliceP).send('invite', aliceTokenP, escrowSrc, 0);
+        return Q(bob   ).send('invite', bobTokenP,   escrowSrc, 1);
       },
 
       /**
@@ -64,16 +74,21 @@ define('contract/makeBob', ['Q', 'contract/escrowExchange'],
         var b = Q.passByCopy({
           stockSrcP: Q(myStockPurse).send('makePurse'),
           moneyDstP: Q(myMoneyPurse).send('makePurse'),
-          moneyNeeded: 7,
+          moneyNeeded: 10,
           cancellationP: Q.promise(function(r) { cancel = r; })
         });
-        var ackP = Q(b.stockSrcP).send('deposit', 10, myStockPurse);
+        var ackP = Q(b.stockSrcP).send('deposit', 7, myStockPurse);
 
-        return Q(ackP).then(
+        var decisionP = Q(ackP).then(
           function(_) {
             return Q(contractHostP).send(
-              'play', tokenP, allegedChessSrc, allegedSide, b);
+              'play', tokenP, allegedSrc, allegedSide, b);
           });
+        return Q(decisionP).then(function(_) {
+          return Q.delay(3000);
+        }).then(function(_) {
+          return Q(b.moneyDstP).send('getBalance');
+        });
       }
     });
     return bob;

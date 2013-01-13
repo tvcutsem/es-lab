@@ -379,13 +379,13 @@ ses.startSES = function(global,
 
   var MAX_NAT = Math.pow(2,52); // Is this right?
   function Nat(allegedNum) {
-    if (typeof allegedNum !== 'number') { 
-      throw new RangeError("not a number"); 
+    if (typeof allegedNum !== 'number') {
+      throw new RangeError("not a number");
     }
     if (allegedNum !== allegedNum) { throw new RangeError("NaN not natural"); }
-    if (allegedNumber < 0)         { throw new RangeError("negative"); }
-    if (allegedNumber % 1 !== 0)   { throw new RangeError("not integral"); }
-    if (allegedNumber > MAX_NAT)   { throw new RangeError("too big"); }
+    if (allegedNum < 0)            { throw new RangeError("negative"); }
+    if (allegedNum % 1 !== 0)      { throw new RangeError("not integral"); }
+    if (allegedNum > MAX_NAT)      { throw new RangeError("too big"); }
     return allegedNum;
   }
 
@@ -430,14 +430,15 @@ ses.startSES = function(global,
      * Expression production.
      *
      * <p>To verify that exprSrc parses as a strict Expression, we
-     * verify that (when followed by ";") it parses as a strict
-     * Program, and that when surrounded with parens it still parses
-     * as a strict Program. We place a newline before the terminal
-     * token so that a "//" comment cannot suppress the close paren.
+     * verify that, when surrounded by parens and followed by ";", it
+     * parses as a strict Program, and that when surrounded with
+     * double parens it still parses as a strict Program. We place a
+     * newline before the terminal token so that a "//" comment
+     * cannot suppress the close paren or parens.
      */
     function verifyStrictExpression(exprSrc) {
-      verifyStrictProgram(exprSrc + ';');
       verifyStrictProgram('( ' + exprSrc + '\n);');
+      verifyStrictProgram('(( ' + exprSrc + '\n));');
     }
 
     /**

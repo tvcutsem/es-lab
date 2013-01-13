@@ -18,14 +18,21 @@
  */
 
 define('contractTest', [
-           'Q', 
-           'contract/makeContractHost', 
+           'Q',
+           'contract/makeContractHost',
            'contract/makeMint',
-           'contract/escrowExchange'],
-function(Q, makeContractHostFar, makeMintFar, escrowExchangeFar) {
+           'contract/escrowExchange',
+           'contract/makeAlice',
+           'contract/makeBob'],
+function(Q,
+         makeContractHost,
+         makeMint,
+         escrowExchange,
+         makeAlice,
+         makeBob) {
   "use strict";
 
-  var contractHostP = Q(makeContractHostFar).send(void 0);
+  var contractHostP = Q(makeContractHost).fcall();
 
   function trivContract(whiteP, blackP) {
     return 8;
@@ -38,5 +45,32 @@ function(Q, makeContractHostFar, makeMintFar, escrowExchangeFar) {
   Q(contractHostP).send('play', whiteTokenP, contractSrc, 0, {});
 
   var blackTokenP = Q(tokensP).get(1);
-  return Q(contractHostP).send('play', blackTokenP, contractSrc, 1, {});
+  var eightP = Q(contractHostP).send('play', blackTokenP, contractSrc, 1, {});
+  // check that eightP fulfills with 8.
+  // (At the time of this writing, did the right thing under debugger)
+
+
+
+
+  var moneyMintP = Q(makeMint).fcall();
+  var aliceMoneyPurseP = Q(moneyMintP).fcall(1000);
+  var bobMoneyPurseP = Q(moneyMintP).fcall(1001);
+
+  var stockMintP = Q(makeMint).fcall();
+  var aliceStockPurseP = Q(stockMintP).fcall(2002);
+  var bobStockPurseP = Q(stockMintP).fcall(2003);
+
+  var aliceP = Q(makeAlice).fcall(aliceMoneyPurseP, aliceStockPurseP,
+                                  contractHostP);
+  var bobP = Q(makeBob).fcall(bobMoneyPurseP, bobStockPurseP,
+                              contractHostP);
+
+  var ifItFitsP = Q(aliceP).send('payBobWell', bobP);
+  // check that ifItFitsP fulfills correctly, and that
+  // payBobBadly1 and payBobBadly2 reject correctly.
+  // (At the time of this writing, did the right thing under debugger)
+
+
+  return Q(bobP).send('tradeWell', aliceP);
+//  return Q(aliceP).send('tradeWell', bobP);
 });

@@ -15,10 +15,18 @@
 
 define('contract/makeAlice', ['Q', 'contract/escrowExchange'],
        function(Q, escrowExchange) {
+  "use strict";
+  var def = cajaVM.def;
 
-  var makeAlice = function(myMoneyPurse, myStockPurse, contractHost) {
+  var makeAlice = function(myMoneyPurse, myStockPurse, contractHostP) {
     var escrowSrc = ''+escrowExchange;
     var myPurse = myMoneyPurse;
+
+    var check = function(allegedSrc, allegedSide) {
+      // for testing purposes, alice and bob are willing to play
+      // any side of any contract, so that the failure we're testing
+      // is in the contractHost's checking
+    };
 
     var alice = def({
       payBobWell: function(bobP) {
@@ -29,7 +37,7 @@ define('contract/makeAlice', ['Q', 'contract/escrowExchange'],
       },
       payBobBadly1: function(bobP) {
         var payment = def({ deposit: function(amount, src) {} });
-        return bobP.send('buy', 'shoe', paymentP);
+        return bobP.send('buy', 'shoe', payment);
       },
       payBobBadly2: function(bobP) {
         var paymentP = Q(myMoneyPurse).send('makePurse');
@@ -43,8 +51,8 @@ define('contract/makeAlice', ['Q', 'contract/escrowExchange'],
         var tokensP = Q(contractHostP).send('setup', escrowSrc);
         var aliceTokenP = Q(tokensP).get(0);
         var bobTokenP   = Q(tokensP).get(1);
-        Q(alice).send('invite', aliceTokenP, escrowSrc, 0);
-        Q(bobP ).send('invite', bobTokenP,   escrowSrc, 1);
+               Q(bobP ).send('invite', bobTokenP,   escrowSrc, 1);
+        return Q(alice).send('invite', aliceTokenP, escrowSrc, 0);
       },
 
       invite: function(tokenP, allegedSrc, allegedSide) {
@@ -59,11 +67,16 @@ define('contract/makeAlice', ['Q', 'contract/escrowExchange'],
         });
         var ackP = Q(a.moneySrcP).send('deposit', 10, myMoneyPurse);
 
-        return Q(ackP).then(
+        var decisionP = Q(ackP).then(
           function(_) {
             return Q(contractHostP).send(
-              'play', tokenP, allegedChessSrc, allegedSide, a);
+              'play', tokenP, allegedSrc, allegedSide, a);
           });
+        return Q(decisionP).then(function(_) {
+          return Q.delay(3000);
+        }).then(function(_) {
+          return Q(a.stockDstP).send('getBalance');
+        });
       }
     });
     return alice;

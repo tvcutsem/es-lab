@@ -514,6 +514,9 @@ var ses;
        send: function(opt_name, var_args) {
          return applyFn(this.post, this, [opt_name, sliceFn(arguments, 1)]);
        },
+       fcall: function(var_args) {
+         return applyFn(this.post, this, [void 0, sliceFn(arguments, 0)]);
+       },
        get: function(name) {
          var that = this;
          return postpone(function() {
@@ -571,6 +574,14 @@ var ses;
        return optHandler.nearer();
      }
 
+     // Will be relevant for remote
+     //var passByCopies = WeakMap();
+     function passByCopy(obj) {
+       freeze(obj);
+       //passByCopies.set(obj, true);
+       return obj;
+     }
+
      //////////////////////////////////////////////////////////////////////////
 
      Q.reject = reject;
@@ -585,6 +596,8 @@ var ses;
 
      theViciousCycle = reject(new Error('vicious promise cycle'));
      theViciousCycleHandler = handle(theViciousCycle);
+
+     Q.passByCopy = passByCopy;
 
      //////////////////////////////////////////////////////////////////////////
      // Non-fundamental conveniences below.
