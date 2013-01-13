@@ -444,11 +444,11 @@ Bob's {\tt buy} method handles a message from untrusted clients such as Alice, a
 
 If the bank's {\tt deposit} method acknowledges a successful deposit, by fulfilling the promise for the result of the deposit, then Bob knows he has obtained \emph{exclusive} access to a \emph{fungible} and \emph{measurable} quantity of a given currency at a given bank. In this case, the success callback of the {\tt .then} above gets called, returning the {\tt good}, fulfilling Alice's pending {\tt goodP} promise.
 
-The interesting work starts on line 11, where {\tt deposit} looks up the alleged payment purse in the {\tt m} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return undefined, causing the following function call to throw an error, rejecting Bob's promise for the result of the deposit, rejecting Alice's {\tt goodP}. If this lookup succeeds, it finds the {\tt decr} function for decrementing that purse's {\tt balance}, which it calls with the amount to withdraw. If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
+The interesting work starts on line 11, where {\tt deposit} looks up the alleged payment purse in the {\tt m} table. If this is anything other than a purse of the same currency at the same bank, this lookup will instead return {\tt undefined}, causing the following function call to throw an error, rejecting Bob's promise for the result of the deposit, rejecting Alice's {\tt goodP}. If this lookup succeeds, it finds the {\tt decr} function for decrementing that purse's {\tt balance}, which it calls with the amount to withdraw. If the payment has insufficient funds, {\tt balance - amount} would be negative and {\tt Nat} would throw.
 
 We have now arrived at the commit point. All the tests that might cause failure have already passed, and no side effects have yet happened. Now we perform all side effects, all of which will happen since no locally observable failure possibilities remain. The assignment decrements the payment purse's {\tt balance} by {\tt amount}, and {\tt decr} returns. Line 12 increments the balance of the purse being deposited into.
 
-The success callback in the {\tt deposit} method implicitly returns undefined, fulfilling Bob's promise for the result of the {\tt deposit} request, triggering Bob to release the good to Alice in exchange.
+The success callback in the {\tt deposit} method implicitly returns {\tt undefined}, fulfilling Bob's promise for the result of the {\tt deposit} request, triggering Bob to release the good to Alice in exchange.
 
 
 
