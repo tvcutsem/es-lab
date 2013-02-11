@@ -15,7 +15,7 @@
 /**
  * @fileoverview Implements the EcmaScript
  * http://wiki.ecmascript.org/doku.php?id=strawman:concurrency
- * strawman, securely when run a Caja or SES platform.
+ * strawman, securely when run on a Caja or SES platform.
  *
  * //provides ses.makeQ
  * @author Mark S. Miller, based on earlier designs by Tyler Close,
@@ -178,7 +178,7 @@ var ses;
 
        stateName: 'near',
 
-       nearer: function() { return this.target; },
+       shorten: function() { return this.target; },
 
        dispatch: function(OP, args) {
          return applyFn(this[OP], this, args);
@@ -204,12 +204,37 @@ var ses;
      /**
       * Returns the promise form of value.
       *
-      * <p>If value is already a promise, return it. Otherwise wrap it
-      * in a promise that is already resolved to value.
+      * <p>If value is already a promise, return it. Else if it is
+      * null, undefined, or a primitive value, then wrap it in a
+      * promise that is already resolved to value, even if
+      * Object(value) would be considered thenable. Else return a
+      * promise now for the result of testing the thenability of value
+      * in a separate turn.
+      *
+      * <p>In that later turn, if value is a thenable, then wrap its
+      * "then" behavior in a reliable promise. Otherwise wrap it in a
+      * promise that is already resolved to value.
       */
      function Q(value) {
        if (isPromise(value)) { return value; }
-       return new Promise(NearHandler, value);
+       if (value !== Object(value)) {
+         // If value is null, undefined, or a primitive value, then
+         // make a resolved promise immediately, even if Object(value)
+         // would inherit a "then" method and thus be considered a
+         // thenable.
+         return new Promise(NearHandler, value);
+       }
+       return promise(function(resolve, reject) {
+         setTimeout(function() {
+           // To prevent plan interference attacks, we must test whether
+           // value is a thenable in a separate turn.
+           if (typeof value.then === 'function') {
+             value.then(resolve, reject);
+           } else {
+             resolve(Promise(NearHandler, value));
+           }
+         });
+       });
      }
 
 
@@ -230,10 +255,10 @@ var ses;
      }
      RejectedHandler.prototype = {
 
-       nearer: function() { return this.promise; },
+       shorten: function() { return this.promise; },
 
        dispatch: function(OP, args) {
-         if (OP === 'THEN') { return this.THEN (args[0], args[1]); }
+         if (OP === 'THEN') { return this.THEN(args[0], args[1]); }
          return this.promise;
        },
 
@@ -283,7 +308,7 @@ var ses;
 
        stateName: 'pending',
 
-       nearer: function() { return this.promise; },
+       shorten: function() { return this.promise; },
 
        dispatch: function(OP, args) {
          return promise(function(resolve) {
@@ -388,7 +413,7 @@ var ses;
      FarHandler.prototype = {
        stateName: 'far',
 
-       nearer: function() { return this.promise; },
+       shorten: function() { return this.promise; },
 
        /** Just invoke sk, the success continuation */
        THEN: function(sk, fk) { return sk(this.promise); }
@@ -405,7 +430,7 @@ var ses;
 
 
        function rejectFar(reason) {
-         // Note that a farPromise is resolved, so its nearer()
+         // Note that a farPromise is resolved, so its shorten()
          // identity must be stable, even when it becomes
          // rejected. Thus, we do not become(farHandler, reject(reason))
          // or become(farHandler, nextSlot.value). Rather, we switch
@@ -446,7 +471,7 @@ var ses;
      RemoteHandler.prototype = {
        stateName: 'pending remote',
 
-       nearer: function()       { return this.promise; }
+       shorten: function()       { return this.promise; }
      };
 
      function makeRemote(remoteDispatch, nextSlotP) {
@@ -568,10 +593,10 @@ var ses;
      };
      def(DontMakePromise);
 
-     function nearer(target1) {
+     function shorten(target1) {
        var optHandler = handle(target1);
        if (!optHandler) { return target1; }
-       return optHandler.nearer();
+       return optHandler.shorten();
      }
 
      // Will be relevant for remote
@@ -592,7 +617,7 @@ var ses;
 
      Q.makeRemote = makeRemote;
 
-     Q.nearer = nearer;
+     Q.shorten = shorten;
 
      theViciousCycle = reject(new Error('vicious promise cycle'));
      theViciousCycleHandler = handle(theViciousCycle);
