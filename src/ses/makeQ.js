@@ -209,27 +209,27 @@ var ses;
       * promise that is already resolved to value, even if
       * Object(value) would be considered thenable. Else return a
       * promise now for the result of testing the thenability of value
-      * in a separate turn.
+      * in a separate turn. To prevent plan interference attacks, this
+      * testing must be in a separate turn.
       *
-      * <p>In that later turn, if value is a thenable, then wrap its
-      * "then" behavior in a reliable promise. Otherwise wrap it in a
-      * promise that is already resolved to value.
+      * <p>In that later turn, if value is a thenable, then use its
+      * "then" behavior to determine the resolution of the previously
+      * returned promise. Else, fulfil the previously returned promise
+      * with value.
       */
      function Q(value) {
        if (isPromise(value)) { return value; }
        if (value !== Object(value)) {
-         // If value is null, undefined, or a primitive value, then
-         // make a resolved promise immediately, even if Object(value)
-         // would inherit a "then" method and thus be considered a
-         // thenable.
          return new Promise(NearHandler, value);
        }
        return promise(function(resolve, reject) {
          setTimeout(function() {
-           // To prevent plan interference attacks, we must test whether
-           // value is a thenable in a separate turn.
            if (typeof value.then === 'function') {
-             value.then(resolve, reject);
+             try {
+               value.then(resolve, reject);
+             } catch (reason) {
+               reject(reason);
+             }
            } else {
              resolve(Promise(NearHandler, value));
            }
