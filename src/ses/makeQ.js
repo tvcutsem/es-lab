@@ -233,7 +233,7 @@ var ses;
            } else {
              resolve(Promise(NearHandler, value));
            }
-         });
+         }, 0);
        });
      }
 
