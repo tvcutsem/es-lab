@@ -252,6 +252,35 @@ ses.startSES = function(global,
   var create = Object.create;
 
   /**
+   * The function ses.mitigateGotchas, if defined, is a function which
+   * given the sourceText for a strict Program, returns rewritten
+   * program with the same semantics as the original but with as
+   * many of the ES5 gotchas removed as possible.  {@code options} is
+   * a record of which gotcha-rewriting-stages to use or omit.
+   * Passing no option performs no mitigation.
+   */
+  function mitigateGotchas(programSrc, options) {
+    if ('function' === typeof ses.mitigateGotchas) {
+      try {
+        return ses.mitigateGotchas(programSrc, options, ses.logger);
+      } catch (error) {
+        // Shouldn't throw, but if it does, the exception is potentially from a
+        // different context with an undefended prototype chain; don't allow it
+        // to leak out.
+        var safeError;
+        try {
+          safeError = new Error(error.message);
+        } catch (metaerror) {
+          throw new Error('Could not safely obtain error from mitigateGotchas');
+        }
+        throw safeError;
+      }
+    } else {
+      return '' + programSrc;
+    }
+  }
+
+  /**
    * Use to tamper proof a function which is not intended to ever be
    * used as a constructor, since it nulls out the function's
    * prototype first.
@@ -542,7 +571,8 @@ ses.startSES = function(global,
               // behalf of a typeof expression, we'd return the string
               // "undefined" here instead. Unfortunately, without
               // parsing or proxies, that isn't possible.
-              throw new ReferenceError('"' + name + '" blocked by Caja');
+              throw new ReferenceError('"' + name +
+                  '" is not defined in this scope.');
             },
             set: function scopedSet(newValue) {
               if (name in imports) {
@@ -642,12 +672,21 @@ ses.startSES = function(global,
      * Program's completion value. Unfortunately, this is not
      * practical as a library without some non-standard support from
      * the platform such as a parser API that provides an AST.
+     * TODO(jasvir): Now that we're parsing, we can provide compileProgram.
      *
      * <p>Thanks to Mike Samuel and Ankur Taly for this trick of using
      * {@code with} together with RegExp matching to intercept free
      * variable access without parsing.
      */
-    function compileExpr(exprSrc, opt_sourcePosition) {
+    function compileExpr(src, opt_sourcePosition) {
+      // Force src to be parsed as an expr
+      var exprSrc = '(' + src + '\n)';
+      exprSrc = mitigateGotchas(exprSrc);
+      // This is a workaround for a bug in the escodegen renderer that
+      // renders expressions as expression statements
+      if (exprSrc[exprSrc.length - 1] === ';') {
+        exprSrc = exprSrc.substr(0, exprSrc.length - 1);
+      }
       var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
       var wrapper = unsafeEval(wrapperSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
@@ -737,7 +776,8 @@ ses.startSES = function(global,
     function compileModule(modSrc, opt_sourcePosition) {
       // Note the EOL after modSrc to prevent trailing line comment in modSrc
       // eliding the rest of the wrapper.
-      var exprSrc = '(function() {' + modSrc + '\n}).call(this)';
+      var exprSrc =
+          '(function() {' + mitigateGotchas(modSrc) + '\n}).call(this)';
 
       // Follow the pattern in compileExpr
       var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
@@ -810,53 +850,43 @@ ses.startSES = function(global,
       global.eval = fakeEval;
     }
 
+
+    // For use by def below
     var defended = WeakMap();
-    var defending = WeakMap();
+    var defendingStack = [];
+    function pushDefending(val) {
+      if (!val) { return; }
+      var t = typeof val;
+      if (t === 'number' || t === 'string' || t === 'boolean') { return; }
+      if (t !== 'object' && t !== 'function') {
+        throw new TypeError('unexpected typeof: ' + t);
+      }
+      if (defended.get(val)) { return; }
+      defended.set(val, true);
+      defendingStack.push(val);
+    }
+
     /**
      * To define a defended object is to tamperProof it and all objects
      * transitively reachable from it via transitive reflective
      * property and prototype traversal.
      */
     function def(node) {
-      var defendingList = [];
-      function recur(val) {
-        if (!val) { return; }
-        var t = typeof val;
-        if (t === 'number' || t === 'string' || t === 'boolean') { return; }
-        if (defended.get(val) || defending.get(val)) { return; }
-        defending.set(val, true);
-        defendingList.push(val);
-
-        tamperProof(val);
-
-        recur(getProto(val));
-
-        // How to optimize? This is a performance sensitive loop, but
-        // forEach seems to be faster on Chrome 18 Canary but a
-        // for(;;) loop seems better on FF 12 Nightly.
-        gopn(val).forEach(function(p) {
-          if (typeof val === 'function' &&
-              (p === 'caller' || p === 'arguments')) {
-            return;
-          }
-          var desc = gopd(val, p);
-          recur(desc.value);
-          recur(desc.get);
-          recur(desc.set);
-        });
-      }
+      var next;
       try {
-        recur(node);
+        pushDefending(node);
+        while (defendingStack.length > 0) {
+          next = defendingStack.pop();
+          pushDefending(getProto(next));
+          tamperProof(next, pushDefending);
+        }
       } catch (err) {
-        defending = WeakMap();
+        defended = WeakMap();
+        defendingStack = [];
         throw err;
       }
-      defendingList.forEach(function(obj) {
-        defended.set(obj, true);
-      });
       return node;
     }
-
 
     /**
      * makeArrayLike() produces a constructor for the purpose of
@@ -866,6 +896,11 @@ ses.startSES = function(global,
      *
      * <p>The constructor returns a new object that inherits from the
      * {@code proto} passed in.
+     *
+     * makeArrayLike.canBeFullyLive indicates whether the implementation
+     * is fully dynamic -- in particular whether, if getLength increases
+     * its value between creation and access, is it guaranteed that
+     * accesses in the new range will be intercepted by getItem.
      */
     var makeArrayLike;
     (function() {
@@ -946,14 +981,10 @@ ses.startSES = function(global,
             return result;
           }
           function getOwnPN() {
-            var lenGetter = lengthMap.get(this);
-            if (!lenGetter) { return void 0; }
-            var len = lenGetter();
-            var result = ['length'];
-            for (var i = 0; i < len; ++i) {
-              result.push('' + i);
-            }
-            return result;
+            // Cannot return an appropriate set of numeric properties, because
+            // this proxy is the ArrayLike.prototype which is shared among all
+            // instances.
+            return ['length'];
           };
           function del(P) {
             P = '' + P;
@@ -973,6 +1004,7 @@ ses.startSES = function(global,
           }, Object.prototype);
           tamperProof(ArrayLike);
           makeArrayLike = function() { return ArrayLike; };
+          makeArrayLike.canBeFullyLive = true;
         })();
       } else {
         (function() {
@@ -984,6 +1016,10 @@ ses.startSES = function(global,
           // See
           // http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
           function nextUInt31PowerOf2(v) {
+            if (!(isFinite(v) && v >= 0)) {
+              // avoid emitting nonsense
+              throw new RangeError(v + ' not >= 0');
+            }
             v &= 0x7fffffff;
             v |= v >> 1;
             v |= v >> 2;
@@ -997,6 +1033,11 @@ ses.startSES = function(global,
           var BiggestArrayLike = void 0;
           var maxLen = 0;
           makeArrayLike = function(length) {
+            length = +length;
+            if (!(isFinite(length) && length >= 0)) {
+              // Avoid bad behavior from negative numbers or other bad input.
+              length = 0;
+            }
             if (!BiggestArrayLike || length > maxLen) {
               var len = nextUInt31PowerOf2(length);
               // Create a new ArrayLike constructor to replace the old one.
@@ -1035,6 +1076,7 @@ ses.startSES = function(global,
             }
             return BiggestArrayLike;
           };
+          makeArrayLike.canBeFullyLive = false;
         })();
       }
     })();

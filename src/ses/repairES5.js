@@ -208,7 +208,7 @@ var ses;
    * be adequately repairable, or otherwise falling back to Caja's
    * ES5/3 translator.
    */
-  ses.maxAcceptableSeverityName = 
+  ses.maxAcceptableSeverityName =
     validateSeverityName(ses.maxAcceptableSeverityName);
   ses.maxAcceptableSeverity = ses.severities[ses.maxAcceptableSeverityName];
 
@@ -366,13 +366,20 @@ var ses;
     return 'Apparently fine';
   };
 
+  var simpleTamperProofOk = false;
+
   /**
-   * "makeTamperProof()" returns a "tamperProof(obj)" function that
-   * acts like "Object.freeze(obj)", except that, if obj is a
-   * <i>prototypical</i> object (defined below), it ensures that the
-   * effect of freezing properties of obj does not suppress the
+   * "makeTamperProof()" returns a "tamperProof(obj, opt_pushNext)"
+   * function that acts like "Object.freeze(obj)", except that, if obj
+   * is a <i>prototypical</i> object (defined below), it ensures that
+   * the effect of freezing properties of obj does not suppress the
    * ability to override these properties on derived objects by simple
    * assignment.
+   *
+   * <p>If opt_pushNext is provided, then it is called for each value
+   * obtained from an own property by reflective property access, so
+   * that tamperProof's caller can arrange to visit each of these
+   * values after tamperProof returns if it wishes to recur.
    *
    * <p>Because of lack of sufficient foresight at the time, ES5
    * unfortunately specified that a simple assignment to a
@@ -392,23 +399,26 @@ var ses;
    * then when tamper proofing it, prior to freezing, replace all its
    * configurable own data properties with accessor properties which
    * simulate what we should have specified -- that assignments to
-   * derived objects succeed if otherwise possible.
+   * derived objects succeed if otherwise possible. In this case,
+   * opt_pushNext, if provided, is called on the value that this data
+   * property had <i>and</i> on the accessors which replaced it.
    *
    * <p>Some platforms (Chrome and Safari as of this writing)
    * implement the assignment semantics ES5 should have specified
    * rather than what it did specify.
    * "test_ASSIGN_CAN_OVERRIDE_FROZEN()" below tests whether we are on
    * such a platform. If so, "repair_ASSIGN_CAN_OVERRIDE_FROZEN()"
-   * replaces "makeTamperProof" with a function that simply returns
-   * "Object.freeze", since the complex workaround here is not needed
-   * on those platforms.
+   * sets simpleTamperProofOk, which informs makeTamperProof that the
+   * complex workaround here is not needed on those platforms. If
+   * opt_pushNext is provided, it must still use reflection to obtain
+   * those values.
    *
    * <p>"makeTamperProof" should only be called after the trusted
    * initialization has done all the monkey patching that it is going
    * to do on the Object.* methods, but before any untrusted code runs
    * in this context.
    */
-  var makeTamperProof = function defaultMakeTamperProof() {
+  function makeTamperProof() {
 
     // Sample these after all trusted monkey patching initialization
     // but before any untrusted code runs in this frame.
@@ -418,27 +428,56 @@ var ses;
     var freeze = Object.freeze;
     var isFrozen = Object.isFrozen;
     var defProp = Object.defineProperty;
+    var call = Function.prototype.call;
 
-    function tamperProof(obj) {
+    function forEachNonPoisonOwn(obj, callback) {
+      var list = gopn(obj);
+      var len = list.length;
+      var i, j, name;  // crockford rule
+      if (typeof obj === 'function') {
+        for (i = 0, j = 0; i < len; i++) {
+          name = list[i];
+          if (name !== 'caller' && name !== 'arguments') {
+            callback(name, j);
+            j++;
+          }
+        }
+      } else {
+        strictForEachFn(list, callback);
+      }
+    }
+
+    function simpleTamperProof(obj, opt_pushNext) {
+      if (obj !== Object(obj)) { return obj; }
+      if (opt_pushNext) {
+        forEachNonPoisonOwn(obj, function(name) {
+          var desc = gopd(obj, name);
+          if ('value' in desc) {
+            opt_pushNext(desc.value);
+          } else {
+            opt_pushNext(desc.get);
+            opt_pushNext(desc.set);
+          }
+        });
+      }
+      return freeze(obj);
+    }
+
+    function tamperProof(obj, opt_pushNext) {
       if (obj !== Object(obj)) { return obj; }
       var func;
-      if (typeof obj === 'object' &&
+      if ((typeof obj === 'object' || obj === Function.prototype) &&
           !!gopd(obj, 'constructor') &&
           typeof (func = obj.constructor) === 'function' &&
           func.prototype === obj &&
           !isFrozen(obj)) {
-        strictForEachFn(gopn(obj), function(name) {
+        var pushNext = opt_pushNext || function(v) {};
+        forEachNonPoisonOwn(obj, function(name) {
           var value;
           function getter() {
-            if (obj === this) { return value; }
-            if (this === void 0 || this === null) { return void 0; }
-            var thisObj = Object(this);
-            if (!!gopd(thisObj, name)) { return this[name]; }
-            // TODO(erights): If we can reliably uncurryThis() in
-            // repairES5.js, the next line should be:
-            //   return callFn(getter, getProtoOf(thisObj));
-            return getter.call(getProtoOf(thisObj));
+            return value;
           }
+
           function setter(newValue) {
             if (obj === this) {
               throw new TypeError('Cannot set virtually frozen property: ' +
@@ -456,24 +495,34 @@ var ses;
             });
           }
           var desc = gopd(obj, name);
-          if (desc.configurable && 'value' in desc) {
+          if ('value' in desc) {
             value = desc.value;
-            getter.prototype = null;
-            setter.prototype = null;
-            defProp(obj, name, {
-              get: getter,
-              set: setter,
-              // We should be able to omit the enumerable line, since it
-              // should default to its existing setting.
-              enumerable: desc.enumerable,
-              configurable: false
-            });
+            if (desc.configurable) {
+              getter.prototype = null;
+              setter.prototype = null;
+              defProp(obj, name, {
+                get: getter,
+                set: setter,
+                // We should be able to omit the enumerable line, since it
+                // should default to its existing setting.
+                enumerable: desc.enumerable,
+                configurable: false
+              });
+              pushNext(getter);
+              pushNext(setter);
+            }
+            pushNext(value);
+          } else {
+            pushNext(desc.get);
+            pushNext(desc.set);
           }
         });
+        return freeze(obj);
+      } else {
+        return simpleTamperProof(obj, opt_pushNext);
       }
-      return freeze(obj);
     }
-    return tamperProof;
+    return simpleTamperProofOk ? simpleTamperProof : tamperProof;
   };
 
 
@@ -1542,7 +1591,7 @@ var ses;
   }
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=2396
-   * 
+   *
    * <p>Commenting out the eval does the right thing.  Only fails in
    * non-strict mode.
    */
@@ -1602,8 +1651,8 @@ var ses;
    * which is unfortunate for SES, as the tamperProof function must
    * kludge expensively to ensure that legacy assignments that don't
    * violate best practices continue to work. Ironically, on platforms
-   * in which this bug is present, tamperProof can just be cheaply
-   * equivalent to Object.freeze.
+   * in which this bug is present, tamperProof can just cheaply
+   * wrap Object.freeze.
    */
   function test_ASSIGN_CAN_OVERRIDE_FROZEN() {
     var x = Object.freeze({foo: 88});
@@ -1675,6 +1724,35 @@ var ses;
   }
 
   /**
+   * Detects whether calling push on a frozen array throws an error.
+   */
+  function test_PUSH_DOES_NOT_THROW_ON_FROZEN_ARRAY() {
+    var x = [1,2];
+    Object.freeze(x);
+    try {
+      x.push(3);
+    } catch (e) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Detects whether calling push on a frozen array can modify the array.
+   */
+  function test_PUSH_IGNORES_FROZEN() {
+    var x = [1,2];
+    Object.freeze(x);
+    try {
+      x.push(3);
+    } catch (e) {
+      if (x.length !== 2) { return 'Unexpected modification of frozen array'; }
+      if (x[0] === 1 && x[1] === 2) { return false; }
+    }
+    return (x.length !== 2 || x[0] !== 1 || x[1] !== 2);
+  }
+
+  /**
    * In some browsers, assigning to array length can delete
    * non-configurable properties.
    * https://bugzilla.mozilla.org/show_bug.cgi?id=590690
@@ -1717,24 +1795,20 @@ var ses;
     return false;
   }
 
-  /**		
-   * In Firefox 15+, Object.freeze and Object.isFrozen only work for		
-   * descendents of that same Object.		
-   */		
-  function test_FIREFOX_15_FREEZE_PROBLEM() {		
-    if (typeof document === 'undefined' ||
-       typeof document.createElement !== 'function') {
-      // likely not a browser environment
-      return false;
-    }
-    var iframe = document.createElement('iframe');		
-    var where = document.getElementsByTagName('script')[0];		
-    where.parentNode.insertBefore(iframe, where);		
-    var otherObject = iframe.contentWindow.Object;		
-    where.parentNode.removeChild(iframe);		
-    var obj = {};		
-    otherObject.freeze(obj);		
-    return !Object.isFrozen(obj);		
+  /**
+   * In Firefox 15+, Object.freeze and Object.isFrozen only work for
+   * descendents of that same Object.
+   */
+  function test_FIREFOX_15_FREEZE_PROBLEM() {
+    if (!document || !document.createElement) { return false; }
+    var iframe = document.createElement('iframe');
+    var where = document.getElementsByTagName('script')[0];
+    where.parentNode.insertBefore(iframe, where);
+    var otherObject = iframe.contentWindow.Object;
+    where.parentNode.removeChild(iframe);
+    var obj = {};
+    otherObject.freeze(obj);
+    return !Object.isFrozen(obj);
   }
 
   /**
@@ -2207,7 +2281,7 @@ var ses;
   function repair_NEED_TO_WRAP_FOREACH() {
     Object.defineProperty(Array.prototype, 'forEach', {
       // Taken from https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Array/forEach
-      value: function(callback, thisArg) { 
+      value: function(callback, thisArg) {
         var T, k;
         if (this === null || this === undefined) {
           throw new TypeError("this is null or not defined");
@@ -2605,9 +2679,7 @@ var ses;
   }
 
   function repair_ASSIGN_CAN_OVERRIDE_FROZEN() {
-    makeTamperProof = function simpleMakeTamperProof() {
-      return Object.freeze;
-    };
+    simpleTamperProofOk = true;
   }
 
   function repair_CANT_REDEFINE_NAN_TO_ITSELF() {
@@ -2662,21 +2734,6 @@ var ses;
         } else {
           return sort.call(this, compareFn);
         }
-      },
-      configurable: true,
-      writable: true
-    });
-  }
-
-  function repair_PUSH_IGNORES_SEALED() {
-    var push = Array.prototype.push;
-    var sealed = Object.isSealed;
-    Object.defineProperty(Array.prototype, 'push', {
-      value: function (compareFn) {
-        if (sealed(this)) {
-          throw new TypeError('Cannot push onto a sealed object.');
-        }
-        return push.apply(this, arguments);
       },
       configurable: true,
       writable: true
@@ -3245,11 +3302,31 @@ var ses;
     {
       description: 'Array.prototype.push ignores sealing',
       test: test_PUSH_IGNORES_SEALED,
-      repair: repair_PUSH_IGNORES_SEALED,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: true,
+      repair: undefined, // workaround is too slow
+      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
+      canRepair: false,
       urls: ['http://code.google.com/p/v8/issues/detail?id=2412'],
       sections: ['15.4.4.11'],
+      tests: [] // TODO(erights): Add to test262
+    },
+    {
+      description: 'Array.prototype.push does not throw on a frozen array',
+      test: test_PUSH_DOES_NOT_THROW_ON_FROZEN_ARRAY,
+      repair: undefined,
+      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: ['15.2.3.9'],
+      tests: [] // TODO(erights): Add to test262
+    },
+    {
+      description: 'Array.prototype.push ignores frozen',
+      test: test_PUSH_IGNORES_FROZEN,
+      repair: undefined,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: ['15.2.3.9'],
       tests: [] // TODO(erights): Add to test262
     },
     {

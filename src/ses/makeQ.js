@@ -155,7 +155,7 @@ var ses;
            value = handler.dispatch(messenger.OP,
                                     messenger.args);
          } catch (reason) {
-           value = reject(reason);
+           value = rejected(reason);
          }
          messenger.resolve(value);
        }, 0);
@@ -169,7 +169,7 @@ var ses;
       * handler. "target" must be a non-promise. The NearHandler
       * constructor does not actually use its "prom" argument, but it
       * is there to support the general HandlerConstructor API as assumed
-      * by the Promise constructor.
+      * by the HiddenPromise constructor.
       */
      function NearHandler(prom, target) {
        this.target = target;
@@ -220,7 +220,7 @@ var ses;
      function Q(value) {
        if (isPromise(value)) { return value; }
        if (value !== Object(value)) {
-         return new Promise(NearHandler, value);
+         return new HiddenPromise(NearHandler, value);
        }
        return promise(function(resolve, reject) {
          setTimeout(function() {
@@ -231,7 +231,7 @@ var ses;
                reject(reason);
              }
            } else {
-             resolve(Promise(NearHandler, value));
+             resolve(new HiddenPromise(NearHandler, value));
            }
          }, 0);
        });
@@ -267,23 +267,23 @@ var ses;
      };
 
      /**
-      * Reject makes a new rejected promise which reports "reason" as the
+      * Rejected makes a new rejected promise which reports "reason" as the
       * alleged reason why it is rejected.
       *
       * <p>Does a def(reason), which (transitively under SES) freezes
       * reason.
       */
-     function reject(reason) {
+     function rejected(reason) {
        reason = def(reason);
        try {
-         return new Promise(RejectedHandler, reason);
+         return new HiddenPromise(RejectedHandler, reason);
        } catch (err) {
          // Workaround undiagnosed intermittent FF bug. TODO(erights):
          // isolate and report.
          // debugger;
          reason = 'Failing to report error for mysterious reasons';
        }
-       return new Promise(RejectedHandler, reason);
+       return new HiddenPromise(RejectedHandler, reason);
      }
 
      /**
@@ -350,7 +350,7 @@ var ses;
            debugger;
          }
        }
-       var resultP = new Promise(PendingHandler, queue);
+       var resultP = new HiddenPromise(PendingHandler, queue);
        var handler = handle(resultP);
 
        function resolve(value) {
@@ -380,14 +380,18 @@ var ses;
          }
        }
 
-       function rejector(reason) {
-         resolve(reject(reason));
+       function reject(reason) {
+         resolve(rejected(reason));
        }
 
+       // compat with sensible subset of DOMFuture construction API
+       resolve.resolve = resolve;
+       resolve.reject = reject;
+
        try {
-         func(constFunc(resolve), constFunc(rejector));
+         func(constFunc(resolve), constFunc(reject));
        } catch (reason) {
-         rejector(reason);
+         reject(reason);
        }
        return resultP;
      }
@@ -426,13 +430,13 @@ var ses;
          if (OP === 'THEN') { return farPromise.THEN(args[0], args[1]); }
          return farDispatch(OP, args);
        }
-       farPromise = new Promise(FarHandler, dispatch);
+       farPromise = new HiddenPromise(FarHandler, dispatch);
 
 
        function rejectFar(reason) {
          // Note that a farPromise is resolved, so its shorten()
          // identity must be stable, even when it becomes
-         // rejected. Thus, we do not become(farHandler, reject(reason))
+         // rejected. Thus, we do not become(farHandler, rejected(reason))
          // or become(farHandler, nextSlot.value). Rather, we switch
          // to a new rejected handler whose promise is this same
          // farPromise.
@@ -486,13 +490,13 @@ var ses;
          }
          return remoteDispatch(OP, args);
        }
-       remotePromise = new Promise(RemoteHandler, remoteDispatch);
+       remotePromise = new HiddenPromise(RemoteHandler, remoteDispatch);
 
 
        Q(nextSlotP).then(function(nextSlot) {
          become(handle(remotePromise, Q(nextSlot.value)));
        }, function(reason) {
-         become(handle(remotePromise, reject(reason)));
+         become(handle(remotePromise, rejected(reason)));
        }).end();
 
        return remotePromise;
@@ -504,9 +508,10 @@ var ses;
       * other object, where the other object might be elsewhere (e.g., on
       * a remote machine) or elsewhen (e.g., not yet computed).
       *
-      * <p>The Promise constructor must not escape. Clients of this module
+      * <p>The HiddenPromise constructor must not escape. Clients of this module
       * use the Q function to make promises from non-promises. Since
-      * Promise.prototype does escape, it must not point back at Promise.
+      * HiddenPromise.prototype does escape, it must not point back at
+      * HiddenPromise.
       *
       * <p>The various methods on a genuine promise never execute "user
       * code", i.e., possibly untrusted client code, during the immediate
@@ -516,16 +521,13 @@ var ses;
       * returns nothing, all other promise methods return genuine
       * promises, enabling safe chaining.
       */
-     function Promise(HandlerMaker, arg) {
+     function HiddenPromise(HandlerMaker, arg) {
        var handler = new HandlerMaker(this, arg);
        handlers.set(this, handler);
        freeze(this);
      }
-     function DontMakePromise() {
-       throw new Error('Make promises by calling Q()');
-     }
-     DontMakePromise.prototype = Promise.prototype = {
-       constructor: DontMakePromise,
+     promise.prototype = HiddenPromise.prototype = {
+       constructor: promise,
 
        toString: function() {
          return '[' + handle(this).stateName + ' promise]';
@@ -591,7 +593,7 @@ var ses;
          });
        }
      };
-     def(DontMakePromise);
+     def(promise);
 
      function shorten(target1) {
        var optHandler = handle(target1);
@@ -609,7 +611,7 @@ var ses;
 
      //////////////////////////////////////////////////////////////////////////
 
-     Q.reject = reject;
+     Q.rejected = rejected;
      Q.promise = promise;
      Q.isPromise = isPromise;
 
@@ -619,7 +621,7 @@ var ses;
 
      Q.shorten = shorten;
 
-     theViciousCycle = reject(new Error('vicious promise cycle'));
+     theViciousCycle = rejected(new Error('vicious promise cycle'));
      theViciousCycleHandler = handle(theViciousCycle);
 
      Q.passByCopy = passByCopy;
@@ -662,7 +664,7 @@ var ses;
        var args = sliceFn(arguments, 0);
        var len = args.length;
        if (len === 0) {
-         return Q.reject(new Error('No references joined'));
+         return Q.rejected(new Error('No references joined'));
        }
        return Q.all(args).then(function(fulfilleds) {
          var first = fulfilleds[0];
@@ -711,7 +713,7 @@ var ses;
              promisedValue = generator[verb](valueOrErr);
            } catch (err) {
              if (isStopIteration(err)) { return Q(err.value); }
-             return Q.reject(err);
+             return Q.rejected(err);
            }
            return Q(promisedValue).then(callback, errback);
          }

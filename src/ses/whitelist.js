@@ -143,7 +143,9 @@ var ses;
       stamp: t,
       makeSealerUnsealerPair: t,
 
-      makeArrayLike: {}
+      makeArrayLike: {
+        canBeFullyLive: t
+      }
     },
     WeakMap: {       // ES-Harmony proposal as currently implemented by FF6.0a1
       prototype: {
