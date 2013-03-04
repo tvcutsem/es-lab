@@ -497,7 +497,11 @@ var ses;
           var desc = gopd(obj, name);
           if ('value' in desc) {
             value = desc.value;
-            if (desc.configurable) {
+            // On some engines, and perhaps to become standard in ES6,
+            // __proto__ already behaves as an accessor but is made to
+            // appear to be a data property, so we should not try to
+            // reconfigure it into another accessor.
+            if (desc.configurable && name !== '__proto__') {
               getter.prototype = null;
               setter.prototype = null;
               defProp(obj, name, {

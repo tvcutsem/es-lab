@@ -1164,7 +1164,9 @@ ses.startSES = function(global,
           value: global[name],
           writable: false,
           configurable: false,
-          enumerable: desc.enumerable // firefox bug 787262
+
+          // See https://bugzilla.mozilla.org/show_bug.cgi?id=787262
+          enumerable: desc.enumerable 
         };
         try {
           defProp(global, name, newDesc);
@@ -1274,6 +1276,23 @@ ses.startSES = function(global,
                        diagnostic, path);
         return true;
       }
+    }
+
+    if (name === '__proto__') {
+      // At least Chrome Version 27.0.1428.0 canary, Safari Version
+      // 6.0.2 (8536.26.17), and Opera 12.14 include '__proto__' in the
+      // result of Object.getOwnPropertyNames. However, the meaning of
+      // deleting this isn't clear, so here we effectively whitelist
+      // it on all objects. 
+      //
+      // We do not whitelist it in whitelist.js, as that would involve
+      // creating a property {@code __proto__: '*'} which, on some
+      // engines (and perhaps as standard on ES6) attempt to make this
+      // portion of the whitelist inherit from {@code '*'}, which
+      // would fail in amusing ways.
+      reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+                     'Skipped', path);
+      return true;
     }
 
     var deleted = void 0;
