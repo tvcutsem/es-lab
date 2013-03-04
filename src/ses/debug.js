@@ -79,6 +79,9 @@ var ses;
        // So this section is v8 specific.
 
        UnsafeError.prepareStackTrace = function(err, sst) {
+	 if (ssts === void 0) {
+	   ses.logger.error('Error while initializing debug module', err);
+	 }
          ssts.set(err, sst);
          return void 0;
        };

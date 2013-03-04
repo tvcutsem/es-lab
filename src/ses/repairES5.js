@@ -1963,7 +1963,9 @@ var ses;
   }
 
   /**
-   *
+   * A strict getter is not supposed to coerce 'this'. However, some
+   * platforms coerce primitive types into their corresponding wrapper
+   * objects.
    */
   function test_STRICT_GETTER_BOXES() {
     Object.defineProperty(Number.prototype, '___test_prop___', {
@@ -1984,7 +1986,10 @@ var ses;
   }
 
   /**
-   *
+   * A non-strict getter is supposed to coerce its 'this' in the same
+   * manner as non-strict functions. However, on some platforms, they
+   * fail to coerce primitive types into their corresponding wrapper
+   * objects.
    */
   function test_NON_STRICT_GETTER_DOESNT_BOX() {
     Object.defineProperty(Number.prototype, '___test_prop___', {
@@ -2002,6 +2007,53 @@ var ses;
     } finally {
       delete Number.prototype.___test_prop___;
     }
+  }
+
+  /**
+   * See https://code.google.com/p/v8/issues/detail?id=2565
+   *
+   * In order to test for this non-descructively, we'd need a
+   * sacrificial frame, which is certainly possible in the browser and
+   * some other platforms, but is currently beyond the assumptions
+   * made by SES itself. Instead, to test for this bug on those
+   * platforms that seem to be candidates, we make
+   * Object.prototype.__proto__ by itself non-writable. If this bug is
+   * present and our repair fails, then this context will be severely
+   * broken.
+   */
+  function test_PROTO_FREEZE_KILLS_CREATE() {
+    var protoDesc = Object.getOwnPropertyDescriptor(Object.prototype,
+                                                    '__proto__');
+    if (!protoDesc || protoDesc.writable !== true) {
+      return false;
+    }
+    try {
+      Object.defineProperty(Object.prototype, '__proto__', {
+        value: null,
+        writable: false,
+        enumerable: protoDesc.enumerable,
+        configurable: protoDesc.configurable
+      });
+    } catch (err) {}
+    var x = {};
+    var y = Object.create(x);
+    var yproto = Object.getPrototypeOf(y);
+    if (yproto === x) { return false; }
+    if (yproto === null) { return true; }
+    return 'Create made unexpected parent ' + yproto;
+  }
+
+  /**
+   * See https://code.google.com/p/google-caja/issues/detail?id=1616
+   */
+  function test_FUNCTION_DOESNT_VERIFY_SYNTAX() {
+    try {
+      Function("/*", "*/){");
+    } catch (err) {
+      if (err instanceof SyntaxError) { return false; }
+      return 'Unexpected error: ' + err;
+    }
+    return true;
   }
 
 
@@ -2744,6 +2796,19 @@ var ses;
     });
   }
 
+  function repair_PROTO_FREEZE_KILLS_CREATE() {
+    Object.defineProperty(Object, 'create', {
+      value: function(parent, descriptors) {
+        function F(){}
+        F.prototype = parent;
+        var result = new F();
+        Object.defineProperties(result, descriptors);
+        return result;
+      }
+    });
+  }
+
+
   ////////////////////// Kludge Records /////////////////////
   //
   // Each kludge record has a <dl>
@@ -3421,6 +3486,29 @@ var ses;
              'https://bugzilla.mozilla.org/show_bug.cgi?id=732669'],
       sections: ['10.4.3'],
       tests: [] // ['10.4.3-1-59-s']
+    },
+    /* On Chrome Version 27.0.1428.0 canary, even this test is so
+       destructive that we cannot make progress.
+    {
+      description: 'Frozen __proto__ breaks Object.create',
+      test: test_PROTO_FREEZE_KILLS_CREATE,
+      repair: repair_PROTO_FREEZE_KILLS_CREATE,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['https://code.google.com/p/v8/issues/detail?id=2565'],
+      sections: [],
+      tests: []
+    },
+    */
+    {
+      description: 'Function constructor does not verify syntax',
+      test: test_FUNCTION_DOESNT_VERIFY_SYNTAX,
+      repair: void 0,
+      preSeverity: severities.NOT_ISOLATED,
+      canRepair: false,
+      urls: ['https://code.google.com/p/google-caja/issues/detail?id=1616'],
+      sections: ['15.3.2.1'],
+      tests: []
     }
   ];
 
