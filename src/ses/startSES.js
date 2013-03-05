@@ -1334,11 +1334,12 @@ ses.startSES = function(global,
       try {
         // Perhaps it's writable non-configurable, in which case we
         // should still be able to freeze it in a harmless state.
-        // TODO(erights): Allow value to be a primitive value
-        // to allow IE10's RegExp.prototype.options
         var value = gopd(base, name).value;
         defProp(base, name, {
-          value: value === null ? null : void 0,
+	  // If it's a primitive value, like IE10's non-standard,
+	  // non-deletable, but harmless RegExp.prototype.options,
+	  // then we allow it to retain its value.
+          value: value === Object(value) ? void 0 : value,
           writable: false,
           configurable: false
         });
