@@ -406,15 +406,15 @@ ses.startSES = function(global,
    */
   var sharedImports = create(null);
 
-  var MAX_NAT = Math.pow(2,52); // Is this right?
+  var MAX_NAT = Math.pow(2, 53);
   function Nat(allegedNum) {
     if (typeof allegedNum !== 'number') {
-      throw new RangeError("not a number");
+      throw new RangeError('not a number');
     }
-    if (allegedNum !== allegedNum) { throw new RangeError("NaN not natural"); }
-    if (allegedNum < 0)            { throw new RangeError("negative"); }
-    if (allegedNum % 1 !== 0)      { throw new RangeError("not integral"); }
-    if (allegedNum > MAX_NAT)      { throw new RangeError("too big"); }
+    if (allegedNum !== allegedNum) { throw new RangeError('NaN not natural'); }
+    if (allegedNum < 0)            { throw new RangeError('negative'); }
+    if (allegedNum % 1 !== 0)      { throw new RangeError('not integral'); }
+    if (allegedNum > MAX_NAT)      { throw new RangeError('too big'); }
     return allegedNum;
   }
 

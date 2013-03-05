@@ -80,10 +80,16 @@ var ses;
 
        UnsafeError.prepareStackTrace = function(err, sst) {
 	 if (ssts === void 0) {
+	   // If an error happens in the debug module after setting up
+	   // this prepareStackTrace but before or during the
+	   // initialization of ssts, then this method gets called
+	   // with ssts still undefined (void 0). In that case, we
+	   // should report the error we're asked to prepare, rather
+	   // than an error thrown by failing to prepare it.
 	   ses.logger.error('Error while initializing debug module', err);
+	   throw err;
 	 }
          ssts.set(err, sst);
-         return void 0;
        };
 
        var unsafeCaptureStackTrace = UnsafeError.captureStackTrace;
