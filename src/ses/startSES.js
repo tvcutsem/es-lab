@@ -872,6 +872,7 @@ ses.startSES = function(global,
      * property and prototype traversal.
      */
     function def(node) {
+      //ses.count('def');
       var next;
       try {
         pushDefending(node);
@@ -1166,7 +1167,7 @@ ses.startSES = function(global,
           configurable: false,
 
           // See https://bugzilla.mozilla.org/show_bug.cgi?id=787262
-          enumerable: desc.enumerable 
+          enumerable: desc.enumerable
         };
         try {
           defProp(global, name, newDesc);
@@ -1283,7 +1284,7 @@ ses.startSES = function(global,
       // 6.0.2 (8536.26.17), and Opera 12.14 include '__proto__' in the
       // result of Object.getOwnPropertyNames. However, the meaning of
       // deleting this isn't clear, so here we effectively whitelist
-      // it on all objects. 
+      // it on all objects.
       //
       // We do not whitelist it in whitelist.js, as that would involve
       // creating a property {@code __proto__: '*'} which, on some
@@ -1336,9 +1337,9 @@ ses.startSES = function(global,
         // should still be able to freeze it in a harmless state.
         var value = gopd(base, name).value;
         defProp(base, name, {
-	  // If it's a primitive value, like IE10's non-standard,
-	  // non-deletable, but harmless RegExp.prototype.options,
-	  // then we allow it to retain its value.
+          // If it's a primitive value, like IE10's non-standard,
+          // non-deletable, but harmless RegExp.prototype.options,
+          // then we allow it to retain its value.
           value: value === Object(value) ? void 0 : value,
           writable: false,
           configurable: false
@@ -1404,7 +1405,9 @@ ses.startSES = function(global,
    * This protection is now gathered here, so that a future version
    * can skip it for non-defensive frames that must only be confined.
    */
+  //ses.startTimer('freezing primordials');
   cajaVM.def(sharedImports);
+  //ses.stopTimer();
 
   keys(propertyReports).sort().forEach(function(status) {
     var group = propertyReports[status];

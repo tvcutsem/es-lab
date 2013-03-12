@@ -475,10 +475,14 @@ var ses;
         forEachNonPoisonOwn(obj, function(name) {
           var value;
           function getter() {
+            //ses.count('getter');
+            //ses.count('getting ' + name);
             return value;
           }
 
           function setter(newValue) {
+            //ses.count('setter');
+            //ses.count('setter_' + name);
             if (obj === this) {
               throw new TypeError('Cannot set virtually frozen property: ' +
                                   name);
@@ -502,6 +506,8 @@ var ses;
             // appear to be a data property, so we should not try to
             // reconfigure it into another accessor.
             if (desc.configurable && name !== '__proto__') {
+              //ses.count('accessorize');
+              //ses.count('accessorize_' + name);
               getter.prototype = null;
               setter.prototype = null;
               defProp(obj, name, {
@@ -526,6 +532,7 @@ var ses;
         return simpleTamperProof(obj, opt_pushNext);
       }
     }
+    // return simpleTamperProof;
     return simpleTamperProofOk ? simpleTamperProof : tamperProof;
   };
 

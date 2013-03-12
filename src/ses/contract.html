@@ -39,7 +39,6 @@
 
 <script src="useHTMLLogger.js"></script>
 <script>
-  /*console.profile('explicit SES init');*/
   function gebi(id) {
     return document.getElementById(id);
   };
@@ -57,6 +56,9 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
   default maxAcceptableSeverityName.
 -->
 <script src="logger.js"></script>
+<script>
+  //ses.startTimer('tamper proofing: contract after logger');
+</script>
 <script src="repairES5.js"></script>
 <script src="WeakMap.js"></script>
 <script src="debug.js"></script>
@@ -212,15 +214,22 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     Q(amdTestP).then(function(amdTest) {
       var amdTestStatus = amdTest === 'this is a test' ?
         'succeeded' : 'failed, unexpected: ' + amdTest;
-      /*console.profileEnd();*/
       appendText(amdLoaderTest, amdTestStatus);
     }, function(reason) {
-      /*console.profileEnd();*/
       appendText(amdLoaderTest, 'failed: ' + reason);
     }).end();
 
     var cTestP = Q(loaderP).send(void 0, 'contractTest');
     Q(cTestP).then(function(cTest) {
+      /*
+      ses.startTimer('reading push pop');
+      var a = [];
+      for (var i = 0; i < 1000000; i++) {
+        a.push('x');
+        a.pop();
+      }
+      */
+      //ses.stopTimer();
       appendText(contractTest, 'ok: ' + cTest);
     }, function(reason) {
       appendText(contractTest, 'oops: ' + reason);
