@@ -36,6 +36,7 @@ var ses;
    // http://wiki.ecmascript.org/doku.php?id=conventions:safe_meta_programming
    var uncurryThis = bind.bind(bind.call);
 
+   var callFn = uncurryThis(bind.call);
    var bindFn = uncurryThis(bind);
    var applyFn = uncurryThis(bind.apply);
    var sliceFn = uncurryThis([].slice);
@@ -65,9 +66,15 @@ var ses;
 
    /**
     * Makes a Q object which uses the provided setTimeout function to
-    * postpone events to future turns.
+    * postpone events to future turns. If the optional opt_nextTick
+    * function is provided, makeQ uses it instead of
+    * setTimeout(thunk, 0) to postpone to the next available turn.
     */
-   function makeQ(setTimeout) {
+   function makeQ(setTimeout, opt_nextTick) {
+
+     var nextTick = opt_nextTick || function(thunk) {
+       setTimeout(thunk, 0);
+     };
 
      /**
       * Maps from promises to their handlers.
@@ -113,14 +120,14 @@ var ses;
       */
      function postpone(thunk) {
        return promise(function(resolve, reject) {
-         setTimeout(function() {
+         nextTick(function() {
            var value;
            try {
              resolve(thunk());
            } catch (reason) {
              reject(reason);
            }
-         }, 0);
+         });
        });
      }
 
@@ -150,7 +157,7 @@ var ses;
       */
      function deliver(handler, messenger) {
        var value;
-       setTimeout(function() {
+       nextTick(function() {
          try {
            value = handler.dispatch(messenger.OP,
                                     messenger.args);
@@ -158,7 +165,7 @@ var ses;
            value = rejected(reason);
          }
          messenger.resolve(value);
-       }, 0);
+       });
      }
 
 
@@ -223,17 +230,20 @@ var ses;
          return new HiddenPromise(NearHandler, value);
        }
        return promise(function(resolve, reject) {
-         setTimeout(function() {
-           if (typeof value.then === 'function') {
-             try {
-               value.then(resolve, reject);
-             } catch (reason) {
-               reject(reason);
+         nextTick(function() {
+           var then;
+           try {
+             then = value.then;
+             if (typeof then === 'function') {
+               callFn(then, value, resolve, reject);
+               return;
              }
-           } else {
-             resolve(new HiddenPromise(NearHandler, value));
+           } catch (reason) {
+             reject(reason);
+             return;
            }
-         }, 0);
+           resolve(new HiddenPromise(NearHandler, value));
+         });
        });
      }
 
@@ -587,9 +597,9 @@ var ses;
        end: function() {
          this.then(function(){},
                    function(reason) {
-           // So if this setTimeout logs throws that terminate a turn, it
+           // So if this nextTick logs throws that terminate a turn, it
            // will also log this reason.
-           setTimeout(function() { throw reason; }, 0);
+           nextTick(function() { throw reason; });
          });
        }
      };
