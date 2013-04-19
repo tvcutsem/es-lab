@@ -1692,12 +1692,8 @@ var ses;
       if (x.length !== 2) { return 'Unexpected modification of frozen array'; }
       if (x[0] === 1 && x[1] === 2) { return false; }
     }
-    if (x.length !== 2) {
-      return 'Unexpected silent modification of frozen array';
-    }
-    return (x[0] !== 1 || x[1] !== 2);
+    return (x.length !== 2 || x[0] !== 1 || x[1] !== 2);
   }
-
 
   /**
    * Detects whether calling sort on a frozen array can modify the array.
@@ -2061,6 +2057,21 @@ var ses;
       return 'Unexpected error: ' + err;
     }
     return true;
+  }
+
+  /**
+   * Opera bug DSK-383293@bugs.opera.com
+   */
+  function test_PROTO_SETTER_UNGETTABLE() {
+    var desc = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__');
+    if (!desc) { return false; }
+    try {
+      desc.set; // yes, just reading it
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return ''+err;
+    }
+    return false;
   }
 
 
@@ -3515,6 +3526,16 @@ var ses;
       canRepair: false,
       urls: ['https://code.google.com/p/google-caja/issues/detail?id=1616'],
       sections: ['15.3.2.1'],
+      tests: []
+    },
+    {
+      description: "Can't get Object.prototype.__proto__'s setter",
+      test: test_PROTO_SETTER_UNGETTABLE,
+      repair: void 0,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['mailto:DSK-383293@bugs.opera.com'],
+      sections: [],
       tests: []
     }
   ];
