@@ -87,9 +87,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
 
     var imports = cajaVM.makeImports();
     cajaVM.copyToImports(imports, {window: 6});
-    // NOTE: do not cajaVM.def(imports) for this test, since the test
-    // itself may modify some of the state reachable from imports that
-    // def would freeze.
+    // NOTE: do not cajaVM.def(imports) for this test
 
     var output = cajaVM.eval('3+4') * cajaVM.compileExpr('window')(imports);
     var text1 = output === 42 ? 'succeeded' : 'failed: ' + output;
@@ -106,7 +104,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       require: function(id) { return { foo: 88, id: id}; },
       exports: exported
     });
-    // NOTE: do not cajaVM.def(imports) for this test. See above
+    // NOTE: do not cajaVM.def(imports) for this test
 
     var returned = modMaker(imports);
     var did = JSON.stringify(cajaVM.def({
