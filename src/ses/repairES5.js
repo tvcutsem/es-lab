@@ -29,6 +29,8 @@
  *
  * //provides ses.statuses, ses.ok, ses.is, ses.makeDelayedTamperProof
  * //provides ses.makeCallerHarmless, ses.makeArgumentsHarmless
+ * //provides ses.verifyExpression, ses.verifyFunctionBody,
+ * //provides ses.verifyProgram,
  * //provides ses.severities, ses.maxSeverity, ses.updateMaxSeverity
  * //provides ses.maxAcceptableSeverityName, ses.maxAcceptableSeverity
  *
@@ -366,6 +368,53 @@ var ses;
     return 'Apparently fine';
   };
 
+  var originalEval = global.eval;
+  var OriginalFunction = global.Function;
+
+  function defaultVerifyExpression(pragma, exprSrc) {
+    if (typeof exprSrc !== 'string') {
+      throw new SyntaxError('Source must be a string');
+    }
+    ses.verifyProgram(pragma, '(' + exprSrc + '\n);');
+    ses.verifyProgram('', '((' + exprSrc + '\n));');
+  }
+
+  /**
+   * Also used as the default implementation of ses.verifyProgram.  As
+   * an implementation of ses.verifyProgram, this happens to accept
+   * ReturnStatements, which is allowed by the ses.verifyProgram
+   * spec below.
+   */
+  function defaultVerifyFunctionBody(pragma, bodySrc) {
+    if (typeof bodySrc !== 'string') {
+      throw new SyntaxError('Source must be a string');
+    }
+    OriginalFunction(pragma + bodySrc);
+  }
+
+  /**
+   * By the time this module exits, either these are repaired to
+   * verify that their argument is a syntactically valid form of the
+   * indicated production, or this module has reported a failure to
+   * repair FUNCTION_DOESNT_VERIFY_SYNTAX.
+   *
+   * <p>Note that verification MUST NOT evaluate any code contained
+   * within these strings, whether they are syntactically valid or
+   * not. See https://code.google.com/p/google-caja/issues/detail?id=1616
+   * and https://code.google.com/p/v8/issues/detail?id=2470
+   *
+   * <p>In ES5, every valid Program is also a valid
+   * FunctionBody. Additionally, a FunctionBody can contain a
+   * ReturnStatement whereas a Program cannot. We consider a 
+   * ses.verifyProgram to be valid if it also admits a
+   * FunctionBody. In other words, we leave unspecified whether
+   * ses.verifyProgram rejects ReturnStatements.
+   */
+  ses.verifyExpression = defaultVerifyExpression;
+  ses.verifyFunctionBody = defaultVerifyFunctionBody;
+  ses.verifyProgram = defaultVerifyFunctionBody;
+
+
   var simpleTamperProofOk = false;
 
   /**
@@ -447,10 +496,38 @@ var ses;
       }
     }
 
+    function makeHistogram() {
+      var counters = Object.create(null);
+      function compare(name1, name2) {
+        return counters[name2] - counters[name1];
+      }
+
+      return {
+        count: function(name) {
+          if (name in counters) {
+            counters[name]++;
+          } else {
+            counters[name] = 0;
+          }
+        },
+        toString: function() {
+          var names = gopn(counters);
+          names = names.sort(compare);
+          return names.map(function(name) {
+            return name + ': ' + counters[name];
+          }).join(', ');
+        }
+      };
+    }
+
+    ses.counts = {};
+    ses.counts.stp = 0;
+
     function simpleTamperProof(obj, opt_pushNext) {
+      ses.counts.stp++;
       if (obj !== Object(obj)) { return obj; }
       if (opt_pushNext) {
-        forEachNonPoisonOwn(obj, function(name) {
+        forEachNonPoisonOwn(obj, function simpleTamperProofProp(name) {
           var desc = gopd(obj, name);
           if ('value' in desc) {
             opt_pushNext(desc.value);
@@ -463,7 +540,15 @@ var ses;
       return freeze(obj);
     }
 
+    ses.counts.tp0 = 0;
+    ses.counts.tp = 0;
+    ses.counts.tpg = 0;
+    ses.counts.tps = 0;
+    ses.counts.gets = makeHistogram();
+    ses.counts.sets = makeHistogram();
+
     function tamperProof(obj, opt_pushNext) {
+      ses.counts.tp0++;
       if (obj !== Object(obj)) { return obj; }
       var func;
       if ((typeof obj === 'object' || obj === Function.prototype) &&
@@ -472,7 +557,7 @@ var ses;
           func.prototype === obj &&
           !isFrozen(obj)) {
         var pushNext = opt_pushNext || function(v) {};
-        forEachNonPoisonOwn(obj, function(name) {
+        forEachNonPoisonOwn(obj, function tamperProofProp(name) {
           var value;
           function getter() {
             //ses.count('getter');
@@ -1692,10 +1777,7 @@ var ses;
       if (x.length !== 2) { return 'Unexpected modification of frozen array'; }
       if (x[0] === 1 && x[1] === 2) { return false; }
     }
-    if (x.length !== 2) {
-      return 'Unexpected silent modification of frozen array';
-    }
-    return (x[0] !== 1 || x[1] !== 2);
+    return (x.length !== 2 || x[0] !== 1 || x[1] !== 2);
   }
 
 
@@ -2019,7 +2101,7 @@ var ses;
   /**
    * See https://code.google.com/p/v8/issues/detail?id=2565
    *
-   * In order to test for this non-descructively, we'd need a
+   * <p>In order to test for this non-descructively, we'd need a
    * sacrificial frame, which is certainly possible in the browser and
    * some other platforms, but is currently beyond the assumptions
    * made by SES itself. Instead, to test for this bug on those
@@ -2063,6 +2145,32 @@ var ses;
     return true;
   }
 
+  function test_TTE_NOT_UNIQUE() {
+    function f() { return arguments; }
+    var gopd = Object.getOwnPropertyDescriptor;
+    var tte = gopd(f, 'caller').get;
+    if (typeof tte !== 'function') { return true; }
+    if (tte !== gopd(f, 'arguments').get) { return true; }
+    var args = f();
+    if (tte !== gopd(args, 'caller').get) { return true; }
+    if (tte !== gopd(args, 'callee').get) { return true; }
+    return false;
+  }
+
+  /**
+   * Opera bug DSK-383293@bugs.opera.com
+   */
+  function test_PROTO_SETTER_UNGETTABLE() {
+    var desc = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__');
+    if (!desc) { return false; }
+    try {
+      desc.set; // yes, just reading it
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return ''+err;
+    }
+    return false;
+  }
 
   ////////////////////// Repairs /////////////////////
   //
@@ -2344,7 +2452,7 @@ var ses;
   function repair_NEED_TO_WRAP_FOREACH() {
     Object.defineProperty(Array.prototype, 'forEach', {
       // Taken from https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Array/forEach
-      value: function(callback, thisArg) {
+      value: function manualForEach(callback, thisArg) {
         var T, k;
         if (this === null || this === undefined) {
           throw new TypeError("this is null or not defined");
@@ -2356,7 +2464,7 @@ var ses;
         }
         T = thisArg;
         k = 0;
-        while(k < len) {
+        while (k < len) {
           var kValue;
           if (k in O) {
             kValue = O[k];
@@ -2815,6 +2923,71 @@ var ses;
     });
   }
 
+  function repair_FUNCTION_DOESNT_VERIFY_SYNTAX() {
+
+    /**
+     * Fails if {@code programSrc} does not parse as a Program
+     * production.
+     *
+     * <p>Uses Ankur Taly's 2009 trick to "cheaply" check that a program
+     * parses using the platform's parser, as implicitly accessed by
+     * the original eval function, while nevertheless ensuring that no
+     * code from {@code programSrc} executes in the process.
+     *
+     * <p> "cheaply" is in quotes above because, the last time it was
+     * measured, it was about 100x more expensive than Crock's trick
+     * of just calling the Function, when that works.
+     *
+     * This implementation happens to reject ReturnStatements, which
+     * is allowed by the ses.verifyProgram spec.    
+     *
+     * <p> See https://code.google.com/p/es-lab/source/browse/trunk/src/ses/initSES.js?spec=svn451&r=451#138
+     */
+    function repairedVerifyProgram(pragma, programSrc) {
+      if (typeof programSrc !== 'string') {
+        throw new SyntaxError('Source must be a string');
+      }
+      try {
+        originalEval(pragma + 'throw "NotASyntaxError";\n' + programSrc);
+      } catch (ex) {
+        if (ex !== 'NotASyntaxError') {
+          throw ex;
+        }
+      }
+    }
+
+    function repairedVerifyFunctionBody(pragma, bodySrc) {
+      if (typeof bodySrc !== 'string') {
+        throw new SyntaxError('Source must be a string');
+      }
+      ses.verifyProgram(pragma, '(function(){' + bodySrc + '\n});');
+      ses.verifyProgram('', '(function(){{' + bodySrc + '\n}});');
+    }
+
+    ses.verifyProgram = repairedVerifyProgram;
+    ses.verifyFunctionBody = repairedVerifyFunctionBody;
+
+    // status quo on ses.verifyExpression is fine, since it will now
+    // delegate to the repaired ses.verifyProgram.
+
+    var slice = [].slice;
+    function VerifyingFunction(var_args) {
+      var params = slice.call(arguments, 0);
+      var body = params.pop();
+      body = ''+(body || '');
+      // Note the EOL after body to prevent trailing line comment in body
+      // eliding the rest of the wrapper.
+      ses.verifyFunctionBody('"use strict";', body);
+      params = params.join(',');
+      ses.verifyExpression('"use strict";', 
+                           'function(' + params + '\n){' + body + '\n}');
+      return OriginalFunction.apply(void 0, arguments);
+    }
+    VerifyingFunction.prototype = OriginalFunction.prototype;
+    VerifyingFunction.prototype.constructor = VerifyingFunction;
+    global.Function = VerifyingFunction;
+  }
+
 
   ////////////////////// Kludge Records /////////////////////
   //
@@ -3036,7 +3209,8 @@ var ses;
       repair: repair_MUTABLE_DATE_PROTO,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: true,
-      urls: ['http://code.google.com/p/google-caja/issues/detail?id=1362'],
+      urls: ['http://code.google.com/p/google-caja/issues/detail?id=1362',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=861219'],
       sections: ['15.9.5'],
       tests: []
     },
@@ -3442,7 +3616,8 @@ var ses;
       preSeverity: severities.NOT_ISOLATED,
       canRepair: false,
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=784892',
-             'https://bugzilla.mozilla.org/show_bug.cgi?id=674195'],
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=674195',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=789897'],
       sections: [],
       tests: []
     },
@@ -3480,7 +3655,7 @@ var ses;
              'https://bugzilla.mozilla.org/show_bug.cgi?id=732669'],
              // Opera DSK-358415
       sections: ['10.4.3'],
-      tests: [] // ['10.4.3-1-59-s']
+      tests: ['10.4.3-1-59-s']
     },
     {
       description: 'Non-strict getter must box this, but does not',
@@ -3492,7 +3667,7 @@ var ses;
              'http://code.google.com/p/v8/issues/detail?id=1977',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=732669'],
       sections: ['10.4.3'],
-      tests: [] // ['10.4.3-1-59-s']
+      tests: ['10.4.3-1-59-s']
     },
     /* On Chrome Version 27.0.1428.0 canary, even this test is so
        destructive that we cannot make progress.
@@ -3510,11 +3685,33 @@ var ses;
     {
       description: 'Function constructor does not verify syntax',
       test: test_FUNCTION_DOESNT_VERIFY_SYNTAX,
-      repair: void 0,
+      repair: repair_FUNCTION_DOESNT_VERIFY_SYNTAX,
       preSeverity: severities.NOT_ISOLATED,
-      canRepair: false,
-      urls: ['https://code.google.com/p/google-caja/issues/detail?id=1616'],
+      canRepair: true,
+      urls: ['https://code.google.com/p/google-caja/issues/detail?id=1616',
+             'https://code.google.com/p/v8/issues/detail?id=2470',
+             'https://bugs.webkit.org/show_bug.cgi?id=106160'],
       sections: ['15.3.2.1'],
+      tests: []
+    },
+    {
+      description: '[[ThrowTypeError]] not a unique function',
+      test: test_TTE_NOT_UNIQUE,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
+      description: "Can't get Object.prototype.__proto__'s setter",
+      test: test_PROTO_SETTER_UNGETTABLE,
+      repair: void 0,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: [],
       tests: []
     }
   ];

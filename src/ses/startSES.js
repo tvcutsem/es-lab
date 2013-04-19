@@ -532,7 +532,7 @@ ses.startSES = function(global,
     /**
      * Make a frozen scope object which reflects all access onto
      * {@code imports}, for use by {@code with} to prevent
-     * access to any {@code freeNames} other than those found on the.
+     * access to any {@code freeNames} other than those found on the
      * {@code imports}.
      */
     function makeScopeObject(imports, freeNames) {
@@ -546,7 +546,12 @@ ses.startSES = function(global,
       // optimization attempt here.)
       freeNames.forEach(function interceptName(name) {
         var desc = gopd(imports, name);
-        if (!desc || desc.writable !== false || desc.configurable) {
+        if (desc && desc.writable === false && !desc.configurable) {
+          // If name names a non-writable, non-configurable own data
+          // property, then don't do the else clause below.
+          // (After reading the demorgan inverse a few times, I
+          // finally realized this is the clearer way to say it.)
+        } else {
           // If there is no own property, or it isn't a non-writable
           // value property, or it is configurable. Note that this
           // case includes accessor properties. The reason we wrap
