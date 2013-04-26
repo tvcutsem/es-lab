@@ -262,9 +262,7 @@ var ses;
         filter: t,
         reduce: t,
         reduceRight: t,
-        length: 'skip'               // can't be redefined on Mozilla
-        // See https://bugzilla.mozilla.org/show_bug.cgi?id=591059
-        // and https://bugzilla.mozilla.org/show_bug.cgi?id=598996
+        length: t
       },
       isArray: t
     },
