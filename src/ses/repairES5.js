@@ -3524,7 +3524,9 @@ var ses;
       repair: void 0,
       preSeverity: severities.NOT_ISOLATED,
       canRepair: false,
-      urls: ['https://code.google.com/p/google-caja/issues/detail?id=1616'],
+      urls: ['https://code.google.com/p/google-caja/issues/detail?id=1616',
+	     'http://code.google.com/p/v8/issues/detail?id=2470',
+	     'https://bugs.webkit.org/show_bug.cgi?id=106160'],
       sections: ['15.3.2.1'],
       tests: []
     },
