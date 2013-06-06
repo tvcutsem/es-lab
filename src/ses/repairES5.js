@@ -475,14 +475,10 @@ var ses;
         forEachNonPoisonOwn(obj, function(name) {
           var value;
           function getter() {
-            //ses.count('getter');
-            //ses.count('getting ' + name);
             return value;
           }
 
           function setter(newValue) {
-            //ses.count('setter');
-            //ses.count('setter_' + name);
             if (obj === this) {
               throw new TypeError('Cannot set virtually frozen property: ' +
                                   name);
@@ -506,8 +502,6 @@ var ses;
             // appear to be a data property, so we should not try to
             // reconfigure it into another accessor.
             if (desc.configurable && name !== '__proto__') {
-              //ses.count('accessorize');
-              //ses.count('accessorize_' + name);
               getter.prototype = null;
               setter.prototype = null;
               defProp(obj, name, {
@@ -532,7 +526,6 @@ var ses;
         return simpleTamperProof(obj, opt_pushNext);
       }
     }
-    // return simpleTamperProof;
     return simpleTamperProofOk ? simpleTamperProof : tamperProof;
   };
 
@@ -1807,7 +1800,11 @@ var ses;
    * descendents of that same Object.
    */
   function test_FIREFOX_15_FREEZE_PROBLEM() {
-    if (!document || !document.createElement) { return false; }
+    if (typeof document === 'undefined' ||
+       typeof document.createElement !== 'function') {
+      // likely not a browser environment
+      return false;
+    }
     var iframe = document.createElement('iframe');
     var where = document.getElementsByTagName('script')[0];
     where.parentNode.insertBefore(iframe, where);
@@ -2013,37 +2010,21 @@ var ses;
   }
 
   /**
-   * See https://code.google.com/p/v8/issues/detail?id=2565
-   *
-   * In order to test for this non-descructively, we'd need a
-   * sacrificial frame, which is certainly possible in the browser and
-   * some other platforms, but is currently beyond the assumptions
-   * made by SES itself. Instead, to test for this bug on those
-   * platforms that seem to be candidates, we make
-   * Object.prototype.__proto__ by itself non-writable. If this bug is
-   * present and our repair fails, then this context will be severely
-   * broken.
+   * A non-configurable __proto__ property appearing even on
+   * Object.create(null). It may still be a bug if it were configurable, but
+   * we only care about the case where we cannot replace it.
    */
-  function test_PROTO_FREEZE_KILLS_CREATE() {
-    var protoDesc = Object.getOwnPropertyDescriptor(Object.prototype,
-                                                    '__proto__');
-    if (!protoDesc || protoDesc.writable !== true) {
-      return false;
+  function test_NONCONFIGURABLE_OWN_PROTO() {
+    var o = Object.create(null);
+    var desc = Object.getOwnPropertyDescriptor(o, '__proto__');
+    if (desc === undefined) { return false; }
+    if (desc.configurable) { return false; }
+    if (desc.value === null && desc.configurable === false) {
+      // the problematic-for-us case, known to occur in Chrome 25.0.1364.172
+      return true;
     }
-    try {
-      Object.defineProperty(Object.prototype, '__proto__', {
-        value: null,
-        writable: false,
-        enumerable: protoDesc.enumerable,
-        configurable: protoDesc.configurable
-      });
-    } catch (err) {}
-    var x = {};
-    var y = Object.create(x);
-    var yproto = Object.getPrototypeOf(y);
-    if (yproto === x) { return false; }
-    if (yproto === null) { return true; }
-    return 'Create made unexpected parent ' + yproto;
+    return 'Unexpected __proto__ own property descriptor, enumerable: ' +
+      desc.enumerable + ', value: ' + desc.value;
   }
 
   /**
@@ -2060,7 +2041,12 @@ var ses;
   }
 
   /**
-   * Opera bug DSK-383293@bugs.opera.com
+   * If you can, see Opera bug DSK-383293@bugs.opera.com.
+   *
+   * <p>On some Operas, the Object.prototype.__proto__ property is an
+   * accessor property, but the property descriptor of that property
+   * has a setter, i.e., {@code desc.set}, which throws a TypeError
+   * when one tries to read it.
    */
   function test_PROTO_SETTER_UNGETTABLE() {
     var desc = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__');
@@ -2354,7 +2340,8 @@ var ses;
 
   function repair_NEED_TO_WRAP_FOREACH() {
     Object.defineProperty(Array.prototype, 'forEach', {
-      // Taken from https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Array/forEach
+      // Taken from
+      // https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Array/forEach
       value: function(callback, thisArg) {
         var T, k;
         if (this === null || this === undefined) {
@@ -2814,18 +2801,6 @@ var ses;
     });
   }
 
-  function repair_PROTO_FREEZE_KILLS_CREATE() {
-    Object.defineProperty(Object, 'create', {
-      value: function(parent, descriptors) {
-        function F(){}
-        F.prototype = parent;
-        var result = new F();
-        Object.defineProperties(result, descriptors);
-        return result;
-      }
-    });
-  }
-
 
   ////////////////////// Kludge Records /////////////////////
   //
@@ -2868,6 +2843,7 @@ var ses;
    */
   var baseKludges = [
     {
+      id: 'MISSING_GETOWNPROPNAMES',
       description: 'Missing getOwnPropertyNames',
       test: test_MISSING_GETOWNPROPNAMES,
       repair: void 0,
@@ -2884,6 +2860,7 @@ var ses;
    */
   var supportedKludges = [
     {
+      id: 'GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS',
       description: 'Global object leaks from global function calls',
       test: test_GLOBAL_LEAKS_FROM_GLOBAL_FUNCTION_CALLS,
       repair: void 0,
@@ -2894,6 +2871,7 @@ var ses;
       tests: ['10.4.3-1-8gs']
     },
     {
+      id: 'GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS',
       description: 'Global object leaks from anonymous function calls',
       test: test_GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS,
       repair: void 0,
@@ -2904,6 +2882,7 @@ var ses;
       tests: ['S10.4.3_A1']
     },
     {
+      id: 'GLOBAL_LEAKS_FROM_STRICT_THIS',
       description: 'Global leaks through strict this',
       test: test_GLOBAL_LEAKS_FROM_STRICT_THIS,
       repair: void 0,
@@ -2914,6 +2893,7 @@ var ses;
       tests: ['10.4.3-1-8gs', '10.4.3-1-8-s']
     },
     {
+      id: 'GLOBAL_LEAKS_FROM_BUILTINS',
       description: 'Global object leaks from built-in methods',
       test: test_GLOBAL_LEAKS_FROM_BUILTINS,
       repair: void 0,
@@ -2928,6 +2908,7 @@ var ses;
       tests: ['S15.2.4.4_A14']
     },
     {
+      id: 'GLOBAL_LEAKS_FROM_GLOBALLY_CALLED_BUILTINS',
       description: 'Global object leaks from globally called built-in methods',
       test: test_GLOBAL_LEAKS_FROM_GLOBALLY_CALLED_BUILTINS,
       repair: void 0,
@@ -2938,6 +2919,7 @@ var ses;
       tests: ['S15.2.4.4_A15']
     },
     {
+      id: 'MISSING_FREEZE_ETC',
       description: 'Object.freeze is missing',
       test: test_MISSING_FREEZE_ETC,
       repair: repair_MISSING_FREEZE_ETC,
@@ -2948,6 +2930,7 @@ var ses;
       tests: ['15.2.3.9-0-1']
     },
     {
+      id: 'FUNCTION_PROTOTYPE_DESCRIPTOR_LIES',
       description: 'A function.prototype\'s descriptor lies',
       test: test_FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
       repair: repair_DEFINE_PROPERTY,
@@ -2959,6 +2942,7 @@ var ses;
       tests: ['S15.3.3.1_A4']
     },
     {
+      id: 'MISSING_CALLEE_DESCRIPTOR',
       description: 'Phantom callee on strict functions',
       test: test_MISSING_CALLEE_DESCRIPTOR,
       repair: repair_MISSING_CALLEE_DESCRIPTOR,
@@ -2969,6 +2953,7 @@ var ses;
       tests: ['S15.2.3.4_A1_T1']
     },
     {
+      id: 'STRICT_DELETE_RETURNS_FALSE',
       description: 'Strict delete returned false rather than throwing',
       test: test_STRICT_DELETE_RETURNS_FALSE,
       repair: void 0,
@@ -2981,6 +2966,7 @@ var ses;
       tests: ['S11.4.1_A5']
     },
     {
+      id: 'REGEXP_CANT_BE_NEUTERED',
       description: 'Non-deletable RegExp statics are a' +
         ' global communication channel',
       test: test_REGEXP_CANT_BE_NEUTERED,
@@ -2997,6 +2983,7 @@ var ses;
       tests: ['S11.4.1_A5']
     },
     {
+      id: 'REGEXP_TEST_EXEC_UNSAFE',
       description: 'RegExp.exec leaks match globally',
       test: test_REGEXP_TEST_EXEC_UNSAFE,
       repair: repair_REGEXP_TEST_EXEC_UNSAFE,
@@ -3010,6 +2997,7 @@ var ses;
       tests: ['S15.10.6.2_A12']
     },
     {
+      id: 'MISSING_BIND',
       description: 'Function.prototype.bind is missing',
       test: test_MISSING_BIND,
       repair: repair_MISSING_BIND,
@@ -3021,6 +3009,7 @@ var ses;
       tests: ['S15.3.4.5_A3']
     },
     {
+      id: 'BIND_CALLS_APPLY',
       description: 'Function.prototype.bind calls .apply rather than [[Call]]',
       test: test_BIND_CALLS_APPLY,
       repair: repair_MISSING_BIND,
@@ -3032,6 +3021,7 @@ var ses;
       tests: ['S15.3.4.5_A4']
     },
     {
+      id: 'BIND_CANT_CURRY_NEW',
       description: 'Function.prototype.bind does not curry construction',
       test: test_BIND_CANT_CURRY_NEW,
       repair: void 0, // JS-based repair essentially impossible
@@ -3042,6 +3032,7 @@ var ses;
       tests: ['S15.3.4.5_A5']
     },
     {
+      id: 'MUTABLE_DATE_PROTO',
       description: 'Date.prototype is a global communication channel',
       test: test_MUTABLE_DATE_PROTO,
       repair: repair_MUTABLE_DATE_PROTO,
@@ -3052,6 +3043,7 @@ var ses;
       tests: []
     },
     {
+      id: 'MUTABLE_WEAKMAP_PROTO',
       description: 'WeakMap.prototype is a global communication channel',
       test: test_MUTABLE_WEAKMAP_PROTO,
       repair: repair_MUTABLE_WEAKMAP_PROTO,
@@ -3062,6 +3054,7 @@ var ses;
       tests: []
     },
     {
+      id: 'NEED_TO_WRAP_FOREACH',
       description: 'Array forEach cannot be frozen while in progress',
       test: test_NEED_TO_WRAP_FOREACH,
       repair: repair_NEED_TO_WRAP_FOREACH,
@@ -3072,17 +3065,20 @@ var ses;
       tests: ['S15.4.4.18_A1', 'S15.4.4.18_A2']
     },
     {
+      id: 'FOREACH_COERCES_THISOBJ',
       description: 'Array forEach converts primitive thisObj arg to object',
       test: test_FOREACH_COERCES_THISOBJ,
       repair: repair_NEED_TO_WRAP_FOREACH,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: true,
       urls: ['http://code.google.com/p/v8/issues/detail?id=2273',
-          'https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Array/forEach'],
+             'https://developer.mozilla.org/en-US/docs/JavaScript/' +
+               'Reference/Global_Objects/Array/forEach'],
       sections: ['15.4.4.18'],
       tests: []
     },
     {
+      id: 'NEEDS_DUMMY_SETTER',
       description: 'Workaround undiagnosed need for dummy setter',
       test: test_NEEDS_DUMMY_SETTER,
       repair: repair_NEEDS_DUMMY_SETTER,
@@ -3093,6 +3089,7 @@ var ses;
       tests: []
     },
     {
+      id: 'FORM_GETTERS_DISAPPEAR',
       description: 'Getter on HTMLFormElement disappears',
       test: test_FORM_GETTERS_DISAPPEAR,
       repair: repair_NEEDS_DUMMY_SETTER,
@@ -3105,6 +3102,7 @@ var ses;
       tests: ['S15.2.3.6_A1']
     },
     {
+      id: 'ACCESSORS_INHERIT_AS_OWN',
       description: 'Accessor properties inherit as own properties',
       test: test_ACCESSORS_INHERIT_AS_OWN,
       repair: repair_ACCESSORS_INHERIT_AS_OWN,
@@ -3115,6 +3113,7 @@ var ses;
       tests: ['S15.2.3.6_A2']
     },
     {
+      id: 'SORT_LEAKS_GLOBAL',
       description: 'Array sort leaks global',
       test: test_SORT_LEAKS_GLOBAL,
       repair: repair_SORT_LEAKS_GLOBAL,
@@ -3125,6 +3124,7 @@ var ses;
       tests: ['S15.4.4.11_A8']
     },
     {
+      id: 'REPLACE_LEAKS_GLOBAL',
       description: 'String replace leaks global',
       test: test_REPLACE_LEAKS_GLOBAL,
       repair: repair_REPLACE_LEAKS_GLOBAL,
@@ -3138,6 +3138,7 @@ var ses;
       tests: ['S15.5.4.11_A12']
     },
     {
+      id: 'CANT_GOPD_CALLER',
       description: 'getOwnPropertyDescriptor on strict "caller" throws',
       test: test_CANT_GOPD_CALLER,
       repair: repair_CANT_GOPD_CALLER,
@@ -3149,6 +3150,7 @@ var ses;
       tests: ['S13.2_A6_T1']
     },
     {
+      id: 'CANT_HASOWNPROPERTY_CALLER',
       description: 'strict_function.hasOwnProperty("caller") throws',
       test: test_CANT_HASOWNPROPERTY_CALLER,
       repair: repair_CANT_HASOWNPROPERTY_CALLER,
@@ -3159,6 +3161,7 @@ var ses;
       tests: ['S13.2_A7_T1']
     },
     {
+      id: 'CANT_IN_CALLER',
       description: 'Cannot "in" caller on strict function',
       test: test_CANT_IN_CALLER,
       repair: void 0,
@@ -3169,6 +3172,7 @@ var ses;
       tests: ['S13.2_A8_T1']
     },
     {
+      id: 'CANT_IN_ARGUMENTS',
       description: 'Cannot "in" arguments on strict function',
       test: test_CANT_IN_ARGUMENTS,
       repair: void 0,
@@ -3179,6 +3183,7 @@ var ses;
       tests: ['S13.2_A8_T2']
     },
     {
+      id: 'STRICT_CALLER_NOT_POISONED',
       description: 'Strict "caller" not poisoned',
       test: test_STRICT_CALLER_NOT_POISONED,
       repair: void 0,
@@ -3189,6 +3194,7 @@ var ses;
       tests: ['S13.2.3_A1']
     },
     {
+      id: 'STRICT_ARGUMENTS_NOT_POISONED',
       description: 'Strict "arguments" not poisoned',
       test: test_STRICT_ARGUMENTS_NOT_POISONED,
       repair: void 0,
@@ -3199,6 +3205,7 @@ var ses;
       tests: ['S13.2.3_A1']
     },
     {
+      id: 'BUILTIN_LEAKS_CALLER',
       description: 'Built in functions leak "caller"',
       test: test_BUILTIN_LEAKS_CALLER,
       repair: repair_BUILTIN_LEAKS_CALLER,
@@ -3213,6 +3220,7 @@ var ses;
       tests: ['Sbp_A10_T1']
     },
     {
+      id: 'BUILTIN_LEAKS_ARGUMENTS',
       description: 'Built in functions leak "arguments"',
       test: test_BUILTIN_LEAKS_ARGUMENTS,
       repair: repair_BUILTIN_LEAKS_ARGUMENTS,
@@ -3227,6 +3235,7 @@ var ses;
       tests: ['Sbp_A10_T2']
     },
     {
+      id: 'BOUND_FUNCTION_LEAKS_CALLER',
       description: 'Bound functions leak "caller"',
       test: test_BOUND_FUNCTION_LEAKS_CALLER,
       repair: repair_MISSING_BIND,
@@ -3238,6 +3247,7 @@ var ses;
       tests: ['S13.2.3_A1', 'S15.3.4.5_A1']
     },
     {
+      id: 'BOUND_FUNCTION_LEAKS_ARGUMENTS',
       description: 'Bound functions leak "arguments"',
       test: test_BOUND_FUNCTION_LEAKS_ARGUMENTS,
       repair: repair_MISSING_BIND,
@@ -3249,6 +3259,7 @@ var ses;
       tests: ['S13.2.3_A1', 'S15.3.4.5_A2']
     },
     {
+      id: 'DELETED_BUILTINS_IN_OWN_NAMES',
       description: 'Deleting built-in leaves phantom behind',
       test: test_DELETED_BUILTINS_IN_OWN_NAMES,
       repair: repair_DELETED_BUILTINS_IN_OWN_NAMES,
@@ -3259,6 +3270,7 @@ var ses;
       tests: []
     },
     {
+      id: 'GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS',
       description: 'getOwnPropertyDescriptor on its own "caller" fails',
       test: test_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS,
       repair: repair_GETOWNPROPDESC_OF_ITS_OWN_CALLER_FAILS,
@@ -3269,6 +3281,7 @@ var ses;
       tests: []
     },
     {
+      id: 'JSON_PARSE_PROTO_CONFUSION',
       description: 'JSON.parse confused by "__proto__"',
       test: test_JSON_PARSE_PROTO_CONFUSION,
       repair: repair_JSON_PARSE_PROTO_CONFUSION,
@@ -3280,6 +3293,7 @@ var ses;
       tests: ['S15.12.2_A1']
     },
     {
+      id: 'PROTO_NOT_FROZEN',
       description: 'Prototype still mutable on non-extensible object',
       test: test_PROTO_NOT_FROZEN,
       repair: void 0,
@@ -3291,6 +3305,7 @@ var ses;
       tests: ['S8.6.2_A8']
     },
     {
+      id: 'PROTO_REDEFINABLE',
       description: 'Prototype still redefinable on non-extensible object',
       test: test_PROTO_REDEFINABLE,
       repair: void 0,
@@ -3301,6 +3316,7 @@ var ses;
       tests: ['S8.6.2_A8']
     },
     {
+      id: 'DEFINING_READ_ONLY_PROTO_FAILS_SILENTLY',
       description: 'Defining __proto__ on non-extensible object fails silently',
       test: test_DEFINING_READ_ONLY_PROTO_FAILS_SILENTLY,
       repair: repair_DEFINE_PROPERTY,
@@ -3311,6 +3327,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
+      id: 'STRICT_EVAL_LEAKS_GLOBALS',
       description: 'Strict eval function leaks variable definitions',
       test: test_STRICT_EVAL_LEAKS_GLOBALS,
       repair: void 0,
@@ -3321,6 +3338,7 @@ var ses;
       tests: ['S10.4.2.1_A1']
     },
     {
+      id: 'EVAL_BREAKS_MASKING',
       description: 'Eval breaks masking of named functions in non-strict code',
       test: test_EVAL_BREAKS_MASKING,
       repair: void 0,
@@ -3331,6 +3349,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
+      id: 'PARSEINT_STILL_PARSING_OCTAL',
       description: 'parseInt still parsing octal',
       test: test_PARSEINT_STILL_PARSING_OCTAL,
       repair: repair_PARSEINT_STILL_PARSING_OCTAL,
@@ -3341,6 +3360,7 @@ var ses;
       tests: ['S15.1.2.2_A5.1_T1']
     },
     {
+      id: 'STRICT_E4X_LITERALS_ALLOWED',
       description: 'E4X literals allowed in strict code',
       test: test_STRICT_E4X_LITERALS_ALLOWED,
       repair: void 0,
@@ -3352,6 +3372,7 @@ var ses;
       tests: []
     },
     {
+      id: 'ASSIGN_CAN_OVERRIDE_FROZEN',
       description: 'Assignment can override frozen inherited property',
       test: test_ASSIGN_CAN_OVERRIDE_FROZEN,
       repair: repair_ASSIGN_CAN_OVERRIDE_FROZEN,
@@ -3367,6 +3388,7 @@ var ses;
       tests: ['15.2.3.6-4-405']
     },
     {
+      id: 'POP_IGNORES_FROZEN',
       description: 'Array.prototype.pop ignores frozeness',
       test: test_POP_IGNORES_FROZEN,
       repair: repair_POP_IGNORES_FROZEN,
@@ -3377,6 +3399,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
+      id: 'SORT_IGNORES_FROZEN',
       description: 'Array.prototype.sort ignores frozeness',
       test: test_SORT_IGNORES_FROZEN,
       repair: repair_SORT_IGNORES_FROZEN,
@@ -3387,6 +3410,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
+      id: 'PUSH_IGNORES_SEALED',
       description: 'Array.prototype.push ignores sealing',
       test: test_PUSH_IGNORES_SEALED,
       repair: undefined, // workaround is too slow
@@ -3397,6 +3421,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
+      id: 'PUSH_DOES_NOT_THROW_ON_FROZEN_ARRAY',
       description: 'Array.prototype.push does not throw on a frozen array',
       test: test_PUSH_DOES_NOT_THROW_ON_FROZEN_ARRAY,
       repair: undefined,
@@ -3407,6 +3432,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
+      id: 'PUSH_IGNORES_FROZEN',
       description: 'Array.prototype.push ignores frozen',
       test: test_PUSH_IGNORES_FROZEN,
       repair: undefined,
@@ -3417,6 +3443,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
+      id: 'ARRAYS_DELETE_NONCONFIGURABLE',
       description: 'Setting [].length can delete non-configurable elements',
       test: test_ARRAYS_DELETE_NONCONFIGURABLE,
       repair: void 0,
@@ -3427,6 +3454,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
+      id: 'ARRAYS_MODIFY_READONLY',
       description: 'Extending an array can modify read-only array length',
       test: test_ARRAYS_MODIFY_READONLY,
       repair: void 0,
@@ -3437,6 +3465,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
+      id: 'CANT_REDEFINE_NAN_TO_ITSELF',
       description: 'Cannot redefine global NaN to itself',
       test: test_CANT_REDEFINE_NAN_TO_ITSELF,
       repair: repair_CANT_REDEFINE_NAN_TO_ITSELF,
@@ -3447,6 +3476,7 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
+      id: 'FIREFOX_15_FREEZE_PROBLEM',
       description: 'Firefox 15 cross-frame freeze problem',
       test: test_FIREFOX_15_FREEZE_PROBLEM,
       repair: void 0,
@@ -3458,6 +3488,7 @@ var ses;
       tests: []
     },
     {
+      id: 'UNEXPECTED_ERROR_PROPERTIES',
       description: 'Error instances have unexpected properties',
       test: test_UNEXPECTED_ERROR_PROPERTIES,
       repair: void 0,
@@ -3468,6 +3499,7 @@ var ses;
       tests: []
     },
     {
+      id: 'ERRORS_HAVE_INVISIBLE_PROPERTIES',
       description: 'Error instances may have invisible properties',
       test: test_ERRORS_HAVE_INVISIBLE_PROPERTIES,
       repair: void 0,
@@ -3479,6 +3511,7 @@ var ses;
       tests: []
     },
     {
+      id: 'STRICT_GETTER_BOXES',
       description: 'Strict getter must not box this, but does',
       test: test_STRICT_GETTER_BOXES,
       repair: void 0,
@@ -3491,9 +3524,10 @@ var ses;
              'https://bugzilla.mozilla.org/show_bug.cgi?id=732669'],
              // Opera DSK-358415
       sections: ['10.4.3'],
-      tests: [] // ['10.4.3-1-59-s']
+      tests: ['10.4.3-1-59-s']
     },
     {
+      id: 'NON_STRICT_GETTER_DOESNT_BOX',
       description: 'Non-strict getter must box this, but does not',
       test: test_NON_STRICT_GETTER_DOESNT_BOX,
       repair: void 0,
@@ -3503,22 +3537,23 @@ var ses;
              'http://code.google.com/p/v8/issues/detail?id=1977',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=732669'],
       sections: ['10.4.3'],
-      tests: [] // ['10.4.3-1-59-s']
+      tests: ['10.4.3-1-59-s']
     },
-    /* On Chrome Version 27.0.1428.0 canary, even this test is so
-       destructive that we cannot make progress.
     {
-      description: 'Frozen __proto__ breaks Object.create',
-      test: test_PROTO_FREEZE_KILLS_CREATE,
-      repair: repair_PROTO_FREEZE_KILLS_CREATE,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=2565'],
-      sections: [],
-      tests: []
+      id: 'NONCONFIGURABLE_OWN_PROTO',
+      description: 'All objects have non-configurable __proto__',
+      test: test_NONCONFIGURABLE_OWN_PROTO,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['https://code.google.com/p/v8/issues/detail?id=1310',
+        'https://mail.mozilla.org/pipermail/es-discuss/2013-March/029177.html'],
+      sections: [],  // Not spelled out in spec, according to Brendan Eich (see
+                     // es-discuss link)
+      tests: []  // TODO(kpreid): add to test262 once we have a section to cite
     },
-    */
     {
+      id: 'FUNCTION_DOESNT_VERIFY_SYNTAX',
       description: 'Function constructor does not verify syntax',
       test: test_FUNCTION_DOESNT_VERIFY_SYNTAX,
       repair: void 0,
@@ -3531,6 +3566,7 @@ var ses;
       tests: []
     },
     {
+      id: 'PROTO_SETTER_UNGETTABLE',
       description: "Can't get Object.prototype.__proto__'s setter",
       test: test_PROTO_SETTER_UNGETTABLE,
       repair: void 0,
@@ -3635,6 +3671,7 @@ var ses;
       ses.updateMaxSeverity(postSeverity);
 
       return {
+        id:            kludge.id,
         description:   kludge.description,
         preSeverity:   kludge.preSeverity,
         canRepair:     kludge.canRepair,
@@ -3654,6 +3691,16 @@ var ses;
     if (ses.ok()) {
       reports.push.apply(reports, testRepairReport(supportedKludges));
     }
+
+    // Made available to allow for later code reusing our diagnoses to work
+    // around non-repairable problems in application-specific ways. startSES
+    // will also expose this on cajaVM for unprivileged code.
+    var indexedReports = Object.create(null);
+    reports.forEach(function (report) {
+      indexedReports[report.id] = report;
+    });
+    ses.es5ProblemReports = indexedReports;
+
     logger.reportRepairs(reports);
   } catch (err) {
     ses.updateMaxSeverity(ses.severities.NOT_SUPPORTED);
