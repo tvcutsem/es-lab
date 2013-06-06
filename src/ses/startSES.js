@@ -18,7 +18,9 @@
  * <p>Assumes ES5 plus a WeakMap that conforms to the anticipated ES6
  * WeakMap spec. Compatible with ES5-strict or anticipated ES6.
  *
- * //provides ses.startSES
+ * //optionally requires ses.mitigateSrcGotchas
+ * //provides ses.startSES ses.resolveOptions, ses.securableWrapperSrc
+ * //provides ses.makeCompiledExpr
  * @author Mark S. Miller,
  * @author Jasvir Nagra
  * @requires WeakMap
@@ -255,26 +257,85 @@ ses.startSES = function(global,
   var create = Object.create;
 
   /**
-   * The function ses.mitigateGotchas, if defined, is a function which
-   * given the sourceText for a strict Program, returns rewritten
-   * program with the same semantics as the original but with as
-   * many of the ES5 gotchas removed as possible.  {@code options} is
-   * a record of which gotcha-rewriting-stages to use or omit.
-   * Passing no option performs no mitigation.
+   * repairES5 repair_FREEZING_BREAKS_PROTOTYPES causes Object.create(null) to
+   * be impossible. This falls back to a regular object. Each use of it
+   * should be accompanied by an explanation of why it is sufficiently
+   * safe.
    */
-  function mitigateGotchas(programSrc, options) {
-    if ('function' === typeof ses.mitigateGotchas) {
+  function createNullIfPossible() {
+    try {
+      return create(null);
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /**
+   * {@code opt_mitigateOpts} is an alleged record of which gotchas to
+   * mitigate. Passing no {@code opt_mitigateOpts} performs all the
+   * default mitigations. Returns a well behaved options record.
+   *
+   * <p>See {@code compileExpr} for documentation of the mitigation
+   * options and their effects.
+   */
+  function resolveOptions(opt_mitigateOpts) {
+    function resolve(opt, defaultOption) {
+      return (opt_mitigateOpts && opt in opt_mitigateOpts) ?
+        opt_mitigateOpts[opt] : defaultOption;
+    }
+    var options = {};
+    if (opt_mitigateOpts === undefined || opt_mitigateOpts === null) {
+      options.maskReferenceError = true;
+
+      options.parseProgram = true;
+      options.rewriteTopLevelVars = true;
+      options.rewriteTopLevelFuncs = true;
+      options.rewriteFunctionCalls = true;
+      options.rewriteTypeOf = false;
+    } else {
+      options.maskReferenceError = resolve('maskReferenceError', true);
+
+      if (opt_mitigateOpts.parseProgram === false) {
+        ses.logger.warn(
+          'Refused to disable parsing for safety on all browsers');
+      }
+      // TODO(jasvir): This should only be necessary if a to-be-added
+      // test in repairES5.js indicates that this platform has the
+      // Function constructor bug
+      options.parseProgram = true;
+      options.rewriteTopLevelVars = resolve('rewriteTopLevelVars', true);
+      options.rewriteTopLevelFuncs = resolve('rewriteTopLevelFuncs', true);
+      options.rewriteFunctionCalls = resolve('rewriteFunctionCalls', true);
+      options.rewriteTypeOf = resolve('rewriteTypeOf',
+                                      !options.maskReferenceError);
+    }
+    return options;
+  }
+  ses.resolveOptions = resolveOptions;
+
+  /**
+   * The function ses.mitigateSrcGotchas, if defined, is a function
+   * which, given the sourceText for a strict Program, returns a
+   * rewritten program with the same semantics as the original but
+   * with some of the ES5 gotchas mitigated -- those that can be
+   * mitigated by source analysis or source-to-source rewriting. The
+   * {@code options} are assumed to already be canonicalized by {@code
+   * resolveOptions} and says which mitigations to apply.
+   */
+  function mitigateSrcGotchas(programSrc, options) {
+    var safeError;
+    if ('function' === typeof ses.mitigateSrcGotchas) {
       try {
-        return ses.mitigateGotchas(programSrc, options, ses.logger);
+        return ses.mitigateSrcGotchas(programSrc, options, ses.logger);
       } catch (error) {
         // Shouldn't throw, but if it does, the exception is potentially from a
         // different context with an undefended prototype chain; don't allow it
         // to leak out.
-        var safeError;
         try {
           safeError = new Error(error.message);
         } catch (metaerror) {
-          throw new Error('Could not safely obtain error from mitigateGotchas');
+          throw new Error(
+            'Could not safely obtain error from mitigateSrcGotchas');
         }
         throw safeError;
       }
@@ -291,6 +352,13 @@ ses.startSES = function(global,
   function constFunc(func) {
     func.prototype = null;
     return freeze(func);
+  }
+
+  /**
+   * Obtain the ES5 singleton [[ThrowTypeError]].
+   */
+  function getThrowTypeError() {
+    return Object.getOwnPropertyDescriptor(getThrowTypeError, "arguments").get;
   }
 
 
@@ -407,7 +475,11 @@ ses.startSES = function(global,
    * this {@code imports} should first be initialized with a copy of the
    * properties of {@code sharedImports}, but nothing enforces this.
    */
-  var sharedImports = create(null);
+  var sharedImports = createNullIfPossible();
+  // createNullIfPossible safety: If not possible, the imports will include
+  // Object.prototype's properties. This has no effect on Caja use, because
+  // we make the global object be the Window which inherits Object.prototype,
+  // and is not a security risk since the properties are ambiently available.
 
   var MAX_NAT = Math.pow(2, 53);
   function Nat(allegedNum) {
@@ -494,7 +566,8 @@ ses.startSES = function(global,
      * property copying.
      */
     function makeImports() {
-      var imports = create(null);
+      var imports = createNullIfPossible();
+      // createNullIfPossible safety: similar to comments about sharedImports.
       copyToImports(imports, sharedImports);
       return imports;
     }
@@ -538,8 +611,12 @@ ses.startSES = function(global,
      * access to any {@code freeNames} other than those found on the.
      * {@code imports}.
      */
-    function makeScopeObject(imports, freeNames) {
-      var scopeObject = create(null);
+    function makeScopeObject(imports, freeNames, options) {
+      var scopeObject = createNullIfPossible();
+      // createNullIfPossible safety: The inherited properties should
+      // always be shadowed by defined properties if they are relevant
+      // (that is, if they occur in freeNames).
+
       // Note: Although this loop is a bottleneck on some platforms,
       // it does not help to turn it into a for(;;) loop, since we
       // still need an enclosing function per accessor property
@@ -559,21 +636,23 @@ ses.startSES = function(global,
           desc = {
             get: function scopedGet() {
               if (name in imports) {
-                var result = imports[name];
-                if (typeof result === 'function') {
-                  // If it were possible to know that the getter call
-                  // was on behalf of a simple function call to the
-                  // gotten function, we could instead return that
-                  // function as bound to undefined. Unfortunately,
-                  // without parsing (or possibly proxies?), that isn't
-                  // possible.
-                }
-                return result;
+                // Note that, if this GET is on behalf of an
+                // unmitigated function call expression, this function
+                // will be called with a this-binding of the scope
+                // object rather than undefined.
+                return imports[name];
               }
-              // if it were possible to know that the getter call was on
-              // behalf of a typeof expression, we'd return the string
-              // "undefined" here instead. Unfortunately, without
-              // parsing or proxies, that isn't possible.
+              if (options.maskReferenceError) {
+                // if it were possible to know that the getter call
+                // was on behalf of a typeof expression, we'd return
+                // {@code void 0} here only for that
+                // case. Unfortunately, without parsing or proxies,
+                // that isn't possible. To fix this more accurately by
+                // parsing and rewriting instead, when available, set
+                // maskReferenceError to false and rewriteTypeOf to
+                // true.
+                return void 0;
+              }
               throw new ReferenceError('"' + name +
                   '" is not defined in this scope.');
             },
@@ -614,7 +693,7 @@ ses.startSES = function(global,
      * surround it with a prelude and postlude.
      *
      * <p>Evaluating the resulting expression return a function that
-     * <i>can</i>be called to execute the original expression safely,
+     * <i>can</i> be called to execute the original expression safely,
      * in a controlled scope. See "makeCompiledExpr" for precisely the
      * pattern that must be followed to call the resulting function
      * safely.
@@ -669,11 +748,11 @@ ses.startSES = function(global,
      * all its free variable references that appear in freeNames are
      * redirected to the corresponding property of imports.
      */
-    function makeCompiledExpr(wrapper, freeNames) {
+    function makeCompiledExpr(wrapper, freeNames, options) {
       if (dirty) { fail('Initial cleaning failed'); }
 
       function compiledCode(imports) {
-        var scopeObject = makeScopeObject(imports, freeNames);
+        var scopeObject = makeScopeObject(imports, freeNames, options);
         return wrapper.call(scopeObject).call(imports);
       };
       compiledCode.prototype = null;
@@ -682,11 +761,50 @@ ses.startSES = function(global,
     ses.makeCompiledExpr = makeCompiledExpr;
 
     /**
-     * Compiles {@code exprSrc} as a strict expression into a function
+     * Compiles {@code src} as a strict expression into a function
      * of an {@code imports}, that when called evaluates {@code
      * exprSrc} in a virtual global environment whose {@code this} is
      * bound to that {@code imports}, and whose free variables
      * refer only to the properties of that {@code imports}.
+     *
+     * <p>The optional {@code opt_mitigateOpts} can be used to control
+     * which transformations are applied to src, if they are
+     * available. If {@code opt_mitigateOpts} is {@code undefined ||
+     * null} then all default transformations are applied. Otherwise
+     * the following option keys can be used.
+     * <ul>
+     * <li>maskReferenceError: Getting a free variable name that is
+     *     absent on the imports object will throw a ReferenceError,
+     *     even if gotten by an unmitigated {@code typeof}. With this
+     *     set to true (the default), getting an absent variable will
+     *     result in {@code undefined} which fixes the behavior of
+     *     unmitigated {@code typeof} but masks normal ReferenceError
+     *     cases. This is a less correct but faster alternative to
+     *     rewriteTypeOf that also works when source mitigations are
+     *     not available.
+     * <li>parseProgram: check the program is syntactically
+     *     valid.
+     * <li>rewriteTopLevelVars: transform vars to properties of global
+     *     object. Defaults to true.
+     * <li>rewriteTopLevelFuncs: transform funcs to properties of
+     *     global object. Defaults to true.
+     * <li>rewriteFunctionCalls: transform function calls, e.g.,
+     *     {@code f()}, into calls ensuring that the function gets
+     *     called with a this-binding of {@code undefined}, e.g.,
+     *     {@code (1,f)()}. Defaults to true. <a href=
+     *     "https://code.google.com/p/google-caja/issues/detail?id=1755"
+     *     >Currently unimplemented</a>.
+     * <li>rewriteTypeOf: rewrite program to support typeof
+     *     barevar. rewriteTypeOf is only needed if maskReferenceError
+     *     is false. If omitted, it defaults to the opposite of
+     *     maskReferenceError.
+     * </ul>
+     *
+     * <p>Currently for security, parseProgram is always true and
+     * cannot be unset because of the <a href=
+     * "https://code.google.com/p/v8/issues/detail?id=2470"
+     * >Function constructor bug</a>. TODO(jasvir): On platforms not
+     * suffering from this bug, parseProgram should default to false.
      *
      * <p>When SES is provided primitively, it should provide an
      * analogous {@code compileProgram} function that accepts a
@@ -700,10 +818,13 @@ ses.startSES = function(global,
      * {@code with} together with RegExp matching to intercept free
      * variable access without parsing.
      */
-    function compileExpr(src, opt_sourcePosition) {
+    function compileExpr(src, opt_mitigateOpts, opt_sourcePosition) {
       // Force src to be parsed as an expr
       var exprSrc = '(' + src + '\n)';
-      exprSrc = mitigateGotchas(exprSrc);
+
+      var options = resolveOptions(opt_mitigateOpts);
+      exprSrc = mitigateSrcGotchas(exprSrc, options);
+
       // This is a workaround for a bug in the escodegen renderer that
       // renders expressions as expression statements
       if (exprSrc[exprSrc.length - 1] === ';') {
@@ -712,7 +833,7 @@ ses.startSES = function(global,
       var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
       var wrapper = unsafeEval(wrapperSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
-      var result = makeCompiledExpr(wrapper, freeNames);
+      var result = makeCompiledExpr(wrapper, freeNames, options);
       return freeze(result);
     }
 
@@ -774,6 +895,9 @@ ses.startSES = function(global,
      * A module source is actually any valid FunctionBody, and thus
      * any valid Program.
      *
+     * For documentation on {@code opt_mitigateOpts} see the
+     * corresponding parameter in compileExpr.
+     *
      * <p>In addition, in case the module source happens to begin with
      * a streotyped prelude of the CommonJS module system, the
      * function resulting from module compilation has an additional
@@ -795,17 +919,19 @@ ses.startSES = function(global,
      * {@code getRequirements} above would also have to extract these
      * from the text to be compiled.
      */
-    function compileModule(modSrc, opt_sourcePosition) {
+    function compileModule(modSrc, opt_mitigateOpts, opt_sourcePosition) {
       // Note the EOL after modSrc to prevent trailing line comment in modSrc
       // eliding the rest of the wrapper.
+      var options = resolveOptions(opt_mitigateOpts);
       var exprSrc =
-          '(function() {' + mitigateGotchas(modSrc) + '\n}).call(this)';
-
+          '(function() {' +
+          mitigateSrcGotchas(modSrc, options) +
+          '\n}).call(this)';
       // Follow the pattern in compileExpr
       var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
       var wrapper = unsafeEval(wrapperSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
-      var moduleMaker = makeCompiledExpr(wrapper, freeNames);
+      var moduleMaker = makeCompiledExpr(wrapper, freeNames, options);
 
       moduleMaker.requirements = getRequirements(modSrc);
       return freeze(moduleMaker);
@@ -936,9 +1062,7 @@ ses.startSES = function(global,
       var nativeProxies = global.Proxy && (function () {
         var obj = {0: 'hi'};
         var p = global.Proxy.create({
-          get: function () {
-            var P = arguments[0];
-            if (typeof P !== 'string') { P = arguments[1]; }
+          get: function(O, P) {
             return obj[P];
           }
         });
@@ -983,6 +1107,19 @@ ses.startSES = function(global,
               return gopd(Object.prototype, P);
             }
           }
+          function get(O, P) {
+            P = '' + P;
+            if (P === 'length') {
+              return lengthGetter.call(O);
+            } else if (typeof P === 'number' || P === '' + (+P)) {
+              var getter = itemMap.get(O);
+              return getter ? getter(+P) : void 0;
+            } else {
+              // Note: if Object.prototype had accessors, this code would pass
+              // incorrect 'this'.
+              return Object.prototype[P];
+            }
+          }
           function has(P) {
             P = '' + P;
             return (P === 'length') ||
@@ -1015,8 +1152,10 @@ ses.startSES = function(global,
           }
 
           ArrayLike.prototype = global.Proxy.create({
+            toString: function() { return '[SES ArrayLike proxy handler]'; },
             getPropertyDescriptor: propDesc,
             getOwnPropertyDescriptor: ownPropDesc,
+            get: get,
             has: has,
             hasOwn: hasOwn,
             getPropertyNames: getPN,
@@ -1104,6 +1243,8 @@ ses.startSES = function(global,
     })();
 
     global.cajaVM = { // don't freeze here
+      // Note that properties defined on cajaVM must also be added to
+      // whitelist.js, or they will be deleted.
 
       /**
        * This is about to be deprecated once we expose ses.logger.
@@ -1138,11 +1279,20 @@ ses.startSES = function(global,
       makeImports: constFunc(makeImports),
       copyToImports: constFunc(copyToImports),
 
-      makeArrayLike: constFunc(makeArrayLike),
+      makeArrayLike: constFunc(makeArrayLike)
 
-      inES5Mode: true,
-      es5ProblemReports: def(ses.es5ProblemReports)
+      // Not defined here because it cannot be whitelisted; see assignment and
+      // comments below.
+      //es5ProblemReports: ses.es5ProblemReports
     };
+
+    // Inserted here to make this ES5 singleton object controllable by our
+    // whitelist, not to make it part of our public API.
+    defProp(cajaVM, '[[ThrowTypeError]]', {
+      enumerable: false,
+      value: getThrowTypeError()
+    });
+
     var extensionsRecord = extensions();
     gopn(extensionsRecord).forEach(function (p) {
       defProp(cajaVM, p,
@@ -1156,17 +1306,29 @@ ses.startSES = function(global,
   })();
 
   var propertyReports = {};
+  var rootReports = {};
+
+  function reportItemProblem(table, severity, status, path) {
+    ses.updateMaxSeverity(severity);
+    var group = table[status] || (table[status] = {
+      severity: severity,
+      list: []
+    });
+    group.list.push(path);
+  }
+
+  function logReports(table) {
+    keys(table).sort().forEach(function(status) {
+      var group = table[status];
+      ses.logger.reportDiagnosis(group.severity, status, group.list);
+    });
+  }
 
   /**
    * Report how a property manipulation went.
    */
   function reportProperty(severity, status, path) {
-    ses.updateMaxSeverity(severity);
-    var group = propertyReports[status] || (propertyReports[status] = {
-      severity: severity,
-      list: []
-    });
-    group.list.push(path);
+    reportItemProblem(propertyReports, severity, status, path);
   }
 
   /**
@@ -1424,16 +1586,65 @@ ses.startSES = function(global,
   }
   clean(sharedImports, '');
 
-  /**
-   * This protection is now gathered here, so that a future version
-   * can skip it for non-defensive frames that must only be confined.
-   */
+  // es5ProblemReports has a 'dynamic' set of keys, and the whitelist mechanism
+  // does not support this (it only has 'skip', which is intended as a
+  // workaround and logged as such), so as a kludge we insert it after cleaning
+  // and before defending. TODO(kpreid): Figure out a proper workaround. Perhaps
+  // add another type of whitelisting (say a wildcard property name, or
+  // 'recursively JSON', or a non-warning 'skip')?
+  cajaVM.es5ProblemReports = ses.es5ProblemReports;
+
+  // This protection is now gathered here, so that a future version
+  // can skip it for non-defensive frames that must only be confined.
   cajaVM.def(sharedImports);
 
-  keys(propertyReports).sort().forEach(function(status) {
-    var group = propertyReports[status];
-    ses.logger.reportDiagnosis(group.severity, status, group.list);
+  // The following objects are ambiently available via language constructs, and
+  // therefore if we did not clean and defend them we have a problem. This is
+  // defense against mistakes in modifying the whitelist, not against browser
+  // bugs.
+  [
+    ['sharedImports', sharedImports],
+    ['[[ThrowTypeError]]', getThrowTypeError()],  // function literals
+    ['Array.prototype', Array.prototype],  // [], gOPN etc.
+    ['Boolean.prototype', Boolean.prototype],  // false, true
+    ['Function.prototype', Function.prototype],  // function(){}
+    ['Number.prototype', Number.prototype],  // 1, 2
+    ['Object.prototype', Object.prototype],  // {}, gOPD
+    ['RegExp.prototype', RegExp.prototype],  // /.../
+    ['String.prototype', String.prototype]  // "..."
+    // TODO(kpreid): Is this list complete?
+  ].forEach(function(record) {
+    var name = record[0];
+    var root = record[1];
+    if (!cleaning.has(root)) {
+      reportItemProblem(rootReports, ses.severities.NOT_ISOLATED,
+          'Not cleaned', name);
+    }
+    if (!Object.isFrozen(root)) {
+      reportItemProblem(rootReports, ses.severities.NOT_ISOLATED,
+          'Not frozen', name);
+    }
   });
+
+  logReports(propertyReports);
+  logReports(rootReports);
+
+  // This repair cannot be fully tested until after Object.prototype is frozen.
+  // TODO(kpreid): Less one-off kludge for this one problem -- or, once the
+  // problem is obsolete, delete all this code.
+  // (We cannot reuse any infrastructure from repairES5 because it is not
+  // exported.)
+  var result;
+  try {
+    result = ses.kludge_test_FREEZING_BREAKS_PROTOTYPES();
+  } catch (e) { result = e; }
+  if (result !== false) {
+    ses.logger.error(
+        'FREEZING_BREAKS_PROTOTYPES repair not actually successful (' +
+        result + ')');
+    ses.updateMaxSeverity(
+        ses.es5ProblemReports.FREEZING_BREAKS_PROTOTYPES.preSeverity);
+  }
 
   ses.logger.reportMax();
 

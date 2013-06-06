@@ -259,6 +259,30 @@ var ses;
     }
   };
 
+  /**
+   * Several test/repair routines want string-keyed maps. Unfortunately,
+   * our exported StringMap is not yet available, and our repairs
+   * include one which breaks Object.create(null). So, an ultra-minimal,
+   * ES3-compatible implementation.
+   */
+  function EarlyStringMap() {
+    var objAsMap = {};
+    return {
+      get: function(key) {
+        return objAsMap[key + '$'];
+      },
+      set: function(key, value) {
+        objAsMap[key + '$'] = value;
+      },
+      has: function(key) {
+        return (key + '$') in objAsMap;
+      },
+      'delete': function(key) {
+        return delete objAsMap[key + '$'];
+      }
+    };
+  }
+
   //////// Prepare for "caller" and "argument" testing and repair /////////
 
   /**
@@ -606,6 +630,59 @@ var ses;
   function test_MISSING_GETOWNPROPNAMES() {
     return !('getOwnPropertyNames' in Object);
   }
+
+  function inTestFrame(callback) {
+    if (!document || !document.createElement) { return undefined; }
+    var iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    try {
+      return callback(iframe.contentWindow);
+    } finally {
+      iframe.parentNode.removeChild(iframe);
+    }
+  }
+
+  /**
+   * Problem visible in Chrome 27.0.1428.0 canary and 27.0.1453.15 beta:
+   * freezing Object.prototype breaks Object.create inheritance.
+   * https://code.google.com/p/v8/issues/detail?id=2565
+   */
+  function test_FREEZING_BREAKS_PROTOTYPES() {
+    // This problem is sufficiently problematic that testing for it breaks the
+    // frame under some circumstances, so we create another frame to test in.
+    // (However, if we've already frozen Object.prototype, we can test in this
+    // frame without side effects.)
+    var testObject;
+    if (Object.isFrozen(Object.prototype)) {
+      testObject = Object;
+    } else {
+      testObject = inTestFrame(function(window) { return window.Object; });
+      if (!testObject) { return false; }  // not in a web browser
+
+      // Apply the repair which should fix the problem to the testing frame.
+      // TODO(kpreid): Design a better architecture to handle cases like this
+      // than one-off state flags.
+      if (repair_FREEZING_BREAKS_PROTOTYPES_wasApplied) {
+        // optional argument not supplied by normal repair process
+        repair_FREEZING_BREAKS_PROTOTYPES(testObject);
+      }
+    }
+
+    var a = new testObject();
+    testObject.freeze(testObject.prototype);
+    var b = testObject.create(a);  // will fail to set [[Prototype]] to a
+    var proto = Object.getPrototypeOf(b);
+    if (proto === a) {
+      return false;
+    } else if (proto === testObject.prototype) {
+      return true;
+    } else {
+      return 'Prototype of created object is neither specified prototype nor ' +
+          'Object.prototype';
+    }
+  }
+  // exported so we can test post-freeze
+  ses.kludge_test_FREEZING_BREAKS_PROTOTYPES = test_FREEZING_BREAKS_PROTOTYPES;
 
   /**
    * Detects https://bugs.webkit.org/show_bug.cgi?id=64250
@@ -1685,8 +1762,12 @@ var ses;
       if (x.length !== 2) { return 'Unexpected modification of frozen array'; }
       if (x[0] === 1 && x[1] === 2) { return false; }
     }
-    return (x.length !== 2 || x[0] !== 1 || x[1] !== 2);
+    if (x.length !== 2) {
+      return 'Unexpected silent modification of frozen array';
+    }
+    return (x[0] !== 1 || x[1] !== 2);
   }
+
 
   /**
    * Detects whether calling sort on a frozen array can modify the array.
@@ -1796,23 +1877,65 @@ var ses;
   }
 
   /**
-   * In Firefox 15+, Object.freeze and Object.isFrozen only work for
-   * descendents of that same Object.
+   * In Firefox 15+, the [[Extensible]] flag is not correctly readable or
+   * settable from code originating from a different frame than the object.
+   *
+   * This test is written in terms of Object.freeze because that's what we care
+   * about the correct operation of.
    */
-  function test_FIREFOX_15_FREEZE_PROBLEM() {
-    if (typeof document === 'undefined' ||
-       typeof document.createElement !== 'function') {
-      // likely not a browser environment
-      return false;
+  function test_FREEZE_IS_FRAME_DEPENDENT() {
+    // This test is extensive because it needs to verify not just the behavior
+    // of the known problem, but that our repair for it was adequate.
+
+    var other = inTestFrame(function(window) { return {
+      Object: window.Object,
+      mutator: window.Function('o', 'o.x = 1;')
+    }; });
+    if (!other) { return false; }
+
+    var frozenInOtherFrame = other.Object();
+    var freezeSucceeded;
+    try {
+      Object.freeze(frozenInOtherFrame);
+      freezeSucceeded = true;
+    } catch (e) {
+      freezeSucceeded = false;
     }
-    var iframe = document.createElement('iframe');
-    var where = document.getElementsByTagName('script')[0];
-    where.parentNode.insertBefore(iframe, where);
-    var otherObject = iframe.contentWindow.Object;
-    where.parentNode.removeChild(iframe);
-    var obj = {};
-    otherObject.freeze(obj);
-    return !Object.isFrozen(obj);
+    if (Object.isFrozen(frozenInOtherFrame) &&
+        other.Object.isFrozen(frozenInOtherFrame) &&
+        freezeSucceeded) {
+      // desired behavior
+    } else if (!Object.isFrozen(frozenInOtherFrame) &&
+        !other.Object.isFrozen(frozenInOtherFrame) &&
+        !freezeSucceeded) {
+      // adequate repair
+    } else if (Object.isFrozen(frozenInOtherFrame) &&
+        !other.Object.isFrozen(frozenInOtherFrame) &&
+        freezeSucceeded) {
+      // expected problem
+      return true;
+    } else {
+      return 'Other freeze failure: ' + Object.isFrozen(frozenInOtherFrame) +
+          other.Object.isFrozen(frozenInOtherFrame) + freezeSucceeded;
+    }
+
+    var frozenInThisFrame = Object.freeze({});
+    // This is another sign of the problem, but we can't repair it and will live
+    // with it.
+    //if (Object.isFrozen(frozenInThisFrame) &&
+    //    other.Object.isFrozen(frozenInThisFrame)) {
+    //  // desired behavior
+    //} else if (!Object.isFrozen(frozenInThisFrame)) {
+    //  return 'Object.isFrozen is broken in this frame';
+    //} else if (!other.Object.isFrozen(frozenInThisFrame)) {
+    //  return true;
+    //}
+    other.mutator(frozenInThisFrame);
+    if (frozenInThisFrame.x !== undefined) {
+      return 'mutable in other frame';
+    }
+
+    return false;  // all tests passed
   }
 
   /**
@@ -1853,6 +1976,8 @@ var ses;
     'lineNumber',
     'message',
     'stack',
+    // at least FF 21
+    'columnNumber',
 
     // at least Safari, WebKit 5.1
     'line',
@@ -1870,7 +1995,22 @@ var ses;
     'stack',
     'stacktrace'
   ];
+  var errorInstanceWhiteMap = new EarlyStringMap();
+  strictForEachFn(errorInstanceWhitelist, function(name) {
+    errorInstanceWhiteMap.set(name, true);
+  });
 
+  // Properties specifically invisible-until-touched to gOPN on Firefox, but
+  // otherwise harmless.
+  var errorInstanceKnownInvisibleList = [
+    'message',
+    'fileName',
+    'lineNumber',
+    'columnNumber',
+    'stack'
+  ];
+
+  // Property names to check for unexpected behavior.
   var errorInstanceBlacklist = [
     // seen in a Firebug on FF
     'category',
@@ -1885,18 +2025,6 @@ var ses;
     'getSourceLine',
     'resetSource'
   ];
-
-  /** Return a fresh one so client can mutate freely */
-  function freshErrorInstanceWhiteMap() {
-    var result = Object.create(null);
-    strictForEachFn(errorInstanceWhitelist, function(name) {
-      // We cannot yet use StringMap so do it manually
-      // We do this naively here assuming we don't need to worry about
-      // __proto__
-      result[name] = true;
-    });
-    return result;
-  }
 
   /**
    * Do Error instances on those platform carry own properties that we
@@ -1914,11 +2042,9 @@ var ses;
     try { null.foo = 3; } catch (err) { errs.push(err); }
     var result = false;
 
-    var approvedNames = freshErrorInstanceWhiteMap();
-
     strictForEachFn(errs, function(err) {
       strictForEachFn(Object.getOwnPropertyNames(err), function(name) {
-         if (!(name in approvedNames)) {
+         if (!errorInstanceWhiteMap.has(name)) {
            result = 'Unexpected error instance property: ' + name;
            // would be good to terminate early
          }
@@ -1930,36 +2056,42 @@ var ses;
   /**
    * On Firefox 14+ (and probably earlier), error instances have magical
    * properties that do not appear in getOwnPropertyNames until you refer
-   * to the property.  This makes test_UNEXPECTED_ERROR_PROPERTIES
-   * unreliable, so we can't assume that passing that test is safe.
+   * to the property.  We have been informed of the specific list at
+   * <https://bugzilla.mozilla.org/show_bug.cgi?id=724768#c12>.
    */
   function test_ERRORS_HAVE_INVISIBLE_PROPERTIES() {
     var gopn = Object.getOwnPropertyNames;
     var gopd = Object.getOwnPropertyDescriptor;
 
+    var checks = errorInstanceWhitelist.concat(errorInstanceBlacklist);
+    var needRepair = false;
+
     var errors = [new Error('e1')];
     try { null.foo = 3; } catch (err) { errors.push(err); }
     for (var i = 0; i < errors.length; i++) {
       var err = errors[i];
-      var found = Object.create(null);
+      var found = new EarlyStringMap();
       strictForEachFn(gopn(err), function (prop) {
-        found[prop] = true;
+        found.set(prop, true);
       });
       var j, prop;
-      for (j = 0; j < errorInstanceWhitelist.length; j++) {
-        prop = errorInstanceWhitelist[j];
-        if (gopd(err, prop) && !found[prop]) {
-          return true;
+      // Check known props
+      for (j = 0; j < errorInstanceKnownInvisibleList.length; j++) {
+        prop = errorInstanceKnownInvisibleList[j];
+        if (gopd(err, prop) && !found.get(prop)) {
+          needRepair = true;
+          found.set(prop, true);  // don't treat as new symptom
         }
       }
-      for (j = 0; j < errorInstanceBlacklist.length; j++) {
-        prop = errorInstanceBlacklist[j];
-        if (gopd(err, prop) && !found[prop]) {
-          return true;
+      // Check for new symptoms
+      for (j = 0; j < checks.length; j++) {
+        prop = checks[j];
+        if (gopd(err, prop) && !found.get(prop)) {
+          return 'Unexpectedly invisible Error property: ' + prop;
         }
       }
     }
-    return false;
+    return needRepair;
   }
 
   /**
@@ -2015,7 +2147,16 @@ var ses;
    * we only care about the case where we cannot replace it.
    */
   function test_NONCONFIGURABLE_OWN_PROTO() {
-    var o = Object.create(null);
+    try {
+      var o = Object.create(null);
+    } catch (e) {
+      if (e.message === NO_CREATE_NULL) {
+        // result of repair_FREEZING_BREAKS_PROTOTYPES
+        return false;
+      } else {
+        throw e;
+      }
+    }
     var desc = Object.getOwnPropertyDescriptor(o, '__proto__');
     if (desc === undefined) { return false; }
     if (desc.configurable) { return false; }
@@ -2025,6 +2166,33 @@ var ses;
     }
     return 'Unexpected __proto__ own property descriptor, enumerable: ' +
       desc.enumerable + ', value: ' + desc.value;
+  }
+
+  function getThrowTypeError() {
+    "use strict";
+    return Object.getOwnPropertyDescriptor(getThrowTypeError, "arguments").get;
+  }
+
+  /**
+   * [[ThrowTypeError]] is extensible or has modifiable properties.
+   */
+  function test_THROWTYPEERROR_UNFROZEN() {
+    return !Object.isFrozen(getThrowTypeError());
+  }
+
+  /**
+   * [[ThrowTypeError]] has properties which the spec gives to other function
+   * objects but not [[ThrowTypeError]].
+   *
+   * We don't check for arbitrary properties because they might be extensions
+   * for all function objects, which we don't particularly want to complain
+   * about (and will delete via whitelisting).
+   */
+  function test_THROWTYPEERROR_PROPERTIES() {
+    var tte = getThrowTypeError();
+    return !!Object.getOwnPropertyDescriptor(tte, 'prototype') ||
+        !!Object.getOwnPropertyDescriptor(tte, 'arguments') ||
+        !!Object.getOwnPropertyDescriptor(tte, 'caller');
   }
 
   /**
@@ -2059,7 +2227,6 @@ var ses;
     }
     return false;
   }
-
 
   ////////////////////// Repairs /////////////////////
   //
@@ -2340,8 +2507,7 @@ var ses;
 
   function repair_NEED_TO_WRAP_FOREACH() {
     Object.defineProperty(Array.prototype, 'forEach', {
-      // Taken from
-      // https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Array/forEach
+      // Taken from https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Array/forEach
       value: function(callback, thisArg) {
         var T, k;
         if (this === null || this === undefined) {
@@ -2767,6 +2933,35 @@ var ses;
     });
   }
 
+  function repair_FREEZE_IS_FRAME_DEPENDENT() {
+    // Every operation which sets an object's [[Extensible]] to false.
+    fix('preventExtensions');
+    fix('freeze');
+    fix('seal');
+
+    function fix(prop) {
+      var base = Object[prop];
+      Object.defineProperty(Object, prop, {
+        configurable: true,  // attributes per ES5.1 section 15
+        writable: true,
+        value: function frameCheckWrapper(obj) {
+          var parent = obj;
+          while (Object.getPrototypeOf(parent) !== null) {
+            parent = Object.getPrototypeOf(parent);
+          }
+          if (parent === obj || parent === Object.prototype) {
+            // Unsoundly assuming this object is from this frame; we're trying
+            // to catch mistakes here, not to do a 100% repair.
+            return base(obj);
+          } else {
+            throw new Error(
+                'Cannot reliably ' + prop + ' object from other frame.');
+          }
+        }
+      });
+    }
+  }
+
   function repair_POP_IGNORES_FROZEN() {
     var pop = Array.prototype.pop;
     var frozen = Object.isFrozen;
@@ -2801,6 +2996,115 @@ var ses;
     });
   }
 
+  // error message is matched elsewhere (for tighter bounds on catch)
+  var NO_CREATE_NULL =
+      'Repaired Object.create can not support Object.create(null)';
+  // flag used for the test-of-repair which cannot operate normally.
+  var repair_FREEZING_BREAKS_PROTOTYPES_wasApplied = false;
+  // optional argument is used for the test-of-repair
+  function repair_FREEZING_BREAKS_PROTOTYPES(opt_Object) {
+    var baseObject = opt_Object || Object;
+    var baseDefProp = baseObject.defineProperties;
+
+    // Object.create fails to override [[Prototype]]; reimplement it.
+    baseObject.defineProperty(baseObject, 'create', {
+      configurable: true,  // attributes per ES5.1 section 15
+      writable: true,
+      value: function repairedObjectCreate(O, Properties) {
+        if (O === null) {
+          // Not ES5 conformant, but hopefully adequate for Caja as ES5/3 also
+          // does not support Object.create(null).
+          throw new TypeError(NO_CREATE_NULL);
+        }
+        // "1. If Type(O) is not Object or Null throw a TypeError exception."
+        if (O !== Object(O)) {
+          throw new TypeError('Object.create: prototype must be an object');
+        }
+        // "2. Let obj be the result of creating a new object as if by the
+        // expression new Object() where Object is the standard built-in
+        // constructor with that name"
+        // "3. Set the [[Prototype]] internal property of obj to O."
+        // Cannot redefine [[Prototype]], so we use the .prototype trick instead
+        function temporaryConstructor() {}
+        temporaryConstructor.prototype = O;
+        var obj = new temporaryConstructor();
+        // "4. If the argument Properties is present and not undefined, add own
+        // properties to obj as if by calling the standard built-in function
+        // Object.defineProperties with arguments obj and Properties."
+        if (Properties !== void 0) {
+          baseDefProp(obj, Properties);
+        }
+        // "5. Return obj."
+        return obj;
+      }
+    });
+
+    var baseErrorToString = Error.prototype.toString;
+
+    // Error.prototype.toString fails to use the .name and .message.
+    // This is being repaired not because it is a critical issue but because
+    // it is more direct than disabling the tests of error taming which fail.
+    baseObject.defineProperty(Error.prototype, 'toString', {
+      configurable: true,  // attributes per ES5.1 section 15
+      writable: true,
+      value: function repairedErrorToString() {
+        // "1. Let O be the this value."
+        var O = this;
+        // "2. If Type(O) is not Object, throw a TypeError exception."
+        if (O !== baseObject(O)) {
+          throw new TypeError('Error.prototype.toString: this not an object');
+        }
+        // "3. Let name be the result of calling the [[Get]] internal method of
+        // O with argument "name"."
+        var name = O.name;
+        // "4. If name is undefined, then let name be "Error"; else let name be
+        // ToString(name)."
+        name = name === void 0 ? 'Error' : '' + name;
+        // "5. Let msg be the result of calling the [[Get]] internal method of O
+        // with argument "message"."
+        var msg = O.message;
+        // "6. If msg is undefined, then let msg be the empty String; else let
+        // msg be ToString(msg)."
+        msg = msg === void 0 ? '' : '' + msg;
+        // "7. If msg is undefined, then let msg be the empty String; else let
+        // msg be ToString(msg)."
+        msg = msg === void 0 ? '' : '' + msg;
+        // "8. If name is the empty String, return msg."
+        if (name === '') { return msg; }
+        // "9. If msg is the empty String, return name."
+        if (msg === '') { return name; }
+        // "10. Return the result of concatenating name, ":", a single space
+        // character, and msg."
+        return name + ': ' + msg;
+      }
+    });
+
+    if (baseObject === Object) {
+      repair_FREEZING_BREAKS_PROTOTYPES_wasApplied = true;
+    }
+  }
+
+  function repair_ERRORS_HAVE_INVISIBLE_PROPERTIES() {
+    var baseGOPN = Object.getOwnPropertyNames;
+    var baseGOPD = Object.getOwnPropertyDescriptor;
+    var errorPattern = /^\[object [\w$]*Error\]$/;
+
+    function touch(name) {
+      // the forEach will invoke this function with this === the error instance
+      baseGOPD(this, name);
+    }
+
+    Object.defineProperty(Object, 'getOwnPropertyNames', {
+      writable: true,  // allow other repairs to stack on
+      value: function repairedErrorInvisGOPN(object) {
+        // Note: not adequate in future ES6 world (TODO(erights): explain why)
+        if (errorPattern.test(objToString.call(object))) {
+          errorInstanceKnownInvisibleList.forEach(touch, object);
+        }
+        return baseGOPN(object);
+      }
+    });
+  }
 
   ////////////////////// Kludge Records /////////////////////
   //
@@ -3476,12 +3780,13 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
-      id: 'FIREFOX_15_FREEZE_PROBLEM',
-      description: 'Firefox 15 cross-frame freeze problem',
-      test: test_FIREFOX_15_FREEZE_PROBLEM,
-      repair: void 0,
-      preSeverity: severities.NOT_ISOLATED,
-      canRepair: false,
+      id: 'FREEZE_IS_FRAME_DEPENDENT',
+      description: 'Object.freeze falsely succeeds on other-frame objects',
+      test: test_FREEZE_IS_FRAME_DEPENDENT,
+      repair: repair_FREEZE_IS_FRAME_DEPENDENT,
+      // NO_KNOWN_EXPLOITness depends on using exactly one SES frame
+      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
+      canRepair: false,  // repair is useful but inadequate
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=784892',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=674195'],
       sections: [],
@@ -3500,11 +3805,11 @@ var ses;
     },
     {
       id: 'ERRORS_HAVE_INVISIBLE_PROPERTIES',
-      description: 'Error instances may have invisible properties',
+      description: 'Error instances have invisible properties',
       test: test_ERRORS_HAVE_INVISIBLE_PROPERTIES,
-      repair: void 0,
-      preSeverity: severities.NOT_ISOLATED,
-      canRepair: false,
+      repair: repair_ERRORS_HAVE_INVISIBLE_PROPERTIES,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=726477',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=724768'],
       sections: [],
@@ -3551,6 +3856,46 @@ var ses;
       sections: [],  // Not spelled out in spec, according to Brendan Eich (see
                      // es-discuss link)
       tests: []  // TODO(kpreid): add to test262 once we have a section to cite
+    },
+    {
+      id: 'FREEZING_BREAKS_PROTOTYPES',
+      description: 'Freezing Object.prototype breaks prototype setting',
+      test: test_FREEZING_BREAKS_PROTOTYPES,
+      repair: repair_FREEZING_BREAKS_PROTOTYPES,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['https://code.google.com/p/v8/issues/detail?id=2565'],
+      sections: ['15.2.3.5'],
+      tests: []  // TODO(kpreid): find/add test262
+    },
+    {
+      id: 'THROWTYPEERROR_UNFROZEN',
+      description: '[[ThrowTypeError]] is not frozen',
+      test: test_THROWTYPEERROR_UNFROZEN,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,  // Note: Safe only because
+          // startSES will do whitelist and defense; per spec intent it's an
+          // undesired communication channel.
+      canRepair: false,  // will be repaired by whitelist
+      urls: ['https://bugs.webkit.org/show_bug.cgi?id=108873'],
+             // TODO(kpreid): find or file Firefox bug (writable props)
+             // TODO(kpreid): find or file Chrome bug (has a .prototype)
+      sections: ['13.2.3'],
+      tests: []  // TODO(kpreid): add to test262
+    },
+    {
+      id: 'THROWTYPEERROR_PROPERTIES',
+      description: '[[ThrowTypeError]] has normal function properties',
+      test: test_THROWTYPEERROR_PROPERTIES,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,  // will be repaired by whitelist
+      urls: [],
+             // WebKit is OK
+             // TODO(kpreid): find or file Firefox bug (has writable props)
+             // TODO(kpreid): find or file Chrome bug (has a .prototype!)
+      sections: ['13.2.3'],
+      tests: []  // TODO(kpreid): add to test262
     },
     {
       id: 'FUNCTION_DOESNT_VERIFY_SYNTAX',
@@ -3695,7 +4040,13 @@ var ses;
     // Made available to allow for later code reusing our diagnoses to work
     // around non-repairable problems in application-specific ways. startSES
     // will also expose this on cajaVM for unprivileged code.
-    var indexedReports = Object.create(null);
+    var indexedReports;
+    try {
+      indexedReports = Object.create(null);
+    } catch (e) {
+      // repair_FREEZING_BREAKS_PROTOTYPES does not support null
+      indexedReports = {};
+    }
     reports.forEach(function (report) {
       indexedReports[report.id] = report;
     });
