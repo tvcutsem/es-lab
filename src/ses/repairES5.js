@@ -786,7 +786,7 @@ var ses;
     var desc = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__');
     if (!desc) { return false; }
     try {
-      desc.set; // yes, just reading it
+      void desc.set; // yes, just reading it
     } catch (err) {
       if (err instanceof TypeError) { return true; }
       return ''+err;

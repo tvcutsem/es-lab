@@ -936,6 +936,7 @@ ses.startSES = function(global,
       params = params.join(',');
       // Note the EOL after modSrc to prevent trailing line comment in body
       // eliding the rest of the wrapper.
+      ses.verifyStrictProgram(body);
       var exprSrc = '(function(' + params + '\n){' + body + '\n})';
       return compileExpr(exprSrc)(sharedImports);
     }

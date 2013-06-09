@@ -17,7 +17,7 @@
  *
  * @author Mark S. Miller
  * @author Jasvir Nagra
- * @requires ses
+ * @overrides ses
  * @overrides StringMap
  */
 
