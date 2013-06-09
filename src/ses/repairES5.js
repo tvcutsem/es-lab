@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /**
- * @fileoverview Monkey patch almost ES5 platforms into a closer
+ * @fileoverview Monkey patch an almost ES5 platforms into a closer
  * emulation of full <a href=
  * "http://code.google.com/p/es-lab/wiki/SecureableES5">Secureable
  * ES5</a>.
@@ -29,8 +29,10 @@
  *
  * //provides ses.statuses, ses.ok, ses.is, ses.makeDelayedTamperProof
  * //provides ses.makeCallerHarmless, ses.makeArgumentsHarmless
+ * //provides ses.verifyStrictProgram
  * //provides ses.severities, ses.maxSeverity, ses.updateMaxSeverity
  * //provides ses.maxAcceptableSeverityName, ses.maxAcceptableSeverity
+ * //provides ses.acceptableProblems
  *
  * @author Mark S. Miller
  * @requires ___global_test_function___, ___global_valueOf_function___
@@ -96,9 +98,6 @@ var ses;
    *   <dt>SAFE_SPEC_VIOLATION</dt>
    *     <dd>safe (in an integrity sense) even if unrepaired. May
    *         still lead to inappropriate failures.</dd>
-   *   <dt>NO_KNOWN_EXPLOIT_SPEC_VIOLATION</dt>
-   *     <dd>known to introduce an indirect safety issue which,
-   *     however, is not known to be exploitable.</dd>
    *   <dt>UNSAFE_SPEC_VIOLATION</dt>
    *     <dd>a safety issue only indirectly, in that this spec
    *         violation may lead to the corruption of assumptions made
@@ -120,8 +119,6 @@ var ses;
     MAGICAL_UNICORN:       { level: -1, description: 'Testing only' },
     SAFE:                  { level: 0, description: 'Safe' },
     SAFE_SPEC_VIOLATION:   { level: 1, description: 'Safe spec violation' },
-    NO_KNOWN_EXPLOIT_SPEC_VIOLATION: {
-        level: 2, description: 'Unsafe spec violation but no known exploits' },
     UNSAFE_SPEC_VIOLATION: { level: 3, description: 'Unsafe spec violation' },
     NOT_OCAP_SAFE:         { level: 4, description: 'Not ocap safe' },
     NOT_ISOLATED:          { level: 5, description: 'Not isolated' },
@@ -139,6 +136,9 @@ var ses;
    *     <dd>test failed before and after repair attempt.</dd>
    *   <dt>NOT_REPAIRED</dt>
    *     <dd>test failed before and after, with no repair to attempt.</dd>
+   *   <dt>REPAIR_SKIPPED</dt>
+   *     <dd>test failed before and after, and ses.acceptableProblems
+   *         specified not to repair it.</dd>
    *   <dt>REPAIRED_UNSAFELY</dt>
    *     <dd>test failed before and passed after repair attempt, but
    *         the repair is known to be inadequate for security, so the
@@ -159,6 +159,7 @@ var ses;
     ALL_FINE:                          'All fine',
     REPAIR_FAILED:                     'Repair failed',
     NOT_REPAIRED:                      'Not repaired',
+    REPAIR_SKIPPED:                    'Repair skipped',
     REPAIRED_UNSAFELY:                 'Repaired unsafely',
     REPAIRED:                          'Repaired',
     ACCIDENTALLY_REPAIRED:             'Accidentally repaired',
@@ -207,6 +208,9 @@ var ses;
    * have the choice of using SES on those platforms which we judge to
    * be adequately repairable, or otherwise falling back to Caja's
    * ES5/3 translator.
+   *
+   * <p>See also {@code ses.acceptableProblems} for overriding the
+   * severity of specific known problems.
    */
   ses.maxAcceptableSeverityName =
     validateSeverityName(ses.maxAcceptableSeverityName);
@@ -231,6 +235,62 @@ var ses;
   }
   function severityNameToLevel(severityName) {
     return ses.severities[validateSeverityName(severityName)];
+  }
+
+  /**
+   * An object whose enumerable keys are problem names and whose values
+   * are records containing the following boolean properties, defaulting
+   * to false if omitted:
+   * <dl>
+   *
+   * <dt>{@code permit}
+   * <dd>If this problem is not repaired, continue even if its severity
+   * would otherwise be too great (maxSeverity will be as if this
+   * problem does not exist). Use this for problems which are known
+   * to be acceptable for the particular use case of SES.
+   *
+   * <p>THIS CONFIGURATION IS POTENTIALLY EXTREMELY DANGEROUS. Ignoring
+   * problems can make SES itself insecure in subtle ways even if you
+   * do not use any of the affected features in your own code. Do not
+   * use it without full understanding of the implications.
+   *
+   * <p>TODO(kpreid): Add a flag to kludge records to indicate whether
+   * the problems may be ignored and check it here.
+   * </dd>
+   *
+   * <dt>{@code doNotRepair}
+   * <dd>Do not attempt to repair this problem.
+   * Use this for problems whose repairs have unacceptable disadvantages.
+   *
+   * <p>Observe that if {@code permit} is also false, then this means to
+   * abort rather than repairing, whereas if {@code permit} is true then
+   * this means to continue without repairing the problem even if it is
+   * repairable.
+   *
+   * </dl>
+   */
+  ses.acceptableProblems = validateAcceptableProblems(ses.acceptableProblems);
+
+  function validateAcceptableProblems(opt_problems) {
+    var validated = {};
+    if (opt_problems) {
+      for (var problem in opt_problems) {
+        // TODO(kpreid): Validate problem names.
+        var flags = opt_problems[problem];
+        if (typeof flags !== 'object') {
+          throw new Error('ses.acceptableProblems["' + problem + '"] is not' +
+              ' an object, but ' + flags);
+        }
+        var valFlags = {permit: false, doNotRepair: false};
+        for (var flag in flags) {
+          if (valFlags.hasOwnProperty(flag)) {
+            valFlags[flag] = Boolean(flags[flag]);
+          }
+        }
+        validated[problem] = valFlags;
+      }
+    }
+    return validated;
   }
 
   /**
@@ -587,6 +647,88 @@ var ses;
   };
 
   /**
+   * The unsafe* variables hold precious values that must not escape
+   * to untrusted code. When {@code eval} is invoked via {@code
+   * unsafeEval}, this is a call to the indirect eval function, not
+   * the direct eval operator.
+   */
+  var unsafeEval = eval;
+  var UnsafeFunction = Function;
+
+  /**
+   * <p>We use Crock's trick of simply passing {@code programSrc} to
+   * the original {@code Function} constructor, which will throw a
+   * SyntaxError if it does not parse as a FunctionBody. We used to
+   * use Ankur's trick (need link) which is more correct, in that it
+   * will throw if {@code programSrc} does not parse as a Program
+   * production, which is the relevant question. However, the
+   * difference -- whether return statements are accepted -- does
+   * not matter for our purposes. And testing reveals that Crock's
+   * trick executes over 100x faster on V8.
+   */
+  function simpleVerifyStrictProgram(programSrc) {
+    try {
+      UnsafeFunction('"use strict";' + programSrc);
+    } catch (err) {
+      // debugger; // Useful for debugging -- to look at programSrc
+      throw err;
+    }
+  }
+
+  /**
+   * Fails if {@code programSrc} does not parse as a strict Program
+   * production, or, almost equivalently, as a FunctionBody
+   * production.
+   */
+  ses.verifyStrictProgram = simpleVerifyStrictProgram;
+
+  /**
+   * Only applicable if ses.mitigateSrcGotchas is available.
+   */
+  function verifyStrictProgramByParsing(programSrc) {
+    var safeError;
+    var newSrc;
+    try {
+      newSrc = ses.mitigateSrcGotchas(programSrc,
+                                      {parseProgram: true},
+                                      ses.logger);
+    } catch (error) {
+      // Shouldn't throw, but if it does, the exception is potentially from a
+      // different context with an undefended prototype chain; don't allow it
+      // to leak out.
+      try {
+        safeError = new Error(error.message);
+      } catch (metaerror) {
+        throw new Error(
+          'Could not safely obtain error from mitigateSrcGotchas');
+      }
+      throw safeError;
+    }
+    if (newSrc !== programSrc) {
+      throw new SyntaxError("Failed to parse program");
+    }
+  }
+
+  /**
+   * Fall back to Ankur's trick if the Function constructor does not
+   * verify syntax. See *CANT_SAFELY_VERIFY_SYNTAX.
+   */
+  function verifyStrictProgramByEvalThrowing(programSrc) {
+    try {
+      unsafeEval('"use strict"; throw "not a SyntaxError";' + programSrc);
+    } catch (err) {
+      if (err == "not a SyntaxError") {
+        // Presumably, if we got here, programSrc parsed but was not executed.
+        return;
+      }
+      if (err instanceof SyntaxError) {
+        throw err;
+      }
+    }
+    throw new TypeError('Unexpected verification outcome');
+  }
+
+  /**
    * Where the "that" parameter represents a "this" that should have
    * been bound to "undefined" but may be bound to a global or
    * globaloid object.
@@ -629,6 +771,27 @@ var ses;
    */
   function test_MISSING_GETOWNPROPNAMES() {
     return !('getOwnPropertyNames' in Object);
+  }
+
+  /**
+   * If you can, see Opera bug DSK-383293@bugs.opera.com.
+   *
+   * <p>On some Operas, the Object.prototype.__proto__ property is an
+   * accessor property, but the property descriptor of that property
+   * has a setter, i.e., {@code desc.set}, which throws a TypeError
+   * when one tries to read it. Unfortunately, this creates
+   * problems beyond our attempts at support.
+   */
+  function test_PROTO_SETTER_UNGETTABLE() {
+    var desc = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__');
+    if (!desc) { return false; }
+    try {
+      desc.set; // yes, just reading it
+    } catch (err) {
+      if (err instanceof TypeError) { return true; }
+      return ''+err;
+    }
+    return false;
   }
 
   function inTestFrame(callback) {
@@ -2198,34 +2361,31 @@ var ses;
   /**
    * See https://code.google.com/p/google-caja/issues/detail?id=1616
    */
-  function test_FUNCTION_DOESNT_VERIFY_SYNTAX() {
+  function test_CANT_SAFELY_VERIFY_SYNTAX() {
     try {
       Function("/*", "*/){");
     } catch (err) {
       if (err instanceof SyntaxError) { return false; }
       return 'Unexpected error: ' + err;
     }
-    return true;
-  }
-
-  /**
-   * If you can, see Opera bug DSK-383293@bugs.opera.com.
-   *
-   * <p>On some Operas, the Object.prototype.__proto__ property is an
-   * accessor property, but the property descriptor of that property
-   * has a setter, i.e., {@code desc.set}, which throws a TypeError
-   * when one tries to read it.
-   */
-  function test_PROTO_SETTER_UNGETTABLE() {
-    var desc = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__');
-    if (!desc) { return false; }
-    try {
-      desc.set; // yes, just reading it
-    } catch (err) {
-      if (err instanceof TypeError) { return true; }
-      return ''+err;
+    if (ses.verifyStrictProgram === simpleVerifyStrictProgram) {
+      // We test this horrible way first, since the test we'd like to use
+      // below, when tried with simpleVerifyStrictProgram even on Safari
+      // 6.0.4 WebKit Nightly r151081 (at the time of this writing)
+      // causes the *browser* to crash.
+      // See https://bugs.webkit.org/show_bug.cgi?id=106160
+      return true;
     }
-    return false;
+
+    ses.__bogus__ = false;
+    try {
+      ses.verifyStrictProgram('}), (ses.__bogus__ = true), (function(){');
+    } catch (err) {
+      if (err instanceof SyntaxError) { return false; }
+      return 'Unexpected error: ' + err;
+    }
+    if (ses.__bogus__ === true) { return true; }
+    return 'Unexpected verification failure';
   }
 
   ////////////////////// Repairs /////////////////////
@@ -2996,6 +3156,21 @@ var ses;
     });
   }
 
+  function repair_PUSH_IGNORES_SEALED() {
+    var push = Array.prototype.push;
+    var sealed = Object.isSealed;
+    Object.defineProperty(Array.prototype, 'push', {
+      value: function(compareFn) {
+        if (sealed(this)) {
+          throw new TypeError('Cannot push onto a sealed object.');
+        }
+        return push.apply(this, arguments);
+      },
+      configurable: true,
+      writable: true
+    });
+  }
+
   // error message is matched elsewhere (for tighter bounds on catch)
   var NO_CREATE_NULL =
       'Repaired Object.create can not support Object.create(null)';
@@ -3106,6 +3281,25 @@ var ses;
     });
   }
 
+  /**
+   * Note that this repair does not repair the Function constructor
+   * itself at this stage. Rather, it repairs ses.verifyStrictProgram,
+   * which startSES uses to build a safe Function constructor from the
+   * unsafe one.
+   *
+   * <p>TODO(kpreid): Is it worth using ses.mitigateSrcGotchas for
+   * this case if available, or is it better to just always use
+   * Ankur's trick (verifyStrictProgramByEvalThrowing) for this?
+   */
+  function repair_CANT_SAFELY_VERIFY_SYNTAX() {
+    if ('function' === typeof ses.mitigateSrcGotchas) {
+      ses.verifyStrictProgram = verifyStrictProgramByParsing;
+    } else {
+      ses.verifyStrictProgram = verifyStrictProgramByEvalThrowing;
+    }
+  }
+
+
   ////////////////////// Kludge Records /////////////////////
   //
   // Each kludge record has a <dl>
@@ -3156,6 +3350,17 @@ var ses;
       urls: [],
       sections: ['15.2.3.4'],
       tests: ['15.2.3.4-0-1']
+    },
+    {
+      id: 'PROTO_SETTER_UNGETTABLE',
+      description: "Can't get Object.prototype.__proto__'s setter",
+      test: test_PROTO_SETTER_UNGETTABLE,
+      repair: void 0,
+      preSeverity: severities.NOT_SUPPORTED,
+      canRepair: false,
+      urls: ['mailto:DSK-383293@bugs.opera.com'],
+      sections: [],
+      tests: []
     }
   ];
 
@@ -3624,7 +3829,7 @@ var ses;
       description: 'Defining __proto__ on non-extensible object fails silently',
       test: test_DEFINING_READ_ONLY_PROTO_FAILS_SILENTLY,
       repair: repair_DEFINE_PROPERTY,
-      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: true,
       urls: ['http://code.google.com/p/v8/issues/detail?id=2441'],
       sections: ['8.6.2'],
@@ -3717,9 +3922,9 @@ var ses;
       id: 'PUSH_IGNORES_SEALED',
       description: 'Array.prototype.push ignores sealing',
       test: test_PUSH_IGNORES_SEALED,
-      repair: undefined, // workaround is too slow
-      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
-      canRepair: false,
+      repair: repair_PUSH_IGNORES_SEALED,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
       urls: ['http://code.google.com/p/v8/issues/detail?id=2412'],
       sections: ['15.4.4.11'],
       tests: [] // TODO(erights): Add to test262
@@ -3728,9 +3933,9 @@ var ses;
       id: 'PUSH_DOES_NOT_THROW_ON_FROZEN_ARRAY',
       description: 'Array.prototype.push does not throw on a frozen array',
       test: test_PUSH_DOES_NOT_THROW_ON_FROZEN_ARRAY,
-      repair: undefined,
-      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
-      canRepair: false,
+      repair: repair_PUSH_IGNORES_SEALED,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
       urls: [],
       sections: ['15.2.3.9'],
       tests: [] // TODO(erights): Add to test262
@@ -3739,9 +3944,9 @@ var ses;
       id: 'PUSH_IGNORES_FROZEN',
       description: 'Array.prototype.push ignores frozen',
       test: test_PUSH_IGNORES_FROZEN,
-      repair: undefined,
+      repair: repair_PUSH_IGNORES_SEALED,
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: false,
+      canRepair: true,
       urls: [],
       sections: ['15.2.3.9'],
       tests: [] // TODO(erights): Add to test262
@@ -3751,7 +3956,7 @@ var ses;
       description: 'Setting [].length can delete non-configurable elements',
       test: test_ARRAYS_DELETE_NONCONFIGURABLE,
       repair: void 0,
-      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: false,
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=590690'],
       sections: ['15.4.5.2'],
@@ -3762,7 +3967,7 @@ var ses;
       description: 'Extending an array can modify read-only array length',
       test: test_ARRAYS_MODIFY_READONLY,
       repair: void 0,
-      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: false,
       urls: ['http://code.google.com/p/v8/issues/detail?id=2379'],
       sections: ['15.4.5.1.3.f'],
@@ -3784,8 +3989,7 @@ var ses;
       description: 'Object.freeze falsely succeeds on other-frame objects',
       test: test_FREEZE_IS_FRAME_DEPENDENT,
       repair: repair_FREEZE_IS_FRAME_DEPENDENT,
-      // NO_KNOWN_EXPLOITness depends on using exactly one SES frame
-      preSeverity: severities.NO_KNOWN_EXPLOIT_SPEC_VIOLATION,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: false,  // repair is useful but inadequate
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=784892',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=674195'],
@@ -3898,27 +4102,16 @@ var ses;
       tests: []  // TODO(kpreid): add to test262
     },
     {
-      id: 'FUNCTION_DOESNT_VERIFY_SYNTAX',
+      id: 'CANT_SAFELY_VERIFY_SYNTAX',
       description: 'Function constructor does not verify syntax',
-      test: test_FUNCTION_DOESNT_VERIFY_SYNTAX,
-      repair: void 0,
+      test: test_CANT_SAFELY_VERIFY_SYNTAX,
+      repair: repair_CANT_SAFELY_VERIFY_SYNTAX,
       preSeverity: severities.NOT_ISOLATED,
-      canRepair: false,
+      canRepair: true,
       urls: ['https://code.google.com/p/google-caja/issues/detail?id=1616',
 	     'http://code.google.com/p/v8/issues/detail?id=2470',
 	     'https://bugs.webkit.org/show_bug.cgi?id=106160'],
       sections: ['15.3.2.1'],
-      tests: []
-    },
-    {
-      id: 'PROTO_SETTER_UNGETTABLE',
-      description: "Can't get Object.prototype.__proto__'s setter",
-      test: test_PROTO_SETTER_UNGETTABLE,
-      repair: void 0,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: ['mailto:DSK-383293@bugs.opera.com'],
-      sections: [],
       tests: []
     }
   ];
@@ -3926,6 +4119,12 @@ var ses;
   ////////////////////// Testing, Repairing, Reporting ///////////
 
   var aboutTo = void 0;
+
+  var defaultDisposition = { permit: false, doNotRepair: false };
+  function disposition(kludge) {
+    return ses.acceptableProblems.hasOwnProperty(kludge.id)
+        ? ses.acceptableProblems[kludge.id] : defaultDisposition;
+  }
 
   /**
    * Run a set of tests & repairs, and report results.
@@ -3943,7 +4142,7 @@ var ses;
     });
     var repairs = [];
     strictForEachFn(kludges, function(kludge, i) {
-      if (beforeFailures[i]) {
+      if (beforeFailures[i] && !disposition(kludge).doNotRepair) {
         var repair = kludge.repair;
         if (repair && repairs.lastIndexOf(repair) === -1) {
           aboutTo = ['repair: ', kludge.description];
@@ -3971,7 +4170,10 @@ var ses;
       var afterFailure = afterFailures[i];
       if (beforeFailure) { // failed before
         if (afterFailure) { // failed after
-          if (kludge.repair) {
+          if (disposition(kludge).doNotRepair) {
+            postSeverity = kludge.preSeverity;
+            status = statuses.REPAIR_SKIPPED;
+          } else if (kludge.repair) {
             postSeverity = kludge.preSeverity;
             status = statuses.REPAIR_FAILED;
           } else {
@@ -3981,7 +4183,7 @@ var ses;
             status = statuses.NOT_REPAIRED;
           }
         } else { // succeeded after
-          if (kludge.repair) {
+          if (kludge.repair && !disposition(kludge).doNotRepair) {
             if (!kludge.canRepair) {
               // repair for development, not safety
               postSeverity = kludge.preSeverity;
@@ -4013,7 +4215,12 @@ var ses;
         postSeverity = severities.NEW_SYMPTOM;
       }
 
-      ses.updateMaxSeverity(postSeverity);
+      if (postSeverity !== severities.SAFE && disposition(kludge).permit) {
+        logger.warn('Problem ignored by configuration (' +
+            postSeverity.description + '): ' + kludge.description);
+      } else {
+        ses.updateMaxSeverity(postSeverity);
+      }
 
       return {
         id:            kludge.id,

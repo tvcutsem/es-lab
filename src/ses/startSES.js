@@ -18,9 +18,12 @@
  * <p>Assumes ES5 plus a WeakMap that conforms to the anticipated ES6
  * WeakMap spec. Compatible with ES5-strict or anticipated ES6.
  *
+ * //requires ses.makeCallerHarmless, ses.makeArgumentsHarmless
+ * //requires ses.verifyStrictProgram
  * //optionally requires ses.mitigateSrcGotchas
  * //provides ses.startSES ses.resolveOptions, ses.securableWrapperSrc
  * //provides ses.makeCompiledExpr
+ * 
  * @author Mark S. Miller,
  * @author Jasvir Nagra
  * @requires WeakMap
@@ -506,30 +509,6 @@ ses.startSES = function(global,
     var UnsafeFunction = Function;
 
     /**
-     * Fails if {@code programSrc} does not parse as a strict Program
-     * production, or, almost equivalently, as a FunctionBody
-     * production.
-     *
-     * <p>We use Crock's trick of simply passing {@code programSrc} to
-     * the original {@code Function} constructor, which will throw a
-     * SyntaxError if it does not parse as a FunctionBody. We used to
-     * use Ankur's trick (need link) which is more correct, in that it
-     * will throw if {@code programSrc} does not parse as a Program
-     * production, which is the relevant question. However, the
-     * difference -- whether return statements are accepted -- does
-     * not matter for our purposes. And testing reveals that Crock's
-     * trick executes over 100x faster on V8.
-     */
-    function verifyStrictProgram(programSrc) {
-      try {
-        UnsafeFunction('"use strict";' + programSrc);
-      } catch (err) {
-        // debugger; // Useful for debugging -- to look at programSrc
-        throw err;
-      }
-    }
-
-    /**
      * Fails if {@code exprSource} does not parse as a strict
      * Expression production.
      *
@@ -541,8 +520,8 @@ ses.startSES = function(global,
      * cannot suppress the close paren or parens.
      */
     function verifyStrictExpression(exprSrc) {
-      verifyStrictProgram('( ' + exprSrc + '\n);');
-      verifyStrictProgram('(( ' + exprSrc + '\n));');
+      ses.verifyStrictProgram('( ' + exprSrc + '\n);');
+      ses.verifyStrictProgram('(( ' + exprSrc + '\n));');
     }
 
     /**
@@ -848,13 +827,18 @@ ses.startSES = function(global,
      * endowments are the only source of eval-time abilities for the
      * expr to cause effects.
      */
-    function confine(exprSrc, opt_endowments, opt_sourcePosition) {
+    function confine(exprSrc,
+                     opt_endowments,
+                     opt_mitigateOpts,
+                     opt_sourcePosition) {
       var imports = makeImports();
       if (opt_endowments) {
         copyToImports(imports, opt_endowments);
       }
       def(imports);
-      return compileExpr(exprSrc, opt_sourcePosition)(imports);
+      return compileExpr(exprSrc,
+                         opt_mitigateOpts,
+                         opt_sourcePosition)(imports);
     }
 
 
