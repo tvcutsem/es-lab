@@ -17,7 +17,7 @@
  * http://wiki.ecmascript.org/doku.php?id=strawman:promises
  * strawman, securely when run on a Caja or SES platform.
  *
- * <p>This differs from previous incarnations of Q by supporting Tab
+ * <p>This will differ from previous incarnations of Q by supporting Tab
  * Atkin's AP2 variant, approximately as documented at
  * http://wiki.ecmascript.org/lib/exe/fetch.php?id=strawman%3Apromises&media=strawman:promisesvsmonads2.pdf
  * The main differences are
