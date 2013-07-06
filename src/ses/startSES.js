@@ -19,7 +19,7 @@
  * WeakMap spec. Compatible with ES5-strict or anticipated ES6.
  *
  * //requires ses.makeCallerHarmless, ses.makeArgumentsHarmless
- * //requires ses.verifyStrictProgram
+ * //requires ses.verifyStrictFunctionBody
  * //optionally requires ses.mitigateSrcGotchas
  * //provides ses.startSES ses.resolveOptions, ses.securableWrapperSrc
  * //provides ses.makeCompiledExpr
@@ -179,6 +179,11 @@ var cajaVM;
  *        skip this last freezing step. With confined-ES5, each frame
  *        is considered a separate protection domain rather that each
  *        individual object.
+ * @param limitSrcCharset ::F([string])
+ *        Given the sourceText for a strict Program, return a record with an
+ *        'error' field if it is not in the limited character set that SES
+ *        should process; otherwise, return a record with a 'programSrc' field
+ *        containing the original program text with Unicode escapes.
  * @param atLeastFreeVarNames ::F([string], Record(true))
  *        Given the sourceText for a strict Program,
  *        atLeastFreeVarNames(sourceText) returns a Record whose
@@ -206,6 +211,7 @@ var cajaVM;
  */
 ses.startSES = function(global,
                         whitelist,
+                        limitSrcCharset,
                         atLeastFreeVarNames,
                         extensions) {
   "use strict";
@@ -282,6 +288,12 @@ ses.startSES = function(global,
    * options and their effects.
    */
   function resolveOptions(opt_mitigateOpts) {
+    if (typeof opt_mitigateOpts === 'string') {
+      // transient deprecated adaptor only, since there used to be an
+      // opt_sourceUrl parameter in many of the parameter positions
+      // now accepting an opt_mitigateOpts
+      opt_mitigateOpts = { sourceUrl: opt_mitigateOpts };
+    }
     function resolve(opt, defaultOption) {
       return (opt_mitigateOpts && opt in opt_mitigateOpts) ?
         opt_mitigateOpts[opt] : defaultOption;
@@ -289,28 +301,25 @@ ses.startSES = function(global,
     var options = {};
     if (opt_mitigateOpts === undefined || opt_mitigateOpts === null) {
       options.maskReferenceError = true;
+      options.parseFunctionBody = true;
 
-      options.parseProgram = true;
       options.rewriteTopLevelVars = true;
       options.rewriteTopLevelFuncs = true;
       options.rewriteFunctionCalls = true;
       options.rewriteTypeOf = false;
+      options.forceParseAndRender = false;
+      options.sourceUrl = void 0;
     } else {
       options.maskReferenceError = resolve('maskReferenceError', true);
+      options.parseFunctionBody = resolve('parseFunctionBody', false);
 
-      if (opt_mitigateOpts.parseProgram === false) {
-        ses.logger.warn(
-          'Refused to disable parsing for safety on all browsers');
-      }
-      // TODO(jasvir): This should only be necessary if a to-be-added
-      // test in repairES5.js indicates that this platform has the
-      // Function constructor bug
-      options.parseProgram = true;
       options.rewriteTopLevelVars = resolve('rewriteTopLevelVars', true);
       options.rewriteTopLevelFuncs = resolve('rewriteTopLevelFuncs', true);
       options.rewriteFunctionCalls = resolve('rewriteFunctionCalls', true);
       options.rewriteTypeOf = resolve('rewriteTypeOf',
                                       !options.maskReferenceError);
+      options.forceParseAndRender = resolve('forceParseAndRender', false);
+      options.sourceUrl = resolve('sourceUrl', void 0);
     }
     return options;
   }
@@ -325,11 +334,11 @@ ses.startSES = function(global,
    * {@code options} are assumed to already be canonicalized by {@code
    * resolveOptions} and says which mitigations to apply.
    */
-  function mitigateSrcGotchas(programSrc, options) {
+  function mitigateSrcGotchas(funcBodySrc, options) {
     var safeError;
     if ('function' === typeof ses.mitigateSrcGotchas) {
       try {
-        return ses.mitigateSrcGotchas(programSrc, options, ses.logger);
+        return ses.mitigateSrcGotchas(funcBodySrc, options, ses.logger);
       } catch (error) {
         // Shouldn't throw, but if it does, the exception is potentially from a
         // different context with an undefended prototype chain; don't allow it
@@ -343,7 +352,7 @@ ses.startSES = function(global,
         throw safeError;
       }
     } else {
-      return '' + programSrc;
+      return '' + funcBodySrc;
     }
   }
 
@@ -514,14 +523,21 @@ ses.startSES = function(global,
      *
      * <p>To verify that exprSrc parses as a strict Expression, we
      * verify that, when surrounded by parens and followed by ";", it
-     * parses as a strict Program, and that when surrounded with
-     * double parens it still parses as a strict Program. We place a
-     * newline before the terminal token so that a "//" comment
-     * cannot suppress the close paren or parens.
+     * parses as a strict FunctionBody, and that when surrounded with
+     * double parens it still parses as a strict FunctionBody. We
+     * place a newline before the terminal token so that a "//"
+     * comment cannot suppress the close paren or parens.
+     *
+     * <p>We never check without parens because not all
+     * expressions, for example "function(){}", form valid expression
+     * statements. We check both single and double parens so there's
+     * no exprSrc text which can close the left paren(s), do
+     * something, and then provide open paren(s) to balance the final
+     * close paren(s). No one such attack will survive both tests.
      */
     function verifyStrictExpression(exprSrc) {
-      ses.verifyStrictProgram('( ' + exprSrc + '\n);');
-      ses.verifyStrictProgram('(( ' + exprSrc + '\n));');
+      ses.verifyStrictFunctionBody('( ' + exprSrc + '\n);');
+      ses.verifyStrictFunctionBody('(( ' + exprSrc + '\n));');
     }
 
     /**
@@ -687,13 +703,8 @@ ses.startSES = function(global,
      *     accurate wrt the original source text, and except for the
      *     first line, all the column numbers are accurate too.
      * </ul>
-     *
-     * <p>TODO(erights): Find out if any platforms have any way to
-     * associate a file name and line number with eval'ed text, so
-     * that we can do something useful with the optional {@code
-     * opt_sourcePosition} to better support debugging.
      */
-    function securableWrapperSrc(exprSrc, opt_sourcePosition) {
+    function securableWrapperSrc(exprSrc) {
       verifyStrictExpression(exprSrc);
 
       return '(function() { ' +
@@ -761,8 +772,8 @@ ses.startSES = function(global,
      *     cases. This is a less correct but faster alternative to
      *     rewriteTypeOf that also works when source mitigations are
      *     not available.
-     * <li>parseProgram: check the program is syntactically
-     *     valid.
+     * <li>parseFunctionBody: check the src is syntactically
+     *     valid as a function body.
      * <li>rewriteTopLevelVars: transform vars to properties of global
      *     object. Defaults to true.
      * <li>rewriteTopLevelFuncs: transform funcs to properties of
@@ -779,12 +790,6 @@ ses.startSES = function(global,
      *     maskReferenceError.
      * </ul>
      *
-     * <p>Currently for security, parseProgram is always true and
-     * cannot be unset because of the <a href=
-     * "https://code.google.com/p/v8/issues/detail?id=2470"
-     * >Function constructor bug</a>. TODO(jasvir): On platforms not
-     * suffering from this bug, parseProgram should default to false.
-     *
      * <p>When SES is provided primitively, it should provide an
      * analogous {@code compileProgram} function that accepts a
      * Program and return a function that evaluates it to the
@@ -797,7 +802,7 @@ ses.startSES = function(global,
      * {@code with} together with RegExp matching to intercept free
      * variable access without parsing.
      */
-    function compileExpr(src, opt_mitigateOpts, opt_sourcePosition) {
+    function compileExpr(src, opt_mitigateOpts) {
       // Force src to be parsed as an expr
       var exprSrc = '(' + src + '\n)';
 
@@ -809,7 +814,7 @@ ses.startSES = function(global,
       if (exprSrc[exprSrc.length - 1] === ';') {
         exprSrc = exprSrc.substr(0, exprSrc.length - 1);
       }
-      var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
+      var wrapperSrc = securableWrapperSrc(exprSrc);
       var wrapper = unsafeEval(wrapperSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
       var result = makeCompiledExpr(wrapper, freeNames, options);
@@ -827,18 +832,13 @@ ses.startSES = function(global,
      * endowments are the only source of eval-time abilities for the
      * expr to cause effects.
      */
-    function confine(exprSrc,
-                     opt_endowments,
-                     opt_mitigateOpts,
-                     opt_sourcePosition) {
+    function confine(exprSrc, opt_endowments, opt_mitigateOpts) {
       var imports = makeImports();
       if (opt_endowments) {
         copyToImports(imports, opt_endowments);
       }
       def(imports);
-      return compileExpr(exprSrc,
-                         opt_mitigateOpts,
-                         opt_sourcePosition)(imports);
+      return compileExpr(exprSrc, opt_mitigateOpts)(imports);
     }
 
 
@@ -903,16 +903,19 @@ ses.startSES = function(global,
      * {@code getRequirements} above would also have to extract these
      * from the text to be compiled.
      */
-    function compileModule(modSrc, opt_mitigateOpts, opt_sourcePosition) {
+    function compileModule(modSrc, opt_mitigateOpts) {
       // Note the EOL after modSrc to prevent trailing line comment in modSrc
       // eliding the rest of the wrapper.
       var options = resolveOptions(opt_mitigateOpts);
+      if (!('programSrc' in limitSrcCharset(modSrc))) {
+        options.forceParseAndRender = true;
+      }
       var exprSrc =
           '(function() {' +
           mitigateSrcGotchas(modSrc, options) +
           '\n}).call(this)';
       // Follow the pattern in compileExpr
-      var wrapperSrc = securableWrapperSrc(exprSrc, opt_sourcePosition);
+      var wrapperSrc = securableWrapperSrc(exprSrc);
       var wrapper = unsafeEval(wrapperSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
       var moduleMaker = makeCompiledExpr(wrapper, freeNames, options);
@@ -936,7 +939,7 @@ ses.startSES = function(global,
       params = params.join(',');
       // Note the EOL after modSrc to prevent trailing line comment in body
       // eliding the rest of the wrapper.
-      ses.verifyStrictProgram(body);
+      ses.verifyStrictFunctionBody(body);
       var exprSrc = '(function(' + params + '\n){' + body + '\n})';
       return compileExpr(exprSrc)(sharedImports);
     }

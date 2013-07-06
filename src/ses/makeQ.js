@@ -14,8 +14,28 @@
 
 /**
  * @fileoverview Implements the EcmaScript
- * http://wiki.ecmascript.org/doku.php?id=strawman:concurrency
+ * http://wiki.ecmascript.org/doku.php?id=strawman:promises
  * strawman, securely when run on a Caja or SES platform.
+ *
+ * <p>This differs from previous incarnations of Q by supporting Tab
+ * Atkin's AP2 variant, approximately as documented at
+ * http://wiki.ecmascript.org/lib/exe/fetch.php?id=strawman%3Apromises&media=strawman:promisesvsmonads2.pdf
+ * The main differences are
+ * <ul>
+ * <li>We allow promises to be fulfilled with promises or thenables,
+ *     without mandatory flattening or assimilation.
+ * <li>We only do recursive unwrapping (both flattening and
+ *     assimilation) for the argument to the first callback of .then,
+ *     and thus for all the implied things defined in terms of
+ *     .then. By using only such thenish operations, all promises seem
+ *     to be flat.
+ * <li>We only do brand-based one-level flattening for the callback
+ *     results of .then and in the resolve function.
+ * <li>We only do brand-based one-level coercion in the Q function.
+ * <li>The addition of several new operations which can perceive and
+ *     manipulate promises-to-promises and promises-to-thenables: .of,
+ *     .fulfill, .flatMap.
+ * </ul>
  *
  * //provides ses.makeQ
  * @author Mark S. Miller, based on earlier designs by Tyler Close,
@@ -56,6 +76,9 @@ var ses;
     * pre-harmony iterators, at least for pre-harmony testing. Take a
     * look at how Kris Kowal's q library handles this.
     *
+    * <p>TODO(erights): Update to the new Harmony iterators, which no
+    * longer use StopIteration.
+    *
     * <p>See
     * http://wiki.ecmascript.org/doku.php?id=harmony:iterators#stopiteration
     */
@@ -66,9 +89,29 @@ var ses;
 
    /**
     * Makes a Q object which uses the provided setTimeout function to
-    * postpone events to future turns. If the optional opt_nextTick
-    * function is provided, makeQ uses it instead of
-    * setTimeout(thunk, 0) to postpone to the next available turn.
+    * postpone events to future turns.
+    *
+    * <p>If the optional opt_nextTick function is provided, makeQ uses
+    * it instead of setTimeout(thunk, 0) to postpone to the next
+    * available turn. Note that opt_nextTick can postpone to a
+    * microturn or a promise-framework-provided synthetic turn, as
+    * long as it satisfies the core requirements:
+    * <ul>
+    * <li>A turn only happens when no user stack frames are on the stack
+    * <li>Turns scheduled by calls to the same opt_nextTick must be executed
+    *     in the same order as these calls.
+    * </ul>
+    * The provided setTimeout function has similar requirements:
+    * <ul>
+    * <li>A turn only happens when no user stack frames are on the stack
+    * <li>Turns scheduled by calls to the same setTimeout with
+    *     non-decreasing delay numbers must be executed in the same
+    *     order as these calls.
+    * </ul>
+    * opt_nextTick, if provided, must have no lower priority than
+    * setTimeout. A call to opt_nextTick must not be executed later
+    * than a call to setTimeout(..., 0) would have been required to
+    * execute.
     */
    function makeQ(setTimeout, opt_nextTick) {
 

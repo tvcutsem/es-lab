@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /**
- * @fileoverview Monkey patch an almost ES5 platforms into a closer
+ * @fileoverview Monkey patch almost ES5 platforms into a closer
  * emulation of full <a href=
  * "http://code.google.com/p/es-lab/wiki/SecureableES5">Secureable
  * ES5</a>.
@@ -29,7 +29,7 @@
  *
  * //provides ses.statuses, ses.ok, ses.is, ses.makeDelayedTamperProof
  * //provides ses.makeCallerHarmless, ses.makeArgumentsHarmless
- * //provides ses.verifyStrictProgram
+ * //provides ses.verifyStrictFunctionBody
  * //provides ses.severities, ses.maxSeverity, ses.updateMaxSeverity
  * //provides ses.maxAcceptableSeverityName, ses.maxAcceptableSeverity
  * //provides ses.acceptableProblems
@@ -220,7 +220,7 @@ var ses;
     if (severityName) {
       var sev = ses.severities[severityName];
       if (sev && typeof sev.level === 'number' &&
-        sev.level >= ses.severities.SAFE.level &&
+        sev.level >= ses.severities.MAGICAL_UNICORN.level &&
         sev.level < ses.severities.NOT_SUPPORTED.level) {
         // do nothing
       } else {
@@ -647,6 +647,31 @@ var ses;
   };
 
   /**
+   * Fails if {@code funcBodySrc} does not parse as a strict
+   * FunctionBody.
+   *
+   * <p>ses.verifyStrictFunctionBody is exported from repairES5
+   * because the best way to perform this verification on a given
+   * platform depends on whether the platform's Function constructor
+   * <a href=
+   * "https://code.google.com/p/google-caja/issues/detail?id=1616"
+   * >fails to verify that its body parses as a FunctionBody</a>. If
+   * it does, repairES5 could have repaired the Function constructor
+   * itself, but chooses not to, since its main client, startSES, has
+   * to wrap and replace the Function constructor anyway.
+   *
+   * <p>On platforms not suffering from this bug,
+   * ses.verifyStrictFunctionBody just calls the original Function
+   * constructor to do this verification (See
+   * simpleVerifyStrictFunctionBody). Otherwise, we repair
+   * ses.verifyStrictFunctionBody
+   *
+   * <p>See verifyStrictFunctionBodyByEvalThrowing and
+   * verifyStrictFunctionBodyByParsing.
+   */
+  ses.verifyStrictFunctionBody = simpleVerifyStrictFunctionBody;
+
+  /**
    * The unsafe* variables hold precious values that must not escape
    * to untrusted code. When {@code eval} is invoked via {@code
    * unsafeEval}, this is a call to the indirect eval function, not
@@ -656,46 +681,84 @@ var ses;
   var UnsafeFunction = Function;
 
   /**
-   * <p>We use Crock's trick of simply passing {@code programSrc} to
+   * <p>We use Crock's trick of simply passing {@code funcBodySrc} to
    * the original {@code Function} constructor, which will throw a
-   * SyntaxError if it does not parse as a FunctionBody. We used to
-   * use Ankur's trick (need link) which is more correct, in that it
-   * will throw if {@code programSrc} does not parse as a Program
-   * production, which is the relevant question. However, the
-   * difference -- whether return statements are accepted -- does
-   * not matter for our purposes. And testing reveals that Crock's
-   * trick executes over 100x faster on V8.
+   * SyntaxError if it does not parse as a FunctionBody.
    */
-  function simpleVerifyStrictProgram(programSrc) {
-    try {
-      UnsafeFunction('"use strict";' + programSrc);
-    } catch (err) {
-      // debugger; // Useful for debugging -- to look at programSrc
-      throw err;
-    }
+  function simpleVerifyStrictFunctionBody(funcBodySrc) {
+    UnsafeFunction('"use strict";' + funcBodySrc);
   }
 
   /**
-   * Fails if {@code programSrc} does not parse as a strict Program
-   * production, or, almost equivalently, as a FunctionBody
-   * production.
+   * If Crock's trick is not safe, then
+   * repair_CANT_SAFELY_VERIFY_SYNTAX may replace it with Ankur's trick,
+   * depending on whether the platform also suffers from bugs that
+   * would block it. See repair_CANT_SAFELY_VERIFY_SYNTAX for details.
+   *
+   * <p>To use Ankur's trick to check a FunctionBody rather than a
+   * program, we use the trick in comment 7 at
+   * https://code.google.com/p/google-caja/issues/detail?id=1616#c7
+   * The criticism of it in comment 8 is blocked by Ankur's trick,
+   * given the absence of the other bugs that
+   * repair_CANT_SAFELY_VERIFY_SYNTAX checks in order to decide.
+   *
+   * <p>Testing once revealed that Crock's trick
+   * (simpleVerifyStrictFunctionBody) executed over 100x faster on V8.
    */
-  ses.verifyStrictProgram = simpleVerifyStrictProgram;
+  function verifyStrictFunctionBodyByEvalThrowing(funcBodySrc) {
+    try {
+      unsafeEval('"use strict"; throw "not a SyntaxError 1";' +
+                 '(function(){' + funcBodySrc +'\n});');
+    } catch (outerErr) {
+      if (outerErr === 'not a SyntaxError 1') {
+        try {
+          unsafeEval('throw "not a SyntaxError 2";' +
+                     '(function(){{' + funcBodySrc +'\n}})');
+        } catch (innerErr) {
+          if (innerErr === 'not a SyntaxError 2') {
+            // Presumably, if we got here, funcBodySrc parsed as a strict
+            // function  body but was not executed, and {funcBodySrc}
+            // parsed as a  non-strict function body but was not executed.
+            // We try it again non-strict so that body level nested
+            // function declarations will not get rejected. Accepting
+            // them is beyond the ES5 spec, but is known to happen in
+            // all implementations.
+            return;
+          }
+          if (innerErr instanceof SyntaxError) {
+            // This case is likely sympomatic of an attack. But the
+            // attack is thwarted and so need not be reported as
+            // anything other than the SyntaxError it is.
+            throw innerErr;
+          }
+        }
+      }
+      if (outerErr instanceof SyntaxError) {
+        throw outerErr;
+      }
+    }
+    throw new TypeError('Unexpected verification outcome');
+  }
 
   /**
-   * Only applicable if ses.mitigateSrcGotchas is available.
+   * Due to https://code.google.com/p/v8/issues/detail?id=2728
+   * we can't assume that SyntaxErrors are always early. If they're
+   * not, then even Ankur's trick doesn't work, so we resort to a full
+   * parse.
+   *
+   * <p>Only applicable if ses.mitigateSrcGotchas is available.
    */
-  function verifyStrictProgramByParsing(programSrc) {
+  function verifyStrictFunctionBodyByParsing(funcBodySrc) {
     var safeError;
     var newSrc;
     try {
-      newSrc = ses.mitigateSrcGotchas(programSrc,
-                                      {parseProgram: true},
+      newSrc = ses.mitigateSrcGotchas(funcBodySrc,
+                                      {parseFunctionBody: true},
                                       ses.logger);
     } catch (error) {
-      // Shouldn't throw, but if it does, the exception is potentially from a
-      // different context with an undefended prototype chain; don't allow it
-      // to leak out.
+      // Shouldn't throw, but if it does, the exception is potentially
+      // from a different context with an undefended prototype chain;
+      // don't allow it to leak out.
       try {
         safeError = new Error(error.message);
       } catch (metaerror) {
@@ -704,28 +767,9 @@ var ses;
       }
       throw safeError;
     }
-    if (newSrc !== programSrc) {
+    if (newSrc !== funcBodySrc) {
       throw new SyntaxError("Failed to parse program");
     }
-  }
-
-  /**
-   * Fall back to Ankur's trick if the Function constructor does not
-   * verify syntax. See *CANT_SAFELY_VERIFY_SYNTAX.
-   */
-  function verifyStrictProgramByEvalThrowing(programSrc) {
-    try {
-      unsafeEval('"use strict"; throw "not a SyntaxError";' + programSrc);
-    } catch (err) {
-      if (err == "not a SyntaxError") {
-        // Presumably, if we got here, programSrc parsed but was not executed.
-        return;
-      }
-      if (err instanceof SyntaxError) {
-        throw err;
-      }
-    }
-    throw new TypeError('Unexpected verification outcome');
   }
 
   /**
@@ -1820,19 +1864,38 @@ var ses;
 
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=1624
+   * regarding variables.
    *
    * <p>Both a direct strict eval operator and an indirect strict eval
    * function must not leak top level declarations in the string being
    * evaluated into their containing context.
    */
-  function test_STRICT_EVAL_LEAKS_GLOBALS() {
-    (1,eval)('"use strict"; var ___global_test_variable___ = 88;');
+  function test_STRICT_EVAL_LEAKS_GLOBAL_VARS() {
+    unsafeEval('"use strict"; var ___global_test_variable___ = 88;');
     if ('___global_test_variable___' in global) {
       delete global.___global_test_variable___;
       return true;
     }
     return false;
   }
+
+  /**
+   * Detects http://code.google.com/p/v8/issues/detail?id=1624
+   * regarding functions
+   *
+   * <p>Both a direct strict eval operator and an indirect strict eval
+   * function must not leak top level declarations in the string being
+   * evaluated into their containing context.
+   */
+  function test_STRICT_EVAL_LEAKS_GLOBAL_FUNCS() {
+    unsafeEval('"use strict"; function ___global_test_func___(){}');
+    if ('___global_test_func___' in global) {
+      delete global.___global_test_func___;
+      return true;
+    }
+    return false;
+  }
+
   /**
    * Detects http://code.google.com/p/v8/issues/detail?id=2396
    *
@@ -2359,33 +2422,70 @@ var ses;
   }
 
   /**
+   * See https://code.google.com/p/v8/issues/detail?id=2728
+   * and https://code.google.com/p/google-caja/issues/detail?id=1616
+   */
+  function test_SYNTAX_ERRORS_ARENT_ALWAYS_EARLY() {
+    try {
+      unsafeEval('throw "not a SyntaxError"; return;');
+    } catch (err) {
+      if (err === 'not a SyntaxError') {
+        return true;
+      } else if (err instanceof SyntaxError) {
+        return false;
+      }
+      return 'Unexpected error: ' + err;
+    }
+    return 'Invalid text parsed';
+  }
+
+  /**
    * See https://code.google.com/p/google-caja/issues/detail?id=1616
    */
   function test_CANT_SAFELY_VERIFY_SYNTAX() {
     try {
+      // See explanation above the call to ses.verifyStrictFunctionBody
+      // below.
       Function("/*", "*/){");
     } catch (err) {
       if (err instanceof SyntaxError) { return false; }
       return 'Unexpected error: ' + err;
     }
-    if (ses.verifyStrictProgram === simpleVerifyStrictProgram) {
-      // We test this horrible way first, since the test we'd like to use
-      // below, when tried with simpleVerifyStrictProgram even on Safari
-      // 6.0.4 WebKit Nightly r151081 (at the time of this writing)
-      // causes the *browser* to crash.
-      // See https://bugs.webkit.org/show_bug.cgi?id=106160
+    if (ses.verifyStrictFunctionBody === simpleVerifyStrictFunctionBody) {
       return true;
     }
 
-    ses.__bogus__ = false;
     try {
-      ses.verifyStrictProgram('}), (ses.__bogus__ = true), (function(){');
-    } catch (err) {
-      if (err instanceof SyntaxError) { return false; }
-      return 'Unexpected error: ' + err;
+      ses.CANT_SAFELY_VERIFY_SYNTAX_canary = false;
+      try {
+        // This test, when tried with simpleVerifyStrictFunctionBody even on
+        // Safari 6.0.4 WebKit Nightly r151081 (the latest at the time
+        // of this writing) causes the *browser* to crash.
+        //
+        // So to avoid crashing the browser, we first check if the
+        // Function constructor itself suffers from the same
+        // underlying problem, by making a similar check that does not
+        // crash the Safari browser. See
+        // https://bugs.webkit.org/show_bug.cgi?id=106160
+        // If this check shows that the underlying problem is absent
+        // then there's no problem. If it is present and no repair to
+        // ses.verifyStrictFunctionBody has yet been attempted, then we
+        // know we have the problem even without the following check.
+        //
+        // Even on Safari, if the repair has been attempted, then we
+        // do fall through to the following check, since it will no
+        // longer crash the browser.
+        ses.verifyStrictFunctionBody(
+          '}), (ses.CANT_SAFELY_VERIFY_SYNTAX_canary = true), (function(){');
+      } catch (err) {
+        if (err instanceof SyntaxError) { return false; }
+        return 'Unexpected error: ' + err;
+      }
+      if (ses.CANT_SAFELY_VERIFY_SYNTAX_canary === true) { return true; }
+      return 'Unexpected verification failure';
+    } finally {
+      delete ses.CANT_SAFELY_VERIFY_SYNTAX_canary;
     }
-    if (ses.__bogus__ === true) { return true; }
-    return 'Unexpected verification failure';
   }
 
   ////////////////////// Repairs /////////////////////
@@ -2437,16 +2537,15 @@ var ses;
    */
   function repair_DEFINE_PROPERTY() {
     function repairedDefineProperty(base, name, desc) {
-      if (typeof base === 'function' &&
-          name === 'prototype' &&
+      if (name === 'prototype' &&
+          typeof base === 'function' &&
           'value' in desc) {
         try {
           base.prototype = desc.value;
         } catch (err) {
           logger.warn('prototype fixup failed', err);
         }
-      }
-      if (!isExtensible(base) && name === '__proto__') {
+      } else if (name === '__proto__' && !isExtensible(base)) {
         throw TypeError('Cannot redefine __proto__ on a non-extensible object');
       }
       return unsafeDefProp(base, name, desc);
@@ -3283,22 +3382,29 @@ var ses;
 
   /**
    * Note that this repair does not repair the Function constructor
-   * itself at this stage. Rather, it repairs ses.verifyStrictProgram,
+   * itself at this stage. Rather, it repairs ses.verifyStrictFunctionBody,
    * which startSES uses to build a safe Function constructor from the
    * unsafe one.
    *
-   * <p>TODO(kpreid): Is it worth using ses.mitigateSrcGotchas for
-   * this case if available, or is it better to just always use
-   * Ankur's trick (verifyStrictProgramByEvalThrowing) for this?
+   * <p>The repair strategy depends on what other bugs this platform
+   * suffers from. In the absence of SYNTAX_ERRORS_ARENT_ALWAYS_EARLY,
+   * STRICT_EVAL_LEAKS_GLOBAL_VARS, and
+   * STRICT_EVAL_LEAKS_GLOBAL_FUNCS, then we can use the cheaper
+   * verifyStrictFunctionBodyByEvalThrowing. Otherwise, if a parser is
+   * available, we use verifyStrictFunctionBodyByParsing. Otherwise we
+   * fail to repair.
    */
   function repair_CANT_SAFELY_VERIFY_SYNTAX() {
-    if ('function' === typeof ses.mitigateSrcGotchas) {
-      ses.verifyStrictProgram = verifyStrictProgramByParsing;
+    if (!test_SYNTAX_ERRORS_ARENT_ALWAYS_EARLY() &&
+        !test_STRICT_EVAL_LEAKS_GLOBAL_VARS() &&
+        !test_STRICT_EVAL_LEAKS_GLOBAL_FUNCS()) {
+      ses.verifyStrictFunctionBody = verifyStrictFunctionBodyByEvalThrowing;
+    } else if (typeof ses.mitigateSrcGotchas === 'function') {
+      ses.verifyStrictFunctionBody = verifyStrictFunctionBodyByParsing;
     } else {
-      ses.verifyStrictProgram = verifyStrictProgramByEvalThrowing;
+      // No known repairs under these conditions
     }
   }
-
 
   ////////////////////// Kludge Records /////////////////////
   //
@@ -3836,11 +3942,22 @@ var ses;
       tests: [] // TODO(erights): Add to test262
     },
     {
-      id: 'STRICT_EVAL_LEAKS_GLOBALS',
+      id: 'STRICT_EVAL_LEAKS_GLOBAL_VARS',
       description: 'Strict eval function leaks variable definitions',
-      test: test_STRICT_EVAL_LEAKS_GLOBALS,
+      test: test_STRICT_EVAL_LEAKS_GLOBAL_VARS,
       repair: void 0,
-      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
+      sections: ['10.4.2.1'],
+      tests: ['S10.4.2.1_A1']
+    },
+    {
+      id: 'STRICT_EVAL_LEAKS_GLOBAL_FUNCS',
+      description: 'Strict eval function leaks function definitions',
+      test: test_STRICT_EVAL_LEAKS_GLOBAL_FUNCS,
+      repair: void 0,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: false,
       urls: ['http://code.google.com/p/v8/issues/detail?id=1624'],
       sections: ['10.4.2.1'],
@@ -4102,9 +4219,23 @@ var ses;
       tests: []  // TODO(kpreid): add to test262
     },
     {
+      id: 'SYNTAX_ERRORS_ARENT_ALWAYS_EARLY',
+      description: 'SyntaxErrors aren\'t always early',
+      test: test_SYNTAX_ERRORS_ARENT_ALWAYS_EARLY,
+      repair: void 0,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: ['https://code.google.com/p/v8/issues/detail?id=2728',
+             'https://code.google.com/p/google-caja/issues/detail?id=1616'],
+      sections: [],
+      tests: []
+    },
+    {
       id: 'CANT_SAFELY_VERIFY_SYNTAX',
       description: 'Function constructor does not verify syntax',
       test: test_CANT_SAFELY_VERIFY_SYNTAX,
+      // This does not repair Function but only ses.verifyStrictFunctionBody
+      // (see above)
       repair: repair_CANT_SAFELY_VERIFY_SYNTAX,
       preSeverity: severities.NOT_ISOLATED,
       canRepair: true,
@@ -4215,7 +4346,8 @@ var ses;
         postSeverity = severities.NEW_SYMPTOM;
       }
 
-      if (postSeverity !== severities.SAFE && disposition(kludge).permit) {
+      if (postSeverity.level > severities.SAFE.level
+          && disposition(kludge).permit) {
         logger.warn('Problem ignored by configuration (' +
             postSeverity.description + '): ' + kludge.description);
       } else {
