@@ -1988,6 +1988,10 @@ var ses;
       if (x.length !== 2) { return 'Unexpected modification of frozen array'; }
       if (x[0] === 1 && x[1] === 2) { return false; }
     }
+    if (x.length === 1 && x[0] === 1 && x[1] === 2) {
+      // Behavior seen on Opera 12.15
+      return true;
+    }
     if (x.length !== 2) {
       return 'Unexpected silent modification of frozen array';
     }
@@ -4109,7 +4113,8 @@ var ses;
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: false,  // repair is useful but inadequate
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=784892',
-             'https://bugzilla.mozilla.org/show_bug.cgi?id=674195'],
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=674195',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=789897'],
       sections: [],
       tests: []
     },
