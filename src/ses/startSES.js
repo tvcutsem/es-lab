@@ -289,9 +289,11 @@ ses.startSES = function(global,
    */
   function resolveOptions(opt_mitigateOpts) {
     if (typeof opt_mitigateOpts === 'string') {
-      // transient deprecated adaptor only, since there used to be an
-      // opt_sourceUrl parameter in many of the parameter positions
-      // now accepting an opt_mitigateOpts
+      // TODO: transient deprecated adaptor only, since there used to
+      // be an opt_sourceUrl parameter in many of the parameter
+      // positions now accepting an opt_mitigateOpts. Once we are
+      // confident that we no longer have live clients that count on
+      // the  old behavior, remove this kludge.
       opt_mitigateOpts = { sourceUrl: opt_mitigateOpts };
     }
     function resolve(opt, defaultOption) {
@@ -302,16 +304,17 @@ ses.startSES = function(global,
     if (opt_mitigateOpts === undefined || opt_mitigateOpts === null) {
       options.maskReferenceError = true;
       options.parseFunctionBody = true;
+      options.sourceUrl = void 0;
 
       options.rewriteTopLevelVars = true;
       options.rewriteTopLevelFuncs = true;
       options.rewriteFunctionCalls = true;
       options.rewriteTypeOf = false;
       options.forceParseAndRender = false;
-      options.sourceUrl = void 0;
     } else {
       options.maskReferenceError = resolve('maskReferenceError', true);
       options.parseFunctionBody = resolve('parseFunctionBody', false);
+      options.sourceUrl = resolve('sourceUrl', void 0);
 
       options.rewriteTopLevelVars = resolve('rewriteTopLevelVars', true);
       options.rewriteTopLevelFuncs = resolve('rewriteTopLevelFuncs', true);
@@ -319,7 +322,6 @@ ses.startSES = function(global,
       options.rewriteTypeOf = resolve('rewriteTypeOf',
                                       !options.maskReferenceError);
       options.forceParseAndRender = resolve('forceParseAndRender', false);
-      options.sourceUrl = resolve('sourceUrl', void 0);
     }
     return options;
   }
@@ -493,7 +495,19 @@ ses.startSES = function(global,
   // we make the global object be the Window which inherits Object.prototype,
   // and is not a security risk since the properties are ambiently available.
 
-  var MAX_NAT = Math.pow(2, 53);
+  var MAX_NAT = Math.pow(2, 53) - 1;
+
+  /**
+   * Is allegenNum a number in the contiguous range of exactly and
+   * unambiguously representable natural numbers (non-negative integers)?
+   *
+   * <p>See <a href=
+   * "https://code.google.com/p/google-caja/issues/detail?id=1801"
+   * >Issue 1801: Nat must include at most (2**53)-1</a>
+   * and <a href=
+   * "https://mail.mozilla.org/pipermail/es-discuss/2013-July/031716.html"
+   * >Allen Wirfs-Brock's suggested phrasing</a> on es-discuss.
+   */
   function Nat(allegedNum) {
     if (typeof allegedNum !== 'number') {
       throw new RangeError('not a number');

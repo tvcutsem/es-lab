@@ -27,11 +27,13 @@
  * create it, use it, and delete it all within this module. But we
  * need to lie to the linter since it can't tell.
  *
+ * //requires ses.mitigateSrcGotchas
+ * //requires ses.acceptableProblems, ses.maxAcceptableSeverityName
  * //provides ses.statuses, ses.ok, ses.is, ses.makeDelayedTamperProof
  * //provides ses.makeCallerHarmless, ses.makeArgumentsHarmless
  * //provides ses.verifyStrictFunctionBody
  * //provides ses.severities, ses.maxSeverity, ses.updateMaxSeverity
- * //provides ses.maxAcceptableSeverityName, ses.maxAcceptableSeverity
+ * //provides ses.maxAcceptableSeverity
  * //provides ses.acceptableProblems
  *
  * @author Mark S. Miller
@@ -298,7 +300,7 @@ var ses;
    * verification-only strategy and fall back to ES5/3 translation.
    */
   ses.ok = function ok(maxSeverity) {
-    if ("string" === typeof maxSeverity) {
+    if ('string' === typeof maxSeverity) {
       maxSeverity = ses.severities[maxSeverity];
     }
     if (!maxSeverity) {
@@ -637,7 +639,7 @@ var ses;
   var makeDelayedTamperProofCalled = false;
   ses.makeDelayedTamperProof = function makeDelayedTamperProof() {
     if (makeDelayedTamperProofCalled) {
-      throw "makeDelayedTamperProof() must only be called once.";
+      throw 'makeDelayedTamperProof() must only be called once.';
     }
     var tamperProof = makeTamperProof();
     strictForEachFn(needToTamperProof, tamperProof);
@@ -726,7 +728,7 @@ var ses;
             return;
           }
           if (innerErr instanceof SyntaxError) {
-            // This case is likely sympomatic of an attack. But the
+            // This case is likely symptomatic of an attack. But the
             // attack is thwarted and so need not be reported as
             // anything other than the SyntaxError it is.
             throw innerErr;
@@ -746,7 +748,20 @@ var ses;
    * not, then even Ankur's trick doesn't work, so we resort to a full
    * parse.
    *
-   * <p>Only applicable if ses.mitigateSrcGotchas is available.
+   * <p>Only applicable if ses.mitigateSrcGotchas is available. To
+   * accommodate constraints of Caja's initialization order, we do not
+   * capture or invoke ses.mitigateSrcGotchas as the time repairES5 is
+   * run. Rather we only test for its presence at repair time in order
+   * to decide what verifier to use. We only use ses.mitigateSrcGotchas
+   * later when we actually verify eval'ed code, and at that time we
+   * use the current binding of ses.mitigateSrcGotchas.
+   *
+   * <p>Thus, clients (like Caja) that know they will be making a
+   * real ses.mitigateSrcGotchas available after repair can
+   * pre-install a placeholder function that, if accidentally invoked,
+   * throws an error to complain that it was not replaced by the real
+   * one. Then, sometime prior to the first verification, the client
+   * should overwrite ses.mitigateSrcGotchas with the real one.
    */
   function verifyStrictFunctionBodyByParsing(funcBodySrc) {
     var safeError;
@@ -767,8 +782,22 @@ var ses;
       }
       throw safeError;
     }
+
+    // The following equality test is due to the peculiar API of
+    // ses.mitigateSrcGotchas, which (TODO(jasvir)) should probably be
+    // fixed instead. However, currently, since we're asking it only to
+    // parse and not to rewrite, if the parse is successful it will
+    // return its argument src string, which is fine.
+    //
+    // If the parse is not successful, ses.mitigateSrcGotchas
+    // indicates the problem <i>only</i> by returning a string which,
+    // if evaluated, would throw a SyntaxError with a non-informative
+    // message. Since, in this case, these are the only possibilities,
+    // we happen to be able to check for the error case by seeing
+    // simply that the string returned is not the src string passed
+    // in.
     if (newSrc !== funcBodySrc) {
-      throw new SyntaxError("Failed to parse program");
+      throw new SyntaxError('Failed to parse program');
     }
   }
 
@@ -1258,9 +1287,8 @@ var ses;
    * should not be boxed
    */
   function test_FOREACH_COERCES_THISOBJ() {
-    "use strict";
     var needsWrapping = true;
-    [1].forEach(function(){ needsWrapping = ("string" != typeof this); }, "f");
+    [1].forEach(function(){ needsWrapping = ('string' != typeof this); }, 'f');
     return needsWrapping;
   }
 
@@ -1303,7 +1331,7 @@ var ses;
       // likely not a browser environment
       return false;
     }
-    var f = document.createElement("form");
+    var f = document.createElement('form');
     try {
       Object.defineProperty(f, 'foo', {
         get: getter,
@@ -1859,7 +1887,7 @@ var ses;
     if (x.__proto__ === Object.prototype) {
       return true;
     }
-    return "Read-only proto was changed in a strange way.";
+    return 'Read-only proto was changed in a strange way.';
   }
 
   /**
@@ -1906,7 +1934,7 @@ var ses;
     var x;
     x = (function a() {
       function a() {}
-      eval("");
+      eval('');
       return a;
     });
     // x() should be the internal function a(), not itself
@@ -1989,7 +2017,7 @@ var ses;
       if (x[0] === 1 && x[1] === 2) { return false; }
     }
     if (x.length === 1 && x[0] === 1 && x[1] === 2) {
-      // Behavior seen on Opera 12.15
+      // Behavior seen on Opera 12.10 mobile and 12.15
       return true;
     }
     if (x.length !== 2) {
@@ -2399,8 +2427,7 @@ var ses;
   }
 
   function getThrowTypeError() {
-    "use strict";
-    return Object.getOwnPropertyDescriptor(getThrowTypeError, "arguments").get;
+    return Object.getOwnPropertyDescriptor(getThrowTypeError, 'arguments').get;
   }
 
   /**
@@ -2450,13 +2477,21 @@ var ses;
     try {
       // See explanation above the call to ses.verifyStrictFunctionBody
       // below.
-      Function("/*", "*/){");
+      Function('/*', '*/){');
     } catch (err) {
       if (err instanceof SyntaxError) { return false; }
       return 'Unexpected error: ' + err;
     }
     if (ses.verifyStrictFunctionBody === simpleVerifyStrictFunctionBody) {
       return true;
+    }
+
+    if (ses.verifyStrictFunctionBody === verifyStrictFunctionBodyByParsing) {
+      // This might not yet be the real one. If
+      // repair_CANT_SAFELY_VERIFY_SYNTAX decides to verify by
+      // parsing, then we're just going to assume here that it is safe
+      // since we might not yet have access to the real parser to test.
+      return false;
     }
 
     try {
@@ -2774,12 +2809,12 @@ var ses;
       value: function(callback, thisArg) {
         var T, k;
         if (this === null || this === undefined) {
-          throw new TypeError("this is null or not defined");
+          throw new TypeError('this is null or not defined');
         }
         var O = Object(this);
         var len = O.length >>> 0;
-        if (objToString.call(callback) !== "[object Function]") {
-          throw new TypeError(callback + " is not a function");
+        if (objToString.call(callback) !== '[object Function]') {
+          throw new TypeError(callback + ' is not a function');
         }
         T = thisArg;
         k = 0;
@@ -2898,7 +2933,7 @@ var ses;
             !fullDesc.configurable) {
           logger.warn(complaint);
           throw new TypeError(complaint
-              + " (Object: " + base + " Property: " + name + ")");
+              + ' (Object: ' + base + ' Property: ' + name + ')');
         }
         return defProp(base, name, fullDesc);
       }
@@ -2913,8 +2948,8 @@ var ses;
                          '"' + name + '" already non-configurable');
           }
           logger.warn(complaint);
-          throw new TypeError(complaint + " (During sealing. Object: "
-              + base + " Property: " + name + ")");
+          throw new TypeError(complaint + ' (During sealing. Object: '
+              + base + ' Property: ' + name + ')');
         }
       });
     }
@@ -4057,7 +4092,7 @@ var ses;
       repair: repair_PUSH_IGNORES_SEALED,
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: true,
-      urls: [],
+      urls: ['https://code.google.com/p/v8/issues/detail?id=2711'],
       sections: ['15.2.3.9'],
       tests: [] // TODO(erights): Add to test262
     },
@@ -4068,7 +4103,7 @@ var ses;
       repair: repair_PUSH_IGNORES_SEALED,
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: true,
-      urls: [],
+      urls: ['https://code.google.com/p/v8/issues/detail?id=2711'],
       sections: ['15.2.3.9'],
       tests: [] // TODO(erights): Add to test262
     },

@@ -108,7 +108,7 @@ var ses;
          '["' + freeNames.join('", "') + '"], ' +
          JSON.stringify(options) + ')));';
 
-     if (options.sourceUrl) {
+     if (options.sourceUrl === void 0) {
        // See http://code.google.com/p/google-caja/wiki/SES#typeof_variable
        if (typeof global.URI !== 'undefined' && URI.parse) {
          var parsed = URI.parse(String(options.sourceUrl));
