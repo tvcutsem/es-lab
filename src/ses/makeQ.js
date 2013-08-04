@@ -19,7 +19,7 @@
  *
  * <p>This will differ from previous incarnations of Q by supporting Tab
  * Atkin's AP2 variant, approximately as documented at
- * http://wiki.ecmascript.org/lib/exe/fetch.php?id=strawman%3Apromises&media=strawman:promisesvsmonads2.pdf
+ * http://wiki.ecmascript.org/lib/exe/fetch.php?media=strawman:promisesvsmonads2.pdf
  * The main differences are
  * <ul>
  * <li>We allow promises to be fulfilled with promises or thenables,
@@ -27,8 +27,8 @@
  * <li>We only do recursive unwrapping (both flattening and
  *     assimilation) for the argument to the first callback of .then,
  *     and thus for all the implied things defined in terms of
- *     .then. By using only such thenish operations, all promises seem
- *     to be flat.
+ *     .then. When using only such thenish operations, all promises
+ *     seem to be flat.
  * <li>We only do brand-based one-level flattening for the callback
  *     results of .then and in the resolve function.
  * <li>We only do brand-based one-level coercion in the Q function.
@@ -144,15 +144,29 @@ var ses;
      }
 
      /**
+      * Get the "best" handler equivalent to this handler, shortening
+      * "became" chains in the process.
+      *
+      * <p>See
+      * http://en.wikipedia.org/wiki/Disjoint-set_data_structure
+      * but note that the algorithm here, because it serves a
+      * different purpose, does not do the rank-based balancing and so
+      * does not have as good a worst case amortized complexity
+      * measure.
+      */
+     function unionFind(handler) {
+       if (!handler.became) { return handler; }
+       return handler.became = unionFind(handler.became);
+     }
+
+     /**
       * Get the "best" handler associated with this promise, shortening
       * "became" chains in the process.
       */
      function handle(prom) {
        var handler = handlers.get(prom);
        if (!handler || !handler.became) { return handler; }
-       while (handler.became) {
-         handler = handler.became;
-       }
+       handler = unionFind(handler);
        handlers.set(prom, handler);
        return handler;
      }
