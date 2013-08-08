@@ -18,7 +18,7 @@
 
 
 var makeMint = () => {
-  var m = WeakMap();
+  var m = new WeakMap();
   var makePurse = () => mint(0);
   
   var mint = balance => {

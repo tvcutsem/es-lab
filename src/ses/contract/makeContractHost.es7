@@ -83,7 +83,7 @@
  * </pre>
  */
 var makeContractHost = () => {
-  var m = WeakMap();
+  var m = new WeakMap();
 
   return def({
     setup: contractSrc => {

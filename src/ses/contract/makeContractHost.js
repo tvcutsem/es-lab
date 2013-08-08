@@ -83,7 +83,7 @@ define('contract/makeContractHost', ['Q'], function(Q) {
    * </pre>
    */
   var makeContractHost = function() {
-    var m = WeakMap();
+    var m = new WeakMap();
 
     return def({
       setup: function(contractSrc) {
