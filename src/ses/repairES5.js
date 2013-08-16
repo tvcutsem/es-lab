@@ -2181,6 +2181,10 @@ var ses;
       // Behavior seen on Opera 12.10 mobile and 12.15
       return true;
     }
+    if (x.length === 1 && x[0] === 1 && !('1' in x)) {
+      // Behavior seen on Safari 5.1.9 (6534.59.8)
+      return true;
+    }
     if (x.length !== 2) {
       return 'Unexpected silent modification of frozen array';
     }
@@ -2272,6 +2276,10 @@ var ses;
       } catch (e) {
         // Don't care whether or not push throws; if it does not mutate and
         // does not throw, that's a bug but not this bug.
+      }
+      if (x.length === 3 && x[0] === 1 && x[1] === 2 && x[2] === 3) {
+        // Behavior seen on Safari 5.1.9 (6534.59.8)
+        return true;
       }
       if (x[0] !== 1 || x[1] !== 2 || x[2] !== undefined) {
         return 'Unexpected modification to elements of array';
@@ -4294,8 +4302,8 @@ var ses;
       preSeverity: severities.NOT_ISOLATED,
       canRepair: true,
       urls: ['https://code.google.com/p/google-caja/issues/detail?id=1616',
-	     'http://code.google.com/p/v8/issues/detail?id=2470',
-	     'https://bugs.webkit.org/show_bug.cgi?id=106160'],
+             'http://code.google.com/p/v8/issues/detail?id=2470',
+             'https://bugs.webkit.org/show_bug.cgi?id=106160'],
       sections: ['15.3.2.1'],
       tests: []
     },
