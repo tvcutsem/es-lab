@@ -561,9 +561,9 @@ var ses;
 
 
        Q(nextSlotP).then(function(nextSlot) {
-         become(handle(remotePromise, Q(nextSlot.value)));
+         become(handle(remotePromise), Q(nextSlot.value));
        }, function(reason) {
-         become(handle(remotePromise, rejected(reason)));
+         become(handle(remotePromise), rejected(reason));
        }).end();
 
        return remotePromise;
