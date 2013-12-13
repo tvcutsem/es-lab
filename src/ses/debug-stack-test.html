@@ -1,0 +1,102 @@
+<!DOCTYPE HTML>
+
+<!--
+ - Copyright (C) 2011 Google Inc.
+ -
+ - Licensed under the Apache License, Version 2.0 (the "License");
+ - you may not use this file except in compliance with the License.
+ - You may obtain a copy of the License at
+ -
+ -      http://www.apache.org/licenses/LICENSE-2.0
+ -
+ - Unless required by applicable law or agreed to in writing, software
+ - distributed under the License is distributed on an "AS IS" BASIS,
+ - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ - See the License for the specific language governing permissions and
+ - limitations under the License.
+-->
+
+<html>
+<head>
+<title>Testing SES/5</title>
+<style type="text/css">
+.log { color: black; }
+.info { color: navy; }
+.warn { color: olive; }
+.error { color: maroon; }
+.reports-text p { margin-top: 0.05em; margin-bottom: 0.05em; }
+.console-text p { margin-top: 0.05em; margin-bottom: 0.05em; }
+</style>
+</head>
+<body>
+<div id="reports" class="reports-text"><b>Repair Reports</b></div>
+<div id="console" class="console-text"><hr></div>
+<pre id="debugStackTest">debugStackTest...</pre>
+
+<script src="useHTMLLogger.js"></script>
+<script>
+  function gebi(id) {
+    return document.getElementById(id);
+  };
+  useHTMLLogger(gebi("reports"), gebi("console"));
+  // This severity is too high for any use other than development.
+  ses.maxAcceptableSeverityName = 'NEW_SYMPTOM';
+</script>
+<script src="logger.js"></script>
+<script src="repairES5.js"></script>
+<script src="WeakMap.js"></script>
+<script src="debug.js"></script>
+<script src="StringMap.js"></script>
+<script src="whitelist.js"></script>
+<script src="atLeastFreeVarNames.js"></script>
+<script src="startSES.js"></script>
+<script src="ejectorsGuardsTrademarks.js"></script>
+<script src="hookupSESPlus.js"></script>
+
+<script>
+  function appendText(node, text) {
+    "use strict";
+    node.appendChild(document.createTextNode(text));
+  }
+  (function() {
+    "use strict";
+    var debugStackTest = gebi('debugStackTest');
+    if (!ses.ok()) {
+      appendText(debugStackTest, 'cancelled');
+      return;
+    }
+
+    var src = 'function foo() { throw Error("bar"); }\n' +
+          'function foo2() { foo(); }\n' +
+          'function foo3() { foo2(); }\n' +
+          'foo3();\n';
+
+    var stack = 'nothing caught';
+    try {
+      cajaVM.eval(src);
+    } catch (er) {
+      try {
+        stack = 'succeeded:\n' + ses.getStack(er);
+      } catch (er2) {
+        stack = 'cannot getStack: ' + er2;
+      }
+    }
+    appendText(debugStackTest, stack);
+  })();
+</script>
+
+<p>
+Using <span id="browserName">unknown</span>
+ <span id="browserVersion">unknown</span>
+on <span id="browserOS">unknown</span>
+<script src="detect.js"></script>
+<script>
+  (function(){
+    "use strict"
+    gebi('browserName').textContent = BrowserDetect.browser;
+    gebi('browserVersion').textContent = BrowserDetect.version;
+    gebi('browserOS').textContent = BrowserDetect.OS;
+  })();
+</script>
+</body>
+</html>
