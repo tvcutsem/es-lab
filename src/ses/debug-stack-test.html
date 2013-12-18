@@ -31,7 +31,6 @@
 <body>
 <div id="reports" class="reports-text"><b>Repair Reports</b></div>
 <div id="console" class="console-text"><hr></div>
-<pre id="debugStackTest">debugStackTest...</pre>
 
 <script src="useHTMLLogger.js"></script>
 <script>
@@ -60,28 +59,24 @@
   }
   (function() {
     "use strict";
-    var debugStackTest = gebi('debugStackTest');
     if (!ses.ok()) {
-      appendText(debugStackTest, 'cancelled');
       return;
     }
 
-    var src = 'function foo() { throw Error("bar"); }\n' +
-          'function foo2() { foo(); }\n' +
-          'function foo3() { foo2(); }\n' +
-          'foo3();\n';
+    var src = 
+        'function foo() { throw Error("Expand me to see stack"); }\n' +
+        'function foo2() { foo(); }\n' +
+        'function foo3() { foo2(); }\n' +
+        'foo3();\n';
 
     var stack = 'nothing caught';
     try {
       cajaVM.eval(src);
     } catch (er) {
-      try {
-        stack = 'succeeded:\n' + ses.getStack(er);
-      } catch (er2) {
-        stack = 'cannot getStack: ' + er2;
-      }
+      ses.logger.info('Expected error: ', er);
+      return;
     }
-    appendText(debugStackTest, stack);
+    ses.logger.error('Missing expected error');
   })();
 </script>
 
