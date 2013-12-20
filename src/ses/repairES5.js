@@ -2859,15 +2859,17 @@ var ses;
    * in strict code.
    *
    * A strict nested function definition should either be a syntax
-   * error, as ES5 specifies, or it should stay local to its block, as
-   * ES6 specifies. Within that block, an assignment to that
-   * function's name should assign to the block-local variable defined
-   * by that function.
+   * error, as
+   * http://wiki.ecmascript.org/doku.php?id=conventions:recommendations_for_implementors
+   * recommends, or it should stay local to its block, as ES6
+   * specifies. Within that block, an assignment to that function's
+   * name should assign to the block-local variable defined by that
+   * function.
    */
   function test_NESTED_STRICT_FUNCTIONS_LEAK() {
     try {
       return unsafeEval(
-        '(function() {\n' +
+          '(function() {\n' +
           '  "use strict";\n' +
           '  var a = function good() { return false; };\n' +
           '  try {\n' +
@@ -4567,7 +4569,8 @@ var ses;
       repair: void 0,
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: false,
-      urls: ['https://connect.microsoft.com/IE/feedback/details/811124/ie11-javascript-function-scoping-is-weird-with-respect-to-functions-and-try-catch'],
+      urls: ['https://connect.microsoft.com/IE/feedback/details/811124/ie11-javascript-function-scoping-is-weird-with-respect-to-functions-and-try-catch',
+             'http://wiki.ecmascript.org/doku.php?id=conventions:recommendations_for_implementors'],
       sections: [],
       tests: []  // hopefully will be in ES6 tests
     }

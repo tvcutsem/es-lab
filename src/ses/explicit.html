@@ -165,15 +165,16 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
         'function foo3() { foo2(); }\n' +
         'foo3();\n';
 
-    var stack = 'nothing caught';
     try {
       cajaVM.eval(src);
-    } catch (er) {
-      ses.logger.info('Expected error: ', er);
+    } catch (err) {
+      // The ses.logger installed by useHTMLLogger.js uses ses.getStack
+      // to display the stack, if any, associated with the err argument.
+      ses.logger.info('Expected error to test ses.getStack API: ', err);
       return;
     }
     ses.logger.error('Missing expected error');
-  })();
+  }());
 </script>
 
 <script src="makeQ.js"></script>
