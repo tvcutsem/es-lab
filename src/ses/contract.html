@@ -18,7 +18,7 @@
 
 <html>
 <head>
-<title>Testing SES/5</title>
+<title>Testing SES</title>
 <style type="text/css">
 .log { color: black; }
 .info { color: navy; }
@@ -36,6 +36,9 @@
 <div id="scriptTest">scriptTest...</div>
 <div id="amdLoaderTest">AMD loader test...</div>
 <div id="contractTest">contract test...</div>
+
+<!-- for communication with automated test driver -->
+<div id="testSignals" class="testcontainer"></div>
 
 <script src="useHTMLLogger.js"></script>
 <script>
@@ -56,9 +59,6 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
   default maxAcceptableSeverityName.
 -->
 <script src="logger.js"></script>
-<script>
-  //ses.startTimer('tamper proofing: contract after logger');
-</script>
 <script src="repairES5.js"></script>
 <script src="WeakMap.js"></script>
 <script src="debug.js"></script>
@@ -70,10 +70,26 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
 <script src="hookupSESPlus.js"></script>
 
 <script>
+  var testSignals = gebi('testSignals');
+  var testExpected = 4;
+  var testPasses = 0;
+  testSignals.className += ' readytotest';
+  function testDone() {
+    "use strict";
+    if (testPasses === testExpected) {
+      document.title += ' - all tests passed';
+    }
+    testSignals.className += ' done';
+  }
+</script>
+
+<script>
   var amdLoaderTest = gebi('amdLoaderTest');
   var contractTest = gebi('contractTest');
-  function appendText(node, text) {
+
+  function appendResult(node, text) {
     "use strict";
+    if (/^succeeded/.test(text)) { testPasses += 1; }
     node.appendChild(document.createTextNode(text));
   }
   (function() {
@@ -82,21 +98,24 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     var moduleTest = gebi('moduleTest');
     var scriptTest = gebi('scriptTest');
     if (!ses.ok()) {
-      appendText(exprTest, 'cancelled');
-      appendText(moduleTest, 'cancelled');
-      appendText(scriptTest, 'cancelled');
-      appendText(amdLoaderTest, 'cancelled');
-      appendText(contractTest, 'cancelled');
+      appendResult(exprTest, 'cancelled');
+      appendResult(moduleTest, 'cancelled');
+      appendResult(scriptTest, 'cancelled');
+      appendResult(amdLoaderTest, 'cancelled');
+      appendResult(contractTest, 'cancelled');
+      testDone();
       return;
     }
 
     var imports = cajaVM.makeImports();
     cajaVM.copyToImports(imports, {window: 6});
-    // NOTE: do not cajaVM.def(imports) for this test
+    // NOTE: do not cajaVM.def(imports) for this test, since the test
+    // itself may modify some of the state reachable from imports that
+    // def would freeze.
 
     var output = cajaVM.eval('3+4') * cajaVM.compileExpr('window')(imports);
     var text1 = output === 42 ? 'succeeded' : 'failed: ' + output;
-    appendText(exprTest, text1);
+    appendResult(exprTest, text1);
 
     // Test ability to bootstrap support for a limited form of
     // CommonJS modules.
@@ -109,7 +128,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       require: function(id) { return { foo: 88, id: id}; },
       exports: exported
     });
-    // NOTE: do not cajaVM.def(imports) for this test
+    // NOTE: do not cajaVM.def(imports) for this test. See above
 
     var returned = modMaker(imports);
     var did = JSON.stringify(cajaVM.def({
@@ -123,7 +142,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       "returned": 77
     }, void 0, ' ');
     var text2 = did === should ? 'succeeded' : 'failed: ' + did;
-    appendText(moduleTest, text2);
+    appendResult(moduleTest, text2);
 
     // Tests the ability to do inter-module linkage as scripts
     // traditionally did, by modification of (virtual) shared
@@ -132,7 +151,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     cajaVM.compileModule('this.x = 88;')(imports);
     var text3 = cajaVM.compileExpr('x')(imports) === 88 ?
       'succeeded' : 'failed';
-    appendText(scriptTest, text3);
+    appendResult(scriptTest, text3);
 
   })();
 </script>
@@ -150,15 +169,16 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
         'function foo3() { foo2(); }\n' +
         'foo3();\n';
 
-    var stack = 'nothing caught';
     try {
       cajaVM.eval(src);
-    } catch (er) {
-      ses.logger.info('Expected error: ', er);
+    } catch (err) {
+      // The ses.logger installed by useHTMLLogger.js uses ses.getStack
+      // to display the stack, if any, associated with the err argument.
+      ses.logger.info('Expected error to test ses.getStack API: ', err);
       return;
     }
     ses.logger.error('Missing expected error');
-  })();
+  }());
 </script>
 
 <script src="makeQ.js"></script>
@@ -238,9 +258,11 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     Q(amdTestP).then(function(amdTest) {
       var amdTestStatus = amdTest === 'this is a test' ?
         'succeeded' : 'failed, unexpected: ' + amdTest;
-      appendText(amdLoaderTest, amdTestStatus);
+      appendResult(amdLoaderTest, amdTestStatus);
+      testDone();
     }, function(reason) {
-      appendText(amdLoaderTest, 'failed: ' + reason);
+      appendResult(amdLoaderTest, 'failed: ' + reason);
+      testDone();
     }).end();
 
     var cTestP = Q(loaderP).send(void 0, 'contractTest');
@@ -254,9 +276,9 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       }
       */
       //ses.stopTimer();
-      appendText(contractTest, 'ok: ' + cTest);
+      appendResult(contractTest, 'ok: ' + cTest);
     }, function(reason) {
-      appendText(contractTest, 'oops: ' + reason);
+      appendResult(contractTest, 'oops: ' + reason);
     }).end();
 
   })();

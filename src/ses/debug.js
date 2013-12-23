@@ -152,19 +152,21 @@ var ses;
        ses.getCWStack = getCWStack;
      })();
 
-   } else if (global.opera) {
-     (function() {
-       // Since pre-ES5 browsers are disqualified, we can assume a
-       // minimum of Opera 11.60.
-     })();
+//   } else if (global.opera) {
+//     (function() {
+//       // Since pre-ES5 browsers are disqualified, we can assume a
+//       // minimum of Opera 11.60.
+//     })();
 
 
-   } else if (new Error().stack) {
+//   } else if (new Error().stack) {
+   } else {
      (function() {
        var FFFramePattern = (/^([^@]*)@(.*?):?(\d*)$/);
 
        // stacktracejs.com suggests that this indicates FF. Really?
        function getCWStack(err) {
+         if (!(err instanceof Error)) { return void 0; }
          var stack = err.stack;
          if (!stack) { return void 0; }
          var lines = stack.split('\n');
@@ -190,10 +192,17 @@ var ses;
        ses.getCWStack = getCWStack;
      })();
 
-   } else {
-     (function() {
-       // Including Safari and IE10.
-     })();
+//   } else {
+//     (function() {
+//       // Including Safari and IE10.
+//       function getCWStack(err) {
+//         if (err instanceof Error) {
+//           return { calls: [] };
+//         }
+//         return void 0;
+//       }
+//       ses.getCWStack = getCWStack;
+//     })();
 
    }
 
@@ -224,9 +233,18 @@ var ses;
    function getStack(err) {
      if (err !== Object(err)) { return void 0; }
      var cwStack = ses.getCWStack(err);
-     if (!cwStack) { return void 0; }
-     var result = ses.stackString(cwStack);
-     if (err instanceof Error) { result = err + '\n' + result; }
+     var result;
+     if (cwStack) {
+       result = ses.stackString(cwStack);
+     } else {
+       return void 0;
+     }
+     if (err instanceof Error) {
+       result = err + '\n' + result;
+       if ('stack' in err && typeof err.stack === 'string') {
+         result += '\n.stack:\n' + err.stack;
+       }
+     }
      return result;
    };
    ses.getStack = getStack;
