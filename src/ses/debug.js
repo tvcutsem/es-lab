@@ -163,7 +163,7 @@ var ses;
    } else {
      (function() {
        var FFFramePattern = (/^([^@]*)@(.*?):?(\d*)$/);
-       var IEFramePattern = (/^\s*at\s+(.*?)\s*\((.*):(\d*):(\d*)\)$/);
+       var IEFramePattern = (/^\s*at\s+([^(]*)\s*\((.*?):(\d*):(\d*)\)$/);
        var JSCFramePattern = (/^([^@]*?)@?([^@]*?):?(\d*)$/);
 
        function getCWStack(err) {
