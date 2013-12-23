@@ -162,21 +162,34 @@ var ses;
 //   } else if (new Error().stack) {
    } else {
      (function() {
-       var FFFramePattern = (/^(?:\s*at\s+)?([^@]*)@(.*?):?(\d*)$/);
+       var FFFramePattern = (/^([^@]*)@(.*?):?(\d*)$/);
+       var JSCFramePattern = (/^([^@]*?)@?([^@]*?):?(\d*)$/);
+       var IEFramePattern = (/^(?:\s*at\s+)?(.*?)\s*\((.*):(\d*):(\d*)\)$/);
 
-       // stacktracejs.com suggests that this indicates FF. Really?
        function getCWStack(err) {
          if (!(err instanceof Error)) { return void 0; }
          var stack = err.stack;
          if (!stack) { return void 0; }
          var lines = stack.split('\n');
          var frames = lines.map(function(line) {
-           var match = FFFramePattern.exec(line);
-           if (match) {
+           var match;
+           if ((match = FFFramePattern.exec(line))) {
              return {
                name: match[1].trim() || '?',
                source: match[2].trim() || '?',
                span: [[+match[3]]]
+             };
+           } else if ((match = JSCFramePattern.exec(line))) {
+             return {
+               name: match[1].trim() || '?',
+               source: match[2].trim() || '?',
+               span: [[+match[3]]]
+             };
+           } else if ((match = IEFramePattern.exec(line))) {
+             return {
+               name: match[1].trim() || '?',
+               source: match[2].trim() || '?',
+               span: [[+match[3],+match[4]]]
              };
            } else {
              return {
