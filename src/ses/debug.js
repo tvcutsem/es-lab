@@ -171,6 +171,9 @@ var ses;
          var stack = err.stack;
          if (!stack) { return void 0; }
          var lines = stack.split('\n');
+         if ((/^\w*Error:/).test(lines[0])) {
+           lines = lines.slice(1);
+         }
          var frames = lines.map(function(line) {
            var match;
            if ((match = FFFramePattern.exec(line))) {
