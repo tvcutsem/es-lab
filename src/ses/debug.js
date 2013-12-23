@@ -162,7 +162,7 @@ var ses;
 //   } else if (new Error().stack) {
    } else {
      (function() {
-       var FFFramePattern = (/^([^@]*)@(.*?):?(\d*)$/);
+       var FFFramePattern = (/^([^@(]*)(?:\([^@)]*\))?@(.*?):?(\d*)$/);
        var IEFramePattern = (/^\s*at\s+([^(]*)\s*\((.*?):(\d*):(\d*)\)$/);
        var JSCFramePattern = (/^([^@]*?)@?([^@]*?):?(\d*)$/);
 
