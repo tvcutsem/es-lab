@@ -152,24 +152,48 @@ var ses;
        ses.getCWStack = getCWStack;
      })();
 
-//   } else if (global.opera) {
-//     (function() {
-//       // Since pre-ES5 browsers are disqualified, we can assume a
-//       // minimum of Opera 11.60.
-//     })();
-
-
-//   } else if (new Error().stack) {
    } else {
      (function() {
+       // Each of these patterns should have the first capture group
+       // be the function name, and the second capture group be the
+       // source URL together with position information. Afterwards,
+       // the lineColPattern will pull apart these source position
+       // components. On all, we assume the function name, if any, has
+       // no colon (":"), at-sign ("@"), or open paren ("("), as each
+       // of these are used to recognize other parts of a debug line.
+
+       // Seen on FF: The function name is sometimes followed by
+       // argument descriptions enclosed in parens, which we
+       // ignore. Then there is always an at-sign followed by possibly
+       // empty source position.
        var FFFramePattern =  (/^\s*([^:@(]*)\s*(?:\(.*\))?@(.*?)$/);
+       // Seen on IE: The line begins with " at ", as on v8, which we
+       // ignore. Then the function name, then the source position
+       // enclosed in parens.
        var IEFramePattern =  (/^\s*(?:at\s+)?([^:@(]*)\s*\((.*?)\)$/);
+       // Seem on Safari (JSC): The name optionally followed by an
+       // at-sign and source position information. This is like FF,
+       // except that the at-sign and source position info may
+       // together be absent.
        var JSCFramePatt1 =   (/^\s*([^:@(]*)\s*(?:@(.*?))?$/);
+       // Also seen on Safari (JSC): Just the source position info by
+       // itself, with no preceding function name. The source position
+       // always seems to contain at least a colon, which is how we
+       // decide that it is a source position rather than a function
+       // name. The pattern here is a bit more flexible, in that it
+       // will accept a function name preceding the source position
+       // and separated by whitespace.
        var JSCFramePatt2 =   (/^\s*?([^:@(]*?)\s*?(.*?)$/);
 
+       // List the above patterns in priority order, where the first
+       // matching pattern is the one used for any one stack line.
        var framePatterns = [FFFramePattern, IEFramePattern,
                             JSCFramePatt1, JSCFramePatt2];
 
+       // If the source position ends in either one or two
+       // colon-digit-sequence suffixes, then the first of these are
+       // the line number, and the second, if present, is the column
+       // number.
        var lineColPattern = (/^(.*?)(?::(\d+)(?::(\d+))?)?$/);
 
        function getCWStack(err) {
@@ -213,19 +237,6 @@ var ses;
 
        ses.getCWStack = getCWStack;
      })();
-
-//   } else {
-//     (function() {
-//       // Including Safari and IE10.
-//       function getCWStack(err) {
-//         if (err instanceof Error) {
-//           return { calls: [] };
-//         }
-//         return void 0;
-//       }
-//       ses.getCWStack = getCWStack;
-//     })();
-
    }
 
    /**
@@ -259,13 +270,16 @@ var ses;
      if (cwStack) {
        result = ses.stackString(cwStack);
      } else {
-       return void 0;
+       if (err instanceof Error &&
+           'stack' in err &&
+           typeof (result = err.stack) === 'string') {
+         // already in result
+       } else {
+         return void 0;
+       }
      }
      if (err instanceof Error) {
        result = err + '\n' + result;
-       if ('stack' in err && typeof err.stack === 'string') {
-         result += '\n.stack:\n' + err.stack;
-       }
      }
      return result;
    };
