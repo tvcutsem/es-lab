@@ -162,9 +162,15 @@ var ses;
 //   } else if (new Error().stack) {
    } else {
      (function() {
-       var FFFramePattern = (/^([^@(]*)(?:\([^@)]*\))?@(.*?):?(\d*)$/);
-       var IEFramePattern = (/^\s*at\s+([^(]*)\s*\((.*?):(\d*):(\d*)\)$/);
-       var JSCFramePattern = (/^([^@]*?)@?([^@]*?):?(\d*)$/);
+       var FFFramePattern =  (/^\s*([^:@(]*)\s*(?:\(.*\))?@(.*?)$/);
+       var IEFramePattern =  (/^\s*(?:at\s+)?([^:@(]*)\s*\((.*?)\)$/);
+       var JSCFramePatt1 =   (/^\s*([^:@(]*)\s*(?:@(.*?))?$/);
+       var JSCFramePatt2 =   (/^\s*?([^:@(]*?)\s*?(.*?)$/);
+
+       var framePatterns = [FFFramePattern, IEFramePattern,
+                            JSCFramePatt1, JSCFramePatt2];
+
+       var lineColPattern = (/^(.*?)(?::(\d+)(?::(\d+))?)?$/);
 
        function getCWStack(err) {
          if (!(err instanceof Error)) { return void 0; }
@@ -175,32 +181,32 @@ var ses;
            lines = lines.slice(1);
          }
          var frames = lines.map(function(line) {
-           var match;
-           if ((match = FFFramePattern.exec(line))) {
-             return {
-               name: match[1].trim() || '?',
-               source: match[2].trim() || '?',
-               span: [[+match[3]]]
-             };
-           } else if ((match = IEFramePattern.exec(line))) {
-             return {
-               name: match[1].trim() || '?',
-               source: match[2].trim() || '?',
-               span: [[+match[3],+match[4]]]
-             };
-           } else if ((match = JSCFramePattern.exec(line))) {
-             return {
-               name: match[1].trim() || '?',
-               source: match[2].trim() || '?',
-               span: [[+match[3]]]
-             };
-           } else {
-             return {
-               name: line.trim() || '?',
-               source: '?',
-               span: []
-             };
-           }
+           var name = line.trim();
+           var source = '?';
+           var span = [];
+           framePatterns.some(function(framePattern) {
+             var match = framePattern.exec(line);
+             if (match) {
+               name = match[1] || '?';
+               source = match[2] || '?';
+               var sub = lineColPattern.exec(source);
+               source = sub[1] || '?';
+               if (sub[2]) {
+                 if (sub[3]) {
+                   span = [[+sub[2],+sub[3]]];
+                 } else {
+                   span = [[+sub[2]]];
+                 }
+               }
+               return true;
+             }
+             return false;
+           });
+           return {
+             name: name,
+             source: source,
+             span: span
+           };
          });
          return { calls: frames };
        }
@@ -232,9 +238,9 @@ var ses;
      var result = calls.map(function(call) {
 
        var spanString = call.span.map(function(subSpan) {
-         return subSpan.join(':');
-       }).join('::');
-       if (spanString) { spanString = ':' + spanString; }
+         return subSpan.join('%');
+       }).join('%%');
+       if (spanString) { spanString = '%' + spanString; }
 
        return '  at ' + call.name + ' (' + call.source + spanString + ')';
 
