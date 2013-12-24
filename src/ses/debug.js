@@ -238,9 +238,9 @@ var ses;
      var result = calls.map(function(call) {
 
        var spanString = call.span.map(function(subSpan) {
-         return subSpan.join('%');
-       }).join('%%');
-       if (spanString) { spanString = '%' + spanString; }
+         return subSpan.join(':');
+       }).join('::');
+       if (spanString) { spanString = ':' + spanString; }
 
        return '  at ' + call.name + ' (' + call.source + spanString + ')';
 
