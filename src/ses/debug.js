@@ -166,16 +166,16 @@ var ses;
        // argument descriptions enclosed in parens, which we
        // ignore. Then there is always an at-sign followed by possibly
        // empty source position.
-       var FFFramePattern =  (/^\s*([^:@(]*)\s*(?:\(.*\))?@(.*?)$/);
+       var FFFramePattern =  (/^\s*([^:@(]*?)\s*(?:\(.*\))?@(.*?)$/);
        // Seen on IE: The line begins with " at ", as on v8, which we
        // ignore. Then the function name, then the source position
        // enclosed in parens.
-       var IEFramePattern =  (/^\s*(?:at\s+)?([^:@(]*)\s*\((.*?)\)$/);
+       var IEFramePattern =  (/^\s*(?:at\s+)?([^:@(]*?)\s*\((.*?)\)$/);
        // Seem on Safari (JSC): The name optionally followed by an
        // at-sign and source position information. This is like FF,
        // except that the at-sign and source position info may
        // together be absent.
-       var JSCFramePatt1 =   (/^\s*([^:@(]*)\s*(?:@(.*?))?$/);
+       var JSCFramePatt1 =   (/^\s*([^:@(]*?)\s*(?:@(.*?))?$/);
        // Also seen on Safari (JSC): Just the source position info by
        // itself, with no preceding function name. The source position
        // always seems to contain at least a colon, which is how we
