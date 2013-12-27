@@ -226,6 +226,11 @@ var ses;
              }
              return false;
            });
+           if (name.indexOf('/') !== -1) {
+             name = name.replace(/[/<]/g,'');
+             var parts = name.split('/');
+             name = parts[parts.length -1];
+           }
            return {
              name: name,
              source: source,
