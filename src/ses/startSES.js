@@ -22,7 +22,7 @@
  * //requires ses.verifyStrictFunctionBody
  * //optionally requires ses.mitigateSrcGotchas
  * //provides ses.startSES ses.resolveOptions, ses.securableWrapperSrc
- * //provides ses.makeCompiledExpr
+ * //provides ses.makeCompiledExpr ses.prepareExpr
  *
  * @author Mark S. Miller,
  * @author Jasvir Nagra
@@ -291,14 +291,6 @@ ses.startSES = function(global,
    * options and their effects.
    */
   function resolveOptions(opt_mitigateOpts) {
-    if (typeof opt_mitigateOpts === 'string') {
-      // TODO: transient deprecated adaptor only, since there used to
-      // be an opt_sourceUrl parameter in many of the parameter
-      // positions now accepting an opt_mitigateOpts. Once we are
-      // confident that we no longer have live clients that count on
-      // the  old behavior, remove this kludge.
-      opt_mitigateOpts = { sourceUrl: opt_mitigateOpts };
-    }
     function resolve(opt, defaultOption) {
       return (opt_mitigateOpts && opt in opt_mitigateOpts) ?
         opt_mitigateOpts[opt] : defaultOption;
@@ -339,7 +331,7 @@ ses.startSES = function(global,
    * {@code options} are assumed to already be canonicalized by {@code
    * resolveOptions} and says which mitigations to apply.
    */
-  function mitigateSrcGotchas(funcBodySrc, options) {
+  function mitigateIfPossible(funcBodySrc, options) {
     var safeError;
     if ('function' === typeof ses.mitigateSrcGotchas) {
       if (INCREMENT_IGNORES_FROZEN) {
@@ -832,13 +824,13 @@ ses.startSES = function(global,
      * {@code with} together with RegExp matching to intercept free
      * variable access without parsing.
      */
-    function compileExpr(exprSrc, opt_mitigateOpts) {
+    function prepareExpr(exprSrc, opt_mitigateOpts) {
       // Force exprSrc to be a string that can only parse (if at all) as
       // an expression.
       exprSrc = '(' + exprSrc + '\n)';
 
       var options = resolveOptions(opt_mitigateOpts);
-      exprSrc = mitigateSrcGotchas(exprSrc, options);
+      exprSrc = mitigateIfPossible(exprSrc, options);
 
       // This is a workaround for a bug in the escodegen renderer that
       // renders expressions as expression statements
@@ -846,9 +838,35 @@ ses.startSES = function(global,
         exprSrc = exprSrc.substr(0, exprSrc.length - 1);
       }
       var wrapperSrc = securableWrapperSrc(exprSrc);
-      var wrapper = unsafeEval(wrapperSrc);
       var freeNames = atLeastFreeVarNames(exprSrc);
-      var result = makeCompiledExpr(wrapper, freeNames, options);
+
+      var suffixSrc;
+      var sourceUrl = options.sourceUrl;
+      if (sourceUrl) {
+        sourceUrl = ''+sourceUrl;
+        // TODO(erights): validate
+        suffixSrc = '\n//# sourceURL=' + sourceUrl + '\n';
+      } else {
+        suffixSrc = '';
+      }
+
+      return def({
+        options: options,
+        wrapperSrc: wrapperSrc,
+        suffixSrc: suffixSrc,
+        freeNames: freeNames
+      });
+    }
+    ses.prepareExpr = prepareExpr;
+
+    /**
+     *
+     */
+    function compileExpr(exprSrc, opt_mitigateOpts) {
+      var prep = prepareExpr(exprSrc, opt_mitigateOpts);
+
+      var wrapper = unsafeEval(prep.wrapperSrc + prep.suffixSrc);
+      var result = makeCompiledExpr(wrapper, prep.freeNames, prep.options);
       return freeze(result);
     }
 
@@ -951,7 +969,7 @@ ses.startSES = function(global,
       // modSrc from eliding the rest of the wrapper.
       var exprSrc =
           '(function() {' +
-          mitigateSrcGotchas(modSrc, options) +
+          mitigateIfPossible(modSrc, options) +
           '\n}).call(this)';
       // Follow the pattern in compileExpr
       var wrapperSrc = securableWrapperSrc(exprSrc);
