@@ -226,10 +226,18 @@ var ses;
              }
              return false;
            });
-           if (name.indexOf('/') !== -1) {
+           if (name === 'Anonymous function') {
+             // Adjust for weirdness seen on IE
+             name = '?';
+           } else if (name.indexOf('/') !== -1) {
+             // Adjust for function name weirdness seen on FF.
              name = name.replace(/[/<]/g,'');
              var parts = name.split('/');
              name = parts[parts.length -1];
+           }
+           if (source === 'Unknown script code' || source === 'eval code') {
+             // Adjust for weirdness seen on IE
+             source = '?';
            }
            return {
              name: name,
