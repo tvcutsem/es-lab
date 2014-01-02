@@ -128,6 +128,8 @@ function useHTMLLogger(reportsElement, consoleElement) {
 
        appendText(preParent, '  at ' + call.name + ' (');
        var url = call.source;
+       var urlText = call.source;
+                     
        if (/^(?:http|https|file):\/\//.test(url)) {
          var googlecodeRX = (/^http:\/\/([^.]+)\.googlecode.com\/svn\/(.*)$/);
          var urlGroups = googlecodeRX.exec(call.source);
@@ -137,14 +139,15 @@ function useHTMLLogger(reportsElement, consoleElement) {
            var spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
            if (spanGroups) {
              url += '#' + spanGroups[1];
+             urlText += ':' + spanGroups[1];
              spanString = spanGroups[2];
            }
          }
          var link = appendNew(preParent, 'a');
          link.href = url;
-         appendText(link, call.source);
+         appendText(link, urlText);
        } else {
-         appendText(preParent, call.source);
+         appendText(preParent, urlText);
        }
        appendText(preParent, spanString + ')\n');
      });
