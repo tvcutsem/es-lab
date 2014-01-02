@@ -141,7 +141,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
            }
          }
          var link = appendNew(preParent, 'a');
-         link.href = call.source;
+         link.href = url;
          appendText(link, call.source);
        } else {
          appendText(preParent, call.source);
