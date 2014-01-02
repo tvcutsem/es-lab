@@ -132,6 +132,7 @@ var ses;
         * http://code.google.com/p/causeway/source/browse/trunk/src/js/com/teleometry/causeway/purchase_example/workers/makeCausewayLogger.js
         */
        function getCWStack(err) {
+         if (Object(err) !== err) { return void 0; }
          var sst = ssts.get(err);
          if (sst === void 0 && err instanceof Error) {
            // We hope it triggers prepareStackTrace

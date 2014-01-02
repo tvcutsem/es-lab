@@ -112,6 +112,32 @@ function useHTMLLogger(reportsElement, consoleElement) {
     toggler.style.cursor = 'pointer';
   }
 
+   /**
+    * Turn a Causeway stack into a DOM rendering of a v8-like stack
+    * traceback string. Based on ses.stackString in debug.js
+    */
+   function stackDom(preParent, cwStack) {
+     var calls = cwStack.calls;
+
+     calls.forEach(function(call) {
+       var spanString = call.span.map(function(subSpan) {
+         return subSpan.join(':');
+       }).join('::');
+
+       if (spanString) { spanString = ':' + spanString; }
+
+       appendText(preParent, '  at ' + call.name + ' (');
+       if (/^(?:http|https|file):\/\//.test(call.source)) {
+         var link = appendNew(preParent, 'a');
+         link.href = call.source;
+         appendText(link, call.source);
+       } else {
+         appendText(preParent, call.source);
+       }
+       appendText(preParent, spanString + ')\n');
+     });
+   };
+
   /** modeled on textAdder */
   function makeLogFunc(parent, style) {
     return function logFunc(var_args) {
@@ -119,19 +145,23 @@ function useHTMLLogger(reportsElement, consoleElement) {
       var args = slice.call(arguments, 0);
 
       // See debug.js
+      var getCWStack = ses.getCWStack;
       var getStack = ses.getStack;
 
       for (var i = 0, len = args.length; i < len; i++) {
         var span = appendNew(p, 'span');
         appendText(span, '' + args[i]);
 
-        if (getStack) {
-          var stack = getStack(args[i]);
-          if (stack) {
-            var stackNode = appendNew(p, 'pre');
-            appendText(stackNode, stack);
-            deflate(span, [stackNode], '');
-          }
+        var cwStack;
+        var stack;
+        if (getCWStack && ((cwStack = getCWStack(args[i])))) {
+          var stackNode = appendNew(p, 'pre');
+          stackDom(stackNode, cwStack);
+          deflate(span, [stackNode], '');
+        } else if (getStack && ((stack = getStack(args[i])))) {
+          var stackNode = appendNew(p, 'pre');
+          appendText(stackNode, stack);
+          deflate(span, [stackNode], '');
         }
       }
       p.className = style;
