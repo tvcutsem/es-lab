@@ -129,7 +129,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
        appendText(preParent, '  at ' + call.name + ' (');
        var url = call.source;
        if (/^(?:http|https|file):\/\//.test(url)) {
-         var googlecodeRX = (/^http:\/\/[^.]\.googlecode.com\/svn\/(.*)$/);
+         var googlecodeRX = (/^http:\/\/([^.]+)\.googlecode.com\/svn\/(.*)$/);
          var urlGroups = googlecodeRX.exec(call.source);
          if (urlGroups) {
            url = 'https://code.google.com/p/' + urlGroups[1] +
