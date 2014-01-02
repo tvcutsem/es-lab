@@ -129,13 +129,13 @@ function useHTMLLogger(reportsElement, consoleElement) {
        appendText(preParent, '  at ' + call.name + ' (');
        var url = call.source;
        var urlText = call.source;
-                     
+
        if (/^(?:http|https|file):\/\//.test(url)) {
          var googlecodeRX = (/^http:\/\/([^.]+)\.googlecode.com\/svn\/(.*)$/);
          var urlGroups = googlecodeRX.exec(call.source);
          if (urlGroups) {
            url = 'https://code.google.com/p/' + urlGroups[1] +
-             '/source/browser/' + urlGroups[2];
+             '/source/browse/' + urlGroups[2];
            var spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
            if (spanGroups) {
              url += '#' + spanGroups[1];
