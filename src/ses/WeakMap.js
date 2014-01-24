@@ -589,6 +589,7 @@ var WeakMap;
               if (!omap) { omap = new OurWeakMap(); }
               omap.set(key, value);
             }
+            return this;
           };
         } else {
           dset = function(key, value) {
@@ -602,12 +603,14 @@ var WeakMap;
             } else {
               hmap.set(key, value);
             }
+            return this;
           };
         }
 
         function ddelete(key) {
-          hmap['delete'](key);
-          if (omap) { omap.delete___(key); }
+          var result = !!hmap['delete'](key);
+          if (omap) { return omap.delete___(key) || result; }
+          return result;
         }
 
         return Object.create(OurWeakMap.prototype, {
