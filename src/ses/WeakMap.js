@@ -22,8 +22,11 @@
  * implementation where the {@code WeakMap} specification does not
  * quite conform, run <code>repairES5.js</code> first.
  *
- * <p> Even though WeakMapModule is not global, the linter thinks it
+ * <p>Even though WeakMapModule is not global, the linter thinks it
  * is, which is why it is in the overrides list below.
+ *
+ * <p>NOTE: Before using this WeakMap emulation in a non-SES
+ * environment, see the note below about hiddenRecord.
  *
  * @author Mark S. Miller
  * @requires crypto, ArrayBuffer, Uint8Array, navigator, console
@@ -310,10 +313,32 @@ var WeakMap;
       // Weak map must brute force, as explained in doc-comment above.
       return void 0;
     }
-    var hiddenRecord = Object.create(null);
-    // For quickly verifying that this hidden record is an own property, not
-    // a hidden record from up the prototype chain.
-    hiddenRecord.key = key;
+
+    // The hiddenRecord and the key point directly at each other, via
+    // the "key" and HIDDEN_NAME properties respectively. The key
+    // field is for quickly verifying that this hidden record is an
+    // own property, not a hidden record from up the prototype chain.
+    //
+    // NOTE: Because this WeakMap emulation is meant only for systems like
+    // SES where Object.prototype is frozen without any numeric
+    // properties, it is ok to use an object literal for the hiddenRecord.
+    // This has two advantages:
+    // * It is much faster in a performance critical place
+    // * It avoids relying on Object.create(null), which had been
+    //   problematic on Chrome 28.0.1480.0. See
+    //   https://code.google.com/p/google-caja/issues/detail?id=1687
+    hiddenRecord = { key: key };
+
+    // When using this WeakMap emulation on platforms where
+    // Object.prototype might not be frozen and Object.create(null) is
+    // reliable, use the following two commented out lines instead.
+    // hiddenRecord = Object.create(null);
+    // hiddenRecord.key = key;
+
+    // Please contact us if you need this to work on platforms where
+    // Object.prototype might not be frozen and
+    // Object.create(null) might not be reliable.
+
     defProp(key, HIDDEN_NAME, {
       value: hiddenRecord,
       writable: false,
@@ -421,14 +446,23 @@ var WeakMap;
           values.push(value);
         }
       }
+      return this;
     }
 
     function delete___(key) {
       var hiddenRecord = getHiddenRecord(key);
+      var index;
       if (hiddenRecord) {
-        delete hiddenRecord[id];
+        return id in hiddenRecord && delete hiddenRecord[id];
       } else {
-        return keys.indexOf(key) >= 0;
+        index = keys.indexOf(key);
+        if (index >= 0) {
+          keys.splice(index, 1);
+          values.splice(index, 1);
+          return true;
+        } else {
+          return false;
+        }
       }
     }
 
@@ -470,7 +504,7 @@ var WeakMap;
        * previous association if present.
        */
       value: function set(key, value) {
-        this.set___(key, value);
+        return this.set___(key, value);
       },
       writable: true,
       configurable: true
