@@ -442,8 +442,15 @@ var WeakMap;
         if (index >= 0) {
           values[index] = value;
         } else {
-          keys.push(key);
-          values.push(value);
+          // Since some browsers preemptively terminate slow turns but
+          // then continue computing with presumably corrupted heap
+          // state, we here defensively get keys.length first and then
+          // use it to update both the values and keys arrays, keeping
+          // them in sync.
+          index = keys.length;
+          values[index] = value;
+          // If we crash here, values will be one longer than keys.
+          keys[index] = key;
         }
       }
       return this;
@@ -451,18 +458,37 @@ var WeakMap;
 
     function delete___(key) {
       var hiddenRecord = getHiddenRecord(key);
-      var index;
+      var index, lastIndex;
       if (hiddenRecord) {
         return id in hiddenRecord && delete hiddenRecord[id];
       } else {
         index = keys.indexOf(key);
-        if (index >= 0) {
-          keys.splice(index, 1);
-          values.splice(index, 1);
-          return true;
-        } else {
+        if (index < 0) {
           return false;
         }
+        // Since some browsers preemptively terminate slow turns but
+        // then continue computing with potentially corrupted heap
+        // state, we here defensively get keys.length first and then use
+        // it to update both the keys and the values array, keeping
+        // them in sync. We update the two with an order of assignments,
+        // such that any prefix of these assignments will preserve the
+        // key/value correspondence, either before or after the delete.
+        // Note that this needs to work correctly when index === lastIndex.
+        lastIndex = keys.length - 1;
+        keys[index] = void 0;
+        // If we crash here, there's a void 0 in the keys array, but
+        // no operation will cause a "keys.indexOf(void 0)", since
+        // getHiddenRecord(void 0) will always throw an error first.
+        values[index] = values[lastIndex];
+        // If we crash here, values[index] cannot be found here,
+        // because keys[index] is void 0.
+        keys[index] = keys[lastIndex];
+        // If index === lastIndex and we crash here, then keys[index]
+        // is still void 0, since the aliasing killed the previous key.
+        keys.length = lastIndex;
+        // If we crash here, keys will be one shorter than values.
+        values.length = lastIndex;
+        return true;
       }
     }
 
