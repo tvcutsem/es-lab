@@ -155,7 +155,7 @@ var ses;
 
    } else {
      (function() {
-       // Each of these patterns should have the first capture group
+       // Each of these FramePatterns should have the first capture group
        // be the function name, and the second capture group be the
        // source URL together with position information. Afterwards,
        // the lineColPattern will pull apart these source position
@@ -191,11 +191,21 @@ var ses;
        var framePatterns = [FFFramePattern, IEFramePattern,
                             JSCFramePatt1, JSCFramePatt2];
 
+       // Each of the LineColPatters should have the first capture
+       // group be the source URL if any, the second by the line
+       // number if any, and the third be the column number if any.
+
+       // Seen on FF Nightly 30 for execution in evaled strings
+       var FFEvalLineColPatterns = (/^(.*?) line (\d+) > eval:\d+:\d+$/);
        // If the source position ends in either one or two
        // colon-digit-sequence suffixes, then the first of these are
        // the line number, and the second, if present, is the column
        // number.
-       var lineColPattern = (/^(.*?)(?::(\d+)(?::(\d+))?)?$/);
+       var MainLineColPattern = (/^(.*?)(?::(\d+)(?::(\d+))?)?$/);
+
+       // List the above patterns in priority order, where the first
+       // matching pattern is the one used for any one stack line.
+       var lineColPatterns = [FFEvalLineColPatterns, MainLineColPattern];
 
        function getCWStack(err) {
          if (!(err instanceof Error)) { return void 0; }
@@ -216,15 +226,23 @@ var ses;
              if (match) {
                name = match[1] || '?';
                source = match[2] || '?';
-               var sub = lineColPattern.exec(source);
-               source = sub[1] || '?';
-               if (sub[2]) {
-                 if (sub[3]) {
-                   span = [[+sub[2], +sub[3]]];
-                 } else {
-                   span = [[+sub[2]]];
+               // Using .some here only because it gives us a way to escape
+               // the loop early. We do not use the results of the .some.
+               lineColPatterns.some(function(lineColPattern) {
+                 var sub = lineColPattern.exec(source);
+                 if (sub) {
+                   source = sub[1] || '?';
+                   if (sub[2]) {
+                     if (sub[3]) {
+                       span = [[+sub[2], +sub[3]]];
+                     } else {
+                       span = [[+sub[2]]];
+                     }
+                   }
+                   return true;
                  }
-               }
+                 return false;
+               });
                return true;
              }
              return false;
