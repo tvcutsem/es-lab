@@ -196,7 +196,7 @@ var ses;
        // number if any, and the third be the column number if any.
 
        // Seen on FF Nightly 30 for execution in evaled strings
-       var FFEvalLineColPatterns = (/^(.*?) line (\d+) > eval:\d+:\d+$/);
+       var FFEvalLineColPatterns = (/^(?:.*?) line \d+ > eval():(\d+):(\d+)$/);
        // If the source position ends in either one or two
        // colon-digit-sequence suffixes, then the first of these are
        // the line number, and the second, if present, is the column
