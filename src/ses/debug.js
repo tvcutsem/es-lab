@@ -38,7 +38,7 @@ var ses;
 (function debugModule(global) {
    "use strict";
 
-   if (typeof ses !== 'undefined' && ses.ok && !ses.ok()) {
+   if (typeof ses !== 'undefined' && ses.okToLoad && !ses.okToLoad()) {
      // already too broken, so give up
      return;
    }
@@ -209,6 +209,8 @@ var ses;
            var name = line.trim();
            var source = '?';
            var span = [];
+           // Using .some here only because it gives us a way to escape
+           // the loop early. We do not use the results of the .some.
            framePatterns.some(function(framePattern) {
              var match = framePattern.exec(line);
              if (match) {
@@ -218,7 +220,7 @@ var ses;
                source = sub[1] || '?';
                if (sub[2]) {
                  if (sub[3]) {
-                   span = [[+sub[2],+sub[3]]];
+                   span = [[+sub[2], +sub[3]]];
                  } else {
                    span = [[+sub[2]]];
                  }

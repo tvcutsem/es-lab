@@ -748,6 +748,19 @@ ses.startSES = function(global,
     }
     ses.securableWrapperSrc = securableWrapperSrc;
 
+    /**
+     * See <a href="http://www.ecma-international.org/ecma-262/5.1/#sec-7.3"
+     * >EcmaScript 5 Line Terminators</a>
+     */
+    var hasLineTerminator = (/[\u000A\u000D\u2028\u2029]/);
+
+    function verifyOnOneLine(text) {
+      text = ''+text;
+      if (hasLineTerminator.test(text)) {
+        throw new TypeError("Unexpected line terminator: " + text);
+      }
+      return text;
+    }
 
     /**
      * Given a wrapper function, such as the result of evaluating the
@@ -843,8 +856,24 @@ ses.startSES = function(global,
       var suffixSrc;
       var sourceUrl = options.sourceUrl;
       if (sourceUrl) {
-        sourceUrl = ''+sourceUrl;
-        // TODO(erights): validate
+        sourceUrl = verifyOnOneLine(sourceUrl);
+        // Placing the sourceURL inside a line comment at the end of
+        // the evaled string, in this format, has emerged as a de
+        // facto convention for associating the source info with this
+        // evaluation. See
+        // http://updates.html5rocks.com/2013/06/sourceMappingURL-and-sourceURL-syntax-changed
+        // http://www.html5rocks.com/en/tutorials/developertools/sourcemaps/#toc-sourceurl
+        // https://developers.google.com/chrome-developer-tools/docs/javascript-debugging#breakpoints-dynamic-javascript
+
+        // TODO(erights): Should validate that the sourceURL is a
+        // valid URL of a whitelisted protocol, where that whitelist
+        // does not include "javascript:". Not doing so at this time
+        // does not itself introduce a security vulnerability, as long
+        // as the sourceURL is all on one line, since the text only
+        // appears in a JavaScript line comment. Separate hazards may
+        // appear when the alleged URL reappears in a stack trace, but
+        // it is the responsibility of that code to handle those URLs
+        // safely.
         suffixSrc = '\n//# sourceURL=' + sourceUrl + '\n';
       } else {
         suffixSrc = '';
@@ -1723,8 +1752,11 @@ ses.startSES = function(global,
 
   ses.logger.reportMax();
 
-  if (ses.ok(ses['severities'][ses.maxAcceptableSeverityName])) {
+  if (ses.ok()) {
     // We succeeded. Enable safe Function, eval, and compile* to work.
+    // TODO(kpreid): This separate 'dirty' flag should be replaced with
+    // a problem registered with ses._repairer, so that ses.ok() itself
+    // gives the whole answer.
     dirty = false;
     ses.logger.log('initSES succeeded.');
   } else {
