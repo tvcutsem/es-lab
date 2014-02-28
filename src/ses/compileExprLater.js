@@ -97,13 +97,16 @@ var ses;
      var result = Q.defer();
      var resolverTicket = getResolverTicket(result.resolve);
 
+     // Freenames consist solely of identifier characters (\w|\$)+
+     // which do not need to be escaped further
+     var freeNamesList = prep.freeNames.length == 0 ? '[]' :
+         '["' + prep.freeNames.join('", "') + '"]';
+
      var scriptSrc =
        'ses.redeemResolver(' + resolverTicket + ')(' +
          'Object.freeze(ses.makeCompiledExpr(' +
            prep.wrapperSrc + ',\n' +
-           // Freenames consist solely of identifier characters (\w|\$)+
-           // which do not need to be escaped further
-           '["' + prep.freeNames.join('", "') + '"], ' +
+           freeNamesList + ', ' +
            JSON.stringify(prep.options) +
          '))' +
        ');' + prep.suffixSrc;

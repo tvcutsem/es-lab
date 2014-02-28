@@ -155,7 +155,7 @@ var ses;
 
    } else {
      (function() {
-       // Each of these FramePatterns should have the first capture group
+       // Each of these patterns should have the first capture group
        // be the function name, and the second capture group be the
        // source URL together with position information. Afterwards,
        // the lineColPattern will pull apart these source position
@@ -167,16 +167,16 @@ var ses;
        // argument descriptions enclosed in parens, which we
        // ignore. Then there is always an at-sign followed by possibly
        // empty source position.
-       var FFFramePattern =  (/^\s*([^:@(]*?)\s*(?:\(.*\))?@(.*?)$/);
+       var FFFramePattern =  /^\s*([^:@(]*?)\s*(?:\(.*\))?@(.*?)$/;
        // Seen on IE: The line begins with " at ", as on v8, which we
        // ignore. Then the function name, then the source position
        // enclosed in parens.
-       var IEFramePattern =  (/^\s*(?:at\s+)?([^:@(]*?)\s*\((.*?)\)$/);
+       var IEFramePattern =  /^\s*(?:at\s+)?([^:@(]*?)\s*\((.*?)\)$/;
        // Seem on Safari (JSC): The name optionally followed by an
        // at-sign and source position information. This is like FF,
        // except that the at-sign and source position info may
        // together be absent.
-       var JSCFramePatt1 =   (/^\s*([^:@(]*?)\s*(?:@(.*?))?$/);
+       var JSCFramePatt1 =   /^\s*([^:@(]*?)\s*(?:@(.*?))?$/;
        // Also seen on Safari (JSC): Just the source position info by
        // itself, with no preceding function name. The source position
        // always seems to contain at least a colon, which is how we
@@ -184,7 +184,7 @@ var ses;
        // name. The pattern here is a bit more flexible, in that it
        // will accept a function name preceding the source position
        // and separated by whitespace.
-       var JSCFramePatt2 =   (/^\s*?([^:@(]*?)\s*?(.*?)$/);
+       var JSCFramePatt2 =   /^\s*?([^:@(]*?)\s*?(.*?)$/;
 
        // List the above patterns in priority order, where the first
        // matching pattern is the one used for any one stack line.
@@ -201,7 +201,7 @@ var ses;
        // colon-digit-sequence suffixes, then the first of these are
        // the line number, and the second, if present, is the column
        // number.
-       var MainLineColPattern = (/^(.*?)(?::(\d+)(?::(\d+))?)?$/);
+       var MainLineColPattern = /^(.*?)(?::(\d+)(?::(\d+))?)?$/;
 
        // List the above patterns in priority order, where the first
        // matching pattern is the one used for any one stack line.
@@ -212,7 +212,7 @@ var ses;
          var stack = err.stack;
          if (!stack) { return void 0; }
          var lines = stack.split('\n');
-         if ((/^\w*Error:/).test(lines[0])) {
+         if (/^\w*Error:/.test(lines[0])) {
            lines = lines.slice(1);
          }
          var frames = lines.map(function(line) {

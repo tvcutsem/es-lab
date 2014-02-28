@@ -125,7 +125,7 @@
          cajaVM.def(imports);
 
          var compiledExprP = compileExprLater(
-           '(function(){' + src + '})()',
+           '(function(){' + src + '\n}())',
            // TODO(erights): Should expand fetch interface to obtain
            // from fetch the url it expanded the id to.
            { sourceUrl: id + '.js' });
