@@ -231,6 +231,9 @@ var ses;
                lineColPatterns.some(function(lineColPattern) {
                  var sub = lineColPattern.exec(source);
                  if (sub) {
+                   // sub[1] if present is the source URL.
+                   // sub[2] if present is the line number.
+                   // sub[3] if present is the column number.
                    source = sub[1] || '?';
                    if (sub[2]) {
                      if (sub[3]) {
