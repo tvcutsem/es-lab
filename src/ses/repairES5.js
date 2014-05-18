@@ -2706,6 +2706,31 @@ var ses;
     }
   }
 
+  /**
+   * Tests for https://code.google.com/p/chromium/issues/detail?id=374327
+   * https://gist.github.com/getify/22ac00ba029e707f19f5
+   * which reports that setting a function's prototype with
+   * defineProperty can update its descriptor without updating the
+   * actual value.
+   */
+  function test_DEFINE_PROPERTY_CONFUSES_FUNC_PROTO() {
+    function bar(){}
+    Object.defineProperty(bar,'prototype',{value:2,writable:false});
+    var desc = Object.getOwnPropertyDescriptor(bar, 'prototype');
+    if (desc.value !== 2) {
+        return 'Unexpected descriptor from setting a function\'s ' +
+          'protptype with defineProperty: ' + JSON.stringify(desc);
+    }
+    if (bar.prototype === 2) {
+      return false;
+    } else if (typeof bar.prototype === 'object') {
+      return true;
+    } else {
+      return 'Unexpected result of setting a function\'s prototype ' +
+        'with defineProperty: ' + typeof bar.prototype;
+    }
+  }
+
   ////////////////////// Repairs /////////////////////
   //
   // Each repair_NAME function exists primarily to repair the problem
@@ -4399,6 +4424,20 @@ var ses;
           // TODO(kpreid): link Microsoft info page when available
       sections: ['8.12.6'],
       tests: []  // TODO(kpreid): contribute tests
+    },
+    {
+      id: 'DEFINE_PROPERTY_CONFUSES_FUNC_PROTO',
+      description: 'Setting a function\'s prototype with defineProperty ' +
+        'doesn\'t change its value',
+      test: test_DEFINE_PROPERTY_CONFUSES_FUNC_PROTO,
+      repair: void 0,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls:
+      ['https://code.google.com/p/chromium/issues/detail?id=374327',
+       'https://gist.github.com/getify/22ac00ba029e707f19f5'],
+      sections: [],
+      tests: []  // TODO(kpreid): contribute tests
     }
   ];
 
@@ -4449,7 +4488,7 @@ var ses;
       strictForEachFn(supportedProblems, ses._repairer.registerProblem);
       ses._repairer.testAndRepair();
     }
-    
+
     var reports = ses._repairer.getReports();
 
     // Made available to allow for later code reusing our diagnoses to work
