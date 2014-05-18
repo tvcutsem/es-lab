@@ -2749,8 +2749,9 @@ var ses;
   var isExtensible = Object.isExtensible;
 
   /*
-   * Fixes both FUNCTION_PROTOTYPE_DESCRIPTOR_LIES and
-   * DEFINING_READ_ONLY_PROTO_FAILS_SILENTLY.
+   * Fixes FUNCTION_PROTOTYPE_DESCRIPTOR_LIES,
+   * DEFINING_READ_ONLY_PROTO_FAILS_SILENTLY and
+   * DEFINE_PROPERTY_CONFUSES_FUNC_PROTO.
    */
   function repair_DEFINE_PROPERTY() {
     function repairedDefineProperty(base, name, desc) {
@@ -4430,7 +4431,7 @@ var ses;
       description: 'Setting a function\'s prototype with defineProperty ' +
         'doesn\'t change its value',
       test: test_DEFINE_PROPERTY_CONFUSES_FUNC_PROTO,
-      repair: void 0,
+      repair: repair_DEFINE_PROPERTY,
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
       canRepair: true,
       urls:
