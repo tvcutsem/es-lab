@@ -2707,15 +2707,15 @@ var ses;
   }
 
   /**
-   * Tests for https://code.google.com/p/chromium/issues/detail?id=374327
-   * https://gist.github.com/getify/22ac00ba029e707f19f5
+   * Tests for https://code.google.com/p/v8/issues/detail?id=3334
    * which reports that setting a function's prototype with
    * defineProperty can update its descriptor without updating the
-   * actual value.
+   * actual value when also changing writable from true to false.
    */
   function test_DEFINE_PROPERTY_CONFUSES_FUNC_PROTO() {
-    function bar(){}
-    Object.defineProperty(bar,'prototype',{value:2,writable:false});
+    function bar() {}
+    var oldBarPrototype = bar.prototype;
+    Object.defineProperty(bar, 'prototype', {value: 2, writable: false});
     var desc = Object.getOwnPropertyDescriptor(bar, 'prototype');
     if (desc.value !== 2) {
         return 'Unexpected descriptor from setting a function\'s ' +
@@ -2724,7 +2724,12 @@ var ses;
     if (bar.prototype === 2) {
       return false;
     } else if (typeof bar.prototype === 'object') {
-      return true;
+      if (bar.prototype === oldBarPrototype) {
+        return true;
+      } else {
+        return 'Unexpected prototype identity from setting a function\'s ' +
+          'prototype with defineProperty.';
+      }
     } else {
       return 'Unexpected result of setting a function\'s prototype ' +
         'with defineProperty: ' + typeof bar.prototype;
@@ -2762,6 +2767,7 @@ var ses;
           base.prototype = desc.value;
         } catch (err) {
           logger.warn('prototype fixup failed', err);
+          throw err;
         }
       } else if (name === '__proto__' && !isExtensible(base)) {
         throw TypeError('Cannot redefine __proto__ on a non-extensible object');
@@ -4025,6 +4031,18 @@ var ses;
       tests: [] // TODO(jasvir): Add to test262
     },
     {
+      id: 'DEFINE_PROPERTY_CONFUSES_FUNC_PROTO',
+      description: 'Setting a function\'s prototype with defineProperty ' +
+        'doesn\'t change its value',
+      test: test_DEFINE_PROPERTY_CONFUSES_FUNC_PROTO,
+      repair: repair_DEFINE_PROPERTY,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['https://code.google.com/p/v8/issues/detail?id=3334'],
+      sections: [],
+      tests: []  // TODO(kpreid): contribute tests
+    },
+    {
       id: 'STRICT_EVAL_LEAKS_GLOBAL_VARS',
       description: 'Strict eval function leaks variable definitions',
       test: test_STRICT_EVAL_LEAKS_GLOBAL_VARS,
@@ -4424,20 +4442,6 @@ var ses;
       urls: ['http://webreflection.blogspot.co.uk/2014/04/all-ie-objects-are-broken.html'],
           // TODO(kpreid): link Microsoft info page when available
       sections: ['8.12.6'],
-      tests: []  // TODO(kpreid): contribute tests
-    },
-    {
-      id: 'DEFINE_PROPERTY_CONFUSES_FUNC_PROTO',
-      description: 'Setting a function\'s prototype with defineProperty ' +
-        'doesn\'t change its value',
-      test: test_DEFINE_PROPERTY_CONFUSES_FUNC_PROTO,
-      repair: repair_DEFINE_PROPERTY,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls:
-      ['https://code.google.com/p/chromium/issues/detail?id=374327',
-       'https://gist.github.com/getify/22ac00ba029e707f19f5'],
-      sections: [],
       tests: []  // TODO(kpreid): contribute tests
     }
   ];
