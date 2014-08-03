@@ -622,7 +622,7 @@ var ses;
    * Maps from standinName to an array mapping from arity to a cached
    * makeStandin function.
    *
-   * Maps blacklisted standinNames to 'blacklisted'.
+   * Maps each blacklisted standinName to 'blacklisted'.
    */
   var standinMakerCache = EarlyStringMap();
   (function(){
@@ -748,18 +748,24 @@ var ses;
    * copied. If this assumption is false, then a mutation to one of
    * these properties on newFunc or the returned standin will not
    * necessarily be reflected in the other.
+   *
+   * Note that ES5 does not specify a .name property on functions, and
+   * IE11 (as of this writing) does not implement one, so this
+   * implementation must be compatible with the absence of a .name
+   * property on functions.
    */
   function funcLike(newFunc, oldFunc) {
+    var name = ''+oldFunc.name;
     var arity = +oldFunc.length;
-    // TODO(erights): On ES6 func.length starts configurable, so we
-    // should try to modify newFunc.length in place if we can.
     // TODO(erights): On ES6 func.name starts configurable, so we
     // should try to modify newFunc.name in place if we can.
-    if (newFunc.length === arity /*&& newFunc.name === name*/) {
+    // TODO(erights): On ES6 func.length starts configurable, so we
+    // should try to modify newFunc.length in place if we can.
+    if (''+newFunc.name === name && +newFunc.length === arity) {
       return newFunc;
     }
 
-    var makeStandin = makeStandinMaker(''+oldFunc.name, arity);
+    var makeStandin = makeStandinMaker(name, arity);
     var standin = makeStandin(newFunc);
 
     var pnames = Object.getOwnPropertyNames(newFunc);
