@@ -617,6 +617,116 @@ var ses;
     return desc + ' leaked as: ' + that;
   }
 
+
+  /**
+   * Maps from standinName to an array mapping from arity to a cached
+   * makeStandin function.
+   *
+   * Maps blacklisted standinNames to 'blacklisted'.
+   */
+  var standinMakerCache = EarlyStringMap();
+  (function(){
+     /**
+      * See <a href=
+      * "https://people.mozilla.org/~jorendorff/es6-draft.html"
+      * >ES6 Draft Spec</a>. The blacklist may conservatively contain
+      * names that would actually be safe. It may not omit names that
+      * would be unsafe.
+      */
+     var blacklist = [
+       // 11.6.2.1 Keywords
+       'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger',
+       'default', 'delete',
+       'do', 'else', 'export', 'extends', 'finally', 'for', 'function',
+       'if', 'import',
+       'in', 'instanceof', 'new', 'return', 'super', 'switch', 'this',
+       'throw', 'try',
+       'typeof', 'var', 'void', 'while', 'with', 'yield',
+
+       // 11.6.2.2 Future Reserved Words
+       'enum', 'await',
+       'implements', 'interface', 'package', 'private', 'protected',
+       'public', 'static',
+
+       // 11.8 Literals
+       'null', 'false', 'true',
+
+       // 12.1.1 Static Semantics: Early Errors
+       'arguments', 'eval',
+
+       // 14.5.1 Static Semantics: Early Errors
+       'let', 'constructor', 'prototype',
+
+       // names used in makeStandinSrc
+       'makeStandin', 'newF',
+
+       // The following are almost certainly safe, but blacklisting
+       // anyway just to be sure. Any of these might be unblacklisted in
+       // the futre.
+
+       // literal-like globals
+       'NaN', 'Infinity', 'undefined',
+
+       // $ is special in template strings
+       '$',
+
+       // contextually reserved or special in ES6
+       'module', 'of', 'as', 'from',
+
+       // expected to be contextually special in ES7
+       'async', 'on'
+
+       // 'get' and 'set' are contextually special in ES5, but despite
+       // that we assume they are safe.
+     ];
+
+     for (var i = 0, len = blacklist.length; i < len; i++) {
+       standinMakerCache.set(blacklist[i], 'blacklisted');
+     }
+   }());
+
+  /**
+   * Returns a makeStandin function which, given a function, returns a
+   * function which has the same call and construct behavior, but
+   * which has .length of arity, and, if known safe, a .name of
+   * standinName.
+   *
+   * The makeStandin function returned by makeStandinMaker is not
+   * generally fresh, to allow us to memoize these on standinName and
+   * arity.
+   */
+  function makeStandinMaker(standinName, arity) {
+    if (!/[a-zA-Z][a-zA-Z0-9]*/.test(standinName)) {
+      standinName = 'standin';
+    }
+    var cacheLine = standinMakerCache.get(standinName);
+    if (cacheLine === 'blacklisted') {
+      cacheLine = standinMakerCache.get((standinName = 'standin'));
+    }
+    if (!cacheLine) {
+      standinMakerCache.set(standinName, ((cacheLine = [])));
+    }
+    var result = cacheLine[arity];
+    if (!result) {
+      var args = [];
+      for (var i = 0; i < arity; i++) {
+        args.push('_' + i);
+      }
+      var makeStandinSrc = '(function makeStandin(newF) {\n' +
+        '  "use strict";\n' +
+        '  return function ' + standinName + '(' + args.join(',') + ') {\n' +
+        '    return newF.apply(this, arguments);\n' +
+        '  }\n' +
+        '})';
+      cacheLine[arity] = ((result = unsafeEval(makeStandinSrc)));
+    }
+    return result;
+  }
+
+  /**
+   * The function own property names that funcLike doesn't copy
+   * in a generic manner from newFunc to the returned standin.
+   */
   var exemptFuncProps = ['name', 'length', 'caller', 'arguments'];
 
   /**
@@ -640,28 +750,16 @@ var ses;
    * necessarily be reflected in the other.
    */
   function funcLike(newFunc, oldFunc) {
-    var len = +oldFunc.length;
+    var arity = +oldFunc.length;
     // TODO(erights): On ES6 func.length starts configurable, so we
     // should try to modify newFunc.length in place if we can.
     // TODO(erights): On ES6 func.name starts configurable, so we
     // should try to modify newFunc.name in place if we can.
-    if (newFunc.length === len /*&& newFunc.name === name*/) {
+    if (newFunc.length === arity /*&& newFunc.name === name*/) {
       return newFunc;
     }
 
-    var args = [];
-    for (var i = 0; i < len; i++) {
-      args.push('_' + i);
-    }
-    var makeStandinSrc = '(function makeStandin(newF) {\n' +
-      '  "use strict";\n' +
-      // TODO(erights): If oldFunc.name is a safe name to use in this
-      // context, we should use its name instead of "standin" below.
-      '  return function standin(' + args.join(',') + ') {\n' +
-      '    return newF.apply(this, arguments);\n' +
-      '  }\n' +
-      '})';
-    var makeStandin = unsafeEval(makeStandinSrc);
+    var makeStandin = makeStandinMaker(''+oldFunc.name, arity);
     var standin = makeStandin(newFunc);
 
     var pnames = Object.getOwnPropertyNames(newFunc);
@@ -671,6 +769,14 @@ var ses;
                               Object.getOwnPropertyDescriptor(newFunc, pname));
       }
     });
+
+    // The isFrozen and isSealed branches of the tests below seem
+    // redundant with !isExtensible, since frozenness and sealedness
+    // is, as of ES5, only the combination of extensibility + property
+    // attributes. We do this anyway for two reasons: Because the
+    // defineProperty loop above skips the exemptFuncProps. And in
+    // case a future ES spec has frozenness or sealedness mean
+    // something beyond merely extensibility + property attributes.
     if (Object.isFrozen(newFunc)) {
       Object.freeze(standin);
     } else if (Object.isSealed(newFunc)) {
@@ -681,6 +787,7 @@ var ses;
     return standin;
   }
   ses.funcLike = funcLike;
+
 
   ////////////////////// Tests /////////////////////
   //
