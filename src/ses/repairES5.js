@@ -701,10 +701,12 @@ var ses;
     }
     var cacheLine = standinMakerCache.get(standinName);
     if (cacheLine === 'blacklisted') {
-      cacheLine = standinMakerCache.get((standinName = 'standin'));
+      standinName = 'standin';
+      cacheLine = standinMakerCache.get(standinName);
     }
     if (!cacheLine) {
-      standinMakerCache.set(standinName, ((cacheLine = [])));
+      cacheLine = [];
+      standinMakerCache.set(standinName, cacheLine);
     }
     var result = cacheLine[arity];
     if (!result) {
@@ -718,7 +720,8 @@ var ses;
         '    return newF.apply(this, arguments);\n' +
         '  }\n' +
         '})';
-      cacheLine[arity] = ((result = unsafeEval(makeStandinSrc)));
+      result = unsafeEval(makeStandinSrc);
+      cacheLine[arity] = result;
     }
     return result;
   }
