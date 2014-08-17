@@ -1,3 +1,4 @@
+
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -2235,7 +2236,29 @@ var ses;
       if (x[0] === 'b') { return false; }
       return 'Unexpected error unshifting a readonly property: ' + x;
     }
+    if (x[0] === 'b') {
+      // The problem is not that the readonly was ignored, but that it
+      // didn't throw, which is caught by test_UNSHIFT_DOESNT_THROW_READONLY
+      return false;
+    }
     if (x[0] === 'a' && x.length == 3) { return true; }
+    return 'Unexpected behavior unshifting a readonly property: ' + x;
+  }
+
+  /**
+   * Detects whether calling unshift on an array with a readonly
+   * property will throw.
+   */
+  function test_UNSHIFT_DOESNT_THROW_READONLY() {
+    var x = ['b', 'c'];
+    Object.defineProperty(x, 0, { writable: false, configurable: false });
+    try {
+      x.unshift('a');
+    } catch (e) {
+      if (x[0] === 'b') { return false; }
+      return 'Unexpected error unshifting a readonly property: ' + x;
+    }
+    if ((x[0] === 'a' || x[0] === 'b') && x.length === 3) { return true; }
     return 'Unexpected behavior unshifting a readonly property: ' + x;
   }
 
@@ -2324,7 +2347,30 @@ var ses;
       if (x[0] === 'b') { return false; }
       return 'Unexpected error unshifting a non-writable property: ' + x;
     }
+    if (x[0] === 'b') {
+      // The problem is not that the readonly was ignored, but that it
+      // didn't throw, which is caught by 
+      // test_UNSHIFT_DOESNT_THROW_NON_WRITABLE
+      return false;
+    }
     if (x[0] === 'a' && x.length == 3) { return true; }
+    return 'Unexpected behavior unshifting a non-writable property: ' + x;
+  }
+
+  /**
+   * Detects whether calling unshift on an array with a non-writable
+   * property will throw.
+   */
+  function test_UNSHIFT_DOESNT_THROW_NON_WRITABLE() {
+    var x = ['b', 'c'];
+    Object.defineProperty(x, 0, { writable: false });
+    try {
+      x.unshift('a');
+    } catch (e) {
+      if (x[0] === 'b') { return false; }
+      return 'Unexpected error unshifting a non-writable property: ' + x;
+    }
+    if ((x[0] === 'a' || x[0] === 'b') && x.length === 3) { return true; }
     return 'Unexpected behavior unshifting a non-writable property: ' + x;
   }
 
@@ -4618,6 +4664,20 @@ var ses;
       tests: [] // TODO(jasvir): Add to test262
     },
     {
+      id: 'UNSHIFT_DOESNT_THROW_READONLY',
+      description: 'Array.prototype.unshift doesn\'t throw on ' + 
+            'readonly property',
+      test: test_UNSHIFT_DOESNT_THROW_READONLY,
+      repair: repair_UNSHIFT_IGNORES_READONLY,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
+             'https://code.google.com/p/google-caja/issues/detail?id=1931',
+             'https://code.google.com/p/v8/issues/detail?id=2615'],
+      sections: [],
+      tests: [] // TODO(jasvir): Add to test262
+    },
+    {
       id: 'SHIFT_IGNORES_READONLY',
       description: 'Array.prototype.shift ignores readonly property',
       test: test_SHIFT_IGNORES_READONLY,
@@ -4673,6 +4733,20 @@ var ses;
       id: 'UNSHIFT_IGNORES_NON_WRITABLE',
       description: 'Array.prototype.unshift ignores non-writable property',
       test: test_UNSHIFT_IGNORES_NON_WRITABLE,
+      repair: repair_UNSHIFT_IGNORES_READONLY,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
+             'https://code.google.com/p/google-caja/issues/detail?id=1931',
+             'https://code.google.com/p/v8/issues/detail?id=2615'],
+      sections: [],
+      tests: [] // TODO(jasvir): Add to test262
+    },
+    {
+      id: 'UNSHIFT_DOESNT_THROW_NON_WRITABLE',
+      description: 'Array.prototype.unshift doesn\'t throw on ' +
+            'non-writable property',
+      test: test_UNSHIFT_DOESNT_THROW_NON_WRITABLE,
       repair: repair_UNSHIFT_IGNORES_READONLY,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: true,
