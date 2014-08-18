@@ -3684,7 +3684,7 @@ var ses;
     function test_method_DOESNT_THROW_kind() {
       var x = ['c', 'b'];
       var val = x[i];
-      Object.defineProperty(x, i, desc);
+      Object.defineProperty(x, i, descs[kind]);
       try {
         x[prop].apply(x, testArgs);
       } catch (_) {
@@ -3711,7 +3711,7 @@ var ses;
       id: (prop + '_PUT_DOESNT_THROW_' + pos + '_' + kind).toUpperCase(),
       description: 'Array.prototype.' + prop + ' doesn\'t throw on ' +
         kind + ' ' + pos + ' property',
-      test: test_method_IGNORES_kind,
+      test: test_method_DOESNT_THROW_kind,
       repair: opt_repair,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: opt_repair !== void 0,
