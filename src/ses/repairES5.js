@@ -2930,7 +2930,6 @@ var ses;
   var hop = Object.prototype.hasOwnProperty;
   var slice = Array.prototype.slice;
   var concat = Array.prototype.concat;
-  var splice = Array.prototype.splice;
   var getPrototypeOf = Object.getPrototypeOf;
   var unsafeDefProp = Object.defineProperty;
   var isExtensible = Object.isExtensible;
@@ -3276,11 +3275,13 @@ var ses;
   }
 
   function repair_UNSHIFT_IGNORES_READONLY() {
+    var baseSplice = Array.prototype.splice;
+    var baseConcat = Array.prototype.concat;
     Object.defineProperty(Array.prototype, 'unshift', {
       value: function(var_args) {
         var len = +this.length;
         var items = slice.call(arguments, 0);
-        splice.apply(this, concat.call([0, 0], items));
+        baseSplice.apply(this, baseConcat.call([0, 0], items));
         return len + items.length;
       },
       configurable: true,
@@ -3289,13 +3290,15 @@ var ses;
   }
 
   function repair_SHIFT_IGNORES_READONLY() {
+    var baseSplice = Array.prototype.splice;
     Object.defineProperty(Array.prototype, 'shift', {
       value: function() {
-        var len = +this.length;
-        if (len <= 0) { return void 0; }
-        var result = this[0];
-        splice.apply(this, concat.call([0, 1], []));
-        return result;
+        if (+this.length >= 1) {
+          var result = this[0];
+          baseSplice.call(this, 0, 1);
+          return result;
+        }
+        return void 0;
       },
       configurable: true,
       writable: true
@@ -3723,7 +3726,7 @@ var ses;
     });
   }
 
-  function arrayMutatorProblem(destination, prop, testArgs) {
+  function arraySealProblem(destination, prop, testArgs) {
     /**
      * Tests only for likely symptoms of a seal violation or a
      * malformed array.
@@ -4744,6 +4747,12 @@ var ses;
     }
   ];
 
+  // SPLICE_PUT_IGNORES_FIRST_READONLY
+  // SPLICE_PUT_DOESNT_THROW_FIRST_READONLY
+  // SPLICE_PUT_IGNORES_FIRST_NON_WRITABLE
+  // SPLICE_PUT_DOESNT_THROW_FIRST_NON_WRITABLE
+  // SPLICE_PUT_IGNORES_LAST_READONLY
+  // SPLICE_PUT_DOESNT_THROW_LAST_READONLY
   arrayPutProblem(supportedProblems,
                   'splice', [0, 0, 'a'], 0, 'a', 'readonly');
   arrayPutProblem(supportedProblems,
@@ -4751,9 +4760,15 @@ var ses;
   arrayPutProblem(supportedProblems,
                   'splice', [1, 1], 1, void 0, 'readonly');
 
+  // POP_PUT_IGNORES_LAST_READONLY
+  // POP_PUT_DOESNT_THROW_LAST_READONLY
   arrayPutProblem(supportedProblems,
                   'pop', [], 1, void 0, 'readonly');
 
+  // UNSHIFT_PUT_IGNORES_FIRST_READONLY
+  // UNSHIFT_PUT_DOESNT_THROW_FIRST_READONLY
+  // UNSHIFT_PUT_IGNORES_FIRST_NON_WRITABLE
+  // UNSHIFT_PUT_DOESNT_THROW_FIRST_NON_WRITABLE
   arrayPutProblem(supportedProblems,
                   'unshift', ['a'], 0, 'a', 'readonly',
                   repair_UNSHIFT_IGNORES_READONLY);
@@ -4761,6 +4776,12 @@ var ses;
                   'unshift', ['a'], 0, 'a', 'non_writable',
                   repair_UNSHIFT_IGNORES_READONLY);
 
+  // SHIFT_PUT_IGNORES_FIRST_READONLY
+  // SHIFT_PUT_DOESNT_THROW_FIRST_READONLY
+  // SHIFT_PUT_IGNORES_FIRST_NON_WRITABLE
+  // SHIFT_PUT_DOESNT_THROW_FIRST_NON_WRITABLE
+  // SHIFT_PUT_IGNORES_LAST_READONLY
+  // SHIFT_PUT_DOESNT_THROW_LAST_READONLY
   arrayPutProblem(supportedProblems,
                   'shift', [], 0, 'b', 'readonly',
                   repair_SHIFT_IGNORES_READONLY);
@@ -4771,6 +4792,14 @@ var ses;
                   'shift', [], 1, void 0, 'readonly',
                   repair_SHIFT_IGNORES_READONLY);
 
+  // REVERSE_PUT_IGNORES_FIRST_READONLY
+  // REVERSE_PUT_DOESNT_THROW_FIRST_READONLY
+  // REVERSE_PUT_IGNORES_FIRST_NON_WRITABLE
+  // REVERSE_PUT_DOESNT_THROW_FIRST_NON_WRITABLE
+  // REVERSE_PUT_IGNORES_LAST_READONLY
+  // REVERSE_PUT_DOESNT_THROW_LAST_READONLY
+  // REVERSE_PUT_IGNORES_LAST_NON_WRITABLE
+  // REVERSE_PUT_DOESNT_THROW_LAST_NON_WRITABLE
   arrayPutProblem(supportedProblems,
                   'reverse', [], 0, 'b', 'readonly');
   arrayPutProblem(supportedProblems,
@@ -4780,6 +4809,14 @@ var ses;
   arrayPutProblem(supportedProblems,
                   'reverse', [], 1,  'c', 'non_writable');
 
+  // SORT_PUT_IGNORES_FIRST_READONLY
+  // SORT_PUT_DOESNT_THROW_FIRST_READONLY
+  // SORT_PUT_IGNORES_FIRST_NON_WRITABLE
+  // SORT_PUT_DOESNT_THROW_FIRST_NON_WRITABLE
+  // SORT_PUT_IGNORES_LAST_READONLY
+  // SORT_PUT_DOESNT_THROW_LAST_READONLY
+  // SORT_PUT_IGNORES_LAST_NON_WRITABLE
+  // SORT_PUT_DOESNT_THROW_LAST_NON_WRITABLE
   arrayPutProblem(supportedProblems,
                   'sort', [], 0, 'b', 'readonly');
   arrayPutProblem(supportedProblems,
@@ -4795,11 +4832,11 @@ var ses;
   // SPLICE_IGNORES_FROZEN
   // SHIFT_IGNORES_SEALED
   // SHIFT_IGNORES_FROZEN
-  arrayMutatorProblem(supportedProblems, 'unshift', ['foo']);
-  arrayMutatorProblem(supportedProblems, 'splice', [0, 0, 'foo']);
-  arrayMutatorProblem(supportedProblems, 'shift', []);
+  arraySealProblem(supportedProblems, 'unshift', ['foo']);
+  arraySealProblem(supportedProblems, 'splice', [0, 0, 'foo']);
+  arraySealProblem(supportedProblems, 'shift', []);
   // Array.prototype.{push,pop,sort} are also subject to the problem
-  // arrayMutatorProblem handles, but are handled separately and more
+  // arraySealProblem handles, but are handled separately and more
   // precisely.
 
   // Note: GLOBAL_LEAKS_FROM_ARRAY_METHODS should be LAST in the list so as
