@@ -1,4 +1,3 @@
-
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -2171,263 +2170,6 @@ var ses;
   }
 
   /**
-   * Detects whether calling splice on an array with a readonly
-   * property will modify that property.
-   */
-  function test_SPLICE_IGNORES_READONLY() {
-    var x = ['b', 'c'];
-    Object.defineProperty(x, 0, { writable: false, configurable: false });
-    try {
-      x.splice(0, 0, 'a');
-    } catch (e) {
-      if (x[0] === 'b') {
-        return false;
-      }
-      return 'Unexpected error splicing a readonly property: ' + x;
-    }
-    if (x[0] === 'a' && x.length == 3) { return true; }
-    return 'Unexpected behavior splicing a readonly property: ' + x;
-  }
-
-  /**
-   * Detects whether calling splice on an array with a readonly
-   * last property will modify that property.
-   */
-  function test_SPLICE_IGNORES_LAST_READONLY() {
-    var x = ['b', 'c'];
-    Object.defineProperty(x, 1, { writable: false, configurable: false });
-    try {
-      x.splice(1, 1);
-    } catch (e) {
-    if (x[1] === 'c' && x.length == 2) { return false; }
-      return 'Unexpected error splicing a readonly last property: ' + x;
-    }
-    if (!('1' in x) && x.length === 1) { return true; }
-    return 'Unexpected behavior splicing a readonly last property: ' + x;
-  }
-
-  /**
-   * Detects whether calling pop on an array with a last readonly
-   * property will modify that property.
-   */
-  function test_POP_IGNORES_READONLY() {
-    var x = ['a', 'b'];
-    Object.defineProperty(x, 1, { writable: false, configurable: false });
-    try {
-      x.pop();
-    } catch (e) {
-      if (x[1] === 'b' && x.length == 2) { return false; }
-      return 'Unexpected error popping a readonly property: ' + x;
-    }
-    if (!('1' in x) && x.length == 1) { return 'oops: ' + x[1]; }
-    return 'Unexpected behavior popping a readonly property: ' + x;
-  }
-
-  /**
-   * Detects whether calling unshift on an array with a readonly
-   * property will modify that property.
-   */
-  function test_UNSHIFT_IGNORES_READONLY() {
-    var x = ['b', 'c'];
-    Object.defineProperty(x, 0, { writable: false, configurable: false });
-    try {
-      x.unshift('a');
-    } catch (e) {
-      if (x[0] === 'b') { return false; }
-      return 'Unexpected error unshifting a readonly property: ' + x;
-    }
-    if (x[0] === 'b') {
-      // The problem is not that the readonly was ignored, but that it
-      // didn't throw, which is caught by test_UNSHIFT_DOESNT_THROW_READONLY
-      return false;
-    }
-    if (x[0] === 'a' && x.length == 3) { return true; }
-    return 'Unexpected behavior unshifting a readonly property: ' + x;
-  }
-
-  /**
-   * Detects whether calling unshift on an array with a readonly
-   * property will throw.
-   */
-  function test_UNSHIFT_DOESNT_THROW_READONLY() {
-    var x = ['b', 'c'];
-    Object.defineProperty(x, 0, { writable: false, configurable: false });
-    try {
-      x.unshift('a');
-    } catch (e) {
-      if (x[0] === 'b') { return false; }
-      return 'Unexpected error unshifting a readonly property: ' + x;
-    }
-    if ((x[0] === 'a' || x[0] === 'b') && x.length === 3) { return true; }
-    return 'Unexpected behavior unshifting a readonly property: ' + x;
-  }
-
-  /**
-   * Detects whether calling shift on an array with a readonly
-   * property will modify that property.
-   */
-  function test_SHIFT_IGNORES_READONLY() {
-    var x = ['a', 'b'];
-    Object.defineProperty(x, 0, { writable: false, configurable: false });
-    try {
-      x.shift();
-    } catch (e) {
-      if (x[0] === 'a' && x.length == 2) { return false; }
-      return 'Unexpected error shifting a readonly property: ' + x;
-    }
-    if (x[0] === 'b' && x.length == 1) { return true; }
-    return 'Unexpected behavior shifting a readonly property: ' + x;
-  }
-
-  /**
-   * Detects whether calling reverse on an array with a readonly
-   * property will modify that property.
-   */
-  function test_REVERSE_IGNORES_READONLY() {
-    var x = ['a', 'b'];
-    Object.defineProperty(x, 0, { writable: false, configurable: false });
-    try {
-      x.reverse();
-    } catch (e) {
-      if (x[0] === 'a') { return false; }
-      return 'Unexpected error reversing an array with a readonly property: ' +
-        x;
-    }
-    if (x[0] === 'b') { return true; }
-    return 'Unexpected behavior reversing an array with a readonly property: ' +
-      x;
-  }
-
-  /**
-   * Detects whether calling sort on an array with a readonly
-   * property will modify that property.
-   */
-  function test_SORT_IGNORES_READONLY() {
-    var x = ['b', 'a'];
-    Object.defineProperty(x, 0, { writable: false, configurable: false });
-    try {
-      x.sort();
-    } catch (e) {
-      if (x[0] === 'b') { return false; }
-      return 'Unexpected error sorting a readonly property: ' + x;
-    }
-    if (x[0] === 'a') { return true; }
-    return 'Unexpected behavior sorting a readonly property: ' + x;
-  }
-
-  /**
-   * Detects whether calling splice on an array with a non-writable
-   * property will modify that property.
-   */
-  function test_SPLICE_IGNORES_NON_WRITABLE() {
-    var x = ['b', 'c'];
-    Object.defineProperty(x, 0, { writable: false });
-    try {
-      x.splice(0, 0, 'a');
-    } catch (e) {
-      if (x[0] === 'b') {
-        return false;
-      }
-      return 'Unexpected error splicing a non-writable property: ' + x;
-    }
-    if (x[0] === 'a' && x.length == 3) { return true; }
-    return 'Unexpected behavior splicing a non-writable property: ' + x;
-  }
-
-  /**
-   * Detects whether calling unshift on an array with a non-writable
-   * property will modify that property.
-   */
-  function test_UNSHIFT_IGNORES_NON_WRITABLE() {
-    var x = ['b', 'c'];
-    Object.defineProperty(x, 0, { writable: false });
-    try {
-      x.unshift('a');
-    } catch (e) {
-      if (x[0] === 'b') { return false; }
-      return 'Unexpected error unshifting a non-writable property: ' + x;
-    }
-    if (x[0] === 'b') {
-      // The problem is not that the readonly was ignored, but that it
-      // didn't throw, which is caught by 
-      // test_UNSHIFT_DOESNT_THROW_NON_WRITABLE
-      return false;
-    }
-    if (x[0] === 'a' && x.length == 3) { return true; }
-    return 'Unexpected behavior unshifting a non-writable property: ' + x;
-  }
-
-  /**
-   * Detects whether calling unshift on an array with a non-writable
-   * property will throw.
-   */
-  function test_UNSHIFT_DOESNT_THROW_NON_WRITABLE() {
-    var x = ['b', 'c'];
-    Object.defineProperty(x, 0, { writable: false });
-    try {
-      x.unshift('a');
-    } catch (e) {
-      if (x[0] === 'b') { return false; }
-      return 'Unexpected error unshifting a non-writable property: ' + x;
-    }
-    if ((x[0] === 'a' || x[0] === 'b') && x.length === 3) { return true; }
-    return 'Unexpected behavior unshifting a non-writable property: ' + x;
-  }
-
-  /**
-   * Detects whether calling shift on an array with a non-writable
-   * property will modify that property.
-   */
-  function test_SHIFT_IGNORES_NON_WRITABLE() {
-    var x = ['a', 'b'];
-    Object.defineProperty(x, 0, { writable: false });
-    try {
-      x.shift();
-    } catch (e) {
-      if (x[0] === 'a' && x.length == 2) { return false; }
-      return 'Unexpected error shifting a non-writable property: ' + x;
-    }
-    if (x[0] === 'b' && x.length == 1) { return true; }
-    return 'Unexpected behavior shifting a non-writable property: ' + x;
-  }
-
-  /**
-   * Detects whether calling reverse on an array with a non-writable
-   * property will modify that property.
-   */
-  function test_REVERSE_IGNORES_NON_WRITABLE() {
-    var x = ['a', 'b'];
-    Object.defineProperty(x, 0, { writable: false });
-    try {
-      x.reverse();
-    } catch (e) {
-      if (x[0] === 'a') { return false; }
-      return 'Unexpected error reversing an array with a ' +
-        'non-writable property: ' + x;
-    }
-    if (x[0] === 'b') { return true; }
-    return 'Unexpected behavior reversing an array with a ' +
-      'non-writable property: ' + x;
-  }
-
-  /**
-   * Detects whether calling sort on an array with a non-writable
-   * property will modify that property.
-   */
-  function test_SORT_IGNORES_NON_WRITABLE() {
-    var x = ['b', 'a'];
-    Object.defineProperty(x, 0, { writable: false });
-    try {
-      x.sort();
-    } catch (e) {
-      if (x[0] === 'b') { return false; }
-      return 'Unexpected error sorting a non-writable property: ' + x;
-    }
-    if (x[0] === 'a') { return true; }
-    return 'Unexpected behavior sorting a non-writable property: ' + x;
-  }
-
-  /**
    * Detects whether calling pop on a frozen array can modify the array.
    * See https://bugs.webkit.org/show_bug.cgi?id=75788
    */
@@ -3897,9 +3639,93 @@ var ses;
   // These are tests and repairs which follow a pattern, such that it is
   // more practical to define them programmatically.
 
+  function arrayPutProblem(destination,
+                           prop, testArgs, i, expected, kind, opt_repair) {
+    var pos = ['first', 'last'][i];
+    var descs = {
+      readonly: {writable: false, configurable: false},
+      non_writable: {writable: false}
+    };
+    var badness = {
+      readonly: severities.UNSAFE_SPEC_VIOLATION,
+      non_writable: severities.SAFE_SPEC_VIOLATION
+    };
+
+    /**
+     * Tests for an array method modifying the value of a non-writable
+     * indexed data property of an array.
+     */
+    function test_method_IGNORES_kind() {
+      var x = ['c', 'b'];
+      var val = x[i];
+      Object.defineProperty(x, i, descs[kind]);
+      try {
+        x[prop].apply(x, testArgs);
+      } catch (_) {
+        if (x[i] === val) { return false; }
+        return 'Unexpected error on ' + prop +
+          ' of a ' + kind + ' property: ' + x;
+      }
+      if (x[i] === val) {
+        // The problem is not that the PUT was ignored, but that
+        // it didn't throw, which is detected by
+        // test_method_DOESNT_THROW_kind() below.
+        return false;
+      }
+      if (x[i] === expected) { return true; }
+      return 'Unexpected behavior on ' + prop +
+        ' of a ' + kind + ' property: ' + x;
+    }
+
+    /**
+     * Tests for an array method not throwing when it tries to modify
+     * the value of a non-writable indexed data property of an array.
+     */
+    function test_method_DOESNT_THROW_kind() {
+      var x = ['c', 'b'];
+      var val = x[i];
+      Object.defineProperty(x, i, desc);
+      try {
+        x[prop].apply(x, testArgs);
+      } catch (_) {
+        return false;
+      }
+      return true;
+    }
+
+    destination.push({
+      id: (prop + '_PUT_IGNORES_' + pos + '_' + kind).toUpperCase(),
+      description: 'Array.prototype.' + prop + ' ignores ' +
+        kind + ' on ' + pos + ' property',
+      test: test_method_IGNORES_kind,
+      repair: opt_repair,
+      preSeverity: badness[kind],
+      canRepair: opt_repair !== void 0,
+      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
+             'https://code.google.com/p/google-caja/issues/detail?id=1931',
+             'https://code.google.com/p/v8/issues/detail?id=2615'],
+      sections: [],
+      tests: [] // TODO(jasvir): Add to test262
+    });
+    destination.push({
+      id: (prop + '_PUT_DOESNT_THROW_' + pos + '_' + kind).toUpperCase(),
+      description: 'Array.prototype.' + prop + ' doesn\'t throw on ' +
+        kind + ' ' + pos + ' property',
+      test: test_method_IGNORES_kind,
+      repair: opt_repair,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: opt_repair !== void 0,
+      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
+             'https://code.google.com/p/google-caja/issues/detail?id=1931',
+             'https://code.google.com/p/v8/issues/detail?id=2615'],
+      sections: [],
+      tests: [] // TODO(jasvir): Add to test262
+    });
+  }
+
   function arrayMutatorProblem(destination, prop, testArgs) {
     /**
-     * Tests only for likley symptoms of a seal violation or a
+     * Tests only for likely symptoms of a seal violation or a
      * malformed array.
      *
      * <p>A sealed object can neither acquire new own properties
@@ -4612,190 +4438,6 @@ var ses;
       tests: [] // TODO(jasvir): Add to test262
     },
     {
-      id: 'SPLICE_IGNORES_READONLY',
-      description: 'Array.prototype.splice ignores readonly property',
-      test: test_SPLICE_IGNORES_READONLY,
-      repair: void 0,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'SPLICE_IGNORES_LAST_READONLY',
-      description: 'Array.prototype.splice ignores readonly last property',
-      test: test_SPLICE_IGNORES_LAST_READONLY,
-      repair: void 0,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'POP_IGNORES_READONLY',
-      description: 'Array.prototype.pop ignores readonly last property',
-      test: test_POP_IGNORES_READONLY,
-      repair: void 0,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'UNSHIFT_IGNORES_READONLY',
-      description: 'Array.prototype.unshift ignores readonly property',
-      test: test_UNSHIFT_IGNORES_READONLY,
-      repair: repair_UNSHIFT_IGNORES_READONLY,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'UNSHIFT_DOESNT_THROW_READONLY',
-      description: 'Array.prototype.unshift doesn\'t throw on ' + 
-            'readonly property',
-      test: test_UNSHIFT_DOESNT_THROW_READONLY,
-      repair: repair_UNSHIFT_IGNORES_READONLY,
-      preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'SHIFT_IGNORES_READONLY',
-      description: 'Array.prototype.shift ignores readonly property',
-      test: test_SHIFT_IGNORES_READONLY,
-      repair: repair_SHIFT_IGNORES_READONLY,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'REVERSE_IGNORES_READONLY',
-      description: 'Array.prototype.reverse ignores readonly property',
-      test: test_REVERSE_IGNORES_READONLY,
-      repair: void 0,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'SORT_IGNORES_READONLY',
-      description: 'Array.prototype.sort ignores readonly property',
-      test: test_SORT_IGNORES_READONLY,
-      repair: void 0,
-      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'SPLICE_IGNORES_NON_WRITABLE',
-      description: 'Array.prototype.splice ignores non-writable property',
-      test: test_SPLICE_IGNORES_NON_WRITABLE,
-      repair: void 0,
-      preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'UNSHIFT_IGNORES_NON_WRITABLE',
-      description: 'Array.prototype.unshift ignores non-writable property',
-      test: test_UNSHIFT_IGNORES_NON_WRITABLE,
-      repair: repair_UNSHIFT_IGNORES_READONLY,
-      preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'UNSHIFT_DOESNT_THROW_NON_WRITABLE',
-      description: 'Array.prototype.unshift doesn\'t throw on ' +
-            'non-writable property',
-      test: test_UNSHIFT_DOESNT_THROW_NON_WRITABLE,
-      repair: repair_UNSHIFT_IGNORES_READONLY,
-      preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'SHIFT_IGNORES_NON_WRITABLE',
-      description: 'Array.prototype.shift ignores non-writable property',
-      test: test_SHIFT_IGNORES_NON_WRITABLE,
-      repair: repair_SHIFT_IGNORES_READONLY,
-      preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'REVERSE_IGNORES_NON_WRITABLE',
-      description: 'Array.prototype.reverse ignores non-writable property',
-      test: test_REVERSE_IGNORES_NON_WRITABLE,
-      repair: void 0,
-      preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
-      id: 'SORT_IGNORES_NON_WRITABLE',
-      description: 'Array.prototype.sort ignores non-writable property',
-      test: test_SORT_IGNORES_NON_WRITABLE,
-      repair: void 0,
-      preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: false,
-      urls: ['https://code.google.com/p/v8/issues/detail?id=3356',
-             'https://code.google.com/p/google-caja/issues/detail?id=1931',
-             'https://code.google.com/p/v8/issues/detail?id=2615'],
-      sections: [],
-      tests: [] // TODO(jasvir): Add to test262
-    },
-    {
       id: 'POP_IGNORES_FROZEN',
       description: 'Array.prototype.pop ignores frozeness',
       test: test_POP_IGNORES_FROZEN,
@@ -5101,6 +4743,51 @@ var ses;
       tests: []  // TODO(kpreid): contribute tests
     }
   ];
+
+  arrayPutProblem(supportedProblems,
+                  'splice', [0, 0, 'a'], 0, 'a', 'readonly');
+  arrayPutProblem(supportedProblems,
+                  'splice', [0, 0, 'a'], 0, 'a', 'non_writable');
+  arrayPutProblem(supportedProblems,
+                  'splice', [1, 1], 1, void 0, 'readonly');
+
+  arrayPutProblem(supportedProblems,
+                  'pop', [], 1, void 0, 'readonly');
+
+  arrayPutProblem(supportedProblems,
+                  'unshift', ['a'], 0, 'a', 'readonly',
+                  repair_UNSHIFT_IGNORES_READONLY);
+  arrayPutProblem(supportedProblems,
+                  'unshift', ['a'], 0, 'a', 'non_writable',
+                  repair_UNSHIFT_IGNORES_READONLY);
+
+  arrayPutProblem(supportedProblems,
+                  'shift', [], 0, 'b', 'readonly',
+                  repair_SHIFT_IGNORES_READONLY);
+  arrayPutProblem(supportedProblems,
+                  'shift', [], 0, 'b', 'non_writable',
+                  repair_SHIFT_IGNORES_READONLY);
+  arrayPutProblem(supportedProblems,
+                  'shift', [], 1, void 0, 'readonly',
+                  repair_SHIFT_IGNORES_READONLY);
+
+  arrayPutProblem(supportedProblems,
+                  'reverse', [], 0, 'b', 'readonly');
+  arrayPutProblem(supportedProblems,
+                  'reverse', [], 0, 'b', 'non_writable');
+  arrayPutProblem(supportedProblems,
+                  'reverse', [], 1, 'c', 'readonly');
+  arrayPutProblem(supportedProblems,
+                  'reverse', [], 1,  'c', 'non_writable');
+
+  arrayPutProblem(supportedProblems,
+                  'sort', [], 0, 'b', 'readonly');
+  arrayPutProblem(supportedProblems,
+                  'sort', [], 0, 'b', 'non_writable');
+  arrayPutProblem(supportedProblems,
+                  'sort', [], 1, 'c', 'readonly');
+  arrayPutProblem(supportedProblems,
+                  'sort', [], 1,  'c', 'non_writable');
 
   // UNSHIFT_IGNORES_SEALED
   // UNSHIFT_IGNORES_FROZEN
