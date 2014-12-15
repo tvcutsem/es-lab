@@ -147,8 +147,7 @@ var ses;
 
   /**
    * Needs to work on ES3, since repairES5.js may be run on an ES3
-   * platform. This is also a known strict mode function that calls
-   * its callback, for tests to use.
+   * platform.
    */
   function strictForEachFn(list, callback) {
     for (var i = 0, len = list.length; i < len; i++) {
@@ -157,27 +156,9 @@ var ses;
   }
 
   /**
-   * A known sloppy function that can be used with strictForEachFn and
-   * a strict f to test what's visible from a sloppy function called
-   * from a strict one.
-   *
-   * Defined using Function so it'll be sloppy (not strict and not
-   * builtin).
+   * A known strict-mode function for tests to use.
    */
-  var sloppyCaller = Function('m', 'f', 'return m([m], f)[0];');
-
-  /**
-   * A known strict function which returns its arguments object.
-   */
-  function strictArguments() { return arguments; }
-
-  /**
-   * A known sloppy function which returns its arguments object.
-   *
-   * Defined using Function so it'll be sloppy (not strict and not
-   * builtin).
-   */
-  var sloppyArguments = Function('return arguments;');
+  function strictFnSpecimen() {}
 
   var objToString = Object.prototype.toString;
 
@@ -197,44 +178,6 @@ var ses;
   var builtInMapMethod = Array.prototype.map;
 
   var builtInForEach = Array.prototype.forEach;
-
-  /**
-   * A list of pairs of <ol>
-   * <li>unique [[ThrowTypeError]] poison functions
-   * <li>a list of strings explaining where they were seen.
-   * </ol>
-   */
-  var throwTypeErrorFuncs = [];
-
-  function addTTE(base, where, names) {
-    names.forEach(function (name) {
-      var desc = Object.getOwnPropertyDescriptor(base, name);
-      if (!desc) { return; }
-      ['get', 'set'].forEach(function (attr) {
-        var tte = desc[attr];
-        if (!tte) { return; }
-        var whereSeen = where + ' ' + attr + ' ' + name;
-        for (var i = 0, len = throwTypeErrorFuncs.length; i < len; i++) {
-          if (throwTypeErrorFuncs[i][0] === tte) {
-            throwTypeErrorFuncs[i][1].push(whereSeen);
-            return;
-          }
-        }
-        throwTypeErrorFuncs.push([tte, [whereSeen]]);
-      });
-    });
-  }
-
-  addTTE(Function.prototype, 'Function.prototype', ['caller', 'arguments']);
-  addTTE(builtInMapMethod, 'builtin function', ['caller', 'arguments']);
-  addTTE(strictForEachFn, 'strict function', ['caller', 'arguments']);
-  addTTE(sloppyCaller, 'sloppy function', ['caller', 'arguments']);
-  addTTE(strictArguments(), 'strict arguments', ['caller', 'callee']);
-  addTTE(sloppyArguments(), 'sloppy arguments', ['caller', 'callee']);
-
-  throwTypeErrorFuncs.forEach(function(pair, i) {
-    logger.log('tte' + i + ': ' + pair[1].join(', '));
-  });
 
   /**
    * At https://bugs.ecmascript.org/show_bug.cgi?id=3113#c24 Jason
@@ -261,8 +204,8 @@ var ses;
   var noFuncPoison =
      Function.prototype.hasOwnProperty('caller') &&
      Function.prototype.hasOwnProperty('arguments') &&
-     !strictForEachFn.hasOwnProperty('caller') &&
-     !strictForEachFn.hasOwnProperty('arguments') &&
+     !strictFnSpecimen.hasOwnProperty('caller') &&
+     !strictFnSpecimen.hasOwnProperty('arguments') &&
      !builtInMapMethod.hasOwnProperty('caller') &&
      !builtInMapMethod.hasOwnProperty('arguments') &&
      delete Function.prototype.caller &&
@@ -271,7 +214,6 @@ var ses;
      !Function.prototype.hasOwnProperty('arguments');
   ses.noFuncPoison = noFuncPoison;
 
-  logger.log('noFuncPoison: ' + noFuncPoison);
 
   /**
    * http://wiki.ecmascript.org/doku.php?id=harmony:egal
@@ -1829,7 +1771,7 @@ var ses;
    * Detects whether strict function violate caller anonymity.
    */
   function test_STRICT_CALLER_NOT_POISONED() {
-    if (!has2(strictForEachFn, 'caller', 'a strict function')) {
+    if (!has2(strictFnSpecimen, 'caller', 'a strict function')) {
       return false;
     }
     function foo(m) { return m.caller; }
@@ -1837,7 +1779,7 @@ var ses;
     var testfn = Function('m', 'f', 'return m([m], f)[0];');
     var caller;
     try {
-      caller = testfn(strictForEachFn, foo);
+      caller = testfn(strictFnSpecimen, foo);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
       return 'Strict "caller" failed with: ' + err;
@@ -1854,7 +1796,7 @@ var ses;
    * Detects whether strict functions are encapsulated.
    */
   function test_STRICT_ARGUMENTS_NOT_POISONED() {
-    if (!has2(strictForEachFn, 'arguments', 'a strict function')) {
+    if (!has2(strictFnSpecimen, 'arguments', 'a strict function')) {
       return false;
     }
     function foo(m) { return m.arguments; }
@@ -1862,7 +1804,7 @@ var ses;
     var testfn = Function('m', 'f', 'return m([m], f)[0];');
     var args;
     try {
-      args = testfn(strictForEachFn, foo);
+      args = testfn(strictFnSpecimen, foo);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
       return 'Strict "arguments" failed with: ' + err;
@@ -2742,6 +2684,54 @@ var ses;
 
   function getThrowTypeError() {
     return Object.getOwnPropertyDescriptor(arguments, 'caller').get;
+  }
+
+  /**
+   * A known strict function which returns its arguments object.
+   */
+  function strictArguments() { return arguments; }
+
+  /**
+   * A known sloppy function which returns its arguments object.
+   *
+   * Defined using Function so it'll be sloppy (not strict and not
+   * builtin).
+   */
+  var sloppyArguments = Function('return arguments;');
+
+  /**
+   * [[ThrowTypeError]] is not unique (even after whatever cleanup was
+   * already done during the noPoison testing above).
+   */
+  function test_THROWTYPEERROR_NOT_UNIQUE() {
+    var tte = getThrowTypeError();
+    if (typeof tte !== 'function') {
+      return 'Unexpected [[ThrowTypeError]]: ' + tte;
+    }
+    var others = [];
+    strictForEachFn([
+      [Function.prototype, 'Function.prototype', ['caller', 'arguments']],
+      [builtInMapMethod, 'builtin function', ['caller', 'arguments']],
+      [strictArguments, 'strict function', ['caller', 'arguments']],
+      [sloppyArguments, 'sloppy function', ['caller', 'arguments']],
+      [strictArguments(), 'strict arguments', ['caller', 'callee']],
+      [sloppyArguments(), 'sloppy arguments', ['caller', 'callee']]
+    ], function(triple) {
+      var base = triple[0];
+      var where = triple[1];
+      var names = triple[2];
+      strictForEachFn(names, function(name) {
+        var desc = Object.getOwnPropertyDescriptor(base, name);
+        if (!desc) { return; }
+        strictForEachFn(['get', 'set'], function (attr) {
+          var otherTTE = desc[attr];
+          if (!otherTTE || otherTTE === tte) { return; }
+          others.push(where + ' ' + attr + ' ' + name);
+        });
+      });
+    });
+    if (others.length === 0) { return false; }
+    return 'Multiple [[ThrowTypeError]]s: ' + others.join(', ');
   }
 
   /**
@@ -4740,6 +4730,17 @@ var ses;
       urls: ['https://code.google.com/p/v8/issues/detail?id=2829'],
       sections: [],  // TODO(kpreid): cite when ES6 is final
       tests: []  // TODO(kpreid): cite when ES6 is final
+    },
+    {
+      id: 'THROWTYPEERROR_NOT_UNIQUE',
+      description: '[[ThrowTypeError]] is not unique',
+      test: test_THROWTYPEERROR_NOT_UNIQUE,
+      repair: void 0,
+      preSeverity: severities.UNSAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
     },
     {
       id: 'THROWTYPEERROR_UNFROZEN',
