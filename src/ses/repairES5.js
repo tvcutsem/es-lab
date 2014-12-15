@@ -31,7 +31,7 @@
  * //provides ses.ok, ses.okToLoad, ses.getMaxSeverity
  * //provides ses.is, ses.makeDelayedTamperProof
  * //provides ses.makeCallerHarmless, ses.makeArgumentsHarmless
- * //provides ses.noPoison
+ * //provides ses.noFuncPoison
  * //provides ses.verifyStrictFunctionBody
  *
  * @author Mark S. Miller
@@ -147,7 +147,8 @@ var ses;
 
   /**
    * Needs to work on ES3, since repairES5.js may be run on an ES3
-   * platform.
+   * platform. This is also a known strict mode function that calls
+   * its callback, for tests to use.
    */
   function strictForEachFn(list, callback) {
     for (var i = 0, len = list.length; i < len; i++) {
@@ -156,9 +157,27 @@ var ses;
   }
 
   /**
-   * A known strict-mode function for tests to use.
+   * A known sloppy function that can be used with strictForEachFn and
+   * a strict f to test what's visible from a sloppy function called
+   * from a strict one.
+   *
+   * Defined using Function so it'll be sloppy (not strict and not
+   * builtin).
    */
-  function strictFnSpecimen() {}
+  var sloppyCaller = Function('m', 'f', 'return m([m], f)[0];');
+
+  /**
+   * A known strict function which returns its arguments object.
+   */
+  function strictArguments() { return arguments; }
+
+  /**
+   * A known sloppy function which returns its arguments object.
+   *
+   * Defined using Function so it'll be sloppy (not strict and not
+   * builtin).
+   */
+  var sloppyArguments = Function('return arguments;');
 
   var objToString = Object.prototype.toString;
 
@@ -180,6 +199,44 @@ var ses;
   var builtInForEach = Array.prototype.forEach;
 
   /**
+   * A list of pairs of <ol>
+   * <li>unique [[ThrowTypeError]] poison functions
+   * <li>a list of strings explaining where they were seen.
+   * </ol>
+   */
+  var throwTypeErrorFuncs = [];
+
+  function addTTE(base, where, names) {
+    names.forEach(function (name) {
+      var desc = Object.getOwnPropertyDescriptor(base, name);
+      if (!desc) { return; }
+      ['get', 'set'].forEach(function (attr) {
+        var tte = desc[attr];
+        if (!tte) { return; }
+        var whereSeen = where + ' ' + attr + ' ' + name;
+        for (var i = 0, len = throwTypeErrorFuncs.length; i < len; i++) {
+          if (throwTypeErrorFuncs[i][0] === tte) {
+            throwTypeErrorFuncs[i][1].push(whereSeen);
+            return;
+          }
+        }
+        throwTypeErrorFuncs.push([tte, [whereSeen]]);
+      });
+    });
+  }
+
+  addTTE(Function.prototype, 'Function.prototype', ['caller', 'arguments']);
+  addTTE(builtInMapMethod, 'builtin function', ['caller', 'arguments']);
+  addTTE(strictForEachFn, 'strict function', ['caller', 'arguments']);
+  addTTE(sloppyCaller, 'sloppy function', ['caller', 'arguments']);
+  addTTE(strictArguments(), 'strict arguments', ['caller', 'callee']);
+  addTTE(sloppyArguments(), 'sloppy arguments', ['caller', 'callee']);
+
+  throwTypeErrorFuncs.forEach(function(pair, i) {
+    logger.log('tte' + i + ': ' + pair[1].join(', '));
+  });
+
+  /**
    * At https://bugs.ecmascript.org/show_bug.cgi?id=3113#c24 Jason
    * Orendorff states the best draft for a simpler safe spec for the
    * .caller and .argument properties on functions, that may or may
@@ -197,25 +254,24 @@ var ses;
    * this fails, then we proceed under the assumption we're in the old
    * regime.
    *
-   * If noPoison, then we're in the new regime made simply safe by
+   * If noFuncPoison, then we're in the new regime made simply safe by
    * these deletions, and we do not treat the names 'caller' and
-   * 'arguments' on functions as special. We have also presumably lost
-   * reachability to the ThrowTypeError function, so we need not worry
-   * whether it would have conformed.
+   * 'arguments' on functions as special.
    */
-  var noPoison =
+  var noFuncPoison =
      Function.prototype.hasOwnProperty('caller') &&
      Function.prototype.hasOwnProperty('arguments') &&
-     !strictFnSpecimen.hasOwnProperty('caller') &&
-     !strictFnSpecimen.hasOwnProperty('arguments') &&
+     !strictForEachFn.hasOwnProperty('caller') &&
+     !strictForEachFn.hasOwnProperty('arguments') &&
      !builtInMapMethod.hasOwnProperty('caller') &&
      !builtInMapMethod.hasOwnProperty('arguments') &&
      delete Function.prototype.caller &&
      delete Function.prototype.arguments &&
      !Function.prototype.hasOwnProperty('caller') &&
      !Function.prototype.hasOwnProperty('arguments');
-  ses.noPoison = noPoison;
+  ses.noFuncPoison = noFuncPoison;
 
+  logger.log('noFuncPoison: ' + noFuncPoison);
 
   /**
    * http://wiki.ecmascript.org/doku.php?id=harmony:egal
@@ -348,7 +404,7 @@ var ses;
       if (typeof obj === 'function') {
         for (i = 0, j = 0; i < len; i++) {
           name = list[i];
-          if (noPoison || (name !== 'caller' && name !== 'arguments')) {
+          if (noFuncPoison || (name !== 'caller' && name !== 'arguments')) {
             callback(name, j);
             j++;
           }
@@ -769,7 +825,7 @@ var ses;
    * The function own property names that funcLike doesn't copy
    * in a generic manner from newFunc to the returned standin.
    */
-  var exemptFuncProps = noPoison ? ['name', 'length'] :
+  var exemptFuncProps = noFuncPoison ? ['name', 'length'] :
      ['name', 'length', 'caller', 'arguments'];
 
   /**
@@ -1626,7 +1682,7 @@ var ses;
       // Seen in IE9. Harmless by itself
       return false;
     }
-    if (desc === void 0 && noPoison) { return false; }
+    if (desc === void 0 && noFuncPoison) { return false; }
     return 'getOwnPropertyDesciptor returned unexpected caller descriptor';
   }
 
@@ -1648,7 +1704,7 @@ var ses;
       return 'hasOwnProperty failed with: ' + err;
     }
     if (answer) { return false; }
-    if (noPoison) { return false; }
+    if (noFuncPoison) { return false; }
     return 'strict_function.hasOwnProperty("caller") was false';
   }
 
@@ -1743,7 +1799,7 @@ var ses;
       return '("caller" in strict_func) failed with: ' + err;
     } finally {}
     if (answer) { return false; }
-    if (noPoison) { return false; }
+    if (noFuncPoison) { return false; }
     return '("caller" in strict_func) was false.';
   }
 
@@ -1765,7 +1821,7 @@ var ses;
       return '("arguments" in strict_func) failed with: ' + err;
     } finally {}
     if (answer) { return false; }
-    if (noPoison) { return false; }
+    if (noFuncPoison) { return false; }
     return '("arguments" in strict_func) was false.';
   }
 
@@ -1773,7 +1829,7 @@ var ses;
    * Detects whether strict function violate caller anonymity.
    */
   function test_STRICT_CALLER_NOT_POISONED() {
-    if (!has2(strictFnSpecimen, 'caller', 'a strict function')) {
+    if (!has2(strictForEachFn, 'caller', 'a strict function')) {
       return false;
     }
     function foo(m) { return m.caller; }
@@ -1781,7 +1837,7 @@ var ses;
     var testfn = Function('m', 'f', 'return m([m], f)[0];');
     var caller;
     try {
-      caller = testfn(strictFnSpecimen, foo);
+      caller = testfn(strictForEachFn, foo);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
       return 'Strict "caller" failed with: ' + err;
@@ -1790,7 +1846,7 @@ var ses;
       // Seen on IE 9
       return true;
     }
-    if (caller === void 0 && noPoison) { return false; }
+    if (caller === void 0 && noFuncPoison) { return false; }
     return 'Unexpected "caller": ' + caller;
   }
 
@@ -1798,7 +1854,7 @@ var ses;
    * Detects whether strict functions are encapsulated.
    */
   function test_STRICT_ARGUMENTS_NOT_POISONED() {
-    if (!has2(strictFnSpecimen, 'arguments', 'a strict function')) {
+    if (!has2(strictForEachFn, 'arguments', 'a strict function')) {
       return false;
     }
     function foo(m) { return m.arguments; }
@@ -1806,7 +1862,7 @@ var ses;
     var testfn = Function('m', 'f', 'return m([m], f)[0];');
     var args;
     try {
-      args = testfn(strictFnSpecimen, foo);
+      args = testfn(strictForEachFn, foo);
     } catch (err) {
       if (err instanceof TypeError) { return false; }
       return 'Strict "arguments" failed with: ' + err;
@@ -1815,7 +1871,7 @@ var ses;
       // Seen on IE 9
       return true;
     }
-    if (args === void 0 && noPoison) { return false; }
+    if (args === void 0 && noFuncPoison) { return false; }
     return 'Unexpected arguments: ' + arguments;
   }
 
@@ -2685,15 +2741,13 @@ var ses;
   }
 
   function getThrowTypeError() {
-    if (noPoison) { return void 0; }
-    return Object.getOwnPropertyDescriptor(getThrowTypeError, 'arguments').get;
+    return Object.getOwnPropertyDescriptor(arguments, 'caller').get;
   }
 
   /**
    * [[ThrowTypeError]] is extensible or has modifiable properties.
    */
   function test_THROWTYPEERROR_UNFROZEN() {
-    if (noPoison) { return false; }
     return !Object.isFrozen(getThrowTypeError());
   }
 
@@ -2706,7 +2760,6 @@ var ses;
    * about (and will delete via whitelisting).
    */
   function test_THROWTYPEERROR_PROPERTIES() {
-    if (noPoison) { return false; }
     var tte = getThrowTypeError();
     return !!Object.getOwnPropertyDescriptor(tte, 'prototype') ||
         !!Object.getOwnPropertyDescriptor(tte, 'arguments') ||

@@ -19,7 +19,7 @@
  * WeakMap spec. Compatible with ES5-strict or anticipated ES6.
  *
  * //requires ses.makeCallerHarmless, ses.makeArgumentsHarmless
- * //requires ses.noPoison
+ * //requires ses.noFuncPoison
  * //requires ses.verifyStrictFunctionBody
  * //optionally requires ses.mitigateSrcGotchas
  * //provides ses.startSES ses.resolveOptions, ses.securableWrapperSrc
@@ -372,8 +372,7 @@ ses.startSES = function(global,
    * Obtain the ES5 singleton [[ThrowTypeError]].
    */
   function getThrowTypeError() {
-    if (ses.noPoison) { return void 0; }
-    return gopd(getThrowTypeError, "arguments").get;
+    return gopd(arguments, 'caller').get;
   }
 
 
@@ -1379,14 +1378,12 @@ ses.startSES = function(global,
       //es5ProblemReports: ses.es5ProblemReports
     };
 
-    if (!ses.noPoison) {
-      // Inserted here to make this ES5 singleton object controllable by our
-      // whitelist, not to make it part of our public API.
-      defProp(cajaVM, '[[ThrowTypeError]]', {
-        enumerable: false,
-        value: getThrowTypeError()
-      });
-    }
+    // Inserted here to make this ES5 singleton object controllable by our
+    // whitelist, not to make it part of our public API.
+    defProp(cajaVM, '[[ThrowTypeError]]', {
+      enumerable: false,
+      value: getThrowTypeError()
+    });
 
     var extensionsRecord = extensions();
     gopn(extensionsRecord).forEach(function (p) {
@@ -1543,7 +1540,7 @@ ses.startSES = function(global,
     }
     var diagnostic;
 
-    if (typeof base === 'function' && !ses.noPoison) {
+    if (typeof base === 'function' && !ses.noFuncPoison) {
       if (name === 'caller') {
         diagnostic = ses.makeCallerHarmless(base, path);
         // We can use a severity of SAFE here since if this isn't
@@ -1733,15 +1730,13 @@ ses.startSES = function(global,
   ].forEach(function(record) {
     var name = record[0];
     var root = record[1];
-    if (root !== void 0) {
-      if (!cleaning.has(root)) {
-        reportItemProblem(rootReports, ses.severities.NOT_ISOLATED,
-            'Not cleaned', name);
-      }
-      if (!Object.isFrozen(root)) {
-        reportItemProblem(rootReports, ses.severities.NOT_ISOLATED,
-            'Not frozen', name);
-      }
+    if (!cleaning.has(root)) {
+      reportItemProblem(rootReports, ses.severities.NOT_ISOLATED,
+          'Not cleaned', name);
+    }
+    if (!Object.isFrozen(root)) {
+      reportItemProblem(rootReports, ses.severities.NOT_ISOLATED,
+          'Not frozen', name);
     }
   });
 
