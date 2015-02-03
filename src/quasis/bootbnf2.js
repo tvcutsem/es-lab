@@ -1,6 +1,6 @@
 
 var SPACE_RE = /\s+/;
-var NUM_RE = /\d+(?:\.\d+)?(?:[eE]-?\d+)?/;
+var NUMBER_RE = /\d+(?:\.\d+)?(?:[eE]-?\d+)?/;
 var IDENT_RE = /[a-zA-Z_\$][\w\$]*/;
 var STRING_RE = /\"(?:[^\"]|\\"|\\\\|\\\/|\\b|\\f|\\n|\\r|\\t|\\u[\da-fA-F][\da-fA-F][\da-fA-F][\da-fA-F])*\"/;
 var SINGLE_OP = /[\[\]\(\){},;]/;
@@ -9,7 +9,7 @@ var LINE_COMMENT_RE = /#.*\n/;
 
 var TOKEN_RE_SRC = '(' + [
   SPACE_RE,
-  NUM_RE,
+  NUMBER_RE,
   IDENT_RE,
   STRING_RE,
   SINGLE_OP,
@@ -63,7 +63,7 @@ function tokens(codesite, ...args) {
   return tokensGen(codesite.raw);
 }
 
-//for (t of tokens`foo:~@% &+=*< #&comment**
+//for (var t of tokens`foo:~@% &+=*< #&comment**
 // >,.?|\-^/[bar(--44,55.3e-4)"baz"]${Object}zip`) {
 //  print(JSON.stringify(t));
 //}
@@ -101,7 +101,7 @@ function JSONT() {
   `;
 }
 
-// for (t of JSONT()) { print(JSON.stringify(t)); }
+// for (var t of JSONT()) { print(JSON.stringify(t)); }
 
 function quasiMemo(quasiCurry) {
   var wm = new WeakMap();
@@ -117,43 +117,51 @@ function quasiMemo(quasiCurry) {
 
 
 function simple(prefix, list) {
+  "use strict";
   if (list.length === 0) { return ['empty']; }
   if (list.length === 1) { return list[0]; }
   return [prefix, ...list];
 }
 
-function makeCompile(sexp, context) {
+function compile(sexp, context) {
+  "use strict";
+  var literals = new Set();
+
   var rules = new Map();
-  rules.set('IDENT', function(...args) {
+  function setRule(name, func) {
+    if (rules.has(name)) {
+      throw new Error('rule conflict: ' + name);
+    }
+    rules.set(name, func);
+  }
+  function getRule(name) {
+    if (!rules.has(name)) {
+      throw new Error('missing rule: ' + name);
+    }
+    return rules.get(name);
+  }
+  setRule('IDENT', function(...args) {
     return context.eat(IDENT_RE);
   });
-  rules.set('NUMBER', function(...args) {
+  setRule('NUMBER', function(...args) {
     return context.eat(NUMBER_RE);
   });
-  rules.set('STRING', function(...args) {
+  setRule('STRING', function(...args) {
     return context.eat(STRING_RE);
   });
-  rules.set('HOLE', function(...args) {
+  setRule('HOLE', function(...args) {
     return context.eatHole();
   });
-  var literals = new Set();
   
-  function compile(sexp) {
+  function peval(sexp) {
     var vtable = Object.freeze({
+      bnf: function(...rules) {
+        var names = rules.map(peval);
+        return getRule(names[0]);
+      },
       def: function(name, body) {
-        rules.set(name, compile(body));
+        setRule(name, peval(body));
         return name;
-      },
-      rule: function(name) {
-        return function(...args) {
-          return rules.get(name)(...args);
-        };
-      },
-      quote: function(str) {
-        literals.add(str);
-        return function(...args) {
-          return context.eat(str);
-        }
       },
       empty: function() {
         return function(...args) {
@@ -166,7 +174,7 @@ function makeCompile(sexp, context) {
         };
       },
       or: function(...choices) {
-        var choicesF = choices.map(choice => compile(choice));
+        var choicesF = choices.map(peval);
         return function(...args) {
           var pos = context.pos;
           for (var choiceF of choicesF) {
@@ -178,7 +186,7 @@ function makeCompile(sexp, context) {
         };
       },
       act: function(seq, hole) {
-        var seqF = compile(seq);
+        var seqF = peval(seq);
         return function(...args) {
           var vals = seqF(...args);
           if (vals === void 0) { return void 0; }
@@ -186,10 +194,10 @@ function makeCompile(sexp, context) {
         };
       },
       seq: function(...terms) {
-        var termsF = terms.map(term => compile(term));
+        var termsF = terms.map(peval);
         return function(...args) {
           var vals = [];
-          for (termF of termsF) {
+          for (var termF of termsF) {
             var val = termF(...args);
             if (val === void 0) { return void 0; }
             vals.push(val);
@@ -198,8 +206,8 @@ function makeCompile(sexp, context) {
         };
       },
       '**': function(patt, sep) {
-        var pattF = compile(patt);
-        var sepF = compile(sep);
+        var pattF = peval(patt);
+        var sepF = peval(sep);
         return function(...args) {
           var vals = [];
           while (true) {
@@ -233,13 +241,116 @@ function makeCompile(sexp, context) {
       },
       '+': function(patt) {
         return vtable['++'](patt, ['empty']);
-      },
+      }
+    });
+
+    if (typeof sexp === 'string') {
+      if (allRE(IDENT_RE).test(sexp)) {
+        return function(...args) {
+          // delay getting rule until it is defined.
+          return getRule(sexp)(...args);
+        };
+      }
+      if (allRE(STRING_RE).test(sexp)) {
+        literals.add(sexp);
+        return function(...args) {
+          return context.eat(sexp);
+        };
+      }
+      throw new Error('unexpected: ' + sexp);
+    }        
+    return vtable[sexp[0]](...sexp.slice(1));
+  }
+
+  return peval(sexp);
+}
+
+var parsedBNF = ['bnf',
+ ['def','bnf',['act',['*','rule'],0]],
+ ['def','rule',['act',['seq','IDENT','"::="','body','";"'],1]],
+ ['def','body',['act',['**','choice','"|"'],2]],
+ ['def','choice',['or','seq',
+                  ['act',['seq','seq','"=>"','HOLE'],3]]],
+ ['def','seq',['act',['*','term'],4]],
+ ['def','term',['or',['act',['seq','prim',['or','"**"','"++"'],'prim'],5],
+                ['act',['seq','prim',['or','"?"','"*"','"+"']],6],
+                'prim']],
+ ['def','prim',['or','IDENT',
+                'STRING',
+                ['act',['seq','"("','body','")"'],7]]]];
+
+
+var parseActions = [
+  rules => ['bnf', ...rules],
+  (n, _1, b, _2) => ['def', n, b],
+  list => simple('or', list),
+  (s, _, h) => ['act', a, h],
+  list => simple('seq', list),
+  (patt, q, sep) => [q, patt, sep],
+  (patt, q) => [q, patt],
+  (_1, b, _2) => b
+];
+
+
+function Context(codesite) {
+  var toks = Array.from(tokens(codesite));
+
+  var pos = 0;
+
+  return Object.freeze({
+    get pos() { return pos; },
+    set pos(newPos) { pos = newPos; },
+
+    eat: function(patt) {
+      if (pos >= toks.length) { return void 0; }
+      var result = toks[pos];
+      if ((typeof patt === 'string' && patt === result) ||
+          (typeof result === 'string' && allRE(patt).test(result))) {
+        return toks[pos++];
+      }
+      return void 0;
+    },
+    eatHole: function() {
+      if (pos >= toks.length) { return void 0; }
+      if (typeof toks[pos] === 'number') {
+        return toks[pos++];
+      }
+      return void 0;
+    }
+  });
+}
+
+
+function parts(codesite, ...args) {
+  return [codesite, ...args];
+}
+
+var [arithCS, ...arithArgs] = parts`
+  expr ::= 
+    term "+" term        => ${(a,_,b) => a+b}
+  | term "-" term        => ${(a,_,b) => a-b}
+  | term;
+  term ::=
+    factor "*" factor    => ${(a,_,b) => a*b}
+  | factor "/" factor    => ${(a,_,b) => a/b}
+  | factor;
+  factor ::=
+    NUMBER               => ${JSON.parse}
+  | "(" expr ")"         => ${(_1,v,_2) => v};
+ `;
+
+var arithContext = Context(arithCS);
+var parseArith = compile(parsedBNF, arithContext);
+var ast = parseArith(...parseActions);
 
 
 function bnfCurry(codesite1) {
   "use strict";
 
-    
+  var context1 = Context(codesite1);
+  var compiledBNF = compile(parsedBNF, context1);
+  var ast = compiledBNF(parseActions);
+
 
   function bnfRest(...args1) {
     function parserCurry(codesite2) {
@@ -250,27 +361,33 @@ function bnfCurry(codesite1) {
   }
 }
 
+
+
+
+
+
 var bnf1 = quasiMemo(bnfCurry);
 
 var bnf = bnf1`
     bnf ::= rule*                 => ${parser};
     rule ::= IDENT "::=" body ";" => ${(n, _1, b, _2) => ['def', n, b]};
-    body ::= choice**"|";         => ${list => simple('or', list)};
+    body ::= choice**"|"          => ${list => simple('or', list)};
     choice ::=
       seq
     | seq "=>" HOLE               => ${(s, _, h) => ['act', a, h]};
     seq ::= term*                 => ${list => simple('seq', list)};
     term ::=
       prim ("**"|"++") prim       => ${(patt, q, sep) => [q, patt, sep]}
-    | prim ("?"|"*"|"+")          => ${(patt, q) => [q, patt]};
+    | prim ("?"|"*"|"+")          => ${(patt, q) => [q, patt]}
+    | prim;
     prim ::=
-      IDENT                       => ${id => ['rule', id]}
-    | STRING                      => ${str => ['quote', str]}
+      IDENT
+    | STRING
     | "(" body ")"                => ${(_1, b, _2) => b};
   `;
 
 
-//for (t of BNFT()) { print(JSON.stringify(t)); }
+//for (var t of BNFT()) { print(JSON.stringify(t)); }
 
 
 function bnfParse(tokensIt) {

@@ -103,6 +103,13 @@ function JSONT() {
 
 // for (t of JSONT()) { print(JSON.stringify(t)); }
 
+function simple(prefix, list) {
+  if (list.length === 0) { return ['empty']; }
+  if (list.length === 1) { return list[0]; }
+  return [prefix, ...list];
+}
+
+
 function BNFT() {
   "use strict";
 
@@ -111,18 +118,19 @@ function BNFT() {
   }
 
   return tokens`
-    bnf ::= rule*                 => ${makeBNF};
+    bnf ::= rule*                 => ${r => r};
     rule ::= IDENT "::=" body ";" => ${(n, _1, b, _2) => ['def', n, b]};
-    body ::= choice**"|";
+    body ::= choice**"|"          => ${list => simple('or', list)};
     choice ::=
-      term*
-    | term* "=>" HOLE             => ${(ts, _, h) => ['act', t, h]};
+      seq
+    | seq "=>" HOLE               => ${(s, _, h) => ['act', a, h]};
+    seq ::= term*                 => ${list => simple('seq', list)};
     term ::=
-      prim ("?"|"+"|"*")          => ${(left, q) => [q, left]}
-    | prim ("++"|"**") prim       => ${(left, q, right) => [q, left, right]};
+      prim ("**"|"++") prim       => ${(patt, q, sep) => [q, patt, sep]}
+    | prim ("?"|"*"|"+")          => ${(patt, q) => [q, patt]};
     prim ::=
-      IDENT
-    | STRING
+      IDENT                       => ${id => ['rule', id]}
+    | STRING                      => ${str => ['quote', str]}
     | "(" body ")"                => ${(_1, b, _2) => b};
   `;
 }
@@ -242,4 +250,4 @@ function bnfParse(tokensIt) {
 }
 
 //JSON.stringify(bnfParse(JSONT()), void 0, ' ');
-JSON.stringify(bnfParse(BNFT()), void 0, ' ');
+JSON.stringify(bnfParse(BNFT()), void 0, '');
