@@ -321,19 +321,21 @@ var arithSrc = compile(['bnf',
  ['def','expr',['or',['act',['term','"+"','expr'],1],
                 'term']],
  ['def','term',['or',['act',['NUMBER'],2],
-                ['act',['"("','expr','")"'],3]]]], 4);
+                ['act',['HOLE'],3],
+                ['act',['"("','expr','")"'],4]]]], 5);
 
 // TODO(erights): confine
 var arithParser = eval(arithSrc);
 
 var arithActions = [
   (v,_) => v,
-  (a,_,b) => a+b,
-  JSON.parse,
+  (a,_,b) => (...args) => a(...args) + b(...args),
+  n => (...args) => JSON.parse(n),
+  (h) => (...args) => args[h],
   (_1,v,_2) => v];
 
 var arithCurry = arithParser(...arithActions);
 
-// var arith = quasiMemo(arithCurry);
+var arith = quasiMemo(arithCurry);
 
-debugger; arithCurry`1 + (2 + 33) + 4`;
+arith`1 + (2 + ${33} + ${44}) + 4`;
