@@ -69,7 +69,10 @@ function Scanner(literalParts, tokenTypes) {
 
   const scanner = Object.freeze({
     get pos() { return pos; },
-    set pos(oldPos) { pos = oldPos; },
+    set pos(oldPos) {
+      if (oldPos < pos - 1) { debugger; }
+      pos = oldPos;
+    },
 
     try: function(thunk) {
       var oldPos = pos;
@@ -114,6 +117,9 @@ function quasiMemo(quasiCurry) {
     if (!quasiRest) {
       quasiRest = quasiCurry(codesite);
       wm.set(codesite, quasiRest);
+    }
+    if (typeof quasiRest !== 'function') {
+      throw new Error(`${typeof quasiRest}: ${quasiRest}`);
     }
     return quasiRest(...args);
   }
@@ -338,4 +344,53 @@ var arithCurry = arithParser(...arithActions);
 
 var arith = quasiMemo(arithCurry);
 
-arith`1 + (2 + ${33} + ${44}) + 4`;
+// arith`1 + (2 + ${33} + ${44}) + 4`;
+
+
+
+var bnfSrc = compile(['bnf',
+ ['def','bnf',['act',[['*','rule'],'EOF'], 0]],
+ ['def','rule',['act',['IDENT','"::="','body','";"'], 1]],
+ ['def','body',['act',[['**','choice','"|"']], 2]],
+ ['def','choice',['or',['act',[['*','term'],'"=>"','HOLE'], 3],
+                  'seq']],
+ ['def','seq',['act',[['*','term']], 4]],
+ ['def','term',['or',['act',['prim',['or','"**"','"++"'],'prim'], 5],
+                ['act',['prim',['or','"?"','"*"','"+"']], 6],
+                'prim']],
+ ['def','prim',['or','IDENT',
+                'STRING',
+                ['act',['"("','body','")"'], 7]]]], 8);
+
+// TODO(erights): confine
+var bnfParser = eval(bnfSrc);
+
+var bnfActions = [
+  (rules,_) => ['bnf', ...rules],
+  (n, _1, b, _2) => ['def', n, b],
+  list => simple('or', list),
+  (s, _, h) => ['act', s, h],
+  list => simple('seq', list),
+  (patt, q, sep) => [q, patt, sep],
+  (patt, q) => [q, patt],
+  (_1, b, _2) => b
+];
+
+var bnfCurry = bnfParser(...bnfActions);
+
+var bnf = quasiMemo(bnfCurry);
+
+
+//var arith2 = bnf`
+JSON.stringify(bnfCurry`
+  start ::= expr EOF     => ${arithActions[0]};
+  expr ::= 
+    term "+" term        => ${arithActions[1]}
+  | term;
+  term ::=
+    NUMBER               => ${arithActions[2]}
+  | HOLE                 => ${arithActions[3]}
+  | "(" expr ")"         => ${arithActions[4]};
+ `, void 0, ' ');
+
+// arith`1 + (2 + ${33} + ${44}) + 4`;
