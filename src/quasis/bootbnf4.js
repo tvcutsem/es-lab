@@ -142,6 +142,7 @@ function compile(sexp, numArgs) {
   const tokenTypes = new Set();
 
   var alphaCount = 0;
+  // TODO(erights): Use lexical "let" once FF supports it.
   const vars = ['var value = fail'];
   function nextVar(prefix) {
     const result = `${prefix}_${alphaCount++}`;
@@ -153,8 +154,8 @@ function compile(sexp, numArgs) {
     vars.length = 1;
     return result;
   }
-  function nextLabel() {
-    return `label_${alphaCount++}`;
+  function nextLabel(prefix) {
+    return `${prefix}_${alphaCount++}`;
   }
 
 
@@ -197,7 +198,7 @@ function compile(sexp, numArgs) {
         return `value = fail;`;
       },
       or: function(...choices) {
-        const labelSrc = nextLabel();
+        const labelSrc = nextLabel('or');
         const choicesSrc = choices.map(peval).map(cSrc =>
 `${cSrc}
 if (value !== fail) break ${labelSrc};`).join('\n');
@@ -210,7 +211,7 @@ if (value !== fail) break ${labelSrc};`).join('\n');
       },
       seq: function(...terms) {
         const posSrc = nextVar('pos');
-        const labelSrc = nextLabel();
+        const labelSrc = nextLabel('seq');
         const sSrc = nextVar('s');
         const vSrc = nextVar('v');
         const termsSrc = terms.map(peval).map(termSrc =>
