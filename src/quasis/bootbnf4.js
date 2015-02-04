@@ -373,10 +373,20 @@ var bnfAST = ['bnf',
 var bnfSrc = compile(bnfAST);
 
 // TODO(erights): confine
-var bnfParser = eval(bnfSrc);
+var bnfParser = (1,eval)(bnfSrc);
+
+
+function metaCompile(baseRules, eof) {
+  var baseAST = ['bnf', ...baseRules];
+  var baseSrc = compile(baseAST);
+  var baseParser = (1,eval)(baseSrc); // TODO(erights): confine
+  var baseCurry = baseParser(...bnfActions);
+  return quasiMemo(baseCurry);
+}
+
 
 var bnfActions = [
-  (rules,_) => ['bnf', ...rules],
+  metaCompile,
   (n, _1, b, _2) => ['def', n, b],
   list => simple('or', list),
   (s, _, h) => ['act', s, h],
