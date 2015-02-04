@@ -409,3 +409,28 @@ var arithSrc2 = compile(arithAST2);
 if (arithSrc !== arithSrc2) {
   throw new Error('compiling differs from meta compiling');
 }
+
+//var bnf2 = bnf`
+var bnfAST2 = bnfCurry`
+  bnf ::= rule* EOF                 => ${bnfActions[0]};
+  rule ::= IDENT "::=" body ";"     => ${bnfActions[1]};
+  body ::= choice ** "|"            => ${bnfActions[2]};
+  choice ::=
+    term* "=>" HOLE                 => ${bnfActions[3]}
+  | seq;
+  seq ::= term*                     => ${bnfActions[4]};
+  term ::= 
+    prim ("**" | "++") prim         => ${bnfActions[5]}
+  | prim ("?" | "*" | "+")          => ${bnfActions[6]}
+  | prim;
+  prim ::=
+    IDENT
+  | STRING
+  | "(" body ")"                    => ${bnfActions[7]};
+`;
+
+var bnfSrc2 = compile(bnfAST2);
+
+if (bnfSrc !== bnfSrc2) {
+  throw new Error('meta compiling differs from meta meta compiling');
+}
