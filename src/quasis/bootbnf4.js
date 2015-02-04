@@ -48,22 +48,22 @@ function* tokensGen1(literalPart, re) {
   return 'EOF';
 }
 
-function* tokensGen(literalParts, tokenTypes) {
+function* tokensGen(rawTemplate, tokenTypes) {
   "use strict";
   // TODO(erights): Calculate re using tokenTypes
   const re = RegExp(TOKEN_RE_SRC, 'g');
-  const numArgs = literalParts.length - 1;
-  for (var i = 0; i < numArgs; i++) {
-    yield* tokensGen1(literalParts[i], re);
+  const numSubsts = rawTemplate.length - 1;
+  for (var i = 0; i < numSubsts; i++) {
+    yield* tokensGen1(rawTemplate[i], re);
     yield i;
   }
-  yield* tokensGen1(literalParts[numArgs], re);
+  yield* tokensGen1(rawTemplate[numSubsts], re);
 }
 
-function Scanner(literalParts, tokenTypes) {
+function Scanner(rawTemplate, tokenTypes) {
   "use strict";
   var fail = Object.freeze({toString: () => 'fail'});
-  var toks = [...tokensGen(literalParts, tokenTypes)];
+  var toks = [...tokensGen(rawTemplate, tokenTypes)];
 
   var pos = 0;
 
@@ -112,16 +112,16 @@ function Scanner(literalParts, tokenTypes) {
 
 function quasiMemo(quasiCurry) {
   const wm = new WeakMap();
-  return function(codesite, ...args) {
-    var quasiRest = wm.get(codesite);
+  return function(template, ...substs) {
+    var quasiRest = wm.get(template);
     if (!quasiRest) {
-      quasiRest = quasiCurry(codesite);
-      wm.set(codesite, quasiRest);
+      quasiRest = quasiCurry(template);
+      wm.set(template, quasiRest);
     }
     if (typeof quasiRest !== 'function') {
       throw new Error(`${typeof quasiRest}: ${quasiRest}`);
     }
-    return quasiRest(...args);
+    return quasiRest(...substs);
   }
 }
 
@@ -137,14 +137,10 @@ function indent(str, newnewline) {
   return str.replace(/\n/g, newnewline);
 }
 
-function compile(sexp, numArgs) {
+function compile(sexp) {
   "use strict";
 
-  const paramSrcs = [];
-  for (var i = 0; i < numArgs; i++) {
-    paramSrcs.push(`act_${i}`)
-  }
-
+  var numSubsts = 0;
   const tokenTypes = new Set();
 
   var alphaCount = 0;
@@ -168,15 +164,20 @@ function compile(sexp, numArgs) {
   function peval(sexp) {
     const vtable = Object.freeze({
       bnf: function(...rules) {
-        // The following line also initializes tokenTypes
+        // The following line also initializes tokenTypes and numSubsts
         const rulesSrc = rules.map(peval).join('');
+
+        const paramSrcs = [];
+        for (var i = 0; i < numSubsts; i++) {
+          paramSrcs.push(`act_${i}`)
+        }
         const tokenTypesSrc = 
               `[${[...tokenTypes].map(tt => JSON.stringify(tt)).join(', ')}]`;
         return (
 `(function(${paramSrcs.join(', ')}) {
   "use strict";
-  return function(codesite) {
-    const scanner = Scanner(codesite.raw, ${tokenTypesSrc});
+  return function(template) {
+    const scanner = Scanner(template.raw, ${tokenTypesSrc});
     const fail = scanner.fail;
     ${indent(rulesSrc,`
     `)}
@@ -237,10 +238,11 @@ ${labelSrc}: {
 if ((value = ${vSrc}) === fail) scanner.pos = ${posSrc};`);
       },
       act: function(terms, hole) {
+        numSubsts = Math.max(numSubsts, hole + 1);
         const termsSrc = vtable.seq(...terms);
         return (
 `${termsSrc}
-if (value !== fail) value = ${paramSrcs[hole]}(...value);`);
+if (value !== fail) value = act_${hole}(...value);`);
       },
       '**': function(patt, sep) {
         const posSrc = nextVar('pos');
@@ -322,33 +324,39 @@ if (value.length === 0) value = fail;`);
   return peval(sexp);
 }
 
-var arithSrc = compile(['bnf',
+var arithAST = ['bnf',
  ['def','start',['act',['expr','EOF'],0]],
  ['def','expr',['or',['act',['term','"+"','expr'],1],
                 'term']],
  ['def','term',['or',['act',['NUMBER'],2],
                 ['act',['HOLE'],3],
-                ['act',['"("','expr','")"'],4]]]], 5);
+                ['act',['"("','expr','")"'],4]]]];
+
+var arithSrc = compile(arithAST);
+
+
 
 // TODO(erights): confine
 var arithParser = eval(arithSrc);
 
 var arithActions = [
   (v,_) => v,
-  (a,_,b) => (...args) => a(...args) + b(...args),
-  n => (...args) => JSON.parse(n),
-  (h) => (...args) => args[h],
+  (a,_,b) => (...substs) => a(...substs) + b(...substs),
+  n => (...substs) => JSON.parse(n),
+  (h) => (...substs) => substs[h],
   (_1,v,_2) => v];
 
 var arithCurry = arithParser(...arithActions);
 
 var arith = quasiMemo(arithCurry);
 
-// arith`1 + (2 + ${33} + ${44}) + 4`;
+if (84 !== arith`1 + (2 + ${33} + ${44}) + 4`) {
+  throw Error('arith template handler did not work');
+}
 
 
 
-var bnfSrc = compile(['bnf',
+var bnfAST = ['bnf',
  ['def','bnf',['act',[['*','rule'],'EOF'], 0]],
  ['def','rule',['act',['IDENT','"::="','body','";"'], 1]],
  ['def','body',['act',[['**','choice','"|"']], 2]],
@@ -360,7 +368,9 @@ var bnfSrc = compile(['bnf',
                 'prim']],
  ['def','prim',['or','IDENT',
                 'STRING',
-                ['act',['"("','body','")"'], 7]]]], 8);
+                ['act',['"("','body','")"'], 7]]]];
+
+var bnfSrc = compile(bnfAST);
 
 // TODO(erights): confine
 var bnfParser = eval(bnfSrc);
@@ -382,15 +392,20 @@ var bnf = quasiMemo(bnfCurry);
 
 
 //var arith2 = bnf`
-JSON.stringify(bnfCurry`
+var arithAST2 = bnfCurry`
   start ::= expr EOF     => ${arithActions[0]};
   expr ::= 
-    term "+" term        => ${arithActions[1]}
+    term "+" expr        => ${arithActions[1]}
   | term;
   term ::=
     NUMBER               => ${arithActions[2]}
   | HOLE                 => ${arithActions[3]}
   | "(" expr ")"         => ${arithActions[4]};
- `, void 0, ' ');
+ `;
 
-// arith`1 + (2 + ${33} + ${44}) + 4`;
+
+var arithSrc2 = compile(arithAST2);
+
+if (arithSrc !== arithSrc2) {
+  throw new Error('compiling differs from meta compiling');
+}
