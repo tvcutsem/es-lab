@@ -62,7 +62,7 @@ function* tokensGen(literalParts, tokenTypes) {
 
 function Scanner(literalParts, tokenTypes) {
   "use strict";
-  var fail = Object.freeze({});
+  var fail = Object.freeze({toString: () => 'fail'});
   var toks = [...tokensGen(literalParts, tokenTypes)];
 
   var pos = 0;
@@ -100,7 +100,8 @@ function Scanner(literalParts, tokenTypes) {
         return toks[pos++];
       }
       return fail;
-    }
+    },
+    eatEOF: function() { return pos >= toks.length ? 'EOF' : fail; }
   });
   return scanner;
 }
@@ -199,7 +200,7 @@ function compile(sexp, numArgs) {
         const labelSrc = nextLabel();
         const choicesSrc = choices.map(peval).map(cSrc =>
 `${cSrc}
-if (value !== fail) { break ${labelSrc}; }`).join('\n');
+if (value !== fail) break ${labelSrc};`).join('\n');
 
         return (
 `${labelSrc}: {
@@ -211,28 +212,28 @@ if (value !== fail) { break ${labelSrc}; }`).join('\n');
         const posSrc = nextVar('pos');
         const labelSrc = nextLabel();
         const sSrc = nextVar('s');
+        const vSrc = nextVar('v');
         const termsSrc = terms.map(peval).map(termSrc =>
 `${termSrc}
-if (value === fail) {
-  ${sSrc} = fail;
-  break ${labelSrc};
-}
+if (value === fail) break ${labelSrc};
 ${sSrc}.push(value);`).join('\n');
 
         return (
 `${sSrc} = [];
+${vSrc} = fail;
 ${posSrc} = scanner.pos;
 ${labelSrc}: {
   ${indent(termsSrc,`
   `)}
+  ${vSrc} = ${sSrc};
 }
-if ((value = ${sSrc}) === fail) { scanner.pos = ${posSrc}; }`);
+if ((value = ${vSrc}) === fail) scanner.pos = ${posSrc};`);
       },
       act: function(terms, hole) {
         const termsSrc = vtable.seq(...terms);
         return (
 `${termsSrc}
-if (value !== fail) { value = ${paramSrcs[hole]}(...value); }`);
+if (value !== fail) value = ${paramSrcs[hole]}(...value);`);
       },
       '**': function(patt, sep) {
         const posSrc = nextVar('pos');
@@ -254,7 +255,7 @@ while (true) {
   ${posSrc} = scanner.pos;
   ${indent(sepSrc,`
   `)}
-  if (value === fail) { break; }
+  if (value === fail) break;
 }
 value = ${sSrc};`);
       },
@@ -262,7 +263,7 @@ value = ${sSrc};`);
         const starSrc = vtable['**'](patt, sep);
         return (
 `${starSrc}
-if (value.length === 0) { value = fail; }`);
+if (value.length === 0) value = fail;`);
       },
       '?': function(patt) {
         return vtable['**'](patt, ['fail']);
@@ -315,15 +316,17 @@ if (value.length === 0) { value = fail; }`);
 }
 
 var arithSrc = compile(['bnf',
- ['def','expr',['or',['act',['term','"+"','term'],0],
+ ['def','start',['act',['expr','EOF'],0]],
+ ['def','expr',['or',['act',['term','"+"','expr'],1],
                 'term']],
- ['def','term',['or',['act',['NUMBER'],1],
-                ['act',['"("','expr','")"'],2]]]], 3);
+ ['def','term',['or',['act',['NUMBER'],2],
+                ['act',['"("','expr','")"'],3]]]], 4);
 
 // TODO(erights): confine
 var arithParser = eval(arithSrc);
 
 var arithActions = [
+  (v,_) => v,
   (a,_,b) => a+b,
   JSON.parse,
   (_1,v,_2) => v];
