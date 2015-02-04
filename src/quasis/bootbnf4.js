@@ -21,22 +21,22 @@ function allRE(re) {
   return RegExp('^' + re.source + '$', re.flags);
 }
 
-function* tokensGen1(literalPart, tokenReSrc) {
+function* tokensGen1(literalPart, re) {
   "use strict";
 
   var expectedIndex = 0;
-  const RE = RegExp(tokenReSrc, 'g');
+  re.lastIndex = 0;
 
   while (true) {
-    const arr = RE.exec(literalPart);
+    const arr = re.exec(literalPart);
     if (arr === null) { return; }
     const tok = arr[1];
-    const actualStart = RE.lastIndex - tok.length;
+    const actualStart = re.lastIndex - tok.length;
     if (expectedIndex !== actualStart) {
       throw new Error(`unexpected ${expectedIndex}:${actualStart}:
   "${literalPart.slice(expectedIndex,actualStart)}"`);
     }
-    expectedIndex = RE.lastIndex;
+    expectedIndex = re.lastIndex;
     if (allRE(SPACE_RE).test(tok)) {
       continue;
     }
@@ -48,20 +48,63 @@ function* tokensGen1(literalPart, tokenReSrc) {
   return 'EOF';
 }
 
-function* tokensGen(literalParts) {
+function* tokensGen(literalParts, tokenTypes) {
   "use strict";
+  // TODO(erights): Calculate re using tokenTypes
+  const re = RegExp(TOKEN_RE_SRC, 'g');
   const numArgs = literalParts.length - 1;
   for (var i = 0; i < numArgs; i++) {
-    yield* tokensGen1(literalParts[i], TOKEN_RE_SRC);
+    yield* tokensGen1(literalParts[i], re);
     yield i;
   }
-  yield* tokensGen1(literalParts[numArgs], TOKEN_RE_SRC);
+  yield* tokensGen1(literalParts[numArgs], re);
 }
 
-function tokens(codesite, ...args) {
+function Scanner(literalParts, tokenTypes) {
   "use strict";
-  return tokensGen(codesite.raw);
+  var fail = Object.freeze({});
+  var toks = [...tokensGen(literalParts, tokenTypes)];
+
+  var pos = 0;
+
+  const scanner = Object.freeze({
+    get pos() { return pos; },
+    set pos(oldPos) { pos = oldPos; },
+
+    try: function(thunk) {
+      var oldPos = pos;
+      var result = thunk();
+      if (fail === result) {
+        pos = oldPos;
+      }
+      return result;
+    },
+
+    fail: fail,
+
+    eat: function(patt) {
+      if (pos >= toks.length) { return fail; }
+      var result = toks[pos];
+      if ((typeof patt === 'string' && patt === result) ||
+          (typeof result === 'string' && allRE(patt).test(result))) {
+        return toks[pos++];
+      }
+      return fail;
+    },
+    eatNUMBER: function() { return scanner.eat(NUMBER_RE); },
+    eatSTRING: function() { return scanner.eat(STRING_RE); },
+    eatIDENT: function() { return scanner.eat(IDENT_RE); },
+    eatHOLE: function() {
+      if (pos >= toks.length) { return fail; }
+      if (typeof toks[pos] === 'number') {
+        return toks[pos++];
+      }
+      return fail;
+    }
+  });
+  return scanner;
 }
+
 
 function quasiMemo(quasiCurry) {
   const wm = new WeakMap();
@@ -95,40 +138,43 @@ function compile(sexp, numArgs) {
     paramSrcs.push(`act_${i}`)
   }
 
-  const literals = new Set();
+  const tokenTypes = new Set();
 
-  const vars = [];
-  function nextVar(name) {
-    const result = `v${vars.length}_${name}`;
+  var alphaCount = 0;
+  const vars = ['var value = fail'];
+  function nextVar(prefix) {
+    const result = `${prefix}_${alphaCount++}`;
     vars.push(result);
     return result;
   }
   function takeVarsSrc() {
-    const result = vars.length === 0 ? '' : 
-`var ${vars.join(', ')};
-`;
-    vars.length = 0;
+    const result = `${vars.join(', ')};`;
+    vars.length = 1;
     return result;
   }
+  function nextLabel() {
+    return `label_${alphaCount++}`;
+  }
+
 
   function peval(sexp) {
     const vtable = Object.freeze({
       bnf: function(...rules) {
-        const startSrc = peval(rules[0][1]);
-        // The following line also initializes literals
+        // The following line also initializes tokenTypes
         const rulesSrc = rules.map(peval).join('');
-
-        const literalsSrc = `[${[...literals].join(', ')}]`;
+        const tokenTypesSrc = 
+              `[${[...tokenTypes].map(tt => JSON.stringify(tt)).join(', ')}]`;
         return (
-`function(${paramSrcs.join(', ')}) {
+`(function(${paramSrcs.join(', ')}) {
   "use strict";
   return function(codesite) {
-    const context = Context(codesite, ${literalsSrc});
-    const fail = context.fail;
+    const scanner = Scanner(codesite.raw, ${tokenTypesSrc});
+    const fail = scanner.fail;
     ${indent(rulesSrc,`
-    `)}return ${startSrc};
+    `)}
+    return rule_${rules[0][1]}();
   };
-}
+})
 `);
       },
       def: function(name, body) {
@@ -136,104 +182,87 @@ function compile(sexp, numArgs) {
         const bodySrc = peval(body);
         return (
 `function rule_${name}() {
-  ${indent(takeVarsSrc(),`
-  `)}return ${indent(bodySrc,`
-  `)};
+  ${takeVarsSrc()}
+  ${indent(bodySrc,`
+  `)}
+  return value;
 }
 `);
       },
       empty: function() {
-        return `[]`;
+        return `value = [];`;
       },
       fail: function() {
-        return `fail`;
+        return `value = fail;`;
       },
       or: function(...choices) {
-        const posSrc = nextVar('pos');
-        const resultSrc = nextVar('result');
+        const labelSrc = nextLabel();
         const choicesSrc = choices.map(peval).map(cSrc =>
-`if (fail !== (${resultSrc} = ${indent(cSrc,`
-               `)})) { return ${resultSrc}; }
-context.reset(${posSrc});
-`).join('');
+`${cSrc}
+if (value !== fail) { break ${labelSrc}; }`).join('\n');
 
         return (
-`(() => {
-  ${posSrc} = context.pos;
+`${labelSrc}: {
   ${indent(choicesSrc,`
-  `)}return fail;
-}())`);
-      },
-      act: function(terms, hole) {
-        const posSrc = nextVar('pos');
-        const resultSrc = nextVar('result');
-        const valsSrc = nextVar('vals');
-        const termsSrc = vtable.seq(...terms);
-        return (
-`(() => {
-  ${posSrc} = context.pos;
-  if (fail === (${valsSrc} = ${indent(termsSrc,`
-                `)})) { return fail; }
-  if (fail === (${resultSrc} = ${paramSrcs[hole]}(...${valsSrc}))) {
-    context.reset(${posSrc});
-  }
-  return ${resultSrc};
-}())`);
+  `)}
+}`);
       },
       seq: function(...terms) {
         const posSrc = nextVar('pos');
-        const resultSrc = nextVar('result');
-        const valsSrc = nextVar('vals');
+        const labelSrc = nextLabel();
+        const sSrc = nextVar('s');
         const termsSrc = terms.map(peval).map(termSrc =>
-`${resultSrc};
-if (fail === (${resultSrc} = ${indent(termSrc,`
-              `)})) { return context.reset(${posSrc}); }
-${valsSrc}.push(${resultSrc});
-`).join('');
+`${termSrc}
+if (value === fail) {
+  ${sSrc} = fail;
+  break ${labelSrc};
+}
+${sSrc}.push(value);`).join('\n');
 
         return (
-`(() => {
-  ${valsSrc} = [];
-  ${posSrc} = context.pos;
+`${sSrc} = [];
+${posSrc} = scanner.pos;
+${labelSrc}: {
   ${indent(termsSrc,`
-  `)}return ${valsSrc};
-}())`);
+  `)}
+}
+if ((value = ${sSrc}) === fail) { scanner.pos = ${posSrc}; }`);
+      },
+      act: function(terms, hole) {
+        const termsSrc = vtable.seq(...terms);
+        return (
+`${termsSrc}
+if (value !== fail) { value = ${paramSrcs[hole]}(...value); }`);
       },
       '**': function(patt, sep) {
         const posSrc = nextVar('pos');
-        const resultSrc = nextVar('result');
-        const valsSrc = nextVar('vals');
+        const sSrc = nextVar('s');
         const pattSrc = peval(patt);
         const sepSrc = peval(sep);
         return (
-`(() => {
-  ${valsSrc} = [];
-  ${posSrc} = context.pos;
-  while (true) {
-    ${resultSrc};
-    if (fail === (${resultSrc} = ${indent(pattSrc,`
-                  `)})) {
-      // after first iteration, backtrack to before the separator
-      context.reset(${posSrc});
-      return ${valsSrc};
-    }
-    ${valsSrc}.push(${resultSrc});
-    ${posSrc} = context.pos;
-    if (fail === (${indent(sepSrc,`
-                  `)})) {
-      context.reset(${posSrc});
-      return ${valsSrc};
-    }
+// after first iteration, backtrack to before the separator
+`${sSrc} = [];
+${posSrc} = scanner.pos;
+while (true) {
+  ${indent(pattSrc,`
+  `)}
+  if (value === fail) {
+    scanner.pos = ${posSrc};
+    break;
   }
-}())`);
+  ${sSrc}.push(value);
+  ${posSrc} = scanner.pos;
+  ${indent(sepSrc,`
+  `)}
+  if (value === fail) { break; }
+}
+value = ${sSrc};`);
       },
       '++': function(patt, sep) {
-        const resultSrc = nextVar('result');
         const starSrc = vtable['**'](patt, sep);
         return (
-`((${resultSrc} = ${indent(starSrc,`
-    `)}
-  ).length === 0 ? fail : ${resultSrc})`);
+`${starSrc}
+if (value.length === 0) { value = fail; }`);
       },
       '?': function(patt) {
         return vtable['**'](patt, ['fail']);
@@ -248,11 +277,34 @@ ${valsSrc}.push(${resultSrc});
 
     if (typeof sexp === 'string') {
       if (allRE(IDENT_RE).test(sexp)) {
-        return `rule_${sexp}()`;
+        switch (sexp) {
+          case 'NUMBER': {
+            tokenTypes.add(sexp);
+            return `value = scanner.eatNUMBER();`;
+          }
+          case 'STRING': {
+            tokenTypes.add(sexp);
+            return `value = scanner.eatSTRING();`;
+          }
+          case 'IDENT': {
+            tokenTypes.add(sexp);
+            return `value = scanner.eatIDENT();`;
+          }
+          case 'HOLE': {
+            return `value = scanner.eatHOLE();`;
+          }
+          case 'EOF': {
+            return `value = scanner.eatEOF();`;
+          }
+          default: {
+            // If it isn't a bnf keyword, assume it is a rule name.
+            return `value = rule_${sexp}();`;
+          }
+        }
       }
       if (allRE(STRING_RE).test(sexp)) {
-        literals.add(sexp);
-        return `context.eat(${sexp})`;
+        tokenTypes.add(sexp);
+        return `value = scanner.eat(${sexp});`;
       }
       throw new Error('unexpected: ' + sexp);
     }        
@@ -262,7 +314,22 @@ ${valsSrc}.push(${resultSrc});
   return peval(sexp);
 }
 
-compile(['bnf', 
-         ['def','f',['++','x','","']],
-         ['def','x',['act',['x','y'], 1]]],
-        3);
+var arithSrc = compile(['bnf',
+ ['def','expr',['or',['act',['term','"+"','term'],0],
+                'term']],
+ ['def','term',['or',['act',['NUMBER'],1],
+                ['act',['"("','expr','")"'],2]]]], 3);
+
+// TODO(erights): confine
+var arithParser = eval(arithSrc);
+
+var arithActions = [
+  (a,_,b) => a+b,
+  JSON.parse,
+  (_1,v,_2) => v];
+
+var arithCurry = arithParser(...arithActions);
+
+// var arith = quasiMemo(arithCurry);
+
+debugger; arithCurry`1 + (2 + 33) + 4`;
