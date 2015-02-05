@@ -46,7 +46,6 @@
       }
       yield tok;
     }
-    return 'EOF';
   }
   
   function* tokensGen(rawTemplate, tokenTypes) {
@@ -62,6 +61,7 @@
   
   function Scanner(rawTemplate, tokenTypes) {
     var fail = Object.freeze({toString: () => 'fail'});
+    var eof = Object.freeze({toString: () => 'eof'});
     var toks = [...tokensGen(rawTemplate, tokenTypes)];
   
     var pos = 0;
@@ -103,7 +103,7 @@
         }
         return fail;
       },
-      eatEOF: function() { return pos >= toks.length ? 'EOF' : fail; }
+      eatEOF: function() { return pos >= toks.length ? eof : fail; }
     });
     return scanner;
   }
@@ -321,16 +321,23 @@ if (value.length === 0) value = fail;`);
   
   function doArith(bnf) {
     return bnf`
-      start ::= expr EOF  => ${(v,_) => v};
+      start ::= expr EOF  ${(v,_) => v};
       expr ::= 
-        term "+" expr     => ${(a,_,b) => (...subs) => a(...subs) + b(...subs)}
+        term "+" expr     ${(a,_,b) => (...subs) => a(...subs) + b(...subs)}
       | term;
       term ::=
-        NUMBER            => ${n => (..._) => JSON.parse(n)}
-      | HOLE              => ${(h) => (...subs) => subs[h]}
-      | "(" expr ")"      => ${(_,v,_2) => v};
+        NUMBER            ${n => (..._) => JSON.parse(n)}
+      | HOLE              ${(h) => (...subs) => subs[h]}
+      | "(" expr ")"      ${(_,v,_2) => v};
      `;
   }
+
+  function testArith(arith, left, right, answer) {
+    if (arith`1 + (2 + ${left} + ${right}) + 4` !== answer) {
+      throw Error('arith template handler did not work');
+    }
+  };
+
 
   var arithRules = [
    ['def','start',['act',['expr','EOF'],0]],
@@ -341,7 +348,7 @@ if (value.length === 0) value = fail;`);
                   ['act',['"("','expr','")"'],4]]]];
   
   
-  var arithActions = doArith((_, ...rules) => rules);
+  var arithActions = doArith((_, ...actions) => actions);
 
   // TODO(erights): really confine
   function confine(expr, env) {
@@ -355,7 +362,7 @@ if (value.length === 0) value = fail;`);
     return closedFunc(...names.map(n => env[n]));
   }
   
-  function metaCompile(baseRules) {
+  function metaCompile(baseRules, _=void 0) {
     var baseAST = ['bnf', ...baseRules];
     var baseSrc = compile(baseAST);
     var baseParser = confine(baseSrc, {
@@ -369,36 +376,33 @@ if (value.length === 0) value = fail;`);
   
   var arith = metaCompile(arithRules)(...arithActions);
   
-  if (84 !== arith`1 + (2 + ${33} + ${44}) + 4`) {
-    throw Error('arith template handler did not work');
-  }
-  
+  testArith(arith, 33, 44, 84);
 
   function doBnf(bnf) {
     return bnf`
-      bnf ::= rule* EOF              => ${metaCompile};
-      rule ::= IDENT "::=" body ";"  => ${(n, _1, b, _2) => ['def', n, b]};
-      body ::= choice ** "|"         => ${list => simple('or', list)};
+      bnf ::= rule+ EOF              ${metaCompile};
+      rule ::= IDENT "::=" body ";"  ${(name,_,body,_2) => ['def', name, body]};
+      body ::= choice ** "|"         ${list => simple('or', list)};
       choice ::=
-        term* "=>" HOLE              => ${(s, _, h) => ['act', s, h]}
+        term* HOLE                   ${(list,hole) => ['act', list, hole]}
       | seq;
-      seq ::= term*                  => ${list => simple('seq', list)};
+      seq ::= term*                  ${list => simple('seq', list)};
       term ::= 
-        prim ("**" | "++") prim      => ${(patt, q, sep) => [q, patt, sep]}
-      | prim ("?" | "*" | "+")       => ${(patt, q) => [q, patt]}
+        prim ("**" | "++") prim      ${(patt,q,sep) => [q, patt, sep]}
+      | prim ("?" | "*" | "+")       ${(patt,q) => [q, patt]}
       | prim;
       prim ::=
         IDENT
       | STRING
-      | "(" body ")"                 => ${(_1, b, _2) => b};
+      | "(" body ")"                 ${(_,b,_2) => b};
     `;
   }    
   
   var bnfRules = [
-   ['def','bnf',['act',[['*','rule'],'EOF'], 0]],
+   ['def','bnf',['act',[['+','rule'],'EOF'], 0]],
    ['def','rule',['act',['IDENT','"::="','body','";"'], 1]],
    ['def','body',['act',[['**','choice','"|"']], 2]],
-   ['def','choice',['or',['act',[['*','term'],'"=>"','HOLE'], 3],
+   ['def','choice',['or',['act',[['*','term'],'HOLE'], 3],
                     'seq']],
    ['def','seq',['act',[['*','term']], 4]],
    ['def','term',['or',['act',['prim',['or','"**"','"++"'],'prim'], 5],
@@ -408,21 +412,12 @@ if (value.length === 0) value = fail;`);
                   'STRING',
                   ['act',['"("','body','")"'], 7]]]];
   
-  var bnfActions = doBnf((_, ...rules) => rules);
+  var bnfActions = doBnf((_, ...actions) => actions);
   
   var bnf = metaCompile(bnfRules)(...bnfActions);
   
-  var arith1 = doArith(bnf);
+  testArith(doArith(bnf), 33, 44, 84);
   
-  if (84 !== arith1`1 + (2 + ${33} + ${44}) + 4`) {
-    throw Error('arith1 template handler did not work');
-  }
-  
-  var bnf1 = doBnf(bnf);
-  
-  var arith2 = doArith(bnf1);
-  
-  if (84 !== arith2`1 + (2 + ${33} + ${44}) + 4`) {
-    throw Error('arith2 template handler did not work');
-  }
+  testArith(doArith(doBnf(bnf)), 33, 44, 84);
+
 }());
