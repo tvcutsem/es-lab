@@ -326,9 +326,9 @@ if (value.length === 0) value = fail;`);
         term "+" expr     => ${(a,_,b) => (...subs) => a(...subs) + b(...subs)}
       | term;
       term ::=
-        NUMBER            => ${n => (...subs) => JSON.parse(n)}
+        NUMBER            => ${n => (..._) => JSON.parse(n)}
       | HOLE              => ${(h) => (...subs) => subs[h]}
-      | "(" expr ")"      => ${(_1,v,_2) => v};
+      | "(" expr ")"      => ${(_,v,_2) => v};
      `;
   }
 
