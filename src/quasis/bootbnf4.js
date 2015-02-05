@@ -25,8 +25,6 @@
   }
   
   function* tokensGen1(literalPart, re) {
-    "use strict";
-  
     var expectedIndex = 0;
     re.lastIndex = 0;
   
@@ -52,19 +50,17 @@
   }
   
   function* tokensGen(rawTemplate, tokenTypes) {
-    "use strict";
     // TODO(erights): Calculate re using tokenTypes
     const re = RegExp(TOKEN_RE_SRC, 'g');
-    const numSubsts = rawTemplate.length - 1;
-    for (var i = 0; i < numSubsts; i++) {
+    const numSubs = rawTemplate.length - 1;
+    for (var i = 0; i < numSubs; i++) {
       yield* tokensGen1(rawTemplate[i], re);
       yield i;
     }
-    yield* tokensGen1(rawTemplate[numSubsts], re);
+    yield* tokensGen1(rawTemplate[numSubs], re);
   }
   
   function Scanner(rawTemplate, tokenTypes) {
-    "use strict";
     var fail = Object.freeze({toString: () => 'fail'});
     var toks = [...tokensGen(rawTemplate, tokenTypes)];
   
@@ -115,7 +111,7 @@
   
   function quasiMemo(quasiCurry) {
     const wm = new WeakMap();
-    return function(template, ...substs) {
+    return function(template, ...subs) {
       var quasiRest = wm.get(template);
       if (!quasiRest) {
         quasiRest = quasiCurry(template);
@@ -124,13 +120,12 @@
       if (typeof quasiRest !== 'function') {
         throw new Error(`${typeof quasiRest}: ${quasiRest}`);
       }
-      return quasiRest(...substs);
+      return quasiRest(...subs);
     }
   }
   
   
   function simple(prefix, list) {
-    "use strict";
     if (list.length === 0) { return ['empty']; }
     if (list.length === 1) { return list[0]; }
     return [prefix, ...list];
@@ -141,9 +136,7 @@
   }
   
   function compile(sexp) {
-    "use strict";
-  
-    var numSubsts = 0;
+    var numSubs = 0;
     const tokenTypes = new Set();
   
     var alphaCount = 0;
@@ -167,18 +160,17 @@
     function peval(sexp) {
       const vtable = Object.freeze({
         bnf: function(...rules) {
-          // The following line also initializes tokenTypes and numSubsts
+          // The following line also initializes tokenTypes and numSubs
           const rulesSrc = rules.map(peval).join('');
   
           const paramSrcs = [];
-          for (var i = 0; i < numSubsts; i++) {
+          for (var i = 0; i < numSubs; i++) {
             paramSrcs.push(`act_${i}`)
           }
           const tokenTypesSrc = 
                 `[${[...tokenTypes].map(tt => JSON.stringify(tt)).join(', ')}]`;
           return (
 `(function(${paramSrcs.join(', ')}) {
-  "use strict";
   return function(template) {
     const scanner = Scanner(template.raw, ${tokenTypesSrc});
     const fail = scanner.fail;
@@ -241,7 +233,7 @@ ${labelSrc}: {
 if ((value = ${vSrc}) === fail) scanner.pos = ${posSrc};`);
         },
         act: function(terms, hole) {
-          numSubsts = Math.max(numSubsts, hole + 1);
+          numSubs = Math.max(numSubs, hole + 1);
           const termsSrc = vtable.seq(...terms);
           return (
 `${termsSrc}
@@ -327,6 +319,19 @@ if (value.length === 0) value = fail;`);
     return peval(sexp);
   }
   
+  function doArith(bnf) {
+    return bnf`
+      start ::= expr EOF  => ${(v,_) => v};
+      expr ::= 
+        term "+" expr     => ${(a,_,b) => (...subs) => a(...subs) + b(...subs)}
+      | term;
+      term ::=
+        NUMBER            => ${n => (...subs) => JSON.parse(n)}
+      | HOLE              => ${(h) => (...subs) => subs[h]}
+      | "(" expr ")"      => ${(_1,v,_2) => v};
+     `;
+  }
+
   var arithRules = [
    ['def','start',['act',['expr','EOF'],0]],
    ['def','expr',['or',['act',['term','"+"','expr'],1],
@@ -336,12 +341,7 @@ if (value.length === 0) value = fail;`);
                   ['act',['"("','expr','")"'],4]]]];
   
   
-  var arithActions = [
-    (v,_) => v,
-    (a,_,b) => (...substs) => a(...substs) + b(...substs),
-    n => (...substs) => JSON.parse(n),
-    (h) => (...substs) => substs[h],
-    (_1,v,_2) => v];
+  var arithActions = doArith((_, ...rules) => rules);
 
   // TODO(erights): really confine
   function confine(expr, env) {
@@ -373,7 +373,26 @@ if (value.length === 0) value = fail;`);
     throw Error('arith template handler did not work');
   }
   
-  
+
+  function doBnf(bnf) {
+    return bnf`
+      bnf ::= rule* EOF              => ${metaCompile};
+      rule ::= IDENT "::=" body ";"  => ${(n, _1, b, _2) => ['def', n, b]};
+      body ::= choice ** "|"         => ${list => simple('or', list)};
+      choice ::=
+        term* "=>" HOLE              => ${(s, _, h) => ['act', s, h]}
+      | seq;
+      seq ::= term*                  => ${list => simple('seq', list)};
+      term ::= 
+        prim ("**" | "++") prim      => ${(patt, q, sep) => [q, patt, sep]}
+      | prim ("?" | "*" | "+")       => ${(patt, q) => [q, patt]}
+      | prim;
+      prim ::=
+        IDENT
+      | STRING
+      | "(" body ")"                 => ${(_1, b, _2) => b};
+    `;
+  }    
   
   var bnfRules = [
    ['def','bnf',['act',[['*','rule'],'EOF'], 0]],
@@ -389,64 +408,19 @@ if (value.length === 0) value = fail;`);
                   'STRING',
                   ['act',['"("','body','")"'], 7]]]];
   
-  var bnfActions = [
-    metaCompile,
-    (n, _1, b, _2) => ['def', n, b],
-    list => simple('or', list),
-    (s, _, h) => ['act', s, h],
-    list => simple('seq', list),
-    (patt, q, sep) => [q, patt, sep],
-    (patt, q) => [q, patt],
-    (_1, b, _2) => b
-  ];
+  var bnfActions = doBnf((_, ...rules) => rules);
   
   var bnf = metaCompile(bnfRules)(...bnfActions);
   
-  
-  var arith1 = bnf`
-    start ::= expr EOF     => ${arithActions[0]};
-    expr ::= 
-      term "+" expr        => ${arithActions[1]}
-    | term;
-    term ::=
-      NUMBER               => ${arithActions[2]}
-    | HOLE                 => ${arithActions[3]}
-    | "(" expr ")"         => ${arithActions[4]};
-   `;
+  var arith1 = doArith(bnf);
   
   if (84 !== arith1`1 + (2 + ${33} + ${44}) + 4`) {
     throw Error('arith1 template handler did not work');
   }
   
+  var bnf1 = doBnf(bnf);
   
-  var bnf1 = bnf`
-    bnf ::= rule* EOF                 => ${bnfActions[0]};
-    rule ::= IDENT "::=" body ";"     => ${bnfActions[1]};
-    body ::= choice ** "|"            => ${bnfActions[2]};
-    choice ::=
-      term* "=>" HOLE                 => ${bnfActions[3]}
-    | seq;
-    seq ::= term*                     => ${bnfActions[4]};
-    term ::= 
-      prim ("**" | "++") prim         => ${bnfActions[5]}
-    | prim ("?" | "*" | "+")          => ${bnfActions[6]}
-    | prim;
-    prim ::=
-      IDENT
-    | STRING
-    | "(" body ")"                    => ${bnfActions[7]};
-  `;
-  
-  var arith2 = bnf1`
-    start ::= expr EOF     => ${arithActions[0]};
-    expr ::= 
-      term "+" expr        => ${arithActions[1]}
-    | term;
-    term ::=
-      NUMBER               => ${arithActions[2]}
-    | HOLE                 => ${arithActions[3]}
-    | "(" expr ")"         => ${arithActions[4]};
-   `;
+  var arith2 = doArith(bnf1);
   
   if (84 !== arith2`1 + (2 + ${33} + ${44}) + 4`) {
     throw Error('arith2 template handler did not work');
