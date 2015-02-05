@@ -4,8 +4,8 @@
   
   var SPACE_RE = /\s+/;
   var NUMBER_RE = /\d+(?:\.\d+)?(?:[eE]-?\d+)?/;
-  var IDENT_RE = /[a-zA-Z_\$][\w\$]*/;
   var STRING_RE = /\"(?:[^\"]|\\"|\\\\|\\\/|\\b|\\f|\\n|\\r|\\t|\\u[\da-fA-F][\da-fA-F][\da-fA-F][\da-fA-F])*\"/;
+  var IDENT_RE = /[a-zA-Z_\$][\w\$]*/;
   var SINGLE_OP = /[\[\]\(\){},;]/;
   var MULTI_OP = /[:~@#%&+=*<>.?|\\\-\^\/]+/;
   var LINE_COMMENT_RE = /#.*\n/;
@@ -13,8 +13,8 @@
   var TOKEN_RE_SRC = '(' + [
     SPACE_RE,
     NUMBER_RE,
-    IDENT_RE,
     STRING_RE,
+    IDENT_RE,
     SINGLE_OP,
     MULTI_OP,
     LINE_COMMENT_RE
@@ -48,9 +48,7 @@
     }
   }
   
-  function* tokensGen(rawTemplate, tokenTypes) {
-    // TODO(erights): Calculate re using tokenTypes
-    const re = RegExp(TOKEN_RE_SRC, 'g');
+  function* tokensGen(rawTemplate, re) {
     const numSubs = rawTemplate.length - 1;
     for (var i = 0; i < numSubs; i++) {
       yield* tokensGen1(rawTemplate[i], re);
@@ -59,19 +57,19 @@
     yield* tokensGen1(rawTemplate[numSubs], re);
   }
   
-  function Scanner(rawTemplate, tokenTypes) {
-    var fail = Object.freeze({toString: () => 'fail'});
-    var eof = Object.freeze({toString: () => 'eof'});
-    var toks = [...tokensGen(rawTemplate, tokenTypes)];
+  function Scanner(rawTemplate, tokenTypeList) {
+    // TODO(erights): Calculate re using tokenTypeList
+    const tokenTypes = new Set(tokenTypeList);
+    const re = RegExp(TOKEN_RE_SRC, 'g');
+    var toks = [...tokensGen(rawTemplate, re)];
   
+    const fail = Object.freeze({toString: () => 'fail'});
+    const eof = Object.freeze({toString: () => 'eof'});
     var pos = 0;
   
     const scanner = Object.freeze({
       get pos() { return pos; },
-      set pos(oldPos) {
-        if (oldPos < pos - 1) { debugger; }
-        pos = oldPos;
-      },
+      set pos(oldPos) { pos = oldPos; },
   
       try: function(thunk) {
         var oldPos = pos;
@@ -95,7 +93,16 @@
       },
       eatNUMBER: function() { return scanner.eat(NUMBER_RE); },
       eatSTRING: function() { return scanner.eat(STRING_RE); },
-      eatIDENT: function() { return scanner.eat(IDENT_RE); },
+      eatIDENT: function() { 
+        if (pos >= toks.length) { return fail; }
+        var result = toks[pos];
+        // It's an identifier if it matches IDENT_RE and it's not a keyword
+        if (allRE(IDENT_RE).test(result) &&
+            !tokenTypes.has(JSON.stringify(result))) {
+          return toks[pos++];
+        }
+        return fail;
+      },
       eatHOLE: function() {
         if (pos >= toks.length) { return fail; }
         if (typeof toks[pos] === 'number') {
@@ -167,12 +174,12 @@
           for (var i = 0; i < numSubs; i++) {
             paramSrcs.push(`act_${i}`)
           }
-          const tokenTypesSrc = 
+          const tokenTypeListSrc = 
                 `[${[...tokenTypes].map(tt => JSON.stringify(tt)).join(', ')}]`;
           return (
 `(function(${paramSrcs.join(', ')}) {
   return function(template) {
-    const scanner = Scanner(template.raw, ${tokenTypesSrc});
+    const scanner = Scanner(template.raw, ${tokenTypeListSrc});
     const fail = scanner.fail;
     ${indent(rulesSrc,`
     `)}
@@ -281,6 +288,10 @@ if (value.length === 0) value = fail;`);
       });
   
       if (typeof sexp === 'string') {
+        if (allRE(STRING_RE).test(sexp)) {
+          tokenTypes.add(sexp);
+          return `value = scanner.eat(${sexp});`;
+        }
         if (allRE(IDENT_RE).test(sexp)) {
           switch (sexp) {
             case 'NUMBER': {
@@ -306,10 +317,6 @@ if (value.length === 0) value = fail;`);
               return `value = rule_${sexp}();`;
             }
           }
-        }
-        if (allRE(STRING_RE).test(sexp)) {
-          tokenTypes.add(sexp);
-          return `value = scanner.eat(${sexp});`;
         }
         throw new Error('unexpected: ' + sexp);
       }        
@@ -352,6 +359,7 @@ if (value.length === 0) value = fail;`);
 
   // TODO(erights): really confine
   function confine(expr, env) {
+debugger;
     var names = Object.getOwnPropertyNames(env);
     var closedFuncSrc = 
 `(function(${names.join(',')}) {
@@ -392,8 +400,8 @@ if (value.length === 0) value = fail;`);
       | prim ("?" | "*" | "+")       ${(patt,q) => [q, patt]}
       | prim;
       prim ::=
-        IDENT
-      | STRING
+        STRING | IDENT
+      | "NUMBER" | "STRING" | "IDENT" | "HOLE" | "EOF"
       | "(" body ")"                 ${(_,b,_2) => b};
     `;
   }    
@@ -408,8 +416,8 @@ if (value.length === 0) value = fail;`);
    ['def','term',['or',['act',['prim',['or','"**"','"++"'],'prim'], 5],
                   ['act',['prim',['or','"?"','"*"','"+"']], 6],
                   'prim']],
-   ['def','prim',['or','IDENT',
-                  'STRING',
+   ['def','prim',['or','STRING','IDENT',
+                  '"NUMBER"','"STRING"','"IDENT"','"HOLE"','"EOF"',
                   ['act',['"("','body','")"'], 7]]]];
   
   var bnfActions = doBnf((_, ...actions) => actions);
