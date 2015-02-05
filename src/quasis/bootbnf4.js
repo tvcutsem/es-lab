@@ -324,7 +324,7 @@ if (value.length === 0) value = fail;`);
   return peval(sexp);
 }
 
-var arithAST = ['bnf',
+var arithRules = [
  ['def','start',['act',['expr','EOF'],0]],
  ['def','expr',['or',['act',['term','"+"','expr'],1],
                 'term']],
@@ -332,12 +332,6 @@ var arithAST = ['bnf',
                 ['act',['HOLE'],3],
                 ['act',['"("','expr','")"'],4]]]];
 
-var arithSrc = compile(arithAST);
-
-
-
-// TODO(erights): confine
-var arithParser = eval(arithSrc);
 
 var arithActions = [
   (v,_) => v,
@@ -346,9 +340,18 @@ var arithActions = [
   (h) => (...substs) => substs[h],
   (_1,v,_2) => v];
 
-var arithCurry = arithParser(...arithActions);
 
-var arith = quasiMemo(arithCurry);
+function metaCompile(baseRules) {
+  var baseAST = ['bnf', ...baseRules];
+  var baseSrc = compile(baseAST);
+  var baseParser = (1,eval)(baseSrc); // TODO(erights): confine
+  return function(...baseActions) {
+    var baseCurry = baseParser(...baseActions);
+    return quasiMemo(baseCurry);
+  };
+}
+
+var arith = metaCompile(arithRules)(...arithActions);
 
 if (84 !== arith`1 + (2 + ${33} + ${44}) + 4`) {
   throw Error('arith template handler did not work');
@@ -356,7 +359,7 @@ if (84 !== arith`1 + (2 + ${33} + ${44}) + 4`) {
 
 
 
-var bnfAST = ['bnf',
+var bnfRules = [
  ['def','bnf',['act',[['*','rule'],'EOF'], 0]],
  ['def','rule',['act',['IDENT','"::="','body','";"'], 1]],
  ['def','body',['act',[['**','choice','"|"']], 2]],
@@ -370,21 +373,6 @@ var bnfAST = ['bnf',
                 'STRING',
                 ['act',['"("','body','")"'], 7]]]];
 
-var bnfSrc = compile(bnfAST);
-
-// TODO(erights): confine
-var bnfParser = (1,eval)(bnfSrc);
-
-
-function metaCompile(baseRules, eof) {
-  var baseAST = ['bnf', ...baseRules];
-  var baseSrc = compile(baseAST);
-  var baseParser = (1,eval)(baseSrc); // TODO(erights): confine
-  var baseCurry = baseParser(...bnfActions);
-  return quasiMemo(baseCurry);
-}
-
-
 var bnfActions = [
   metaCompile,
   (n, _1, b, _2) => ['def', n, b],
@@ -396,13 +384,10 @@ var bnfActions = [
   (_1, b, _2) => b
 ];
 
-var bnfCurry = bnfParser(...bnfActions);
-
-var bnf = quasiMemo(bnfCurry);
+var bnf = metaCompile(bnfRules)(...bnfActions);
 
 
-//var arith2 = bnf`
-var arithAST2 = bnfCurry`
+var arith1 = bnf`
   start ::= expr EOF     => ${arithActions[0]};
   expr ::= 
     term "+" expr        => ${arithActions[1]}
@@ -413,15 +398,12 @@ var arithAST2 = bnfCurry`
   | "(" expr ")"         => ${arithActions[4]};
  `;
 
-
-var arithSrc2 = compile(arithAST2);
-
-if (arithSrc !== arithSrc2) {
-  throw new Error('compiling differs from meta compiling');
+if (84 !== arith1`1 + (2 + ${33} + ${44}) + 4`) {
+  throw Error('arith1 template handler did not work');
 }
 
-//var bnf2 = bnf`
-var bnfAST2 = bnfCurry`
+
+var bnf1 = bnf`
   bnf ::= rule* EOF                 => ${bnfActions[0]};
   rule ::= IDENT "::=" body ";"     => ${bnfActions[1]};
   body ::= choice ** "|"            => ${bnfActions[2]};
@@ -439,8 +421,17 @@ var bnfAST2 = bnfCurry`
   | "(" body ")"                    => ${bnfActions[7]};
 `;
 
-var bnfSrc2 = compile(bnfAST2);
+var arith2 = bnf1`
+  start ::= expr EOF     => ${arithActions[0]};
+  expr ::= 
+    term "+" expr        => ${arithActions[1]}
+  | term;
+  term ::=
+    NUMBER               => ${arithActions[2]}
+  | HOLE                 => ${arithActions[3]}
+  | "(" expr ")"         => ${arithActions[4]};
+ `;
 
-if (bnfSrc !== bnfSrc2) {
-  throw new Error('meta compiling differs from meta meta compiling');
+if (84 !== arith2`1 + (2 + ${33} + ${44}) + 4`) {
+  throw Error('arith2 template handler did not work');
 }
