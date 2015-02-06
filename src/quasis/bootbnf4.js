@@ -1,5 +1,5 @@
 
-(function() {
+(function(global) {
   "use strict";
   
   var SPACE_RE = /\s+/;
@@ -69,7 +69,12 @@
   
     const scanner = Object.freeze({
       get pos() { return pos; },
-      set pos(oldPos) { pos = oldPos; },
+      set pos(oldPos) { 
+        if (oldPos < pos - 1) {
+          debugger;
+        }
+        pos = oldPos;
+      },
   
       try: function(thunk) {
         var oldPos = pos;
@@ -428,4 +433,99 @@ debugger;
   
   testArith(doArith(doBnf(bnf)), 33, 44, 84);
 
-}());
+  global.bnf = bnf;
+}(this));
+
+
+function doJsonPattern(startAction) {
+  return bnf`
+    start ::= term EOF        ${startAction};
+    term ::=
+      "[" elem ** "," "]"     ${(_,elems,_2) => ['list', ...elems]}
+    | "{" pair ** "," "}"     ${(_,pairs,_2) => ['record', ...pairs]}
+    | NUMBER | STRING 
+    | "true" | "false" | "null"
+    | HOLE                    ${hole => ['hole', hole]}
+    | "(" term ")"            ${(_,v,_2) => v};
+    elem ::=
+      quant
+    | term;
+    pair ::= 
+      STRING ":" elem         ${(k,_,v) => ['pair', k, v]}
+    | quant; 
+    quant ::=
+      term ("?" | "*" | "+")  ${(patt,q) => ['quant', q, patt]};
+  `;
+}
+
+function quant(q, arr) {
+  if (!Array.isArray(arr)) {
+    throw new Error("cannot flatten: " + arr);
+  }
+  var len = arr.length;
+  switch (q) {
+    case '?': {
+      if (len <= 1) return;
+      break;
+    }
+    case '*': {
+      return;
+    }
+    case '+': {
+      if (len >= 1) return;
+      break;
+    }
+  }
+  throw new Error(`Length ${len} does not match "${q}"`);
+}
+
+function jsonExprAction(term, _) {
+  return function(...subs) {
+    function interp(sexp) {
+      const vtable = Object.freeze({
+        list: function(...elems) {
+          var result = [];
+          for (var e of elems) {
+            if (e[0] === 'quant') {
+              var v = interp(e[2]);
+              quant(e[1], v);
+              result.push(...v);
+            } else {
+              result.push(interp(e));
+            }
+          }
+          return result;
+        },
+        record: function(...pairs) {
+          result = {};
+          for (var p of pairs) {
+            if (p[0] === 'quant') {
+              var v = interp(p[2]);
+              var names = Object.getOwnPropertyNames(v);
+              quant(p[1], names);
+              names.forEach(n => result[n] = v[n]);
+            } else {
+              if (p[0] !== 'pair') { throw new Error("unrecognized: " + p); }
+              result[interp(p[1])] = interp(p[2]);
+            }
+          }
+          return result;
+        },
+        hole: function(hole) {
+          return subs[hole];
+        }
+      });
+      
+      if (typeof sexp === 'string') {
+        return JSON.parse(sexp);
+      }
+      return vtable[sexp[0]](...sexp.slice(1));
+    }
+
+    return interp(term);
+  };
+}
+
+var jsonExpr = doJsonPattern(jsonExprAction);
+
+JSON.stringify(jsonExpr`["a", [${["b","c"]}*, "d"]*]`);
