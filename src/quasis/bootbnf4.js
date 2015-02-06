@@ -7,7 +7,7 @@
   var STRING_RE = /\"(?:[^\"]|\\"|\\\\|\\\/|\\b|\\f|\\n|\\r|\\t|\\u[\da-fA-F][\da-fA-F][\da-fA-F][\da-fA-F])*\"/;
   var IDENT_RE = /[a-zA-Z_\$][\w\$]*/;
   var SINGLE_OP = /[\[\]\(\){},;]/;
-  var MULTI_OP = /[:~@#%&+=*<>.?|\\\-\^\/]+/;
+  var MULTI_OP = /[:~@%&+=*<>.?|\\\-\^\/]+/;
   var LINE_COMMENT_RE = /#.*\n/;
   
   var TOKEN_RE_SRC = '(' + [
@@ -443,16 +443,18 @@ function doJsonPattern(startAction) {
     term ::=
       "[" elem ** "," "]"     ${(_,elems,_2) => ['list', ...elems]}
     | "{" pair ** "," "}"     ${(_,pairs,_2) => ['record', ...pairs]}
-    | NUMBER | STRING 
-    | "true" | "false" | "null"
+    | prim
     | HOLE                    ${hole => ['hole', hole]}
     | "(" term ")"            ${(_,v,_2) => v};
     elem ::=
       quant
     | term;
     pair ::= 
-      STRING ":" elem         ${(k,_,v) => ['pair', k, v]}
-    | quant; 
+      prim ":" elem         ${(k,_,v) => ['pair', k, v]}
+    | quant;
+    prim ::=
+      # JSON only specifies STRING keys but allows the others
+      NUMBER | STRING | IDENT | "true" | "false" | "null";
     quant ::=
       term ("?" | "*" | "+")  ${(patt,q) => ['quant', q, patt]};
   `;
@@ -479,7 +481,7 @@ function quant(q, arr) {
   throw new Error(`Length ${len} does not match "${q}"`);
 }
 
-function jsonExprAction(term, _) {
+function jsonValueAction(term, _) {
   return function(...subs) {
     function interp(sexp) {
       const vtable = Object.freeze({
@@ -506,7 +508,11 @@ function jsonExprAction(term, _) {
               names.forEach(n => result[n] = v[n]);
             } else {
               if (p[0] !== 'pair') { throw new Error("unrecognized: " + p); }
-              result[interp(p[1])] = interp(p[2]);
+              var key = p[1];
+              if (key[0] === '"') {
+                key = JSON.parse(key);
+              }
+              result[key] = interp(p[2]);
             }
           }
           return result;
@@ -526,6 +532,74 @@ function jsonExprAction(term, _) {
   };
 }
 
-var jsonExpr = doJsonPattern(jsonExprAction);
+var json = doJsonPattern(jsonValueAction);
 
-JSON.stringify(jsonExpr`["a", [${["b","c"]}*, "d"]*]`);
+JSON.stringify(json`["a", [${["b","c"]}*, "d"]*]`);
+
+JSON.stringify(json`{a:1,{b:2,a:3,c:4}*}`);
+
+
+function jsonMatchAction(term, _) {
+  return function(...subs) {
+    return function (speciment) {
+      function match(sexp, part) {
+        const vtable = Object.freeze({
+          list: function(...elems) {
+            if (!Array.isArray(part)) { return false; }
+            var pi = 0;
+            for (var e of elems) {
+              if (e[0] === 'quant') {
+                const startPi = pi;
+                while (pi < parts.length && match(e[2], parts[pi])) {
+                  if (e[1] === '?' && pi > startPi) {
+                    break;
+                  }
+                  pi++;
+                }
+                if (e[1] === '+' && pi === startPi) {
+                  return false;
+                }
+              } else {
+                if (match(e, parts[pi])) {
+                  pi++;
+                } else {
+                  return false;
+                }
+              }
+            }
+            return pi === parts.length;
+          },
+          record: function(...pairs) {
+            result = {};
+            for (var p of pairs) {
+              if (p[0] === 'quant') {
+                var v = match(p[2]);
+                var names = Object.getOwnPropertyNames(v);
+                quant(p[1], names);
+                names.forEach(n => result[n] = v[n]);
+              } else {
+                if (p[0] !== 'pair') { throw new Error("unrecognized: " + p); }
+                result[match(p[1])] = match(p[2]);
+              }
+            }
+            return result;
+          },
+          hole: function(hole) {
+            return subs[hole];
+          }
+        });
+        
+        if (typeof sexp === 'string') {
+          return JSON.parse(sexp);
+        }
+        return vtable[sexp[0]](...sexp.slice(1));
+      }
+  
+      return match(term, specimen);
+    };
+  };
+}
+
+var json.match = doJsonPattern(jsonMatchAction);
+
+JSON.stringify(json.match`["a", [${["b","c"]}*, "d"]*]`);
