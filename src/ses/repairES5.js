@@ -160,8 +160,6 @@ var ses;
    */
   function strictFnSpecimen() {}
 
-  var objToString = Object.prototype.toString;
-
   /**
    * Sample map early, to obtain a representative built-in for testing.
    *
@@ -472,6 +470,108 @@ var ses;
     return tamperProof;
   };
 
+
+  ////////////////////// Brand testing /////////////////////
+
+  /**
+   * Note that, as of ES5, Object.prototype.toString.call(foo) (for
+   * the original Object.prototype.toString and original
+   * Function.prototype.call) was a reliable branding mechanism for
+   * distinguishing the built-in types. This is no longer true of ES6
+   * once untrusted code runs in that realm, and so should no longer
+   * be used for that purpose. See makeBrandTester and the brands it
+   * makes.
+   */
+  var objToString = Object.prototype.toString;
+
+  /**
+   * Using Allen's trick from 
+   * https://esdiscuss.org/topic/tostringtag-spoofing-for-null-and-undefined#content-59
+   * for brand tests that will remain reliable in ES6. Note that
+   * makeBrandTester runs at SES initialization time, but the
+   * brandTester it makes must remain reliable after untrusted code
+   * has run in that SES realm after a correct SES initialization.
+   */
+  function makeBrandTester(constr, methodName, args, opt_example) {
+    if (constr === void 0) {
+      // If there is no built-in constr, then we assume there cannot
+      // be any objects that are genuinely of that brand.
+      return function(specimen) { return false; }
+    }
+    var originalMethod = constr.prototype[methodName];
+    function brandTester(specimen) {
+      if (specimen !== Object(specimen)) { return false; }
+      try {
+        originalMethod.apply(specimen, args);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    };
+    // a bit of sanity checking before proceeding
+    strictForEachFn([null, undefined, true, 1, 'x', {}], function(v) {
+      if (brandTester(v)) {
+        throw new Error('brand test for ' + constr + ' passed: ' + v);
+      }
+    });
+    if (opt_example !== void 0 && !brandTester(opt_example)) {
+      throw new Error('brand test for ' + constr + ' failed: ' + opt_example);
+    }
+    return brandTester;
+  }
+
+  /**
+   * A reliable brand test for whether specimen has a [[Class]] of
+   * "Date", or, in ES6 terminology, whether it has a [[DateValue]]
+   * internal slot.
+   */
+  var isBuiltinDate = 
+      makeBrandTester(Date, 'getDay', [], new Date());
+
+  /**
+   * A reliable brand test for whether specimen has a [[Class]] of
+   * "Number", or, in ES6 terminology, whether it has a [[NumberData]]
+   * internal slot.
+   */
+  var isBuiltinNumberObject = 
+      makeBrandTester(Number, 'toString', [], new Number(3));
+
+  /**
+   * A reliable brand test for whether specimen has a [[Class]] of
+   * "Boolean", or, in ES6 terminology, whether it has a [[BooleanData]]
+   * internal slot.
+   */
+  var isBuiltinBooleanObject = 
+      makeBrandTester(Boolean, 'toString', [], new Boolean(true));
+
+  /**
+   * A reliable brand test for whether specimen has a [[Class]] of
+   * "String", or, in ES6 terminology, whether it has a [[StringData]]
+   * internal slot.
+   */
+  var isBuiltinStringObject = 
+      makeBrandTester(String, 'toString', [], new String('y'));
+
+  /**
+   * A reliable brand test for whether specimen has a [[Class]] of
+   * "RegExp", or, in ES6 terminology, whether it has a [[RegExpMatcher]]
+   * internal slot.
+   */
+  var isBuiltinRegExp = 
+      makeBrandTester(RegExp, 'exec', ['x'], /x/);
+
+  /**
+   * A reliable brand test for whether specimen has a [[Class]] of
+   * "WeakMap", or, in ES6 terminology, whether it has a [[WeakMapData]]
+   * internal slot.
+   */
+  var isBuiltinWeakMap = 
+      makeBrandTester(global.WeakMap, 'get', [{}],
+                      global.WeakMap ? new WeakMap() : void 0);
+
+
+  ///////////////////////////////////////////
+
   /**
    * Fails if {@code funcBodySrc} does not parse as a strict
    * FunctionBody.
@@ -650,6 +750,9 @@ var ses;
   function testGlobalLeak(desc, that) {
     if (that === void 0) { return false; }
     if (that === global) { return true; }
+    // objToString use here ok, because it only determines the quality
+    // of diagnostic issued, and anyway runs only during SES
+    // initialization before objToString could be spoofed.
     if (objToString.call(that) === '[object Window]') { return true; }
     return desc + ' leaked as: ' + that;
   }
@@ -1331,8 +1434,7 @@ var ses;
       return 'Curries construction failed with: ' + err;
     }
     if (typeof d === 'string') { return true; } // Opera
-    var str = objToString.call(d);
-    if (str === '[object Date]') { return false; }
+    if (isBuiltinDate(d)) { return false; }
     return 'Unexpected ' + str + ': ' + d;
   }
 
@@ -1396,6 +1498,25 @@ var ses;
   }
 
   /**
+   * As of ES6, for all the builtin constructors (except Function)
+   * that make a particular type of exotic object that
+   * constructor.prototype must be a plain object rather than that
+   * kind of exotic object.
+   */
+  function test_NUMBER_PROTO_IS_NUMBER() {
+    return isBuiltinNumberObject(Number.prototype);
+  }
+  function test_BOOLEAN_PROTO_IS_BOOLEAN() {
+    return isBuiltinBooleanObject(Boolean.prototype);
+  }
+  function test_STRING_PROTO_IS_STRING() {
+    return isBuiltinStringObject(String.prototype);
+  }
+  function test_REGEXP_PROTO_IS_REGEXP() {
+    return isBuiltinRegExp(RegExp.prototype);
+  }
+
+  /**
    * Detects https://code.google.com/p/v8/issues/detail?id=1447
    *
    * <p>This bug is fixed as of V8 r8258 bleeding-edge, but is not yet
@@ -1453,19 +1574,9 @@ var ses;
    * <p>Sometimes, when trying to freeze an object containing an
    * accessor property with a getter but no setter, Chrome <= 17 fails
    * with <blockquote>Uncaught TypeError: Cannot set property ident___
-   * of #<Object> which has only a getter</blockquote>. So if
-   * necessary, the repair overrides {@code Object.defineProperty} to
-   * always install a dummy setter in lieu of the absent one.
-   *
-   * <p>Since this problem seems to have gone away as of Chrome 18, it
-   * is no longer as important to isolate and report it.
-   *
-   * <p>TODO(erights): We should also override {@code
-   * Object.getOwnPropertyDescriptor} to hide the presence of the
-   * dummy setter, and instead report an absent setter.
+   * of #<Object> which has only a getter</blockquote>.
    */
   function test_NEEDS_DUMMY_SETTER() {
-    if (NEEDS_DUMMY_SETTER_repaired) { return false; }
     if (typeof navigator === 'undefined') { return false; }
     var ChromeMajorVersionPattern = (/Chrome\/(\d*)\./);
     var match = ChromeMajorVersionPattern.exec(navigator.userAgent);
@@ -1473,9 +1584,6 @@ var ses;
     var ver = +match[1];
     return ver <= 17;
   }
-  /** we use this variable only because we haven't yet isolated a test
-   * for the problem. */
-  var NEEDS_DUMMY_SETTER_repaired = false;
 
   /**
    * Detects https://code.google.com/p/chromium/issues/detail?id=94666
@@ -3083,25 +3191,25 @@ var ses;
    * can't be called on a {@code constr.prototype} itself even across
    * frames.
    *
-   * <p>This only works when {@code constr} corresponds to an internal
-   * [[Class]] property whose value is {@code classString}. To test
-   * for {@code constr.prototype} cross-frame, we observe that for all
-   * objects of this [[Class]], only the prototypes directly inherit
-   * from an object that does not have this [[Class]].
+   * <p>This only works when {@code constr} is the constructor of
+   * objects that are supposed to pass hasBrand, and
+   * constr.prototype inappropriately also passes the hasBrand. To
+   * test for {@code constr.prototype} cross-frame, we observe that
+   * for all objects that do pass the hasBrand, only the
+   * constr.prototype objects directly inherit from an object that
+   * does not pass this hasBrand.
    */
-  function makeMutableProtoPatcher(constr, classString) {
+  function makeMutableProtoPatcher(constr, hasBrand) {
     var proto = constr.prototype;
-    var baseToString = objToString.call(proto);
-    if (baseToString !== '[object ' + classString + ']') {
-      throw new TypeError('unexpected: ' + baseToString);
+    if (!hasBrand(proto)) {
+      throw new TypeError('unexpected: ' + proto);
     }
     var grandProto = getPrototypeOf(proto);
-    var grandBaseToString = objToString.call(grandProto);
-    if (grandBaseToString === '[object ' + classString + ']') {
-      throw new TypeError('malformed inheritance: ' + classString);
+    if (hasBrand(grandProto)) {
+      throw new TypeError('malformed inheritance: ' + constr);
     }
     if (grandProto !== Object.prototype) {
-      logger.log('unexpected inheritance: ' + classString);
+      logger.log('unexpected inheritance: ' + constr);
     }
     function mutableProtoPatcher(name) {
       if (!hop.call(proto, name)) { return; }
@@ -3116,16 +3224,15 @@ var ses;
           // succeed, since, for example, a non-Date can still inherit
           // from Date.prototype. However, in such cases, the built-in
           // method application will fail on its own without our help.
-          if (objToString.call(parent) !== baseToString) {
-            // As above, === baseToString does not necessarily mean
-            // success, but the built-in failure again would not need
-            // our help.
-            var thisToString = objToString.call(this);
-            if (thisToString === baseToString) {
+          if (!hasBrand(parent)) {
+            // As above, hasBrand(parent) being true does not
+            // necessarily mean success, but the built-in failure
+            // again would not need our help.
+            if (hasBrand(this)) {
               throw new TypeError('May not mutate internal state of a ' +
-                                  classString + '.prototype');
+                                  constr + '.prototype');
             } else {
-              throw new TypeError('Unexpected: ' + thisToString);
+              throw new TypeError('Unexpected: ' + this);
             }
           }
         }
@@ -3156,13 +3263,14 @@ var ses;
      'setSeconds',
      'setUTCSeconds',
      'setMilliseconds',
-     'setUTCMilliseconds'].forEach(makeMutableProtoPatcher(Date, 'Date'));
+     'setUTCMilliseconds'].forEach(
+         makeMutableProtoPatcher(Date, isBuiltinDate));
   }
 
   function repair_MUTABLE_WEAKMAP_PROTO() {
     // Note: coordinate this list with maintanence of whitelist.js
     ['set',
-     'delete'].forEach(makeMutableProtoPatcher(WeakMap, 'WeakMap'));
+     'delete'].forEach(makeMutableProtoPatcher(WeakMap, isBuiltinWeakMap));
   }
 
   function repair_NEED_TO_WRAP_FOREACH() {
@@ -3175,7 +3283,7 @@ var ses;
         }
         var O = Object(this);
         var len = O.length >>> 0;
-        if (objToString.call(callback) !== '[object Function]') {
+        if (typeof callback !== 'function') {
           throw new TypeError(callback + ' is not a function');
         }
         T = thisArg;
@@ -3190,66 +3298,6 @@ var ses;
         }
       }
     });
-  }
-
-
-  function repair_NEEDS_DUMMY_SETTER() {
-    var defProp = Object.defineProperty;
-    var gopd = Object.getOwnPropertyDescriptor;
-
-    function dummySetter(newValue) {
-      throw new TypeError('no setter for assigning: ' + newValue);
-    }
-    dummySetter.prototype = null;
-    rememberToTamperProof(dummySetter);
-
-    defProp(Object, 'defineProperty', {
-      value: function setSetterDefProp(base, name, desc) {
-        if (typeof desc.get === 'function' && desc.set === void 0) {
-          var oldDesc = gopd(base, name);
-          if (oldDesc) {
-            var testBase = {};
-            defProp(testBase, name, oldDesc);
-            defProp(testBase, name, desc);
-            desc = gopd(testBase, name);
-            if (desc.set === void 0) { desc.set = dummySetter; }
-          } else {
-            if (objToString.call(base) === '[object HTMLFormElement]') {
-              // This repair was triggering bug
-              // https://code.google.com/p/chromium/issues/detail?id=94666
-              // on Chrome, causing
-              // https://code.google.com/p/google-caja/issues/detail?id=1401
-              // so if base is an HTMLFormElement we skip this
-              // fix. Since this repair and this situation are both
-              // Chrome only, it is ok that we're conditioning this on
-              // the unspecified [[Class]] value of base.
-              //
-              // To avoid the further bug identified at Comment 2
-              // https://code.google.com/p/chromium/issues/detail?id=94666#c2
-              // We also have to reconstruct the requested desc so that
-              // the setter is absent. This is why we additionally
-              // condition this special case on the absence of an own
-              // name property on base.
-              var desc2 = { get: desc.get };
-              if ('enumerable' in desc) {
-                desc2.enumerable = desc.enumerable;
-              }
-              if ('configurable' in desc) {
-                desc2.configurable = desc.configurable;
-              }
-              var result = defProp(base, name, desc2);
-              var newDesc = gopd(base, name);
-              if (newDesc.get === desc.get) {
-                return result;
-              }
-            }
-            desc.set = dummySetter;
-          }
-        }
-        return defProp(base, name, desc);
-      }
-    });
-    NEEDS_DUMMY_SETTER_repaired = true;
   }
 
   function repair_JSON_PARSE_PROTO_CONFUSION() {
@@ -3562,28 +3610,6 @@ var ses;
 
   function repair_FREEZING_BREAKS_WEAKMAP() {
     global.WeakMap = undefined;
-  }
-
-  function repair_ERRORS_HAVE_INVISIBLE_PROPERTIES() {
-    var baseGOPN = Object.getOwnPropertyNames;
-    var baseGOPD = Object.getOwnPropertyDescriptor;
-    var errorPattern = /^\[object [\w$]*Error\]$/;
-
-    function touch(name) {
-      // the forEach will invoke this function with this === the error instance
-      baseGOPD(this, name);
-    }
-
-    Object.defineProperty(Object, 'getOwnPropertyNames', {
-      writable: true,  // allow other repairs to stack on
-      value: function repairedErrorInvisGOPN(object) {
-        // Note: not adequate in future ES6 world (TODO(erights): explain why)
-        if (errorPattern.test(objToString.call(object))) {
-          errorInstanceKnownInvisibleList.forEach(touch, object);
-        }
-        return baseGOPN(object);
-      }
-    });
   }
 
   /**
@@ -4149,6 +4175,50 @@ var ses;
       tests: []
     },
     {
+      id: 'NUMBER_PROTO_IS_NUMBER',
+      description: 'Number.prototype should be a plain object',
+      test: test_NUMBER_PROTO_IS_NUMBER,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
+      id: 'BOOLEAN_PROTO_IS_BOOLEAN',
+      description: 'Boolean.prototype should be a plain object',
+      test: test_BOOLEAN_PROTO_IS_BOOLEAN,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
+      id: 'STRING_PROTO_IS_STRING',
+      description: 'String.prototype should be a plain object',
+      test: test_STRING_PROTO_IS_STRING,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
+      id: 'REGEXP_PROTO_IS_REGEXP',
+      description: 'RegExp.prototype should be a plain object',
+      test: test_REGEXP_PROTO_IS_REGEXP,
+      repair: void 0,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: false,
+      urls: [],
+      sections: [],
+      tests: []
+    },
+    {
       id: 'NEED_TO_WRAP_FOREACH',
       description: 'Array forEach cannot be frozen while in progress',
       test: test_NEED_TO_WRAP_FOREACH,
@@ -4176,10 +4246,10 @@ var ses;
       id: 'NEEDS_DUMMY_SETTER',
       description: 'Workaround undiagnosed need for dummy setter',
       test: test_NEEDS_DUMMY_SETTER,
-      repair: repair_NEEDS_DUMMY_SETTER,
+      repair: void 0,
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: true,
-      urls: [],
+      canRepair: false,
+      urls: ['https://code.google.com/p/chromium/issues/detail?id=94666'],
       sections: [],
       tests: []
     },
@@ -4659,9 +4729,9 @@ var ses;
       id: 'ERRORS_HAVE_INVISIBLE_PROPERTIES',
       description: 'Error instances have invisible properties',
       test: test_ERRORS_HAVE_INVISIBLE_PROPERTIES,
-      repair: repair_ERRORS_HAVE_INVISIBLE_PROPERTIES,
+      repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: true,
+      canRepair: false,
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=726477',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=724768'],
       sections: [],
