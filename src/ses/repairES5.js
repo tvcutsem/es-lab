@@ -548,7 +548,7 @@ var ses;
       //   do not yet whitelist Proxy. We might use it internally (see
       //   startSES.js) but we do not yet make it available to any
       //   code running within SES.
-      // TODO(erights): Report this bug to Mozilla
+      // See https://bugzilla.mozilla.org/show_bug.cgi?id=1133249
       // TODO(erights): Add a test for this to test262
       // TODO(erights): Extract all these self-tests into tests
       // performed within the repair framework.
@@ -1547,7 +1547,7 @@ var ses;
    * that make a particular type of exotic object, that
    * constructor.prototype must be a plain object rather than that
    * kind of exotic object. As of this writing, at least Chrome, FF,
-   * Safari, and Opera violate this. I haven't yet tested IE.
+   * Safari, Opera, and IE11 violate this.
    */
   function test_NUMBER_PROTO_IS_NUMBER() {
     return isBuiltinNumberObject(Number.prototype);
@@ -1558,7 +1558,7 @@ var ses;
    * that make a particular type of exotic object, that
    * constructor.prototype must be a plain object rather than that
    * kind of exotic object. As of this writing, at least Chrome, FF,
-   * Safari, and Opera violate this. I haven't yet tested IE.
+   * Safari, Opera, and IE11 violate this.
    */
   function test_BOOLEAN_PROTO_IS_BOOLEAN() {
     return isBuiltinBooleanObject(Boolean.prototype);
@@ -1569,7 +1569,7 @@ var ses;
    * that make a particular type of exotic object, that
    * constructor.prototype must be a plain object rather than that
    * kind of exotic object. As of this writing, at least Chrome, FF,
-   * Safari, and Opera violate this. I haven't yet tested IE.
+   * Safari, Opera, and IE11 violate this.
    */
   function test_STRING_PROTO_IS_STRING() {
     return isBuiltinStringObject(String.prototype);
@@ -1580,7 +1580,7 @@ var ses;
    * that make a particular type of exotic object, that
    * constructor.prototype must be a plain object rather than that
    * kind of exotic object. As of this writing, at least Chrome, FF,
-   * Safari, and Opera violate this. I haven't yet tested IE.
+   * Safari, Opera, and IE11 violate this.
    */
   function test_REGEXP_PROTO_IS_REGEXP() {
     return isBuiltinRegExp(RegExp.prototype);
@@ -4230,7 +4230,12 @@ var ses;
       repair: repair_MUTABLE_DATE_PROTO,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: true,
-      urls: ['https://code.google.com/p/google-caja/issues/detail?id=1362'],
+      urls: ['https://code.google.com/p/google-caja/issues/detail?id=1362',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=797686',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=861219',
+             'https://code.google.com/p/v8/issues/detail?id=3890',
+             'https://bugs.webkit.org/show_bug.cgi?id=141610',
+             'https://connect.microsoft.com/IE/feedbackdetail/view/1131123/for-many-x-x-prototype-is-an-x-when-it-must-be-a-plain-object'],
       sections: ['15.9.5'],
       tests: []
     },
@@ -4241,7 +4246,8 @@ var ses;
       repair: repair_MUTABLE_WEAKMAP_PROTO,
       preSeverity: severities.NOT_OCAP_SAFE,
       canRepair: true,
-      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=656828'],
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=656828',
+             'https://bugzilla.mozilla.org/show_bug.cgi?id=797686'],
       sections: [],
       tests: []
     },
@@ -4252,7 +4258,10 @@ var ses;
       repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
-      urls: [],
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=797686',
+             'https://code.google.com/p/v8/issues/detail?id=3890',
+             'https://bugs.webkit.org/show_bug.cgi?id=141610',
+             'https://connect.microsoft.com/IE/feedbackdetail/view/1131123/for-many-x-x-prototype-is-an-x-when-it-must-be-a-plain-object'],
       sections: [],
       tests: []
     },
@@ -4263,7 +4272,10 @@ var ses;
       repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
-      urls: [],
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=797686',
+             'https://code.google.com/p/v8/issues/detail?id=3890',
+             'https://bugs.webkit.org/show_bug.cgi?id=141610',
+             'https://connect.microsoft.com/IE/feedbackdetail/view/1131123/for-many-x-x-prototype-is-an-x-when-it-must-be-a-plain-object'],
       sections: [],
       tests: []
     },
@@ -4274,7 +4286,10 @@ var ses;
       repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
-      urls: [],
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=797686',
+             'https://code.google.com/p/v8/issues/detail?id=3890',
+             'https://bugs.webkit.org/show_bug.cgi?id=141610',
+             'https://connect.microsoft.com/IE/feedbackdetail/view/1131123/for-many-x-x-prototype-is-an-x-when-it-must-be-a-plain-object'],
       sections: [],
       tests: []
     },
@@ -4285,7 +4300,10 @@ var ses;
       repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: false,
-      urls: [],
+      urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=797686',
+             'https://code.google.com/p/v8/issues/detail?id=3890',
+             'https://bugs.webkit.org/show_bug.cgi?id=141610',
+             'https://connect.microsoft.com/IE/feedbackdetail/view/1131123/for-many-x-x-prototype-is-an-x-when-it-must-be-a-plain-object'],
       sections: [],
       tests: []
     },
