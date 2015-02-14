@@ -485,20 +485,40 @@ var ses;
   var objToString = Object.prototype.toString;
 
   /**
-   * Using Allen's trick from 
+   * For reliably testing that a specimen is an exotic object of some
+   * built-in exotic type.
+   *
+   * <p>The exotic type should be those objects normally made by
+   * ctor. methodName must be the name of a method on ctor.prototype
+   * that, when applied to an exotic object of this exotic type as
+   * this-value, with the provided args list, will return without
+   * error, but when applied to any other object as this-value will
+   * throw an error. opt_example, if provided, must be an example of
+   * such an exotic object that can be used for internal sanity
+   * checking before returning a brandTester.
+   *
+   * <p>Uses Allen's trick from
    * https://esdiscuss.org/topic/tostringtag-spoofing-for-null-and-undefined#content-59
-   * for brand tests that will remain reliable in ES6. Note that
-   * makeBrandTester runs at SES initialization time, but the
-   * brandTester it makes must remain reliable after untrusted code
-   * has run in that SES realm after a correct SES initialization.
+   * for brand testing that will remain reliable in ES6. 
+   * However, testing reveals that, on FF 35.0.1, a proxy on an exotic
+   * object X will pass this brand test when X will. This is fixed as of
+   * FF Nightly 38.0a1.
+   *
+   * <p>Returns a brandTester function such that, if brandTester(specimen)
+   * returns true, this is a reliable indicator that specimen actually
+   * is an exotic object of that type.
+   *
+   * <p>As a convenience, ctor may be undefined, in which
+   * case we assume that there are no exotic objects of that kind. In
+   * this case, the returned brandTester always says false.
    */
-  function makeBrandTester(constr, methodName, args, opt_example) {
-    if (constr === void 0) {
-      // If there is no built-in constr, then we assume there cannot
+  function makeBrandTester(ctor, methodName, args, opt_example) {
+    if (ctor === void 0) {
+      // If there is no built-in ctor, then we assume there cannot
       // be any objects that are genuinely of that brand.
-      return function(specimen) { return false; }
+      return function absentCtorBrandTester(specimen) { return false; }
     }
-    var originalMethod = constr.prototype[methodName];
+    var originalMethod = ctor.prototype[methodName];
     function brandTester(specimen) {
       if (specimen !== Object(specimen)) { return false; }
       try {
@@ -509,13 +529,40 @@ var ses;
       }
     };
     // a bit of sanity checking before proceeding
-    strictForEachFn([null, undefined, true, 1, 'x', {}], function(v) {
+    var counterExamples = [null, void 0, true, 1, 'x', {}];
+    if (opt_example !== void 0) {
+      counterExamples.push({valueOf: function() { return opt_example; }});
+      counterExamples.push(Object.create(opt_example));
+    }
+    strictForEachFn(counterExamples, function(v, i) {
       if (brandTester(v)) {
-        throw new Error('brand test for ' + constr + ' passed: ' + v);
+        logger.error('Brand test ' + i + ' for ' + ctor + ' passed: ' + v);
+        ses._repairer.updateMaxSeverity(ses.severities.NOT_SUPPORTED);
       }
     });
+    if (opt_example !== void 0 && typeof global.Proxy === 'function') {
+      // We treat the Proxy counter-example more gently for two reasons:
+      // * The test fails as of FF 35.0.1, which, as of this writing,
+      //   Caja must still support.
+      // * It currently does not cause an insecurity for us, since we
+      //   do not yet whitelist Proxy. We might use it internally (see
+      //   startSES.js) but we do not yet make it available to any
+      //   code running within SES.
+      // TODO(erights): Report this bug to Mozilla
+      // TODO(erights): Add a test for this to test262
+      // TODO(erights): Extract all these self-tests into tests
+      // performed within the repair framework.
+      // TODO(erights): Add a self-test that will catch any
+      // whitelisting of Proxy while this is still an issue.
+      var proxy = new Proxy(opt_example, {});
+      if (brandTester(proxy)) {
+        logger.warn('Brand test of proxy for ' + ctor + ' passed: ' + proxy);
+        ses._repairer.updateMaxSeverity(ses.severities.SAFE_SPEC_VIOLATION);
+      }
+    }
     if (opt_example !== void 0 && !brandTester(opt_example)) {
-      throw new Error('brand test for ' + constr + ' failed: ' + opt_example);
+      logger.error('Brand test for ' + ctor + ' failed: ' + opt_example);
+      ses._repairer.updateMaxSeverity(ses.severities.NOT_SUPPORTED);
     }
     return brandTester;
   }
@@ -525,49 +572,47 @@ var ses;
    * "Date", or, in ES6 terminology, whether it has a [[DateValue]]
    * internal slot.
    */
-  var isBuiltinDate = 
-      makeBrandTester(Date, 'getDay', [], new Date());
+  var isBuiltinDate = makeBrandTester(
+      Date, 'getDay', [], new Date());
 
   /**
    * A reliable brand test for whether specimen has a [[Class]] of
    * "Number", or, in ES6 terminology, whether it has a [[NumberData]]
    * internal slot.
    */
-  var isBuiltinNumberObject = 
-      makeBrandTester(Number, 'toString', [], new Number(3));
+  var isBuiltinNumberObject = makeBrandTester(
+      Number, 'toString', [], new Number(3));
 
   /**
    * A reliable brand test for whether specimen has a [[Class]] of
    * "Boolean", or, in ES6 terminology, whether it has a [[BooleanData]]
    * internal slot.
    */
-  var isBuiltinBooleanObject = 
-      makeBrandTester(Boolean, 'toString', [], new Boolean(true));
+  var isBuiltinBooleanObject = makeBrandTester(
+      Boolean, 'toString', [], new Boolean(true));
 
   /**
    * A reliable brand test for whether specimen has a [[Class]] of
    * "String", or, in ES6 terminology, whether it has a [[StringData]]
    * internal slot.
    */
-  var isBuiltinStringObject = 
-      makeBrandTester(String, 'toString', [], new String('y'));
+  var isBuiltinStringObject = makeBrandTester(
+      String, 'toString', [], new String('y'));
 
   /**
    * A reliable brand test for whether specimen has a [[Class]] of
    * "RegExp", or, in ES6 terminology, whether it has a [[RegExpMatcher]]
    * internal slot.
    */
-  var isBuiltinRegExp = 
-      makeBrandTester(RegExp, 'exec', ['x'], /x/);
+  var isBuiltinRegExp = makeBrandTester(
+      RegExp, 'exec', ['x'], /x/);
 
   /**
-   * A reliable brand test for whether specimen has a [[Class]] of
-   * "WeakMap", or, in ES6 terminology, whether it has a [[WeakMapData]]
+   * A reliable brand test for whether specimen has a [[WeakMapData]]
    * internal slot.
    */
-  var isBuiltinWeakMap = 
-      makeBrandTester(global.WeakMap, 'get', [{}],
-                      global.WeakMap ? new WeakMap() : void 0);
+  var isBuiltinWeakMap = makeBrandTester(
+      global.WeakMap, 'get', [{}], global.WeakMap ? new WeakMap() : void 0);
 
 
   ///////////////////////////////////////////
@@ -1499,19 +1544,44 @@ var ses;
 
   /**
    * As of ES6, for all the builtin constructors (except Function)
-   * that make a particular type of exotic object that
+   * that make a particular type of exotic object, that
    * constructor.prototype must be a plain object rather than that
-   * kind of exotic object.
+   * kind of exotic object. As of this writing, at least Chrome, FF,
+   * Safari, and Opera violate this. I haven't yet tested IE.
    */
   function test_NUMBER_PROTO_IS_NUMBER() {
     return isBuiltinNumberObject(Number.prototype);
   }
+
+  /**
+   * As of ES6, for all the builtin constructors (except Function)
+   * that make a particular type of exotic object, that
+   * constructor.prototype must be a plain object rather than that
+   * kind of exotic object. As of this writing, at least Chrome, FF,
+   * Safari, and Opera violate this. I haven't yet tested IE.
+   */
   function test_BOOLEAN_PROTO_IS_BOOLEAN() {
     return isBuiltinBooleanObject(Boolean.prototype);
   }
+
+  /**
+   * As of ES6, for all the builtin constructors (except Function)
+   * that make a particular type of exotic object, that
+   * constructor.prototype must be a plain object rather than that
+   * kind of exotic object. As of this writing, at least Chrome, FF,
+   * Safari, and Opera violate this. I haven't yet tested IE.
+   */
   function test_STRING_PROTO_IS_STRING() {
     return isBuiltinStringObject(String.prototype);
   }
+
+  /**
+   * As of ES6, for all the builtin constructors (except Function)
+   * that make a particular type of exotic object, that
+   * constructor.prototype must be a plain object rather than that
+   * kind of exotic object. As of this writing, at least Chrome, FF,
+   * Safari, and Opera violate this. I haven't yet tested IE.
+   */
   function test_REGEXP_PROTO_IS_REGEXP() {
     return isBuiltinRegExp(RegExp.prototype);
   }
@@ -3187,29 +3257,29 @@ var ses;
   /**
    * Return a function suitable for using as a forEach argument on a
    * list of method names, where that function will monkey patch each
-   * of these names methods on {@code constr.prototype} so that they
-   * can't be called on a {@code constr.prototype} itself even across
+   * of these names methods on {@code ctor.prototype} so that they
+   * can't be called on a {@code ctor.prototype} itself even across
    * frames.
    *
-   * <p>This only works when {@code constr} is the constructor of
+   * <p>This only works when {@code ctor} is the constructor of
    * objects that are supposed to pass hasBrand, and
-   * constr.prototype inappropriately also passes the hasBrand. To
-   * test for {@code constr.prototype} cross-frame, we observe that
+   * ctor.prototype inappropriately also passes the hasBrand. To
+   * test for {@code ctor.prototype} cross-frame, we observe that
    * for all objects that do pass the hasBrand, only the
-   * constr.prototype objects directly inherit from an object that
+   * ctor.prototype objects directly inherit from an object that
    * does not pass this hasBrand.
    */
-  function makeMutableProtoPatcher(constr, hasBrand) {
-    var proto = constr.prototype;
+  function makeMutableProtoPatcher(ctor, hasBrand) {
+    var proto = ctor.prototype;
     if (!hasBrand(proto)) {
       throw new TypeError('unexpected: ' + proto);
     }
     var grandProto = getPrototypeOf(proto);
     if (hasBrand(grandProto)) {
-      throw new TypeError('malformed inheritance: ' + constr);
+      throw new TypeError('malformed inheritance: ' + ctor);
     }
     if (grandProto !== Object.prototype) {
-      logger.log('unexpected inheritance: ' + constr);
+      logger.log('unexpected inheritance: ' + ctor);
     }
     function mutableProtoPatcher(name) {
       if (!hop.call(proto, name)) { return; }
@@ -3230,7 +3300,7 @@ var ses;
             // again would not need our help.
             if (hasBrand(this)) {
               throw new TypeError('May not mutate internal state of a ' +
-                                  constr + '.prototype');
+                                  ctor + '.prototype');
             } else {
               throw new TypeError('Unexpected: ' + this);
             }
@@ -3959,7 +4029,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['15.2.3.4'],
-      tests: ['15.2.3.4-0-1']
+      tests: ['test/built-ins/Object/getOwnPropertyNames/15.2.3.4-0-1.js']
     },
     {
       id: 'PROTO_SETTER_UNGETTABLE',
@@ -3987,7 +4057,7 @@ var ses;
       canRepair: false,  // Not repairable without rewriting
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=64250'],
       sections: ['10.2.1.2', '10.2.1.2.6'],
-      tests: ['10.4.3-1-8gs']
+      tests: ['test/language/function-code/10.4.3-1-8gs.js']
     },
     {
       id: 'GLOBAL_LEAKS_FROM_ANON_FUNCTION_CALLS',
@@ -3998,7 +4068,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['10.4.3'],
-      tests: ['S10.4.3_A1']
+      tests: ['test/language/function-code/S10.4.3_A1.js']
     },
     {
       id: 'GLOBAL_LEAKS_FROM_STRICT_THIS',
@@ -4009,7 +4079,8 @@ var ses;
       canRepair: false,  // Not repairable without rewriting
       urls: [],
       sections: ['10.4.3'],
-      tests: ['10.4.3-1-8gs', '10.4.3-1-8-s']
+      tests: ['test/language/function-code/10.4.3-1-8gs.js',
+              'test/language/function-code/10.4.3-1-8-s.js']
     },
     {
       id: 'GLOBAL_LEAKS_FROM_BUILTINS',
@@ -4025,7 +4096,7 @@ var ses;
              'https://connect.microsoft.com/IE/feedback/details/' +
                '685430/global-object-leaks-from-built-in-methods'],
       sections: ['15.2.4.4'],
-      tests: ['S15.2.4.4_A14']
+      tests: ['test/built-ins/Object/prototype/valueOf/S15.2.4.4_A14.js']
     },
     {
       id: 'GLOBAL_LEAKS_FROM_GLOBALLY_CALLED_BUILTINS',
@@ -4037,7 +4108,7 @@ var ses;
           // so it's not worth creating a repair for this bug.
       urls: [],
       sections: ['10.2.1.2', '10.2.1.2.6', '15.2.4.4'],
-      tests: ['S15.2.4.4_A15']
+      tests: ['test/built-ins/Object/prototype/valueOf/S15.2.4.4_A15.js']
     },
     {
       id: 'MISSING_FREEZE_ETC',
@@ -4048,7 +4119,7 @@ var ses;
       canRepair: false,  // Long-dead bug, not worth keeping old repair around
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=55736'],
       sections: ['15.2.3.9'],
-      tests: ['15.2.3.9-0-1']
+      tests: ['test/built-ins/Object/freeze/15.2.3.9-0-1.js']
     },
     {
       id: 'FUNCTION_PROTOTYPE_DESCRIPTOR_LIES',
@@ -4060,7 +4131,7 @@ var ses;
       urls: ['https://code.google.com/p/v8/issues/detail?id=1530',
              'https://code.google.com/p/v8/issues/detail?id=1570'],
       sections: ['15.2.3.3', '15.2.3.6', '15.3.5.2'],
-      tests: ['S15.3.3.1_A4']
+      tests: ['test/built-ins/Function/prototype/S15.3.3.1_A4.js']
     },
     {
       id: 'MISSING_CALLEE_DESCRIPTOR',
@@ -4071,7 +4142,7 @@ var ses;
       canRepair: false,  // Long-dead bug, not worth keeping old repair around
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=55537'],
       sections: ['15.2.3.4'],
-      tests: ['S15.2.3.4_A1_T1']
+      tests: ['test/built-ins/Object/getOwnPropertyNames/S15.2.3.4_A1_T1.js']
     },
     {
       id: 'STRICT_DELETE_RETURNS_FALSE',
@@ -4084,7 +4155,7 @@ var ses;
                '685432/strict-delete-sometimes-returns-false-' +
                'rather-than-throwing'],
       sections: ['11.4.1'],
-      tests: ['S11.4.1_A5']
+      tests: ['test/language/expressions/delete/S11.4.1_A5.js']
     },
     {
       id: 'REGEXP_CANT_BE_NEUTERED',
@@ -4101,7 +4172,7 @@ var ses;
                '685439/non-deletable-regexp-statics-are-a-global-' +
                'communication-channel'],
       sections: ['11.4.1'],
-      tests: ['S11.4.1_A5']
+      tests: ['test/language/expressions/delete/S11.4.1_A5.js']
     },
     {
       id: 'REGEXP_TEST_EXEC_UNSAFE',
@@ -4115,7 +4186,7 @@ var ses;
              'https://bugzilla.mozilla.org/show_bug.cgi?id=635017',
              'https://code.google.com/p/google-caja/issues/detail?id=528'],
       sections: ['15.10.6.2'],
-      tests: ['S15.10.6.2_A12']
+      tests: ['test/built-ins/RegExp/prototype/exec/S15.10.6.2_A12.js']
     },
     {
       id: 'MISSING_BIND',
@@ -4248,7 +4319,7 @@ var ses;
       test: test_NEEDS_DUMMY_SETTER,
       repair: void 0,
       preSeverity: severities.UNSAFE_SPEC_VIOLATION,
-      canRepair: false,
+      canRepair: false,  // Long-dead bug, not worth keeping old repair around
       urls: ['https://code.google.com/p/chromium/issues/detail?id=94666'],
       sections: [],
       tests: []
@@ -4264,7 +4335,7 @@ var ses;
              'https://code.google.com/p/v8/issues/detail?id=1651',
              'https://code.google.com/p/google-caja/issues/detail?id=1401'],
       sections: ['15.2.3.6'],
-      tests: ['S15.2.3.6_A1']
+      tests: ['test/built-ins/Object/defineProperty/S15.2.3.6_A1.js']
     },
     {
       id: 'ACCESSORS_INHERIT_AS_OWN',
@@ -4382,7 +4453,7 @@ var ses;
              'http://wiki.ecmascript.org/doku.php?id=' +
                'conventions:make_non-standard_properties_configurable'],
       sections: [],
-      tests: ['Sbp_A10_T1']
+      tests: ['https://github.com/tc39/test262/blob/b752d2fdde2d3a49619735ed3713f6c287667c6d/test/suite/bestPractice/Sbp_A10_T1.js']
     },
     {
       id: 'BUILTIN_LEAKS_ARGUMENTS',
@@ -4397,7 +4468,7 @@ var ses;
              'http://wiki.ecmascript.org/doku.php?id=' +
                'conventions:make_non-standard_properties_configurable'],
       sections: [],
-      tests: ['Sbp_A10_T2']
+      tests: ['https://github.com/tc39/test262/blob/b752d2fdde2d3a49619735ed3713f6c287667c6d/test/suite/bestPractice/Sbp_A10_T2.js']
     },
     {
       id: 'BOUND_FUNCTION_LEAKS_CALLER',
@@ -4409,7 +4480,8 @@ var ses;
       urls: ['https://code.google.com/p/v8/issues/detail?id=893',
              'https://bugs.webkit.org/show_bug.cgi?id=63398'],
       sections: ['15.3.4.5'],
-      tests: ['S13.2.3_A1', 'S15.3.4.5_A1']
+      tests: ['test/language/statements/function/S13.2.3_A1.js',
+              'test/built-ins/Function/prototype/bind/S15.3.4.5_A1.js']
     },
     {
       id: 'BOUND_FUNCTION_LEAKS_ARGUMENTS',
@@ -4421,7 +4493,8 @@ var ses;
       urls: ['https://code.google.com/p/v8/issues/detail?id=893',
              'https://bugs.webkit.org/show_bug.cgi?id=63398'],
       sections: ['15.3.4.5'],
-      tests: ['S13.2.3_A1', 'S15.3.4.5_A2']
+      tests: ['test/language/statements/function/S13.2.3_A1.js', 
+              'test/built-ins/Function/prototype/bind/S15.3.4.5_A2.js']
     },
     {
       id: 'DELETED_BUILTINS_IN_OWN_NAMES',
@@ -4455,7 +4528,7 @@ var ses;
       urls: ['https://code.google.com/p/v8/issues/detail?id=621',
              'https://code.google.com/p/v8/issues/detail?id=1310'],
       sections: ['15.12.2'],
-      tests: ['S15.12.2_A1']
+      tests: ['test/built-ins/JSON/parse/S15.12.2_A1.js']
     },
     {
       id: 'PROTO_NOT_FROZEN',
@@ -4468,7 +4541,7 @@ var ses;
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832',
              'https://bugs.webkit.org/show_bug.cgi?id=78438'],
       sections: ['8.6.2'],
-      tests: ['S8.6.2_A8']
+      tests: ['test/language/types/object/S8.6.2_A8.js']
     },
     {
       id: 'PROTO_REDEFINABLE',
@@ -4480,7 +4553,7 @@ var ses;
           // so it's not worth creating a repair for this bug.
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=65832'],
       sections: ['8.6.2'],
-      tests: ['S8.6.2_A8']
+      tests: ['test/language/types/object/S8.6.2_A8.js']
     },
     {
       id: 'DEFINING_READ_ONLY_PROTO_FAILS_SILENTLY',
@@ -4515,7 +4588,7 @@ var ses;
           // so it's not worth creating a repair for this bug.
       urls: ['https://code.google.com/p/v8/issues/detail?id=1624'],
       sections: ['10.4.2.1'],
-      tests: ['S10.4.2.1_A1']
+      tests: ['test/language/eval-code/S10.4.2.1_A1.js']
     },
     {
       id: 'STRICT_EVAL_LEAKS_GLOBAL_FUNCS',
@@ -4527,7 +4600,7 @@ var ses;
           // so it's not worth creating a repair for this bug.
       urls: ['https://code.google.com/p/v8/issues/detail?id=1624'],
       sections: ['10.4.2.1'],
-      tests: ['S10.4.2.1_A1']
+      tests: ['test/language/eval-code/S10.4.2.1_A1.js']
     },
     {
       id: 'EVAL_BREAKS_MASKING',
@@ -4550,7 +4623,7 @@ var ses;
       canRepair: true,
       urls: ['https://code.google.com/p/v8/issues/detail?id=1645'],
       sections: ['15.1.2.2'],
-      tests: ['S15.1.2.2_A5.1_T1']
+      tests: ['test/built-ins/parseInt/S15.1.2.2_A5.1_T1.js']
     },
     {
       id: 'STRICT_E4X_LITERALS_ALLOWED',
@@ -4579,7 +4652,7 @@ var ses;
              'http://wiki.ecmascript.org/doku.php?id=strawman:' +
                'fixing_override_mistake'],
       sections: ['8.12.4'],
-      tests: ['15.2.3.6-4-405']
+      tests: ['test/built-ins/Object/defineProperty/15.2.3.6-4-405.js']
     },
     {
       id: 'INCREMENT_IGNORES_FROZEN',
@@ -4731,7 +4804,7 @@ var ses;
       test: test_ERRORS_HAVE_INVISIBLE_PROPERTIES,
       repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
-      canRepair: false,
+      canRepair: false,  // Long-dead bug, not worth keeping old repair around
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=726477',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=724768'],
       sections: [],
@@ -4751,7 +4824,7 @@ var ses;
              'https://bugzilla.mozilla.org/show_bug.cgi?id=732669'],
              // Opera DSK-358415
       sections: ['10.4.3'],
-      tests: ['10.4.3-1-59-s']
+      tests: ['test/language/function-code/10.4.3-1-59-s.js']
     },
     {
       id: 'NON_STRICT_GETTER_DOESNT_BOX',
@@ -4764,7 +4837,7 @@ var ses;
              'https://code.google.com/p/v8/issues/detail?id=1977',
              'https://bugzilla.mozilla.org/show_bug.cgi?id=732669'],
       sections: ['10.4.3'],
-      tests: ['10.4.3-1-59-s']
+      tests: ['test/language/function-code/10.4.3-1-59-s.js']
     },
     {
       id: 'NONCONFIGURABLE_OWN_PROTO',
