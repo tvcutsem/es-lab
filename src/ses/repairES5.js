@@ -516,7 +516,7 @@ var ses;
     if (ctor === void 0) {
       // If there is no built-in ctor, then we assume there cannot
       // be any objects that are genuinely of that brand.
-      return function absentCtorBrandTester(specimen) { return false; }
+      return function absentCtorBrandTester(specimen) { return false; };
     }
     var originalMethod = ctor.prototype[methodName];
     function brandTester(specimen) {
@@ -554,7 +554,7 @@ var ses;
       // performed within the repair framework.
       // TODO(erights): Add a self-test that will catch any
       // whitelisting of Proxy while this is still an issue.
-      var proxy = new Proxy(opt_example, {});
+      var proxy = new global.Proxy(opt_example, {});
       if (brandTester(proxy)) {
         logger.warn('Brand test of proxy for ' + ctor + ' passed: ' + proxy);
         ses._repairer.updateMaxSeverity(ses.severities.SAFE_SPEC_VIOLATION);
@@ -1480,7 +1480,7 @@ var ses;
     }
     if (typeof d === 'string') { return true; } // Opera
     if (isBuiltinDate(d)) { return false; }
-    return 'Unexpected ' + str + ': ' + d;
+    return 'Unexpected alleged Date: ' + d;
   }
 
   /**
