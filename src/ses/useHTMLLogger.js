@@ -191,26 +191,16 @@ function useHTMLLogger(reportsElement, consoleElement) {
     error: makeLogFunc(consoleElement, 'error')
   };
 
-  var StartsWithHTTPS = /^https:/;
   var StartsWithTestSlash = /^test\//;
-  var TestIDPattern = /^(?:Sbp|S)?(.*)$/;
 
   /**
    *
    */
   function linkToTest(test) {
-    if (StartsWithHTTPS.test(test)) {
-      return test;
-    } else if (StartsWithTestSlash.test(test)) {
+    if (StartsWithTestSlash.test(test)) {
       return 'https://github.com/tc39/test262/blob/master/' + test;
     }
-    var match = TestIDPattern.exec(test);
-    if (match) {
-      test = match[1];
-    }
-    test = encodeURIComponent(test);
-    return 'https://github.com/tc39/test262/search?q=' + 
-          '%22es5id%3A+' + test + '%22';
+    return test;
   }
 
   /**
@@ -276,9 +266,6 @@ function useHTMLLogger(reportsElement, consoleElement) {
         var link = appendNew(linkElement, 'a');
         link.href = linkToTest(test);
         link.target = '_blank';
-        if (!StartsWithTestSlash.test(test)) {
-            test = 'Test ' + test;
-        }
         appendText(link, test);
       });
     });
