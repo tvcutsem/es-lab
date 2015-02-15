@@ -4198,7 +4198,7 @@ var ses;
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=26382',
              'https://bugs.webkit.org/show_bug.cgi?id=42371'],
       sections: ['15.3.4.5'],
-      tests: ['S15.3.4.5_A3']
+      tests: ['test/built-ins/Function/prototype/bind/S15.3.4.5_A3.js']
     },
     {
       id: 'BIND_CALLS_APPLY',
@@ -4210,7 +4210,7 @@ var ses;
       urls: ['https://code.google.com/p/v8/issues/detail?id=892',
              'https://code.google.com/p/v8/issues/detail?id=828'],
       sections: ['15.3.4.5.1'],
-      tests: ['S15.3.4.5_A4']
+      tests: ['test/built-ins/Function/prototype/bind/S15.3.4.5_A4.js']
     },
     {
       id: 'BIND_CANT_CURRY_NEW',
@@ -4221,7 +4221,7 @@ var ses;
       canRepair: false,  // JS-based repair essentially impossible
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=26382#c29'],
       sections: ['15.3.4.5.2'],
-      tests: ['S15.3.4.5_A5']
+      tests: ['test/built-ins/Function/prototype/bind/S15.3.4.5_A5.js']
     },
     {
       id: 'MUTABLE_DATE_PROTO',
@@ -4316,7 +4316,8 @@ var ses;
       canRepair: false,  // Long-dead bug, not worth keeping old repair around
       urls: ['https://code.google.com/p/v8/issues/detail?id=1447'],
       sections: ['15.4.4.18'],
-      tests: ['S15.4.4.18_A1', 'S15.4.4.18_A2']
+      tests: ['test/built-ins/Array/prototype/forEach/S15.4.4.18_A1.js',
+              'test/built-ins/Array/prototype/forEach/S15.4.4.18_A2.js']
     },
     {
       id: 'FOREACH_COERCES_THISOBJ',
@@ -4364,7 +4365,7 @@ var ses;
       canRepair: false,  // Long-dead bug, not worth keeping old repair around
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=637994'],
       sections: ['8.6.1', '15.2.3.6'],
-      tests: ['S15.2.3.6_A2']
+      tests: ['test/built-ins/Object/defineProperty/S15.2.3.6_A2.js']
     },
     {
       id: 'SORT_LEAKS_GLOBAL',
@@ -4375,7 +4376,7 @@ var ses;
       canRepair: false,  // Long-dead bug, not worth keeping old repair around
       urls: ['https://code.google.com/p/v8/issues/detail?id=1360'],
       sections: ['15.4.4.11'],
-      tests: ['S15.4.4.11_A8']
+      tests: ['test/built-ins/Array/prototype/sort/S15.4.4.11_A8.js']
     },
     {
       id: 'REPLACE_LEAKS_GLOBAL',
@@ -4389,7 +4390,7 @@ var ses;
                '685928/bad-this-binding-for-callback-in-string-' +
                'prototype-replace'],
       sections: ['15.5.4.11'],
-      tests: ['S15.5.4.11_A12']
+      tests: ['test/built-ins/String/prototype/replace/S15.5.4.11_A12.js']
     },
     {
       id: 'CANT_GOPD_CALLER',
@@ -4401,7 +4402,7 @@ var ses;
       urls: ['https://connect.microsoft.com/IE/feedback/details/' +
                '685436/getownpropertydescriptor-on-strict-caller-throws'],
       sections: ['15.2.3.3', '13.2', '13.2.3'],
-      tests: ['S13.2_A6_T1']
+      tests: ['test/language/statements/function/S13.2_A6_T1.js']
     },
     {
       id: 'CANT_HASOWNPROPERTY_CALLER',
@@ -4412,7 +4413,7 @@ var ses;
       canRepair: false,  // Long-dead bug, not worth keeping old repair around
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398#c3'],
       sections: ['15.2.4.5', '13.2', '13.2.3'],
-      tests: ['S13.2_A7_T1']
+      tests: ['test/language/statements/function/S13.2_A7_T1.js']
     },
     {
       id: 'CANT_IN_CALLER',
@@ -4423,7 +4424,7 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398'],
       sections: ['11.8.7', '13.2', '13.2.3'],
-      tests: ['S13.2_A8_T1']
+      tests: ['test/language/statements/function/S13.2_A8_T1.js']
     },
     {
       id: 'CANT_IN_ARGUMENTS',
@@ -4434,7 +4435,7 @@ var ses;
       canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=63398'],
       sections: ['11.8.7', '13.2', '13.2.3'],
-      tests: ['S13.2_A8_T2']
+      tests: ['test/language/statements/function/S13.2_A8_T2.js']
     },
     {
       id: 'STRICT_CALLER_NOT_POISONED',
@@ -4445,7 +4446,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['13.2'],
-      tests: ['S13.2.3_A1']
+      tests: ['test/language/statements/function/S13.2.3_A1.js']
     },
     {
       id: 'STRICT_ARGUMENTS_NOT_POISONED',
@@ -4456,7 +4457,7 @@ var ses;
       canRepair: false,
       urls: [],
       sections: ['13.2'],
-      tests: ['S13.2.3_A1']
+      tests: ['test/language/statements/function/S13.2.3_A1.js']
     },
     {
       id: 'BUILTIN_LEAKS_CALLER',
