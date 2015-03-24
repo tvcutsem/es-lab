@@ -420,9 +420,18 @@ var ses;
        var resultP = new HiddenPromise(PendingHandler, queue);
        var handler = handle(resultP);
 
+       // This is a bit subtle: create a temp variable that serves the
+       // same purpose as resultP, except that, under some assumptions
+       // about what is reachable from a closure, enables the resolve
+       // function below to drop its reference to the result but
+       // without clearing resultP itself. Thus, even if resolve runs
+       // during the call to promise, the call to promise still
+       // returns the non-cleared resultP.
+       var tempResultP = resultP;
+
        function resolve(value) {
          if (!buffer) { return; } // silent
-         // assert(handler === handle(resultP)) since, the only way this
+         // assert(handler === handle(tempResultP)) since, the only way this
          // becomes untrue is by a prior call to resolve, which will
          // clear buffer, so we would never get here.
 
@@ -430,9 +439,9 @@ var ses;
          buffer = void 0;
 
          var newHandler = become(handler, Q(value));
-         handle(resultP); // just to shorten
+         handle(tempResultP); // just to shorten
          handler = void 0; // A dead resolver should not retain dead objects
-         resultP = void 0;
+         tempResultP = void 0;
 
          var forward;
          if (newHandler instanceof PendingHandler) {

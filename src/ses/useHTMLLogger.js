@@ -192,6 +192,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
   };
 
   var StartsWithTestSlash = /^test\//;
+  var HasURIScheme = /^[-+.\w]+:/;
 
   /**
    *
@@ -199,8 +200,11 @@ function useHTMLLogger(reportsElement, consoleElement) {
   function linkToTest(test) {
     if (StartsWithTestSlash.test(test)) {
       return 'https://github.com/tc39/test262/blob/master/' + test;
+    } else if (HasURIScheme.test(test)) {
+      return test;
+    } else {
+      return 'data:,Failed%20to%20resolve%20' + test;
     }
-    return test;
   }
 
   /**
@@ -255,7 +259,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
         var linkElement = appendNew(linksBlock, 'p');
         if (i === 0) { appendText(linkElement, 'See '); }
         var link = appendNew(linkElement, 'a');
-        link.href = 'http://es5.github.io/#x' + encodeURIComponent(section);
+        link.href = 'https://es5.github.io/#x' + encodeURIComponent(section);
         link.target = '_blank';
         appendText(link, 'Section ' + section);
       });
