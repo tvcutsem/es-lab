@@ -144,7 +144,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
             urlText += ':' + spanGroups[1];
             spanString = spanGroups[2];
           }
-        } else if ((urlGroups = RAW_RX.exec(call.source))) {
+        } else if ((urlGroups = RAWGIT_RX.exec(call.source))) {
           url = 'https://github.com/' + urlGroups[1] +
             '/blob/master/' + urlGroups[2];
           var spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
