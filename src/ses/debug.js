@@ -207,9 +207,17 @@ var ses;
        // matching pattern is the one used for any one stack line.
        var lineColPatterns = [FFEvalLineColPatterns, MainLineColPattern];
 
+       // FF40 Nightly has moved the magic stack property to a
+       // not-very-magic getter on Error.prototype. This enables us to
+       // prevent unprivileged access to stack information.
+       var primStackDesc = 
+             Object.getOwnPropertyDescriptor(Error.prototype, 'stack');
+       var primStackGetter = (primStackDesc && primStackDesc.get) ||
+             function legacyPrimStackGetter() { return this.stack; };
+
        function getCWStack(err) {
          if (!(err instanceof Error)) { return void 0; }
-         var stack = err.stack;
+         var stack = primStackGetter.call(err);
          if (!stack) { return void 0; }
          var lines = stack.split('\n');
          if (/^\w*Error:/.test(lines[0])) {
@@ -308,8 +316,7 @@ var ses;
        result = ses.stackString(cwStack);
      } else {
        if (err instanceof Error &&
-           'stack' in err &&
-           typeof (result = err.stack) === 'string') {
+           typeof (result = primStackGetter.call(err)) === 'string') {
          // already in result
        } else {
          return void 0;
