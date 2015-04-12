@@ -25,7 +25,6 @@
  * WeakMap is available, but before startSES.js. initSESPlus.js includes
  * this. initSES.js does not.
  *
- * //provides ses.UnsafeError,
  * //provides ses.getCWStack ses.stackString ses.getStack
  * @author Mark S. Miller
  * @requires WeakMap, this
@@ -55,7 +54,6 @@ var ses;
     * debugging operations, unless explicitly turned off below.
     */
    var UnsafeError = Error;
-   ses.UnsafeError = Error;
    function FakeError(message) {
      return UnsafeError(message);
    }
@@ -63,6 +61,16 @@ var ses;
    FakeError.prototype.constructor = FakeError;
 
    Error = FakeError;
+
+   // TODO(erights): We need a more general mechanism for this kind of
+   // cleanup. One that covers this case and the UnsafeFunction case
+   // in startSES.js
+   [EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError
+   ].forEach(function(err) {
+     if (Object.getPrototypeOf(err) === UnsafeError) {
+       Object.setPrototypeOf(err, FakeError);
+     }
+   });
 
    /**
     * Should be a function of an argument object (normally an error
