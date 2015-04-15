@@ -258,6 +258,15 @@ ses.startSES = function(global,
       ses.es5ProblemReports.NONCONFIGURABLE_OWN_PROTO.afterFailure;
   var INCREMENT_IGNORES_FROZEN =
       ses.es5ProblemReports.INCREMENT_IGNORES_FROZEN.afterFailure;
+  var CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT =
+      ses.es5ProblemReports.CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT.
+            afterFailure;
+
+  if (CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT) {
+    // Note: Imperative update, but should be ok.
+//    whitelist.cajaVM.anonIntrinsics.IteratorPrototype.next = '*';
+    // Whether this has the desired effect is tested after cleaning.
+  }
 
   var dirty = true;
 
@@ -1845,6 +1854,18 @@ ses.startSES = function(global,
         result + ')');
     ses.updateMaxSeverity(
         ses.es5ProblemReports.FREEZING_BREAKS_PROTOTYPES.preSeverity);
+  }
+
+  // Tests whether CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT is still a
+  // problem for us 
+  if (ses.optForeignForIn) {
+    try {
+      ses.optForeignForIn({});
+    } catch (err) {
+      ses.logger.warn(
+          'CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT still problematic:', err);
+      // No severity update needed, since it fails safe.
+    }
   }
 
   ses.logger.reportMax();

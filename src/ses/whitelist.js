@@ -121,10 +121,9 @@ var ses;
       anonIntrinsics: {
         ThrowTypeError: {},
         IteratorPrototype: {
-          constructor: false,  // suppress inherited '*'
-          // See https://bugzilla.mozilla.org/show_bug.cgi?id=1152550
-          // and https://code.google.com/p/google-caja/issues/detail?id=1962
-//          next: '*'
+          constructor: false  // suppress inherited '*'
+          // Note that startSES may add a "next: '*'" here, depending on
+          // CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT
         },
         ArrayIteratorPrototype: {},
         StringIteratorPrototype: {},
@@ -133,7 +132,7 @@ var ses;
 
         // The %GeneratorFunction% intrinsic is the constructor of
         // generator functions, so %GeneratorFunction%.prototype is
-        // the %Generator% intrinsic, which all generator function
+        // the %Generator% intrinsic, which all generator functions
         // inherit from. A generator function is effectively the
         // constructor of its generator instances, so, for each
         // generator function (e.g., "g1" on the diagram at
@@ -148,8 +147,7 @@ var ses;
         GeneratorFunction: {
           prototype: {
             prototype: {
-              next: '*',  // redundant, but IteratorPrototype.next isn't std
-                          // and so might disappear in the future.
+              next: '*',
               'return': '*',
               'throw': '*'
             }

@@ -203,7 +203,11 @@ var ses;
        // group be the source URL if any, the second by the line
        // number if any, and the third be the column number if any.
 
-       // Seen on FF Nightly 30 for execution in evaled strings
+       // Seen on FF Nightly 30 for execution in evaled strings.
+       // The current Causeway format is not sufficiently expressive
+       // to represent the useful information here and (TODO(erights))
+       // needs to be enhanced. In the meantime, this pattern captures
+       // the outer source position and ignores the inner one.
        var FFEvalLineColPatterns = 
              (/^(.*?) line (\d+) > (?:[^:]*):(?:\d+):(?:\d+)$/);
        // If the source position ends in either one or two
@@ -239,6 +243,7 @@ var ses;
          if (/^\w*Error:/.test(lines[0])) {
            lines = lines.slice(1);
          }
+         lines = lines.filter(function(line) { return line !== ''; });
          var frames = lines.map(function(line) {
            var name = line.trim();
            var source = '?';
