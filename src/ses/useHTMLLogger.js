@@ -157,6 +157,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
         
         var link = appendNew(preParent, 'a');
         link.href = url;
+        link.target = '_blank';
         link.textContent = urlText;
       } else {
         appendText(preParent, urlText);
