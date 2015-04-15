@@ -3672,6 +3672,23 @@ var ses;
     return true;
   }
 
+
+  /**
+   * optForeignForIn, if non-undefined, is a function of one parameter
+   * in a foreign frame that does a do-nothing for/in on that
+   * parameter. Used for detecting whether
+   * https://code.google.com/p/google-caja/issues/detail?id=1962 is
+   * present. Exported so that startSES can also test whether
+   * https://codereview.appspot.com/222570043/ was an adequate repair.
+   *
+   * <p>When run in a non-browser environment, optForeignForIn is
+   * undefined.
+   */
+  ses.optForeignForIn = inTestFrame(function(window) {
+    return window.Function('o', '"use strict"; for (var x in o) {}');
+  });
+
+
   ////////////////////// Repairs /////////////////////
   //
   // Each repair_NAME function exists primarily to repair the problem

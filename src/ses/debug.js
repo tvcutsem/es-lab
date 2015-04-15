@@ -204,7 +204,8 @@ var ses;
        // number if any, and the third be the column number if any.
 
        // Seen on FF Nightly 30 for execution in evaled strings
-       var FFEvalLineColPatterns = (/^(?:.*?) line \d+ > eval():(\d+):(\d+)$/);
+       var FFEvalLineColPatterns = 
+             (/^(.*?) line (\d+) > (?:[^:]*):(?:\d+):(?:\d+)$/);
        // If the source position ends in either one or two
        // colon-digit-sequence suffixes, then the first of these are
        // the line number, and the second, if present, is the column
@@ -224,9 +225,16 @@ var ses;
              function legacyPrimStackGetter() { return this.stack; };
 
        function getCWStack(err) {
-         if (!(err instanceof Error)) { return void 0; }
-         var stack = primStackGetter.call(err);
-         if (!stack) { return void 0; }
+         var stack = void 0;
+         try {
+           stack = primStackGetter.call(err);
+         } catch (_) {
+           // There's no known good inter-realm brand check for
+           // whether something is an error object. Instead, we simply
+           // handle the failure of stack-getting magic as another way
+           // to not get any stack information.
+         }
+         if (!stack || typeof stack !== 'string') { return void 0; }
          var lines = stack.split('\n');
          if (/^\w*Error:/.test(lines[0])) {
            lines = lines.slice(1);

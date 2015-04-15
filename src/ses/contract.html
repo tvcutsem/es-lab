@@ -188,7 +188,7 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     "use strict";
     if (!ses.ok()) { return; }
 
-    var exprSrc = 
+    var exprSrc =
         '(function(){\n' +
         '  function foo(str) {\n' +
         '    debugger;\n' +
@@ -213,13 +213,13 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       ses.logger.error('Missing expected error');
     }
 
-    var compiledP = ses.compileExprLater(exprSrc, { 
+    var compiledP = ses.compileExprLater(exprSrc, {
       sourceUrl: 'http://example.com/fake2.js'
     });
     // TODO(erights): Should be 'done' once makeQ supports it.
     Q(compiledP).fcall(cajaVM.sharedImports).then(
-      function(val) { 
-        ses.logger.error('Missing expected error: ', val); 
+      function(val) {
+        ses.logger.error('Missing expected error: ', val);
       },
       function(reason) {
         // The ses.logger installed by useHTMLLogger.js uses ses.getStack
@@ -308,7 +308,18 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       appendResult(contractTest, 'failed: ' + reason);
     }).end();
 
-  })();
+    if (ses.optForeignForIn) {
+      tried: {
+        try {
+          ses.optForeignForIn({});
+        } catch (err) {
+          ses.logger.error('Foreign for/in test failed: ', err);
+          break tried;
+        }
+        ses.logger.log('Foreign for/in test succeeded.');
+      }
+    }
+  }());
 </script>
 
 <p>
@@ -318,7 +329,7 @@ on <span id="browserOS">unknown</span>
 <script src="detect.js"></script>
 <script>
   (function(){
-    "use strict"
+    "use strict";
     gebi('browserName').textContent = BrowserDetect.browser;
     gebi('browserVersion').textContent = BrowserDetect.version;
     gebi('browserOS').textContent = BrowserDetect.OS;

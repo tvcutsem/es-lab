@@ -121,18 +121,37 @@ var ses;
       anonIntrinsics: {
         ThrowTypeError: {},
         IteratorPrototype: {
-          constructor: false  // suppress inherited '*'
+          constructor: false,  // suppress inherited '*'
+          // See https://bugzilla.mozilla.org/show_bug.cgi?id=1152550
+          // and https://code.google.com/p/google-caja/issues/detail?id=1962
+//          next: '*'
         },
         ArrayIteratorPrototype: {},
         StringIteratorPrototype: {},
         // TODO MapIteratorPrototype: {},
         // TODO SetIteratorPrototype: {},
+
+        // The %GeneratorFunction% intrinsic is the constructor of
+        // generator functions, so %GeneratorFunction%.prototype is
+        // the %Generator% intrinsic, which all generator function
+        // inherit from. A generator function is effectively the
+        // constructor of its generator instances, so, for each
+        // generator function (e.g., "g1" on the diagram at
+        // http://people.mozilla.org/~jorendorff/figure-2.png )
+        // its .prototype is a prototype that its instances inherit
+        // from. Paralleling this structure, %Generator%.prototype,
+        // i.e., %GeneratorFunction%.prototype.prototype, is the
+        // object that all these generator function prototypes inherit
+        // from. The .next, .return and .throw that generator
+        // instances respond to are actually the builtin methods they
+        // inherit from this object.
         GeneratorFunction: {
           prototype: {
             prototype: {
-              next: t,
-              'return': t,
-              'throw': t
+              next: '*',  // redundant, but IteratorPrototype.next isn't std
+                          // and so might disappear in the future.
+              'return': '*',
+              'throw': '*'
             }
           }
         },

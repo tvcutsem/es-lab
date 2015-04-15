@@ -11,6 +11,7 @@ Ecmascript 5, proxies and traits are discussed in these [talks](http://code.goog
 ### Script Compartments ###
 
 These abstractions compose well. For example, in an SES frame as initialized by initSES.js
+
 ```js
     var compartment1 = makeMembrane(cajaVM.eval);
     var eval1 = compartment1.wrapper;
