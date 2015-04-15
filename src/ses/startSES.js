@@ -264,7 +264,7 @@ ses.startSES = function(global,
 
   if (CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT) {
     // Note: Imperative update, but should be ok.
-//    whitelist.cajaVM.anonIntrinsics.IteratorPrototype.next = '*';
+    whitelist.cajaVM.anonIntrinsics.IteratorPrototype.next = '*';
     // Whether this has the desired effect is tested after cleaning.
   }
 

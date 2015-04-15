@@ -307,18 +307,6 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     }, function(reason) {
       appendResult(contractTest, 'failed: ' + reason);
     }).end();
-
-    if (ses.optForeignForIn) {
-      tried: {
-        try {
-          ses.optForeignForIn({});
-        } catch (err) {
-          ses.logger.error('Foreign for/in test failed: ', err);
-          break tried;
-        }
-        ses.logger.log('Foreign for/in test succeeded.');
-      }
-    }
   }());
 </script>
 
