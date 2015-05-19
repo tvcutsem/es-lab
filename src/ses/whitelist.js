@@ -109,6 +109,12 @@ var ses;
 
   var t = true;
   var TypedArrayWhitelist;  // defined and used below
+
+  // Note that, on browsers suffering from
+  // CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT, startSES does an
+  // imperative update of the whitelist, but should be ok.  Please
+  // maintain this note together with corresponding notes in
+  // startSES.js where whitelist is updated and where it first read.
   ses.whitelist = {
     cajaVM: {                        // Caja support
       // The accessible intrinsics which are not reachable by own

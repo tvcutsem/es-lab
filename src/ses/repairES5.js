@@ -1293,14 +1293,32 @@ var ses;
     return false;
   }
 
-  // Create a new iframe and pass its 'window' object to the provided callback.
-  // If the environment is not a browser, return undefined and do not call the
-  // callback.
+  /**
+   * Create a new iframe and pass its 'window' object to the provided
+   * callback.  If the environment is not a browser, return undefined
+   * and do not call the callback.
+   *
+   * <p>inTestFrame assumes we are in a browser environment iff there
+   * is a non-undefined document with a truthy createElement
+   * property. If so, it creates an iframe, makes it a child somewhere
+   * of the current document, calls the callback, passing that
+   * iframe's window, and then removes the iframe.
+   *
+   * <p>A typical callback (e.g., _optForeignForIn) will then create a
+   * function within that other frame, to be used later to test
+   * cross-frame operations. However, on IE10 on Windows, this iframe
+   * removal may then prevent that created function from running at
+   * that later time, with a "Error: Can't execute code from a freed
+   * script" error.
+   */
   function inTestFrame(callback) {
     if (!(typeof document !== 'undefined' && document.createElement)) {
       return undefined;
     }
     var iframe = document.createElement('iframe');
+    // Four choices for where to put the iframe seems like a lot. How
+    // many of these have been, or even can be, tested? Can we kill
+    // the ones we cannot test?
     var container = document.body || document.getElementsByTagName('head')[0] ||
         document.documentElement || document;
     container.appendChild(iframe);
@@ -3677,9 +3695,9 @@ var ses;
 
 
   /**
-   * optForeignForIn, if non-undefined, is a function of one parameter
+   * _optForeignForIn, if non-undefined, is a function of one parameter
    * in a foreign frame that does a do-nothing for/in on that
-   * parameter. Used for detecting 
+   * parameter. Used for detecting
    * https://code.google.com/p/google-caja/issues/detail?id=1962 ,
    * i.e., whether cross-frame for/in relies on the
    * non-standard %IteratorPrototype%.next method being present.
@@ -3687,17 +3705,17 @@ var ses;
    * <p>Exported so that startSES can test whether whitelisting
    * %IteratorPrototype%.next "fixes" the problem.
    *
-   * <p>When run in a non-browser environment, optForeignForIn is
+   * <p>When run in a non-browser environment, _optForeignForIn is
    * undefined.
    */
-  ses.optForeignForIn = inTestFrame(function(window) {
+  ses._optForeignForIn = inTestFrame(function(window) {
     return window.Function('o', '"use strict"; for (var x in o) {}');
   });
 
   function test_CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT() {
     var getProto = Object.getPrototypeOf;
 
-    if (!ses.optForeignForIn) { return false; }
+    if (!ses._optForeignForIn) { return false; }
     var nextless = inTestFrame(function(window) {
       var iterSym = window.Symbol && window.Symbol.iterator;
       if (!iterSym) { return void 0; }
@@ -3709,17 +3727,17 @@ var ses;
     });
     if (!nextless) { return false; }
     try {
-      ses.optForeignForIn(nextless);
+      ses._optForeignForIn(nextless);
     } catch (err) {
       // Cannot easily instanceof Error, since it is a cross-frame
-      // error. No reliable brand test for error anyway.
+      // error. No reliable brand test for Error anyway.
       if (err.name === 'TypeError' && 'message' in err) {
         return true;
       }
       return 'Unexpected error: ' + err;
     }
     return false;
-  }      
+  }
 
 
   ////////////////////// Repairs /////////////////////

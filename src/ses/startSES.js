@@ -167,7 +167,7 @@ var cajaVM;
  *        TODO(erights): Currently, the code has only been tested when
  *        {@code global} is the global object of <i>this</i>
  *        frame. The code should be made to work for cross-frame use.
- * @param whitelist ::Record(Permit) where 
+ * @param whitelist ::Record(Permit) where
  *        Permit = true | false | "*" | "maybeAccessor" | Record(Permit).
  *        Describes the subset of naming paths starting from {@code
  *        sharedImports} that should be accessible. The <i>accessible
@@ -263,7 +263,9 @@ ses.startSES = function(global,
             afterFailure;
 
   if (CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT) {
-    // Note: Imperative update, but should be ok.
+    // Note: Imperative update, but should be ok.  Please maintain
+    // this note together with corresponding notes where whitelist is
+    // defined in whitelist.js, and where it is first read below.
     whitelist.cajaVM.anonIntrinsics.IteratorPrototype.next = '*';
     // Whether this has the desired effect is tested after cleaning.
   }
@@ -1036,13 +1038,13 @@ ses.startSES = function(global,
       function FakeFunction(var_args) {
         var params = [].slice.call(arguments, 0);
         var body = ses.verifyStrictFunctionBody(params.pop() || '');
- 
+
         // Although the individual params may not be strings, the params
         // array is reliably a fresh array, so under the SES (not CES)
         // assumptions of unmodified primordials, this calls the reliable
         // Array.prototype.join which guarantees that its result is a string.
         params = params.join(',');
- 
+
         // Note the EOL after body to prevent a trailing line comment in
         // body from eliding the rest of the wrapper.
         var exprSrc = '(function(' + params + '\n){' + body + '\n})';
@@ -1512,6 +1514,12 @@ ses.startSES = function(global,
    * non-enumerable since ES5.1 specifies that all these properties
    * are non-enumerable on the global object.
    */
+  // Note that, on browsers suffering from
+  // CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT, startSES does an
+  // imperative update of the whitelist above, but should be ok.
+  // Please maintain this note together with corresponding notes in
+  // whitelist.js where whitelist is defined, and in startSES.js above
+  // where whitelist is updated
   keys(whitelist).forEach(function(name) {
     var desc = gopd(global, name);
     if (desc) {
@@ -1857,10 +1865,10 @@ ses.startSES = function(global,
   }
 
   // Tests whether CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT is still a
-  // problem for us 
-  if (ses.optForeignForIn) {
+  // problem for us
+  if (ses._optForeignForIn) {
     try {
-      ses.optForeignForIn({});
+      ses._optForeignForIn({});
     } catch (err) {
       ses.logger.warn(
           'CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT still problematic:', err);
