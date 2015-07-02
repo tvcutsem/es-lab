@@ -202,7 +202,8 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     syncEval: {
       try {
         cajaVM.confine(exprSrc, {}, {
-          sourceUrl: 'http://example.com/fake1.js'
+//          sourceUrl: 'http://example.com/fake1.js'
+//          sourceUrl: 'data:,' + encodeURIComponent(exprSrc)
         });
       } catch (err) {
         // The ses.logger installed by useHTMLLogger.js uses ses.getStack
@@ -214,7 +215,8 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     }
 
     var compiledP = ses.compileExprLater(exprSrc, {
-      sourceUrl: 'http://example.com/fake2.js'
+//      sourceUrl: 'http://example.com/fake2.js'
+//      sourceUrl: 'data:,' + encodeURIComponent(exprSrc)
     });
     // TODO(erights): Should be 'done' once makeQ supports it.
     Q(compiledP).fcall(cajaVM.sharedImports).then(

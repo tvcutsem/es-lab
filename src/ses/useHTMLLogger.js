@@ -154,11 +154,16 @@ function useHTMLLogger(reportsElement, consoleElement) {
             spanString = spanGroups[2];
           }
         }
-        
+
         var link = appendNew(preParent, 'a');
         link.href = url;
         link.target = '_blank';
         link.textContent = urlText;
+      } else if (/^data:/.test(url)) {
+        var link = appendNew(preParent, 'a');
+        link.href = url;
+        link.target = '_blank';
+        link.textContent = 'data:...';
       } else {
         appendText(preParent, urlText);
       }
