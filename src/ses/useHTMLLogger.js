@@ -116,58 +116,70 @@ function useHTMLLogger(reportsElement, consoleElement) {
   var RAWGIT_RX = /^https:\/\/rawgit.com\/(.*)\/master\/(.*)$/;
 
   /**
-   * Turn a Causeway stack into a DOM rendering of a v8-like stack
+   * Turn an extended Causeway stack frame into a DOM rendering of a
+   * stackframe line from a v8-like stack traceback string. Based on
+   * frameString in debug.js
+   */
+  function frameDom(preParent, call) {
+    var spanString = call.span.map(function(subSpan) {
+      return subSpan.join(':');
+    }).join('::');
+
+    if (spanString) { spanString = ':' + spanString; }
+
+    appendText(preParent, ' at ' + call.name + ' (');
+    var url = call.source;
+    var urlText = call.source;
+
+    if (typeof url !== 'string') {
+      appendText(preParent, 'eval');
+      frameDom(preParent, url);
+    } else if (/^(?:http|https|file):\/\//.test(url)) {
+      var urlGroups;
+      if ((urlGroups = CODE_GOOGLE_RX.exec(call.source))) {
+        url = 'https://code.google.com/p/' + urlGroups[1] +
+          '/source/browse/' + urlGroups[2];
+        var spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
+        if (spanGroups) {
+          url += '#' + spanGroups[1];
+          urlText += ':' + spanGroups[1];
+          spanString = spanGroups[2];
+        }
+      } else if ((urlGroups = RAWGIT_RX.exec(call.source))) {
+        url = 'https://github.com/' + urlGroups[1] +
+          '/blob/master/' + urlGroups[2];
+        var spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
+        if (spanGroups) {
+          url += '#L' + spanGroups[1];
+          urlText += ':' + spanGroups[1];
+          spanString = spanGroups[2];
+        }
+      }
+      var link = appendNew(preParent, 'a');
+      link.href = url;
+      link.target = '_blank';
+      link.textContent = urlText;
+    } else if (/^data:/.test(url)) {
+      var link = appendNew(preParent, 'a');
+      link.href = url;
+      link.target = '_blank';
+      link.textContent = 'data:...';
+    } else {
+      appendText(preParent, urlText);
+    }
+    appendText(preParent, spanString + ')');
+  }
+
+  /**
+   * Turn an extended Causeway stack into a DOM rendering of a v8-like stack
    * traceback string. Based on ses.stackString in debug.js
    */
   function stackDom(preParent, cwStack) {
     var calls = cwStack.calls;
 
     calls.forEach(function(call) {
-      var spanString = call.span.map(function(subSpan) {
-        return subSpan.join(':');
-      }).join('::');
-
-      if (spanString) { spanString = ':' + spanString; }
-
-      appendText(preParent, '  at ' + call.name + ' (');
-      var url = call.source;
-      var urlText = call.source;
-
-      if (/^(?:http|https|file):\/\//.test(url)) {
-        var urlGroups;
-        if ((urlGroups = CODE_GOOGLE_RX.exec(call.source))) {
-          url = 'https://code.google.com/p/' + urlGroups[1] +
-            '/source/browse/' + urlGroups[2];
-          var spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
-          if (spanGroups) {
-            url += '#' + spanGroups[1];
-            urlText += ':' + spanGroups[1];
-            spanString = spanGroups[2];
-          }
-        } else if ((urlGroups = RAWGIT_RX.exec(call.source))) {
-          url = 'https://github.com/' + urlGroups[1] +
-            '/blob/master/' + urlGroups[2];
-          var spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
-          if (spanGroups) {
-            url += '#L' + spanGroups[1];
-            urlText += ':' + spanGroups[1];
-            spanString = spanGroups[2];
-          }
-        }
-
-        var link = appendNew(preParent, 'a');
-        link.href = url;
-        link.target = '_blank';
-        link.textContent = urlText;
-      } else if (/^data:/.test(url)) {
-        var link = appendNew(preParent, 'a');
-        link.href = url;
-        link.target = '_blank';
-        link.textContent = 'data:...';
-      } else {
-        appendText(preParent, urlText);
-      }
-      appendText(preParent, spanString + ')\n');
+      frameDom(preParent, call);
+      appendText(preParent, '\n');
     });
   };
 

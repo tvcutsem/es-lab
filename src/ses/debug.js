@@ -107,7 +107,7 @@ var ses;
    // FF40 Nightly has moved the magic stack property to a
    // not-very-magic getter on Error.prototype. This enables us to
    // prevent unprivileged access to stack information.
-   var primStackDesc = 
+   var primStackDesc =
        Object.getOwnPropertyDescriptor(Error.prototype, 'stack');
    var primStackGetter = (primStackDesc && primStackDesc.get) ||
        function legacyPrimStackGetter() { return this.stack; };
@@ -161,7 +161,33 @@ var ses;
        var ssts = new WeakMap(); // error -> sst
 
        /**
-        * Returns a stack in Causeway format.
+        * Given a v8 CallSite object as defined at
+        * https://code.google.com/p/v8-wiki/wiki/JavaScriptStackTraceApi
+        * return a stack frame in extended Causeway format.
+        *
+        * <p>The difference between Causeway format and extended
+        * Causeway format is that the source field of a stack frame
+        * may be either a string (as in the normal Causeway format) or
+        * another stack frame recursively, to represent eval calls.
+        */
+       function getCWFrame(callSite) {
+         if (typeof callSite === 'string') {
+           // See https://code.google.com/p/v8/issues/detail?id=4268
+           return callSite;
+         }
+         var source = callSite.isEval() ?
+             getCWFrame(callSite.getEvalOrigin()) :
+             '' + (callSite.getFileName() || '?');
+         return {
+           name: '' + (callSite.getFunctionName() ||
+                       callSite.getMethodName() || '?'),
+           source: source,
+           span: [ [ callSite.getLineNumber(), callSite.getColumnNumber() ] ]
+         };
+       }
+
+       /**
+        * Returns a stack in extended Causeway format.
         *
         * <p>Based on
         * http://code.google.com/p/causeway/source/browse/trunk/src/js/com/teleometry/causeway/purchase_example/workers/makeCausewayLogger.js
@@ -176,14 +202,7 @@ var ses;
          }
          if (sst === void 0) { return void 0; }
 
-         return { calls: sst.map(function(frame) {
-           return {
-             name: '' + (frame.getFunctionName() ||
-                         frame.getMethodName() || '?'),
-             source: '' + (frame.getFileName() || '?'),
-             span: [ [ frame.getLineNumber(), frame.getColumnNumber() ] ]
-           };
-         })};
+         return {calls: sst.map(getCWFrame)};
        };
        ses.getCWStack = getCWStack;
      })();
@@ -229,14 +248,16 @@ var ses;
        // Each of the LineColPatters should have the first capture
        // group be the source URL if any, the second by the line
        // number if any, and the third be the column number if any.
+       // If there are more, then we have an eval where the next three
+       // are the function-name, line, and column within the evaled string.
 
        // Seen on FF Nightly 30 for execution in evaled strings.
-       // The current Causeway format is not sufficiently expressive
-       // to represent the useful information here and (TODO(erights))
-       // needs to be enhanced. In the meantime, this pattern captures
-       // the outer source position and ignores the inner one.
-       var FFEvalLineColPatterns = 
-             (/^(.*?) line (\d+) > (?:[^:]*):(?:\d+):(?:\d+)$/);
+       // On the left of the &gt; is the position from which eval was
+       // called. On the right is the position within the evaled
+       // string.
+       // TODO(erights): Handle multiple eval nestings.
+       var FFEvalLineColPatterns =
+             (/^(.*?) line (\d+)() > ([^:]*):(\d+):(\d+)$/);
        // If the source position ends in either one or two
        // colon-digit-sequence suffixes, then the first of these are
        // the line number, and the second, if present, is the column
@@ -282,12 +303,33 @@ var ses;
                    // sub[1] if present is the source URL.
                    // sub[2] if present is the line number.
                    // sub[3] if present is the column number.
+                   // sub[4] if present is the function name within the evaled
+                   // string.
+                   // sub[5] if present is the line number within the
+                   // evaled string.
+                   // sub[6] if present is the column number within
+                   // the evaled string.
                    source = sub[1] || '?';
                    if (sub[2]) {
                      if (sub[3]) {
                        span = [[+sub[2], +sub[3]]];
                      } else {
                        span = [[+sub[2]]];
+                     }
+                   }
+                   if (sub.length >= 5) {
+                     source = {
+                       name: sub[4] === 'eval' ? '?' : (sub[4] || '?'),
+                       source: source,
+                       span: span
+                     };
+                     span = [];
+                     if (sub[5]) {
+                       if (sub[6]) {
+                         span = [[+sub[5], +sub[6]]];
+                       } else {
+                         span = [[+sub[5]]];
+                       }
                      }
                    }
                    return true;
@@ -325,23 +367,30 @@ var ses;
    }
 
    /**
-    * Turn a Causeway stack into a v8-like stack traceback string.
+    * Turn an extended Causeway stack frame into a stackframe line
+    * from a v8-like stack traceback string as defined at
+    * https://code.google.com/p/v8-wiki/wiki/JavaScriptStackTraceApi
+    */
+   function frameString(frame) {
+     var spanString = frame.span.map(function(subSpan) {
+       return subSpan.join(':');
+     }).join('::');
+     if (spanString) { spanString = ':' + spanString; }
+     var source = frame.source;
+     if (typeof source !== 'string') {
+       source = 'eval' + frameString(source);
+     }
+     return ' at ' + frame.name + ' (' + source + spanString + ')';
+   }
+
+   /**
+    * Turn an extended Causeway stack into a v8-like stack traceback
+    * string.
     */
    function stackString(cwStack) {
      if (!cwStack) { return void 0; }
-     var calls = cwStack.calls;
-
-     var result = calls.map(function(call) {
-
-       var spanString = call.span.map(function(subSpan) {
-         return subSpan.join(':');
-       }).join('::');
-       if (spanString) { spanString = ':' + spanString; }
-
-       return '  at ' + call.name + ' (' + call.source + spanString + ')';
-
-     });
-     return result.join('\n');
+     var result = cwStack.calls.map(frameString);
+     return result.join('\n ');
    };
    ses.stackString = stackString;
 
