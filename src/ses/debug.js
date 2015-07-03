@@ -117,6 +117,8 @@ var ses;
        // Assuming http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
        // So this section is v8 specific.
 
+       UnsafeError.stackTraceLimit = Infinity;
+
        UnsafeError.prepareStackTrace = function(err, sst) {
          if (ssts === void 0) {
            // If an error happens in the debug module after setting up
@@ -173,6 +175,7 @@ var ses;
        function getCWFrame(callSite) {
          if (typeof callSite === 'string') {
            // See https://code.google.com/p/v8/issues/detail?id=4268
+           // TODO(erights): Should actually parse it into a proper CallSite.
            return callSite;
          }
          var source = callSite.isEval() ?
