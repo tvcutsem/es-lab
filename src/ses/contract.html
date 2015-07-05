@@ -197,13 +197,14 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       'function fakeUrl(g) {\n' +
       '  g("Expand me to see stack");\n' +
       '}\n';
-    var endowedSrc =
-      'function endowed(f) {\n' +
-      '  f(evalOnly);\n' +
-      '}\n';
+    var nestedSrc =
+      'cajaVM.confine(\n' +
+      '  "function nested(f) {\\n" + \n' +
+      '  "  f(evalOnly);\\n" + \n' +
+      '  "}\\n", {evalOnly: evalOnly})';
     var exprSrc =
       '(function dataUrl(){\n' +
-      '  endowed(fakeUrl);\n' +
+      '  nested(fakeUrl);\n' +
       '}())';
 
     syncEval: {
@@ -211,9 +212,9 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
       var cfakeUrl = cajaVM.confine(fakeUrlSrc, void 0, {
         sourceUrl: 'http://example.com/fake1.js'
       });
-      var cendowed = cajaVM.confine(endowedSrc, {evalOnly: cevalOnly});
+      var cnested = cajaVM.confine(nestedSrc, {evalOnly: cevalOnly});
       try {
-        cajaVM.confine(exprSrc, {fakeUrl: cfakeUrl, endowed: cendowed}, {
+        cajaVM.confine(exprSrc, {fakeUrl: cfakeUrl, nested: cnested}, {
           sourceUrl: 'data:,' + encodeURIComponent(exprSrc)
         });
       } catch (err) {
@@ -229,15 +230,15 @@ The <script src="useHTMLLogger.js"> and the inline script above advises
     var efakeUrlP = ses.confineLater(fakeUrlSrc, void 0, {
       sourceUrl: 'http://example.com/fake2.js'
     });
-    var eendowedP = Q(eevalOnlyP).then(function(eevalOnly) {
-      return ses.confineLater(endowedSrc, {evalOnly: eevalOnly});
+    var enestedP = Q(eevalOnlyP).then(function(eevalOnly) {
+      return ses.confineLater(nestedSrc, {evalOnly: eevalOnly});
     });
-    var doneP = Q.all([efakeUrlP, eendowedP]).then(function(efooPair) {
+    var doneP = Q.all([efakeUrlP, enestedP]).then(function(efooPair) {
       var efakeUrl = efooPair[0];
-      var eendowed = efooPair[1];
+      var enested = efooPair[1];
       return ses.confineLater(exprSrc, {
         fakeUrl: efakeUrl, 
-        endowed: eendowed
+        nested: enested
       }, {
         sourceUrl: 'data:,' + encodeURIComponent(exprSrc)
       });

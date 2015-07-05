@@ -178,6 +178,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
     var calls = cwStack.calls;
 
     calls.forEach(function(call) {
+      appendText(preParent, ' ');
       frameDom(preParent, call);
       appendText(preParent, '\n');
     });
