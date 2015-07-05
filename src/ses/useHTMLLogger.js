@@ -130,6 +130,8 @@ function useHTMLLogger(reportsElement, consoleElement) {
     appendText(preParent, ' at ' + call.name + ' (');
     var url = call.source;
     var urlText = call.source;
+    var spanGroups;
+    var link;
 
     if (typeof url !== 'string') {
       appendText(preParent, 'eval');
@@ -139,7 +141,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
       if ((urlGroups = CODE_GOOGLE_RX.exec(call.source))) {
         url = 'https://code.google.com/p/' + urlGroups[1] +
           '/source/browse/' + urlGroups[2];
-        var spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
+        spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
         if (spanGroups) {
           url += '#' + spanGroups[1];
           urlText += ':' + spanGroups[1];
@@ -148,19 +150,19 @@ function useHTMLLogger(reportsElement, consoleElement) {
       } else if ((urlGroups = RAWGIT_RX.exec(call.source))) {
         url = 'https://github.com/' + urlGroups[1] +
           '/blob/master/' + urlGroups[2];
-        var spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
+        spanGroups = (/^:([0-9]+)(.*)$/).exec(spanString);
         if (spanGroups) {
           url += '#L' + spanGroups[1];
           urlText += ':' + spanGroups[1];
           spanString = spanGroups[2];
         }
       }
-      var link = appendNew(preParent, 'a');
+      link = appendNew(preParent, 'a');
       link.href = url;
       link.target = '_blank';
       link.textContent = urlText;
     } else if (/^data:/.test(url)) {
-      var link = appendNew(preParent, 'a');
+      link = appendNew(preParent, 'a');
       link.href = url;
       link.target = '_blank';
       link.textContent = 'data:...';
