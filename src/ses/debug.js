@@ -417,7 +417,7 @@ var ses;
    function stackString(cwStack) {
      if (!cwStack) { return void 0; }
      var result = cwStack.calls.map(frameString);
-     return result.join('\n ');
+     return ' ' + result.join('\n ');
    };
    ses.stackString = stackString;
 

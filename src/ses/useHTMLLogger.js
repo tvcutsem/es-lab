@@ -195,6 +195,7 @@ function useHTMLLogger(reportsElement, consoleElement) {
       // See debug.js
       var getCWStack = ses.getCWStack;
       var getStack = ses.getStack;
+      var stackNode;
 
       for (var i = 0, len = args.length; i < len; i++) {
         var span = appendNew(p, 'span');
@@ -203,11 +204,11 @@ function useHTMLLogger(reportsElement, consoleElement) {
         var cwStack;
         var stack;
         if (getCWStack && ((cwStack = getCWStack(args[i])))) {
-          var stackNode = appendNew(p, 'pre');
+          stackNode = appendNew(p, 'pre');
           stackDom(stackNode, cwStack);
           deflate(span, [stackNode], '');
         } else if (getStack && ((stack = getStack(args[i])))) {
-          var stackNode = appendNew(p, 'pre');
+          stackNode = appendNew(p, 'pre');
           appendText(stackNode, stack);
           deflate(span, [stackNode], '');
         }
