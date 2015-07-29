@@ -171,7 +171,9 @@ var ses;
             BYTES_PER_ELEMENT: '*',
             set: '*',
             subarray: '*'
-          }
+          },
+          from: '*',  // See https://code.google.com/p/v8/issues/detail?id=4315
+          of: '*'     // See https://code.google.com/p/v8/issues/detail?id=4315
         }
       },
 

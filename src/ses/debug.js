@@ -32,6 +32,55 @@
  * so there would be no loss of integrity in switching to some other
  * heuristic.
  *
+
+ * <p>This API defines an "Extended Causeway Stacktrace", a
+ * JSON representation of a stacktrace, based on Causeway's stacktrace
+ * format, as documented at
+ * http://wiki.erights.org/wiki/Causeway_Platform_Developer and
+ * implemented at
+ * https://github.com/cocoonfx/causeway/blob/master/src/js/com/teleometry/causeway/purchase_example/workers/makeCausewayLogger.js
+ * and
+ * https://github.com/cocoonfx/causeway/blob/master/src/js/com/teleometry/causeway/log/html/instrument.js
+ * The extension is to allow nested frames, in order to represent
+ * nested eval positions. An Extended Causeway Stacktrace has the form:
+ * <pre>
+ * stacktrace ::= {calls: [frame*]};
+ * frame ::= {name: functionName,
+ *            source: source,
+ *            span: [[startLine, startCol?], [endLine, endCol?]?]};
+ * functionName ::= STRING;
+ * startLine, startCol, endLine, endCol ::= INTEGER
+ * source ::= STRING | frame;
+ * </pre>
+ * <p>TODO(erights): Move this frame nesting into Causeway itself.
+ *
+ * <p>The functionName might be the name of the function, a name
+ * associated with where the function is stored, i.e., the property
+ * name as "method name", or "?" to indicate unknown.
+ *
+ * <p>When the call happens at callsite P in code that is evaled from
+ * callsite Q, then the outer frame represents callsite P and the
+ * <tt>source</tt> of that outer frame is an inner frame representing
+ * callsite Q.
+ *
+ * When the source is a string, it should be either a URI ideally
+ * saying where to obtain exactly that same source, or a "?" to
+ * indicate unknown.
+ *
+ * <p>ses.getCWStack(err) obtains an Extended Causeway Stacktrace from
+ * an error object if possible.
+ *
+ * <p>ses.stackString(stacktrace) converts an Extended Causeway
+ * Stacktrace into a v8-like stack traceback string as documented at
+ * https://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
+ *
+ * <p>ses.getStack(err) obtains a stack traceback string from an error
+ * object if possible. Ideally, it does so by
+ * stackString(getCWStack(err)), yielding a v8-like stack traceback
+ * string in a mostly platform-independent mannner. However, it may
+ * report a platform-dependent string when getCWStack(err) on that
+ * platform does not succeed.
+ *
  * //provides ses.getCWStack ses.stackString ses.getStack
  * @author Mark S. Miller
  * @requires WeakMap, this
@@ -108,24 +157,38 @@ var ses;
    /**
     * Should be a function of an argument object (normally an error
     * instance) that returns the stack trace associated with argument
-    * in Causeway format.
-    *
-    * <p>See http://wiki.erights.org/wiki/Causeway_Platform_Developer
+    * in Extended Causeway format, as defined above.
     *
     * <p>Currently, there is no one portable technique for doing
-    * this. So instead, each platform specific branch of the if below
-    * should assign something useful to getCWStack.
+    * extracting stack trace information from an Error
+    * object. Instead, each platform specific branch of the
+    * <tt>if</tt> below should assign something useful to getCWStack.
     */
    ses.getCWStack = function uselessGetCWStack(err) { return void 0; };
 
    // FF40 Nightly has moved the magic stack property to a
    // not-very-magic getter on Error.prototype. This enables us to
-   // prevent unprivileged access to stack information.
+   // prevent unprivileged access to stack information, by capturing
+   // this getter before startSES removes it, since it is not
+   // whitelisted. 
    var primStackDesc =
        Object.getOwnPropertyDescriptor(Error.prototype, 'stack');
    var primStackGetter = (primStackDesc && primStackDesc.get) ||
        function legacyPrimStackGetter() { return this.stack; };
 
+   /**
+    * line2CWFrame(line) takes a (typically) single line string,
+    * representing a single stackframe of a stacktrace, and returns an
+    * Extended Causeway frame JSON object as defined above.
+    *
+    * <p>There is no standard for how these lines are formatted and
+    * they vary widely between platforms. line2CWFrame scrapes this
+    * line unreliably by using a variety of regular expressions that
+    * we've accumulated over time, to cover all the cases we've seen
+    * across platforms. There are a variety of user-triggered
+    * conditions that can cause this scraping to fail, such as a
+    * methodName that contains an "(" or "@" character.
+    */
    var line2CWFrame = (function() {
      // Each of these frame patterns should have the first capture
      // group be the function name, and the second capture group be
@@ -143,18 +206,18 @@ var ses;
      // argument descriptions enclosed in parens, which we
      // ignore. Then there is always an at-sign followed by possibly
      // empty source position.
-     var FFFramePattern =  /^\s*([^:@(]*?)\s*(?:\(.*\))?@(.*?)$/;
+     var FFFramePattern = /^\s*([^:@(]*?)\s*(?:\(.*\))?@(.*?)$/;
 
      // Seen on IE: The line begins with " at ", as on v8, which we
      // ignore. Then the function name, then the source position
      // enclosed in parens.
-     var IEFramePattern =  /^\s*(?:at\s+)?([^:@(]*?)\s*\((.*?)\)$/;
+     var IEFramePattern = /^\s*(?:at\s+)?([^:@(]*?)\s*\((.*?)\)$/;
 
      // Seem on Safari (JSC): The name optionally followed by an
      // at-sign and source position information. This is like FF,
      // except that the at-sign and source position info may
      // together be absent.
-     var JSCFramePatt1 =   /^\s*([^:@(]*?)\s*(?:@(.*?))?$/;
+     var JSCFramePatt1 = /^\s*([^:@(]*?)\s*(?:@(.*?))?$/;
 
      // Also seen on Safari (JSC): Just the source position info by
      // itself, with no preceding function name. The source position
@@ -163,7 +226,7 @@ var ses;
      // name. The pattern here is a bit more flexible, in that it
      // will accept a function name preceding the source position
      // and separated by whitespace.
-     var JSCFramePatt2 =   /^\s*?([^:@(]*?)\s*?(.*?)$/;
+     var JSCFramePatt2 = /^\s*?([^:@(]*?)\s*?(.*?)$/;
 
      // List the above patterns in priority order, where the first
      // matching pattern is the one used for any one stack line.
@@ -288,8 +351,6 @@ var ses;
        // Assuming http://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
        // So this section is v8 specific.
 
-       UnsafeError.stackTraceLimit = 100;
-
        UnsafeError.prepareStackTrace = function(err, sst) {
          if (ssts === void 0) {
            // If an error happens in the debug module after setting up
@@ -336,12 +397,8 @@ var ses;
        /**
         * Given a v8 CallSite object as defined at
         * https://code.google.com/p/v8-wiki/wiki/JavaScriptStackTraceApi
-        * return a stack frame in extended Causeway format.
-        *
-        * <p>The difference between Causeway format and extended
-        * Causeway format is that the source field of a stack frame
-        * may be either a string (as in the normal Causeway format) or
-        * another stack frame recursively, to represent eval calls.
+        * return a stack frame in Extended Causeway Format as defined
+        * above.
         */
        function callSite2CWFrame(callSite) {
          if (typeof callSite === 'string') {
@@ -361,10 +418,7 @@ var ses;
        }
 
        /**
-        * Returns a stack in extended Causeway format.
-        *
-        * <p>Based on
-        * http://code.google.com/p/causeway/source/browse/trunk/src/js/com/teleometry/causeway/purchase_example/workers/makeCausewayLogger.js
+        * Returns a stack in Extended Causeway Format as defined above.
         */
        function getCWStack(err) {
          if (Object(err) !== err) { return void 0; }
@@ -408,7 +462,7 @@ var ses;
    }
 
    /**
-    * Turn an extended Causeway stack frame into a stackframe line
+    * Turn an Extended Causeway stackframe object into a stackframe line
     * from a v8-like stack traceback string as defined at
     * https://code.google.com/p/v8-wiki/wiki/JavaScriptStackTraceApi
     */
@@ -425,8 +479,8 @@ var ses;
    }
 
    /**
-    * Turn an extended Causeway stack into a v8-like stack traceback
-    * string.
+    * Turn an Extended Causeway Stacktrace object into a v8-like stack
+    * traceback string.
     */
    function stackString(cwStack) {
      if (!cwStack) { return void 0; }
@@ -436,7 +490,9 @@ var ses;
    ses.stackString = stackString;
 
    /**
-    * Return the v8-like stack traceback string associated with err.
+    * Return a stack traceback string associated with err. Ideally,
+    * this is in a platform idependent v8-like format, but this may
+    * not always be possible.
     */
    function getStack(err) {
      if (err !== Object(err)) { return void 0; }
