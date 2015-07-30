@@ -2066,7 +2066,8 @@ var ses;
       return false;
     }
     if (desc === void 0 && noFuncPoison) { return false; }
-    return 'getOwnPropertyDesciptor returned unexpected caller descriptor';
+    return 'getOwnPropertyDesciptor returned unexpected caller descriptor: ' +
+      JSON.stringify(desc);
   }
 
   /**
