@@ -1505,6 +1505,105 @@ ses.startSES = function(global,
   }
 
   /**
+   * Because of the browser split between Window and WindowProxy, it
+   * becomes tricky to make a property on the global object
+   * effectively non-writable non-configurable. See
+   * https://github.com/domenic/window-proxy-spec
+   * https://esdiscuss.org/topic/figuring-out-the-behavior-of-windowproxy-in-the-face-of-non-configurable-properties
+   */
+  function freezeGlobalProp(name) {
+    var desc = gopd(global, name);
+    if (!desc) { return; }
+    if (desc.writable === false && desc.configurable === false) {
+      // Even on a conforming browser, some properties might be
+      // universally non-writable non-configurable, like NaN,
+      // Infinity, and undefined.
+      return;
+    }
+    var oldValue = global[name]; // even if from a getter
+
+    var legacyDesc = {
+      value: oldValue,
+      writable: false,
+      enumerable: desc.enumerable,
+      configurable: false
+    };
+    try {
+      defProp(global, name, legacyDesc);
+      // At the time of this writing, only FF Nightly implements the
+      // new browser draft spec, in which setting the property
+      // explicitly to non-configurable is accepted, in which case the
+      // defProp operation above will throw, skipping the return below
+      // and falling through to the following code. That following
+      // code *should* work on these older browsers, but, for reasons
+      // not yet diagnosed, it actually crashes v8 (Chrome, Opera)
+      // pages and misbehavior on JSC (Safari).
+
+      // TODO(erights): Diagnose and report these v8 and JSC problems,
+      // if they are in fact v8 or JSC problems. Depending on what
+      // globals we use in our repaired defProp, the problem might be
+      // that we're using one of these globals while it is deleted.
+      return;
+
+    } catch (err) {
+      // On a browser which conforms to the spec, the error will be
+      // the normal case, in which case we ignore the error and fall
+      // through to the code below.
+    }
+
+    var newDesc = {
+      value: oldValue,
+      writable: false,
+      // See https://bugzilla.mozilla.org/show_bug.cgi?id=787262
+      enumerable: desc.enumerable
+    };
+    try {
+      delete global[name];
+    } catch (err) {
+      // If the property is already non-configurable on the underlying
+      // Window object, then this delete will throw, which is fine
+      // since it is already non-configurable, which is what we really
+      // care about anyway. So we ignore the error here.
+    }
+    try {
+
+      // If the property on the underlying Window was
+      // non-configurable, this leaves it non-configurable and makes
+      // it readonly. If it was configurable, the above delete should
+      // have deleted it, in which case the omitted configurable
+      // should result in the property on the underlying Window being
+      // created non-configurable, even though the property on the
+      // global WindowProxy will be reported as configurable.
+
+      defProp(global, name, newDesc);
+    } catch (err) {
+      reportProperty(ses.severities.NEW_SYMPTOM,
+                     'Global ' + name + ' cannot be made readonly: ' + err);
+    }
+    var token = {};  // guaranteed unequal to everything
+    try {
+      global[name] = token;
+    } catch (err) {
+      // It should fail, so we ignore the error. If it does not fail,
+      // we don't report here an error for that, but rather, test
+      // below whether the value of the variable changed.
+    }
+    try {
+      defProp(global, name, { value: token });
+    } catch (err) {
+      // It should fail, so we ignore the error.
+    }
+    if (global[name] === token) {
+      reportProperty(ses.severities.NEW_SYMPTOM,
+                     'Global ' + name + ' was not made readonly');
+    }
+    if (global[name] !== oldValue) {
+      reportProperty(ses.severities.NEW_SYMPTOM,
+                     'Global ' + name + ' changed inexplicably');
+    }
+  }
+
+  /**
    * Initialize accessible global variables and {@code sharedImports}.
    *
    * For each of the whitelisted globals, we read its value, freeze
@@ -1525,6 +1624,7 @@ ses.startSES = function(global,
     if (desc) {
       var permit = whitelist[name];
       if (permit) {
+        freezeGlobalProp(name);
         var newDesc = {
           value: global[name],
           writable: false,
@@ -1533,12 +1633,6 @@ ses.startSES = function(global,
           // See https://bugzilla.mozilla.org/show_bug.cgi?id=787262
           enumerable: desc.enumerable
         };
-        try {
-          defProp(global, name, newDesc);
-        } catch (err) {
-          reportProperty(ses.severities.NEW_SYMPTOM,
-                         'Global ' + name + ' cannot be made readonly: ' + err);
-        }
         defProp(sharedImports, name, newDesc);
       }
     }
