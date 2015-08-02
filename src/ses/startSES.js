@@ -250,6 +250,27 @@ ses.startSES = function(global,
   //var EMULATE_LEGACY_GETTERS_SETTERS = false;
   var EMULATE_LEGACY_GETTERS_SETTERS = true;
 
+  /**
+   * freezeGlobalProp below defines several possible platform
+   * behaviors regarding what is needed to freeze a property on the
+   * global object. If TRY_GLOBAL_SIMPLE_FREEZE_FIRST, we first try a
+   * strategy we call <i>simple freezing</i> first, which works on
+   * platforms implementing the <i>legacy behavior</i> or <i>simple
+   * behavior</i>, before proceeding to the strategy that should work
+   * on any expected platform behavior. If
+   * TRY_GLOBAL_SIMPLE_FREEZE_FIRST is false, then we only follow the
+   * strategy that should work on any expected platform behavior. At
+   * the time of this writing, with TRY_GLOBAL_SIMPLE_FREEZE_FIRST
+   * false, v8 (Chrome and Opera) fails by crashing the page, and JSC
+   * (Safari) fails in undiagnosed ways, both for undiagnosed reasons.
+   *
+   * <p>TODO(erights): Diagnose how v8 and JSC fail when
+   * TRY_GLOBAL_SIMPLE_FREEZE_FIRST is false, and report these
+   * problems.
+   */
+  //var TRY_GLOBAL_SIMPLE_FREEZE_FIRST = false;
+  var TRY_GLOBAL_SIMPLE_FREEZE_FIRST = true;
+
   //////////////// END KLUDGE SWITCHES ///////////
 
   // Problems we can work around but repairES5 cannot repair.
@@ -1499,80 +1520,226 @@ ses.startSES = function(global,
   }
 
   /**
-   * Because of the browser split between Window and WindowProxy, it
-   * becomes tricky to make a property on the global object
-   * effectively non-writable non-configurable. See
-   * https://github.com/domenic/window-proxy-spec
+   * Although, in the official spec language, only objects are
+   * "frozen", here we also use the shorthand "frozen" to describe a
+   * non-writable, non-configurable, data property.  Because of the
+   * browser split between Window and WindowProxy, it becomes tricky
+   * to freeze a property on the global object.
+   *
+   * <p>As discussed at
    * https://esdiscuss.org/topic/figuring-out-the-behavior-of-windowproxy-in-the-face-of-non-configurable-properties
+   * and
+   * https://esdiscuss.org/topic/a-dom-use-case-that-can-t-be-emulated-with-direct-proxies
+   * the EcmaScript notion of "global object" is split into two
+   * portions named Window and WindowProxy. When a frame is navigated
+   * from one url to another, a fresh realm (set of primordials) is
+   * associated with the post-navigation state, including a fresh
+   * Window object. However, the WindowProxy associated with the frame
+   * is reused, but changed from proxying for the old Window to
+   * proxying for the new Window.
+   *
+   * <p>While WindowProxy wp is proxying for Window w, for each
+   * property f on w, i.e., w.f, there appears a corresponding f
+   * property on wp, wp.f, whose state tracks the state of w.f. At the
+   * time of this writing, on most browsers the state of wp.f appears
+   * to be the same as the state of w.f, including the configurability
+   * of w.f. Those threads explain that this behavior causes a fatal
+   * violation of the invariants of the ES6 (EcmaScript 2015)
+   * spec. The problem is that the claim of stability made by
+   * presenting wp.f as non-configurable is violated when the frame is
+   * navigated and wp.f now tracks a different Window's f property.
+   *
+   * <p>TODO(erights) add tests for these violations to test262.
+   * TODO(erights): Add SES tests for these violations using our
+   * repair-framework.
+   * TODO(erights): Add SES tests and repairs for conformance to draft
+   * https://github.com/domenic/window-proxy-spec, but only when we
+   * know we're in an environment, like a browser, where the global
+   * object is split in this way.
+   *
+   * <p>The difficulty arises from the fact that only the WindowProxy
+   * is reified -- is accessible to JavaScript code as a first class
+   * object. The underlying Window object is purely an explanatory
+   * device and is never directly accessible to JavaScript
+   * code. However, it is the Window object that is at the end of the
+   * scope chain of code in its realm. Global variables in that realm
+   * are 1-to-1 with properties of the Window object. Thus, JavaScript
+   * code can only reason about or manipulate w.f indirecty -- either
+   * via wp.f or via the global variable f. When we say that the
+   * following code must freeze global property <i>name</i>, we really
+   * mean that it must ensure that the corresponding global variable
+   * <i>name</i> is unassignable and that its value must be stable
+   * over time.
+   *
+   * <p>The draft WindowProxy spec at
+   * https://github.com/domenic/window-proxy-spec explains the
+   * solution we arrived at. At the time of this writing,
+   * <ul>
+   * <li>No browser fully implements this spec (the specced behavior).
+   * <li>On most browsers wp.f appears to have the same state as w.f
+   *     (the legacy behavior).
+   * <li>Non-browsers should conform directly to the EcmaScript
+   *     spec, in which a realm only has one global object, no implicit
+   *     proxying is involved, and none of the invariants are threatened
+   *     (the simple behavior).
+   * <li>FF Nightly currently has partially implemented the spec, and
+   *     is otherwise acting as a legacy browser (the mixed
+   *     behavior). On FF Nightly, defineProperty seems to act
+   *     according to the spec, but if w.f is non-configurable, then
+   *     getOwnProperty might still report wp.f as
+   *     non-configurable. See
+   *     https://bugzilla.mozilla.org/show_bug.cgi?id=1178639 and
+   *     https://github.com/domenic/window-proxy-spec/issues/4
+   * </ul>
+   * <p>The following code must succeed at freezing the global
+   * <i>name</i> property in all three cases. For the legacy or simple
+   * behavior, this is done by straightforward application of
+   * <tt>Object.defineProperty</tt>.
+   *
+   * <p>For the specced or mixed behaviors, we distinguish the
+   * following cases.
+   * <ul>
+   * <li>When w.f is absent, then wp.f will also reported as absent
+   *     and <tt>freezeGlobalProp('f')</tt> does nothing.
+   * <li>When w.f is actually a configurable (data or accessor)
+   *     property, then in all cases wp.f will also be reported as
+   *     configurable. In order to make w.f non-configurable we first
+   *     need to delete it. Because w.f is configurable, we can delete
+   *     it by deleting wp.f. Then, by recreating wp.f without an
+   *     explicit <tt>configurable</tt> attribute, the specced or mixed
+   *     behaviors will recreate w.f as non-configurable, but may
+   *     present it on wp.f as configurable.
+   * <li>When w.f is actually a non-configurable data property and (in
+   *     violation of the spec) wp.f is reported as non-configurable,
+   *     then we need merely ensure that w.f is non-writable as
+   *     well. We do so by ensuring that wp.f is non-writable.
+   * <li>When w.f is actually a non-configurable data property and is
+   *     reported as configurable, then we need merely ensure that w.f
+   *     is non-writable. Since we can't distingiush this case
+   *     ahead of time from the <i>w.f is actually configurable</i>
+   *     case above, so we'll go ahead and first try to delete wp.f
+   *     anyway, though we will fail to do so.
+   * <li>When w.f is actually a non-configurable accessor property,
+   *     whether or not wp.f is reported as configurable, we
+   *     cannot freeze wp.f. Currently we have no whitelisted cases like
+   *     that and no ability to determine if the getter is stateless,
+   *     so we report a fatal diagnostic.
+   *     TODO(erights): Revisit if we ever introduce something like a
+   *     DeepFrozen trademark used to brand safe getters, such as
+   *     those installed by <tt>tamperProof</tt> and <tt>def</tt>.
+   * </ul>
    */
   function freezeGlobalProp(name) {
     var desc = gopd(global, name);
     if (!desc) { return; }
-    if (desc.writable === false && desc.configurable === false) {
-      // Even on a conforming browser, some properties might be
-      // universally non-writable non-configurable, like NaN,
-      // Infinity, and undefined.
-      return;
-    }
-    var oldValue = global[name]; // even if from a getter
 
-    var legacyDesc = {
+    // The fullyFrozenDesc is a full descriptor of a frozen data
+    // property. semiFrozenDesc is similar but without the
+    // configurable attribute. It should only be used if the
+    // underlying property has been deleted or is already known to be
+    // non-configurable.
+
+    var oldValue = global[name]; // even if from a getter
+    var fullyFrozenDesc = {
       value: oldValue,
       writable: false,
+      // See https://bugzilla.mozilla.org/show_bug.cgi?id=787262
       enumerable: desc.enumerable,
       configurable: false
     };
-    try {
-      defProp(global, name, legacyDesc);
-      // At the time of this writing, only FF Nightly implements the
-      // new browser draft spec, in which setting the property
-      // explicitly to non-configurable is accepted, in which case the
-      // defProp operation above will throw, skipping the return below
-      // and falling through to the following code. That following
-      // code *should* work on these older browsers, but, for reasons
-      // not yet diagnosed, it actually crashes v8 (Chrome, Opera)
-      // pages and misbehavior on JSC (Safari).
-
-      // TODO(erights): Diagnose and report these v8 and JSC problems,
-      // if they are in fact v8 or JSC problems. Depending on what
-      // globals we use in our repaired defProp, the problem might be
-      // that we're using one of these globals while it is deleted.
-      return;
-
-    } catch (err) {
-      // On a browser which conforms to the spec, the error will be
-      // the normal case, in which case we ignore the error and fall
-      // through to the code below.
-    }
-
-    var newDesc = {
+    var semiFrozenDesc = {
       value: oldValue,
       writable: false,
       // See https://bugzilla.mozilla.org/show_bug.cgi?id=787262
       enumerable: desc.enumerable
     };
-    try {
-      delete global[name];
-    } catch (err) {
-      // If the property is already non-configurable on the underlying
-      // Window object, then this delete will throw, which is fine
-      // since it is already non-configurable, which is what we really
-      // care about anyway. So we ignore the error here.
+
+    if (desc.configurable) {
+      // Might be specced, simple, legacy, or mized
+      // behavior. Underlying property might or might not be
+      // configurable.
+      if (TRY_GLOBAL_SIMPLE_FREEZE_FIRST) {
+        // In case it is simple or legacy, then we try to freeze it
+        // directly using fullyFrozenDesc, but continue if that fails.
+        try {
+          defProp(global, name, fullyFrozenDesc);
+          // If we reach here, we're in legacy or simple behavior.
+          if ('document' in global) {
+            // Assume we're in a browser, though we should have better
+            // evidence first. If we are in a browser, we are seeing
+            // legacy behavior that violates the spec. TODO(erights):
+            // Move this diagnostic into a SES repair expressed using
+            // our repair-framework.
+            reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+                           'Globals were simply freezable', name);
+          }
+          return;
+        } catch (err) {
+          // Specced or mixed behavior, so we ignore the expected error
+          // and continue
+        }
+      }
+      try {
+        delete global[name];
+      } catch (err) {
+        // If the property is already non-configurable on the underlying
+        // Window object, then this delete will throw, which is fine
+        // since it is already non-configurable, which is what we really
+        // care about anyway. So we ignore the error here.
+      }
+      try {
+        // If the property on the underlying Window was
+        // non-configurable, this leaves it non-configurable and makes
+        // it readonly. If the underlying property was configurable,
+        // the above delete should have deleted it, in which case the
+        // omitted <tt>configurable</tt> should result in the property
+        // on the underlying Window being created non-configurable,
+        // even though the property on the global WindowProxy may be
+        // reported as configurable.
+        defProp(global, name, semiFrozenDesc);
+      } catch (err) {
+        reportProperty(ses.severities.NEW_SYMPTOM,
+                       'Globals could not be made readonly', name);
+      }
+    } else {
+      // Either simple (non-browser) behavior or legacy (browser) behavior
+      if ('document' in global) {
+        // Assume we're in a browser, though we should have better
+        // evidence first. TODO(erights): Move this diagnostic into
+        // a SES repair expressed using our repair-framework.
+        reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+                       'Globals reported as non-configurable', name);
+      }
+      if (desc.writable === true) {
+        defProp(global, name, semiFrozenDesc);
+      } else if (desc.writable === false) {
+        // Already frozen
+        return;
+      } else {
+        reportProperty(ses.severities.NEW_SYMPTOM,
+                       'Globals are not data properties', name);
+      }
     }
-    try {
+  }
 
-      // If the property on the underlying Window was
-      // non-configurable, this leaves it non-configurable and makes
-      // it readonly. If it was configurable, the above delete should
-      // have deleted it, in which case the omitted configurable
-      // should result in the property on the underlying Window being
-      // created non-configurable, even though the property on the
-      // global WindowProxy will be reported as configurable.
-
-      defProp(global, name, newDesc);
-    } catch (err) {
+  /**
+   * Emit a diagnostic if global variable name does not seem to be frozen,
+   * potentially causing SES to judge this platform unsafe.
+   *
+   * <p>Since we can't use getOwnPropertyDescriptor to see if we
+   * succeessfully froze w.f. Instead we test whether we can still
+   * affect wp.f or the global variable f.
+   */
+  function checkGlobalFrozen(name) {
+    var desc = gopd(global, name);
+    var oldValue = global[name];
+    if (!(ses.is(oldValue, desc.value))) {
       reportProperty(ses.severities.NEW_SYMPTOM,
-                     'Global ' + name + ' cannot be made readonly: ' + err);
+                     'Globals are not simple data properties', name);
+    }
+    if (desc.writable !== false) {
+      reportProperty(ses.severities.NEW_SYMPTOM,
+                     'Globals are not readonly data properties', name);
     }
     var token = {};  // guaranteed unequal to everything
     try {
@@ -1587,14 +1754,30 @@ ses.startSES = function(global,
     } catch (err) {
       // It should fail, so we ignore the error.
     }
-    if (global[name] === token) {
+    var newValue = global[name];
+    // Try restoring the global environment before continuing
+    try {
+      global[name] = oldValue;
+    } catch (err) {}
+    try {
+      defProp(global, name, { value: oldValue });
+    } catch (err) {}
+
+    if (newValue === token) {
       reportProperty(ses.severities.NEW_SYMPTOM,
-                     'Global ' + name + ' was not made readonly');
+                     'Globals wre not made readonly', name);
     }
-    if (global[name] !== oldValue) {
+    if (!(ses.is(newValue, oldValue))) {
       reportProperty(ses.severities.NEW_SYMPTOM,
-                     'Global ' + name + ' changed inexplicably');
+                     'Globals changed inexplicably', name);
     }
+    if (!(ses.is(global[name], oldValue))) {
+      reportProperty(ses.severities.NEW_SYMPTOM,
+                     'Globals could not be restored' + name);
+    }
+    // TODO(erights): Should also try deleting it.
+    // TODO(erights): Should also try using the global variable
+    // directly, via unsafeEval.
   }
 
   /**
@@ -1619,6 +1802,7 @@ ses.startSES = function(global,
       var permit = whitelist[name];
       if (permit) {
         freezeGlobalProp(name);
+        checkGlobalFrozen(name);
         var newDesc = {
           value: global[name],
           writable: false,
