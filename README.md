@@ -1,6 +1,6 @@
 # ES-lab: experiments with proposed extensions to JavaScript
 
- * The core of a Secure ECMAScript (SES) [runtime](http://google-caja.googlecode.com/svn/trunk/src/com/google/caja/ses/explicit.html). Sources at [caja](http://code.google.com/p/google-caja/source/browse/trunk/src/com/google/caja/ses/). (Old sources at [es-lab](http://code.google.com/p/es-lab/source/browse/trunk/src/ses/).)
+ * The core of a Secure ECMAScript (SES) [runtime](https://rawgit.com/tvcutsem/es-lab/master/src/ses/contract.html). Sources at [caja](http://code.google.com/p/google-caja/source/browse/trunk/src/com/google/caja/ses/). (Old sources at [es-lab](http://code.google.com/p/es-lab/source/browse/trunk/src/ses/).)
  * [DirectProxies](http://es-lab.googlecode.com/svn/trunk/src/proxies/DirectProxies.js) a wrapper library that implements the new [Direct Proxy API](http://wiki.ecmascript.org/doku.php?id=harmony:direct_proxies) on top of the older [Harmony Proxies API](http://wiki.ecmascript.org/doku.php?id=harmony:proxies). Tested in Firefox 8.
  * [Membranes](http://code.google.com/p/es-lab/source/browse/trunk/src/membrane.js) to be built on ES-Harmony [Proxies](http://wiki.ecmascript.org/doku.php?id=harmony:proxies) and [WeakMap](http://wiki.ecmascript.org/doku.php?id=harmony:weak_maps)s.
  * [traits.js](http://code.google.com/p/es-lab/wiki/Traits), a traits library for ES5 that is backwards-compatible with ES3.
