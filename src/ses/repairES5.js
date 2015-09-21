@@ -1845,7 +1845,7 @@ var ses;
   }
 
   /**
-   * As of ES6, for all the builtin constructors except 
+   * As of ES6, for all the builtin constructors except
    * (except Function, Array, Number, Boolean, and String),
    * that make a particular type of exotic object, that
    * constructor.prototype must be a plain object rather than that
@@ -1856,7 +1856,7 @@ var ses;
   }
 
   /**
-   * As of ES6, for all the builtin constructors except 
+   * As of ES6, for all the builtin constructors except
    * (except Function, Array, Number, Boolean, and String),
    * that make a particular type of exotic object, that
    * constructor.prototype must be a plain object rather than that
@@ -1868,7 +1868,7 @@ var ses;
   }
 
   /**
-   * As of ES6, for all the builtin constructors except 
+   * As of ES6, for all the builtin constructors except
    * (except Function, Array, Number, Boolean, and String),
    * that make a particular type of exotic object, that
    * constructor.prototype must be a plain object rather than that
