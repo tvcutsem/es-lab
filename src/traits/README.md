@@ -1,0 +1,1 @@
+The latest version of traits.js lives [here](https://github.com/traitsjs/traits.js).
