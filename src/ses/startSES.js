@@ -285,17 +285,6 @@ ses.startSES = function(global,
       ses.es5ProblemReports.NONCONFIGURABLE_OWN_PROTO.afterFailure;
   var INCREMENT_IGNORES_FROZEN =
       ses.es5ProblemReports.INCREMENT_IGNORES_FROZEN.afterFailure;
-  var CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT =
-      ses.es5ProblemReports.CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT.
-            afterFailure;
-
-  if (CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT) {
-    // Note: Imperative update, but should be ok.  Please maintain
-    // this note together with corresponding notes where whitelist is
-    // defined in whitelist.js, and where it is first read below.
-    whitelist.cajaVM.anonIntrinsics.IteratorPrototype.next = '*';
-    // Whether this has the desired effect is tested after cleaning.
-  }
 
   var dirty = true;
 
@@ -1802,12 +1791,6 @@ ses.startSES = function(global,
    * non-enumerable since ES5.1 specifies that all these properties
    * are non-enumerable on the global object.
    */
-  // Note that, on browsers suffering from
-  // CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT, startSES does an
-  // imperative update of the whitelist above, but should be ok.
-  // Please maintain this note together with corresponding notes in
-  // whitelist.js where whitelist is defined, and in startSES.js above
-  // where whitelist is updated
   keys(whitelist).forEach(function(name) {
     var desc = gopd(global, name);
     if (desc) {
