@@ -122,6 +122,13 @@ var ses;
       anonIntrinsics: {
         ThrowTypeError: {},
         IteratorPrototype: {
+          // Technically, for SES-on-ES5, we should not need to
+          // whitelist 'next'. However, browsers are accidentally
+          // relying on it
+          // https://bugs.chromium.org/p/v8/issues/detail?id=4769#
+          // https://bugs.webkit.org/show_bug.cgi?id=154475
+          // and we will be whitelisting it as we transition to ES6
+          // anyway, so we unconditionally whitelist it now.
           next: '*',
           constructor: false
         },
