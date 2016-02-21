@@ -2093,6 +2093,7 @@ var ses;
       return false;
     }
     if (desc === void 0 && noFuncPoison) { return false; }
+    if (desc === void 0) { return true; }
     return 'getOwnPropertyDesciptor returned unexpected caller descriptor';
   }
 
@@ -2113,9 +2114,7 @@ var ses;
       if (err instanceof TypeError) { return true; }
       return 'hasOwnProperty failed with: ' + err;
     }
-    if (answer) { return false; }
-    if (noFuncPoison) { return false; }
-    return 'strict_function.hasOwnProperty("caller") was false';
+    return !answer && !noFuncPoison;
   }
 
   /**
@@ -5160,7 +5159,7 @@ var ses;
     },
     {
       id: 'CANT_GOPD_CALLER',
-      description: 'getOwnPropertyDescriptor on strict "caller" throws',
+      description: 'getOwnPropertyDescriptor on strict "caller" fails',
       test: test_CANT_GOPD_CALLER,
       repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
@@ -5172,7 +5171,7 @@ var ses;
     },
     {
       id: 'CANT_HASOWNPROPERTY_CALLER',
-      description: 'strict_function.hasOwnProperty("caller") throws',
+      description: 'strict_function.hasOwnProperty("caller") fails',
       test: test_CANT_HASOWNPROPERTY_CALLER,
       repair: void 0,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
