@@ -22,7 +22,7 @@
  * //requires ses.severities, ses.updateMaxSeverity
  * //requires ses.is
  * //requires ses.makeCallerHarmless, ses.makeArgumentsHarmless
- * //requires ses.inBrowser, ses._optForeignForIn
+ * //requires ses.inBrowser
  * //requires ses.noFuncPoison
  * //requires ses.verifyStrictFunctionBody, ses.makeDelayedTamperProof
  * //requires ses.getUndeniables, ses.earlyUndeniables
@@ -2128,18 +2128,6 @@ ses.startSES = function(global,
         result + ')');
     ses.updateMaxSeverity(
         ses.es5ProblemReports.FREEZING_BREAKS_PROTOTYPES.preSeverity);
-  }
-
-  // Tests whether CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT is still a
-  // problem for us
-  if (ses._optForeignForIn) {
-    try {
-      ses._optForeignForIn({});
-    } catch (err) {
-      ses.logger.warn(
-          'CROSS_FRAME_FOR_IN_NEEDS_INHERITED_NEXT still problematic:', err);
-      // No severity update needed, since it fails safe.
-    }
   }
 
   ses.logger.reportMax();
