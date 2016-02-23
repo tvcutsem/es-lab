@@ -1845,11 +1845,10 @@ var ses;
   }
 
   /**
-   * As of ES6, for all the builtin constructors except
-   * (except Function, Array, Number, Boolean, and String),
-   * that make a particular type of exotic object, that
-   * constructor.prototype must be a plain object rather than that
-   * kind of exotic object.
+   * As of ES6, for all the builtin constructors that make a
+   * particular type of exotic object, except Function, Array, Number,
+   * Boolean, and String, that constructor.prototype must be a plain
+   * object rather than that kind of exotic object.
    */
   function test_DATE_PROTO_IS_DATE() {
     return isBuiltinDate(Date.prototype);
