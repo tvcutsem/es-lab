@@ -72,7 +72,7 @@
  *
  * <p>ses.stackString(stacktrace) converts an Extended Causeway
  * Stacktrace into a v8-like stack traceback string as documented at
- * https://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
+ * https://github.com/v8/v8/wiki/Stack-Trace-API#appendix-stack-trace-format
  *
  * <p>ses.getStack(err) obtains a stack traceback string from an error
  * object if possible. Ideally, it does so by
@@ -464,7 +464,7 @@ var ses;
    /**
     * Turn an Extended Causeway stackframe object into a stackframe line
     * from a v8-like stack traceback string as defined at
-    * https://code.google.com/p/v8-wiki/wiki/JavaScriptStackTraceApi
+    * https://github.com/v8/v8/wiki/Stack-Trace-API#appendix-stack-trace-format
     */
    function frameString(frame) {
      var spanString = frame.span.map(function(subSpan) {
