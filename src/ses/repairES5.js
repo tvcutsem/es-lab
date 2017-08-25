@@ -50,6 +50,16 @@
 var RegExp;
 var ses;
 
+// TODO(erights): We should test for
+// We now have a reason to omit Proxy from the whitelist.
+// The makeBrandTester in repairES5 uses Allen's trick at
+// https://esdiscuss.org/topic/tostringtag-spoofing-for-null-and-undefined#content-59
+// , but testing reveals that, on FF 35.0.1, a proxy on an exotic
+// object X will pass this brand test when X will. This is fixed as of
+// FF Nightly 38.0a1.
+
+
+
 /**
  * <p>Qualifying platforms generally include all JavaScript platforms
  * shown on <a href="http://kangax.github.com/es5-compat-table/"

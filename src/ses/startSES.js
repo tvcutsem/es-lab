@@ -397,7 +397,7 @@ ses.startSES = function(global,
   }
 
   if (typeof WeakMap === 'undefined') {
-    fail('No built-in WeakMaps, so WeakMap.js must be loaded first');
+    fail('No built-in WeakMaps');
   }
 
 
@@ -1168,7 +1168,12 @@ ses.startSES = function(global,
     function pushDefending(val) {
       if (!val) { return; }
       var t = typeof val;
-      if (t === 'number' || t === 'string' || t === 'boolean') { return; }
+      if (t === 'number' ||
+          t === 'string' ||
+          t === 'boolean' ||
+          t === 'symbol') {
+        return;
+      }
       if (t !== 'object' && t !== 'function') {
         throw new TypeError('unexpected typeof: ' + t);
       }

@@ -27,7 +27,6 @@ var context = VM.createContext({
 [
     "logger.js",
     "repairES5.js",
-    "WeakMap.js",
     "debug.js",
     "StringMap.js",
     "whitelist.js",

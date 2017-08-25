@@ -67,7 +67,7 @@ var ses;
  *     of these is tamed as if with true, so that the value of the
  *     property is further tamed according to what other objects it
  *     inherits from.
- * <li>false, which suppression permission inherited via "*".
+ * <li>false, which suppresses permission inherited via "*".
  * </ul>
  *
  * <p>TODO: We want to do for constructor: something weaker than '*',
@@ -121,7 +121,7 @@ var ses;
       // rest were introduced in ES6.
       anonIntrinsics: {
         ThrowTypeError: {},
-        IteratorPrototype: {
+        IteratorPrototype: {  // 25.1
           // Technically, for SES-on-ES5, we should not need to
           // whitelist 'next'. However, browsers are accidentally
           // relying on it
@@ -151,8 +151,8 @@ var ses;
         // from. The .next, .return and .throw that generator
         // instances respond to are actually the builtin methods they
         // inherit from this object.
-        GeneratorFunction: {
-          prototype: {
+        GeneratorFunction: {  // 25.2
+          prototype: {  // 25.3
             prototype: {
               next: '*',
               'return': '*',
@@ -160,6 +160,8 @@ var ses;
             }
           }
         },
+        // TODO: 25.5 AsyncFunction
+
         TypedArray: TypedArrayWhitelist = {
           length: '*',  // does not inherit from Function.prototype on Chrome
           name: '*',  // ditto
@@ -212,57 +214,60 @@ var ses;
         canBeFullyLive: t
       }
     },
-    WeakMap: {       // ES-Harmony proposal as currently implemented by FF6.0a1
-      prototype: {
-        // Note: coordinate this list with maintenance of repairES5.js
-        get: t,
-        set: t,
-        has: t,
-        'delete': t
-      }
-    },
-    StringMap: {  // A specialized approximation of ES-Harmony's Map.
-      prototype: {} // Technically, the methods should be on the prototype,
-                    // but doing so while preserving encapsulation will be
-                    // needlessly expensive for current usage.
-    },
-// As of this writing, the WeakMap emulation in WeakMap.js relies on
-// the unguessability and undiscoverability of HIDDEN_NAME, a
-// secret property name. However, on a platform with built-in
-// Proxies, if whitelisted but not properly monkey patched, proxies
-// could be used to trap and thereby discover HIDDEN_NAME. So until we
-// (TODO(erights)) write the needed monkey patching of proxies, we
-// omit them from our whitelist.
-//
-// We now have an additional reason to omit Proxy from the whitelist.
-// The makeBrandTester in repairES5 uses Allen's trick at
-// https://esdiscuss.org/topic/tostringtag-spoofing-for-null-and-undefined#content-59
-// , but testing reveals that, on FF 35.0.1, a proxy on an exotic
-// object X will pass this brand test when X will. This is fixed as of
-// FF Nightly 38.0a1.
-//
-//    Proxy: {                         // ES-Harmony proposal
-//      create: t,
-//      createFunction: t
-//    },
-    escape: t,                       // ES5 Appendix B
-    unescape: t,                     // ES5 Appendix B
-    Object: {
-      // If any new methods are added here that may reveal the
-      // HIDDEN_NAME within WeakMap.js, such as the proposed
-      // getOwnPropertyDescriptors or getPropertyDescriptors, then
-      // extend WeakMap.js to monkey patch these to avoid revealing
-      // HIDDEN_NAME.
-      getPropertyDescriptor: t,      // ES-Harmony proposal
-      getPropertyNames: t,           // ES-Harmony proposal
-      is: t,                         // ES-Harmony proposal
+
+    // In order according to
+    // http://www.ecma-international.org/ecma-262/ with chapter
+    // numbers where applicable
+
+
+    // 18 The Global Object
+
+    // 18.1
+    Infinity: t,
+    NaN: t,
+    undefined: t,
+
+    // 18.2
+    // eval: t,                      // Whitelisting under separate control
+                                     // by TAME_GLOBAL_EVAL in startSES.js
+    isFinite: t,
+    isNaN: t,
+    parseFloat: t,
+    parseInt: t,
+    decodeURI: t,
+    decodeURIComponent: t,
+    encodeURI: t,
+    encodeURIComponent: t,
+
+    
+    // 19 Fundamental Objects
+
+    Object: {  // 19.1
+      assign: t,                     // ES-Harmony
+      create: t,
+      defineProperties: t,           // ES-Harmony
+      defineProperty: t,
+      entries: t,                    // ES-Harmony
+      freeze: t,
+      getOwnPropertyDescriptor: t,
+      getOwnPropertyDescriptors: t,  // ES-Harmony
+      getOwnPropertyNames: t,
+      getOwnPropertySymbols: t,      // ES-Harmony
+      getPrototypeOf: t,
+      is: t,                         // ES-Harmony
+      isExtensible: t,
+      isFrozen: t,
+      isSealed: t,
+      keys: t,
+      preventExtensions: t,
+      seal: t,
+      setPrototypeOf: t,             // ES-Harmony
+      values: t,                     // ES-Harmony
+
       prototype: {
 
-        // Whitelisted only to work around a Chrome debugger
-        // stratification bug (TODO(erights): report). These are
-        // redefined in startSES.js in terms of standard methods, so
-        // that we can be confident they introduce no non-standard
-        // possibilities.
+        // B.2.2
+        // __proto__: t, whitelisted manually in startSES.js
         __defineGetter__: t,
         __defineSetter__: t,
         __lookupGetter__: t,
@@ -280,233 +285,62 @@ var ses;
         stack: '*',
 
         constructor: '*',
-        toString: '*',
-        toLocaleString: '*',
-        valueOf: t,
         hasOwnProperty: t,
         isPrototypeOf: t,
-        propertyIsEnumerable: t
-      },
-      getPrototypeOf: t,
-      getOwnPropertyDescriptor: t,
-      getOwnPropertyNames: t,
-      create: t,
-      defineProperty: t,
-      defineProperties: t,
-      seal: t,
-      freeze: t,
-      preventExtensions: t,
-      isSealed: t,
-      isFrozen: t,
-      isExtensible: t,
-      keys: t
+        propertyIsEnumerable: t,
+        toLocaleString: '*',
+        toString: '*',
+        valueOf: '*',
+
+        // Generally allowed
+        [Symbol.iterator]: '*',
+        [Symbol.toPrimitive]: '*',
+        [Symbol.toStringTag]: '*',
+        [Symbol.unscopables]: '*'
+      }
     },
-    NaN: t,
-    Infinity: t,
-    undefined: t,
-    // eval: t,                      // Whitelisting under separate control
-                                     // by TAME_GLOBAL_EVAL in startSES.js
-    parseInt: t,
-    parseFloat: t,
-    isNaN: t,
-    isFinite: t,
-    decodeURI: t,
-    decodeURIComponent: t,
-    encodeURI: t,
-    encodeURIComponent: t,
-    Function: {
+    
+    Function: {  // 19.2
+      length: t,
       prototype: {
         apply: t,
-        call: t,
         bind: t,
-        prototype: '*',
-        length: '*',
-        arity: '*',                  // non-std, deprecated in favor of length
-        name: '*'                    // non-std
-      }
-    },
-    Array: {
-      prototype: {
-        concat: t,
-        join: t,
-        pop: t,
-        push: t,
-        reverse: t,
-        shift: t,
-        slice: t,
-        sort: t,
-        splice: t,
-        unshift: t,
-        indexOf: t,
-        lastIndexOf: t,
-        every: t,
-        some: t,
-        forEach: t,
-        map: t,
-        filter: t,
-        reduce: t,
-        reduceRight: t,
-        length: t
-      },
-      isArray: t,
-      from: t
-    },
-    String: {
-      prototype: {
-        substr: t,                   // ES5 Appendix B
-        anchor: t,                   // Harmless whatwg
-        big: t,                      // Harmless whatwg
-        blink: t,                    // Harmless whatwg
-        bold: t,                     // Harmless whatwg
-        fixed: t,                    // Harmless whatwg
-        fontcolor: t,                // Harmless whatwg
-        fontsize: t,                 // Harmless whatwg
-        italics: t,                  // Harmless whatwg
-        link: t,                     // Harmless whatwg
-        small: t,                    // Harmless whatwg
-        strike: t,                   // Harmless whatwg
-        sub: t,                      // Harmless whatwg
-        sup: t,                      // Harmless whatwg
-        trimLeft: t,                 // non-standard
-        trimRight: t,                // non-standard
-        valueOf: t,
-        charAt: t,
-        charCodeAt: t,
-        concat: t,
-        indexOf: t,
-        lastIndexOf: t,
-        localeCompare: t,
-        match: t,
-        replace: t,
-        search: t,
-        slice: t,
-        split: t,
-        substring: t,
-        toLowerCase: t,
-        toLocaleLowerCase: t,
-        toUpperCase: t,
-        toLocaleUpperCase: t,
-        trim: t,
-        length: '*'
-      },
-      fromCharCode: t
-    },
-    Boolean: {
-      prototype: {
-        valueOf: t
-      }
-    },
-    Number: {
-      prototype: {
-        valueOf: t,
-        toFixed: t,
-        toExponential: t,
-        toPrecision: t
-      },
-      MAX_VALUE: t,
-      MIN_VALUE: t,
-      NaN: t,
-      NEGATIVE_INFINITY: t,
-      POSITIVE_INFINITY: t
-    },
-    Math: {
-      E: t,
-      LN10: t,
-      LN2: t,
-      LOG2E: t,
-      LOG10E: t,
-      PI: t,
-      SQRT1_2: t,
-      SQRT2: t,
+        call: t,
+        [Symbol.hasInstance]: '*',
 
-      abs: t,
-      acos: t,
-      asin: t,
-      atan: t,
-      atan2: t,
-      ceil: t,
-      cos: t,
-      exp: t,
-      floor: t,
-      log: t,
-      max: t,
-      min: t,
-      pow: t,
-      random: t,                     // questionable
-      round: t,
-      sin: t,
-      sqrt: t,
-      tan: t
-    },
-    Date: {                          // no-arg Date constructor is questionable
-      prototype: {
-        // Note: coordinate this list with maintanence of repairES5.js
-        getYear: t,                  // ES5 Appendix B
-        setYear: t,                  // ES5 Appendix B
-        toGMTString: t,              // ES5 Appendix B
-        toDateString: t,
-        toTimeString: t,
-        toLocaleString: t,
-        toLocaleDateString: t,
-        toLocaleTimeString: t,
-        valueOf: t,
-        getTime: t,
-        getFullYear: t,
-        getUTCFullYear: t,
-        getMonth: t,
-        getUTCMonth: t,
-        getDate: t,
-        getUTCDate: t,
-        getDay: t,
-        getUTCDay: t,
-        getHours: t,
-        getUTCHours: t,
-        getMinutes: t,
-        getUTCMinutes: t,
-        getSeconds: t,
-        getUTCSeconds: t,
-        getMilliseconds: t,
-        getUTCMilliseconds: t,
-        getTimezoneOffset: t,
-        setTime: t,
-        setFullYear: t,
-        setUTCFullYear: t,
-        setMonth: t,
-        setUTCMonth: t,
-        setDate: t,
-        setUTCDate: t,
-        setHours: t,
-        setUTCHours: t,
-        setMinutes: t,
-        setUTCMinutes: t,
-        setSeconds: t,
-        setUTCSeconds: t,
-        setMilliseconds: t,
-        setUTCMilliseconds: t,
-        toUTCString: t,
-        toISOString: t,
-        toJSON: t
-      },
-      parse: t,
-      UTC: t,
-      now: t                         // questionable
-    },
-    RegExp: {
-      prototype: {
-        exec: t,
-        test: t,
-        source: 'maybeAccessor',
-        global: 'maybeAccessor',
-        ignoreCase: 'maybeAccessor',
-        multiline: 'maybeAccessor',
-        flags: 'maybeAccessor',
-        unicode: 'maybeAccessor',
-        lastIndex: '*',
-        options: '*',                // non-std
-        sticky: 'maybeAccessor'      // non-std
+        // 19.2.4 instances
+        length: '*',
+        name: '*',                   // ES-Harmony
+        prototype: '*',
+        arity: '*',                   // non-std, deprecated in favor of length
+
+        // Generally allowed
+        [Symbol.species]: 'maybeAccessor'  // ES-Harmony?
       }
     },
-    Error: {
+    
+    Boolean: {  // 19.3
+      prototype: t
+    },
+    
+    Symbol: {  // 19.4               all ES-Harmony
+      for: t,
+      hasInstance: t,
+      isConcatSpreadable: t,
+      iterator: t,
+      keyFor: t,
+      match: t,
+      replace: t,
+      search: t,
+      species: t,
+      split: t,
+      toPrimitive: t,
+      toStringTag: t,
+      unscopables: t,
+      prototype: t
+    },
+
+    Error: {  // 19.5
       prototype: {
         name: '*',
         message: '*'
@@ -539,23 +373,261 @@ var ses;
     URIError: {
       prototype: t
     },
-    JSON: {
-      parse: t,
-      stringify: t
-    },
 
 
-    ///////////////// Standard Starting in ES6 //////////////////
-
-    ArrayBuffer: {                   // Khronos Typed Arrays spec; ops are safe
-      length: t,  // does not inherit from Function.prototype on Chrome
-      name: t,  // ditto
-      isView: t,
+    // 20 Numbers and Dates
+    
+    Number: {  // 20.1
+      EPSILON: t,                    // ES-Harmony
+      isFinite: t,                   // ES-Harmony
+      isInteger: t,                  // ES-Harmony
+      isNaN: t,                      // ES-Harmony
+      isSafeInteger: t,              // ES-Harmony
+      MAX_SAFE_INTEGER: t,           // ES-Harmony
+      MAX_VALUE: t,
+      MIN_SAFE_INTEGER: t,           // ES-Harmony
+      MIN_VALUE: t,
+      NaN: t,
+      NEGATIVE_INFINITY: t,
+      parseFloat: t,                 // ES-Harmony
+      parseInt: t,                   // ES-Harmony
+      POSITIVE_INFINITY: t,
       prototype: {
-        byteLength: 'maybeAccessor',
-        slice: t
+        toExponential: t,
+        toFixed: t,
+        toPrecision: t
       }
     },
+
+    Math: {  // 20.2
+      E: t,
+      LN10: t,
+      LN2: t,
+      LOG10E: t,
+      LOG2E: t,
+      PI: t,
+      SQRT1_2: t,
+      SQRT2: t,
+
+      abs: t,
+      acos: t,
+      asin: t,
+      asinh: t,                      // ES-Harmony
+      atan: t,
+      atanh: t,                      // ES-Harmony
+      atan2: t,
+      cbrt: t,                       // ES-Harmony
+      ceil: t,
+      clz32: t,                      // ES-Harmony
+      cos: t,
+      cosh: t,                       // ES-Harmony
+      exp: t,
+      expm1: t,                      // ES-Harmony
+      floor: t,
+      fround: t,                     // ES-Harmony
+      hypot: t,                      // ES-Harmony
+      imul: t,                       // ES-Harmony
+      log: t,
+      log1p: t,                      // ES-Harmony
+      log10: t,                      // ES-Harmony
+      log2: t,                       // ES-Harmony
+      max: t,
+      min: t,
+      pow: t,
+      random: t,                     // questionable
+      round: t,
+      sign: t,                       // ES-Harmony
+      sin: t,
+      sinh: t,                       // ES-Harmony
+      sqrt: t,
+      tan: t,
+      tanh: t,                       // ES-Harmony
+      trunc: t                       // ES-Harmony
+    },
+
+    // no-arg Date constructor is questionable
+    Date: {  // 20.3
+      now: t,                        // questionable
+      parse: t,
+      UTC: t,
+      prototype: {
+        // Note: coordinate this list with maintanence of repairES5.js
+        getDate: t,
+        getDay: t,
+        getFullYear: t,
+        getHours: t,
+        getMilliseconds: t,
+        getMinutes: t,
+        getMonth: t,
+        getSeconds: t,
+        getTime: t,
+        getTimezoneOffset: t,
+        getUTCDate: t,
+        getUTCDay: t,
+        getUTCFullYear: t,
+        getUTCHours: t,
+        getUTCMilliseconds: t,
+        getUTCMinutes: t,
+        getUTCMonth: t,
+        getUTCSeconds: t,
+        setDate: t,
+        setFullYear: t,
+        setHours: t,
+        setMilliseconds: t,
+        setMinutes: t,
+        setMonth: t,
+        setSeconds: t,
+        setTime: t,
+        setUTCDate: t,
+        setUTCFullYear: t,
+        setUTCHours: t,
+        setUTCMilliseconds: t,
+        setUTCMinutes: t,
+        setUTCMonth: t,
+        setUTCSeconds: t,
+        toDateString: t,
+        toISOString: t,
+        toJSON: t,
+        toLocaleDateString: t,
+        toLocaleString: t,
+        toLocaleTimeString: t,
+        toTimeString: t,
+        toUTCString: t,
+
+        // B.2.4
+        getYear: t,
+        setYear: t,
+        toGMTString: t
+      }
+    },
+
+
+    // 21 Text Processing
+
+    String: {  // 21.2
+      fromCharCode: t,
+      fromCodePoint: t,              // ES-Harmony
+      raw: t,                        // ES-Harmony
+      prototype: {
+        charAt: t,
+        charCodeAt: t,
+        codePointAt: t,              // ES-Harmony
+        concat: t,
+        endsWith: t,                 // ES-Harmony
+        includes: t,                 // ES-Harmony
+        indexOf: t,
+        lastIndexOf: t,
+        localeCompare: t,
+        match: t,
+        normalize: t,                // ES-Harmony
+        padEnd: t,                // ES-Harmony
+        padStart: t,                // ES-Harmony
+        repeat: t,                // ES-Harmony
+        replace: t,
+        search: t,
+        slice: t,
+        split: t,
+        startsWith: t,                // ES-Harmony
+        substring: t,
+        toLocaleLowerCase: t,
+        toLocaleUpperCase: t,
+        toLowerCase: t,
+        toUpperCase: t,
+        trim: t,
+
+        // B.2.3
+        substr: t,
+        anchor: t,
+        big: t,                      
+        blink: t,                    
+        bold: t,                     
+        fixed: t,                    
+        fontcolor: t,                
+        fontsize: t,                 
+        italics: t,                  
+        link: t,                     
+        small: t,                    
+        strike: t,                   
+        sub: t,                      
+        sup: t,                      
+
+        trimLeft: t,                 // non-standard
+        trimRight: t,                // non-standard
+        
+        // 21.1.4 instances
+        length: '*'
+      }
+    },
+
+    RegExp: {  // 21.2
+      prototype: {
+        exec: t,
+        flags: 'maybeAccessor',
+        global: 'maybeAccessor',
+        ignoreCase: 'maybeAccessor',
+        [Symbol.match]: '*',         // ES-Harmony
+        multiline: 'maybeAccessor',
+        [Symbol.replace]: '*',       // ES-Harmony
+        [Symbol.search]: '*',        // ES-Harmony
+        source: 'maybeAccessor',
+        [Symbol.split]: '*',         // ES-Harmony
+        sticky: 'maybeAccessor',
+        test: t,        
+        unicode: 'maybeAccessor',
+
+        // 21.2.6 instances
+        lastIndex: '*',
+        options: '*'                 // non-std
+      }
+    },
+
+
+    // 22 Indexed Collections
+
+    Array: {  // 22.1
+      from: t,
+      isArray: t,
+      of: t,                         // ES-Harmony?
+      prototype: {
+        concat: t,
+        copyWithin: t,               // ES-Harmony
+        entries: t,                  // ES-Harmony
+        every: t,
+        fill: t,                  // ES-Harmony
+        filter: t,
+        find: t,                  // ES-Harmony
+        findIndex: t,                  // ES-Harmony
+        forEach: t,
+        includes: t,                  // ES-Harmony
+        indexOf: t,
+        join: t,
+        keys: t,                  // ES-Harmony
+        lastIndexOf: t,
+        map: t,
+        pop: t,
+        push: t,
+        reduce: t,
+        reduceRight: t,
+        reverse: t,
+        shift: t,
+        slice: t,
+        some: t,
+        sort: t,
+        splice: t,
+        unshift: t,
+        values: t,                  // ES-Harmony
+
+        // B.2.5
+        compile: false,             // UNSAFE. Purposely suppressed
+
+        // 22.1.4 instances
+        length: '*'
+      }
+    },
+
+    // 22.2 Typed Array stuff
+    // TODO: Not yet organized according to spec order
+    
     Int8Array: TypedArrayWhitelist,
     Uint8Array: TypedArrayWhitelist,
     Uint8ClampedArray: TypedArrayWhitelist,
@@ -565,30 +637,156 @@ var ses;
     Uint32Array: TypedArrayWhitelist,
     Float32Array: TypedArrayWhitelist,
     Float64Array: TypedArrayWhitelist,
-    DataView: {                      // Typed Arrays spec
+
+
+    // 23 Keyed Collections          all ES-Harmony
+
+    Map: {  // 23.1
+      prototype: {
+        clear: t,
+        delete: t,
+        entries: t,
+        forEach: t,
+        get: t,
+        has: t,
+        keys: t,
+        set: t,
+        size: 'maybeAccessor',
+        values: t
+      }
+    },
+
+    Set: {  // 23.2
+      prototype: {
+        add: t,
+        clear: t,
+        delete: t,
+        entries: t,
+        forEach: t,
+        has: t,
+        keys: t,
+        size: 'maybeAccessor',
+        values: t
+      }
+    },
+    
+    WeakMap: {  // 23.3
+      prototype: {
+        // Note: coordinate this list with maintenance of repairES5.js
+        delete: t,
+        get: t,
+        has: t,
+        set: t
+      }
+    },
+
+    WeakSet: {  // 23.4
+      prototype: {
+        add: t,
+        delete: t,
+        has: t
+      }
+    },
+
+
+    // 24 Structured Data
+
+    ArrayBuffer: {  // 24.1            all ES-Harmony
+      isView: t,
       length: t,  // does not inherit from Function.prototype on Chrome
-      name: t,  // ditto
+      name: t,    // ditto
+      prototype: {
+        byteLength: 'maybeAccessor',
+        slice: t
+      }
+    },
+
+    // 24.2 TODO: Omitting SharedArrayBuffer for now
+
+    DataView: {  // 24.3            all ES-Harmony
+      length: t,  // does not inherit from Function.prototype on Chrome
+      name: t,    // ditto
       prototype: {
         buffer: 'maybeAccessor',
         byteOffset: 'maybeAccessor',
         byteLength: 'maybeAccessor',
-        getInt8: t,
-        getUint8: t,
-        getInt16: t,
-        getUint16: t,
-        getInt32: t,
-        getUint32: t,
         getFloat32: t,
         getFloat64: t,
-        setInt8: t,
-        setUint8: t,
-        setInt16: t,
-        setUint16: t,
-        setInt32: t,
-        setUint32: t,
+        getInt8: t,
+        getInt16: t,
+        getInt32: t,
+        getUint8: t,
+        getUint16: t,
+        getUint32: t,
         setFloat32: t,
-        setFloat64: t
+        setFloat64: t,
+        setInt8: t,
+        setInt16: t,
+        setInt32: t,
+        setUint8: t,
+        setUint16: t,
+        setUint32: t
       }
+    },
+
+    // 24.4 TODO: Omitting Atomics for now
+
+    JSON: {  // 24.5
+      parse: t,
+      stringify: t
+    },
+
+
+    // 25 Control Abstraction Objects
+
+    Promise: {  // 25.4
+      all: t,
+      race: t,
+      reject: t,
+      resolve: t,
+      prototype: {
+        catch: t,
+        then: t
+      }
+    },
+
+
+    // 26 Reflection
+
+    Reflect: {  // 26.1
+      apply: t,
+      construct: t,
+      defineProperty: t,
+      deleteProperty: t,
+      get: t,
+      getOwnPropertyDescriptor: t,
+      getPrototypeOf: t,
+      has: t,
+      isExtensible: t,
+      ownKeys: t,
+      preventExtensions: t,
+      set: t,
+      setPrototypeOf: t
+    },
+    
+    Proxy: {  // 26.2
+      revocable: t
+    },
+
+
+    // Appendix B
+
+    // B.2.1
+    escape: t,
+    unescape: t,
+
+
+    // Other
+    
+    StringMap: {  // A specialized approximation of ES-Harmony's Map.
+      prototype: {} // Technically, the methods should be on the prototype,
+                    // but doing so while preserving encapsulation will be
+                    // needlessly expensive for current usage.
     }
   };
 })();
