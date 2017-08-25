@@ -87,7 +87,7 @@ var ses;
 
        var nextSlot = Q.defer();
 
-       function farDispatch(OP, args) {
+       function farDispatch(_, OP, args) {
          var opt_name = args[0];
          var opt_entityBody = serialize(args[1]);
          var xhr = new XHR();

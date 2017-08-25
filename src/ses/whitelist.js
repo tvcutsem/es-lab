@@ -746,8 +746,45 @@ var ses;
       resolve: t,
       prototype: {
         catch: t,
-        then: t
+        then: t,
+
+        // nanoq.js
+        get: t,
+        put: t,
+        del: t,
+        post: t,
+        invoke: t,
+        fapply: t,
+        fcall: t,
+
+        // Temporary compat with the old makeQ.js
+        send: t,
+        delete: t,
+        end: t
       }
+    },
+
+    // nanoq.js
+    Q: {
+      all: t,
+      race: t,
+      reject: t,
+      resolve: t,
+
+      join: t,
+      isPassByCopy: t,
+      passByCopy: t,
+      makeRemote: t,
+      makeFar: t,
+
+      // Temporary compat with the old makeQ.js
+      promise: t,
+      shorten: t,
+      isPromise: t,
+      delay: t,
+      memoize: t,
+      async: t,
+      defer: t
     },
 
 
