@@ -63,7 +63,7 @@ var ses;
     * farPromise for an (assumed remote) resource for a given URL.
     *
     * <p>The optional serializer, if omitted, defaults to passing
-    * through undefined and simple coercion of to string of everything
+    * through undefined and simple coercion to string of everything
     * else. The optional unserializer defaults to passing back the
     * undefined or resultText that it is given. If both are omitted,
     * the resulting maker makes text resources, that provide access to
@@ -87,13 +87,12 @@ var ses;
 
        var nextSlot = Q.defer();
 
-       function farDispatch(_, OP, args) {
-         var opt_name = args[0];
-         var opt_entityBody = serialize(args[1]);
+       function farDispatch(OP, opt_key, opt_args) {
+         var opt_entityBody = serialize(opt_args);
          var xhr = new XHR();
-         if (opt_name !== void 0) {
+         if (typeof opt_key === 'string') {
            // This should be a safe encoding
-           url = url + '&q=' + encodeURIComponent(opt_name);
+           url = url + '&q=' + encodeURIComponent(opt_key);
          }
          xhr.open(OP, url);
 
@@ -131,7 +130,14 @@ var ses;
          });
        }
 
-       return Q.makeFar(farDispatch, nextSlot.promise);
+       const farRelay = cajaVM.def({
+         GET(_, key) { return farDispatch('GET', key); },
+         PUT(_, key, val) { return farDispatch('PUT', key, [val]); },
+         DELETE(_, key) { return farDispatch('DELETE', key); },
+         POST(_, opt_key, args) { return farDispatch('POST', opt_key, args); }
+       });
+
+       return Q.makeFar(farRelay, nextSlot.promise);
      }
      return constFunc(makeFarResource);
    }

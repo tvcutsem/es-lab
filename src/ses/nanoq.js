@@ -81,13 +81,15 @@
       passByCopyRecords.add(record);
       return record;
     },
-    makeRemote(remoteRelay) {
+    makeRemote(remoteRelay, nextSlotP) {
+      // TODO: Use nextSlotP instead of AWAIT_FAR
       const promise = Promise.resolve(remoteRelay.AWAIT_FAR());
       relayToPromise.set(remoteRelay, promise);
       promiseToRelay.set(promise, remoteRelay);
       return promise;
     },
-    makeFar(farRelay) {
+    makeFar(farRelay, nextSlotP) {
+      // TODO: Use nextSlotP to indicate partition breakage
       const promise = Promise.resolve(farRelay);
       relayToPromise.set(farRelay, promise);
       promiseToRelay.set(promise, farRelay);
@@ -95,13 +97,29 @@
     },
 
     // Temporary compat with the old makeQ.js
-    rejected: Q.reject,
-    promise(func) { return new Promise(func); },
     // shorten
     // isPromise
-    // delay
-    // memoize
     // async
+    rejected: Q.reject,
+    promise(func) { return new Promise(func); },
+    delay(millis, opt_answer) {
+       return new Promise(resolve => {
+         setTimeout(() => { resolve(opt_answer); }, millis);
+       });
+    },
+    memoize(oneArgFuncP, opt_memoMap) {
+       var memoMap = opt_memoMap || new WeakMap();
+
+       function oneArgMemo(arg) {
+         var resultP = memoMap.get(arg);
+         if (!resultP) {
+           resultP = Q(oneArgFuncP).fcall(arg);
+           memoMap.set(arg, resultP);
+         }
+         return resultP;
+       }
+      return cajaVM.constFunc(oneArgMemo);
+    },
     defer() {
       var deferred = {};
       deferred.promise = new Promise((resolve, reject) => {
