@@ -3728,6 +3728,10 @@ var ses;
     return true;
   }
 
+  function test_MISSING_GET_OWN_PROPERTY_DESCRIPTORS() {
+    return !('getOwnPropertyDescriptors' in Object);
+  }
+
 
   ////////////////////// Repairs /////////////////////
   //
@@ -4567,6 +4571,24 @@ var ses;
         addDummyProperty(obj);
         return oldPreventExtensions(obj);
       }
+    });
+  }
+
+  // See https://github.com/ljharb/Object.getOwnPropertyDescriptors
+  function repair_MISSING_GET_OWN_PROPERTY_DESCRIPTORS() {
+    function getOwnPropertyDescriptorsShim(obj) {
+      const result = {};
+      for (const key of Reflect.ownKeys(obj)) {
+        const desc = Object.getOwnPropertyDescriptor(obj, key);
+        Object.defineProperty(result, key, desc);
+        return result;
+      }
+    }
+    Object.defineProperty(Object, 'getOwnPropertyDescriptors', {
+      value: getOwnPropertyDescriptorsShim,
+      writable: true,
+      enumerable: false,
+      configurable: true
     });
   }
 
@@ -5806,6 +5828,17 @@ var ses;
       canRepair: true,
       urls: ['https://bugzilla.mozilla.org/show_bug.cgi?id=1125389',
              'https://code.google.com/p/google-caja/issues/detail?id=1954'],
+      sections: [],
+      tests: []
+    },
+    {
+      id: 'MISSING_GET_OWN_PROPERTY_DESCRIPTORS',
+      description: 'getOwnPropertyDescriptors is missing',
+      test: test_MISSING_GET_OWN_PROPERTY_DESCRIPTORS,
+      repair: repair_MISSING_GET_OWN_PROPERTY_DESCRIPTORS,
+      preSeverity: severities.SAFE_SPEC_VIOLATION,
+      canRepair: true,
+      urls: [],
       sections: [],
       tests: []
     }
