@@ -4581,7 +4581,7 @@ var ses;
       for (const key of Reflect.ownKeys(obj)) {
         const desc = Object.getOwnPropertyDescriptor(obj, key);
         Object.defineProperty(result, key, {
-          value: desc
+          value: desc,
           writable: true,
           enumerable: true,
           configurable: true
