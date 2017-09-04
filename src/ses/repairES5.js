@@ -4580,7 +4580,12 @@ var ses;
       const result = {};
       for (const key of Reflect.ownKeys(obj)) {
         const desc = Object.getOwnPropertyDescriptor(obj, key);
-        Object.defineProperty(result, key, desc);
+        Object.defineProperty(result, key, {
+          value: desc
+          writable: true,
+          enumerable: true,
+          configurable: true
+        });
       }
       return result;
     }
