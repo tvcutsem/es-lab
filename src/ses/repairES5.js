@@ -752,6 +752,33 @@ var ses;
   ses.earlyUndeniables = getUndeniables();
 
 
+  function registerIteratorProtos(registery, base, name) {
+    var iteratorSym = global.Symbol && global.Symbol.iterator ||
+        "@@iterator"; // used instead of a symbol on FF35
+    var getProto = Object.getPrototypeOf;
+
+    if (base[iteratorSym]) {
+      var anIter = base[iteratorSym]();
+      var anIteratorPrototype = getProto(anIter);
+      registery[name] = anIteratorPrototype;
+      var anIterProtoBase = getProto(anIteratorPrototype);
+      if (anIterProtoBase !== Object.prototype) {
+        if (!registery.IteratorPrototype) {
+          if (getProto(anIterProtoBase) !== Object.prototype) {
+            throw new Error(
+              '%IteratorPrototype%.__proto__ was not Object.prototype');
+          }
+          registery.IteratorPrototype = anIterProtoBase;
+        } else {
+          if (registery.IteratorPrototype !== anIterProtoBase) {
+            throw new Error('unexpected %' + name + '%.__proto__');
+          }
+        }
+      }
+    }
+  }
+
+
   /**
    * Get the intrinsics not otherwise reachable by named own property
    * traversal. See
@@ -774,47 +801,18 @@ var ses;
     // this is the only surviving ThrowTypeError intrinsic.
     result.ThrowTypeError = gopd(arguments, 'callee').get;
 
-    // Get the ES6 %ArrayIteratorPrototype%, %StringIteratorPrototype%,
-    // and %IteratorPrototype% intrinsics, if present.
-
-    // TODO %MapIteratorPrototype%, %SetIteratorPrototype%
-    // It is currently safe to omit %MapIteratorPrototype% and
-    // %SetIteratorPrototype% since we do not yet whitelist Map and
-    // Set.
+    // Get the ES6 %ArrayIteratorPrototype%,
+    // %StringIteratorPrototype%, %MapIteratorPrototype%,
+    // %SetIteratorPrototype% and %IteratorPrototype% intrinsics, if
+    // present.
     (function() {
-      var iteratorSym = global.Symbol && global.Symbol.iterator ||
-            "@@iterator"; // used instead of a symbol on FF35
-      if ([][iteratorSym]) {
-        var arrayIter = [][iteratorSym]();
-        var ArrayIteratorPrototype = getProto(arrayIter);
-        result.ArrayIteratorPrototype = ArrayIteratorPrototype;
-        var arrayIterProtoBase = getProto(ArrayIteratorPrototype);
-        if (arrayIterProtoBase !== Object.prototype) {
-          if (getProto(arrayIterProtoBase) !== Object.prototype) {
-            throw new Error(
-                '%IteratorPrototype%.__proto__ was not Object.prototype');
-          }
-          result.IteratorPrototype = arrayIterProtoBase;
-        }
+      registerIteratorProtos(result, [], 'ArrayIteratorPrototype');
+      registerIteratorProtos(result, '', 'StringIteratorPrototype');
+      if (typeof Map === 'function') {
+        registerIteratorProtos(result, new Map(), 'MapIteratorPrototype');
       }
-      if (''[iteratorSym]) {
-        var stringIter = ''[iteratorSym]();
-        var StringIteratorPrototype = getProto(stringIter);
-        result.StringIteratorPrototype = StringIteratorPrototype;
-        var stringIterProtoBase = getProto(StringIteratorPrototype);
-        if (stringIterProtoBase !== Object.prototype) {
-          if (!result.IteratorPrototype) {
-            if (getProto(stringIterProtoBase) !== Object.prototype) {
-              throw new Error(
-                  '%IteratorPrototype%.__proto__ was not Object.prototype');
-            }
-            result.IteratorPrototype = stringIterProtoBase;
-          } else {
-            if (result.IteratorPrototype !== stringIterProtoBase) {
-              throw new Error('unexpected %StringIteratorPrototype%.__proto__');
-            }
-          }
-        }
+      if (typeof Set === 'function') {
+        registerIteratorProtos(result, new Set(), 'SetIteratorPrototype');
       }
     }());
 

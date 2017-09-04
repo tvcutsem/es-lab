@@ -134,8 +134,8 @@ var ses;
         },
         ArrayIteratorPrototype: {},
         StringIteratorPrototype: {},
-        // TODO MapIteratorPrototype: {},
-        // TODO SetIteratorPrototype: {},
+        MapIteratorPrototype: {},
+        SetIteratorPrototype: {},
 
         // The %GeneratorFunction% intrinsic is the constructor of
         // generator functions, so %GeneratorFunction%.prototype is
