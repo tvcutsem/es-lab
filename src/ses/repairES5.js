@@ -4581,8 +4581,8 @@ var ses;
       for (const key of Reflect.ownKeys(obj)) {
         const desc = Object.getOwnPropertyDescriptor(obj, key);
         Object.defineProperty(result, key, desc);
-        return result;
       }
+      return result;
     }
     Object.defineProperty(Object, 'getOwnPropertyDescriptors', {
       value: getOwnPropertyDescriptorsShim,
