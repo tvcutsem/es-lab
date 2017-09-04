@@ -46,10 +46,12 @@
 
   const passByCopyRecords = new WeakSet();
 
+  const reject = Promise.reject.bind(Promise);
+
   Object.defineProperties(Q, Object.getOwnPropertyDescriptors({
     all: Promise.all.bind(Promise),
     race: Promise.race.bind(Promise),
-    reject: Promise.reject.bind(Promise),
+    reject: reject,
     resolve: Promise.resolve.bind(Promise),
     
     join(p, q) {
@@ -100,7 +102,7 @@
     // shorten
     // isPromise
     // async
-    rejected: Q.reject,
+    rejected: reject,
     promise(func) { return new Promise(func); },
     delay(millis, opt_answer) {
        return new Promise(resolve => {
