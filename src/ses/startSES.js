@@ -1702,10 +1702,12 @@ ses.startSES = function(global,
     } else {
       // Either simple (non-browser) behavior or legacy (browser) behavior
       if (ses.isInBrowser()) {
-        // TODO(erights): Move this diagnostic into a SES repair
-        // expressed using our repair-framework.
-        reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
-                       'Globals reported as non-configurable', name);
+        if (name !== 'Infinity' && name !== 'NaN' && name !== 'undefined') {
+          // TODO(erights): Move this diagnostic into a SES repair
+          // expressed using our repair-framework.
+          reportProperty(ses.severities.SAFE_SPEC_VIOLATION,
+                         'Globals reported as non-configurable', name);
+	}
       }
       if (desc.writable === true) {
         defProp(global, name, semiFrozenDesc);
@@ -1892,9 +1894,13 @@ ses.startSES = function(global,
    * Delete the property if possible, else try to poison.
    */
   function cleanProperty(base, name, path) {
-    function poison() {
-      throw new TypeError('Cannot access property ' + path);
+    if (path === 'Promise.all.arguments') {
+      debugger;
     }
+    if (path === 'Q.all.arguments') {
+      debugger;
+    }
+    var poison = ses.getAnonIntrinsics().ThrowTypeError;
     var diagnostic;
 
     if (typeof base === 'function' && !ses.noFuncPoison) {
@@ -2007,8 +2013,12 @@ ses.startSES = function(global,
     } else if (desc2.value !== Object(desc2.value2) && // is primitive
                !desc2.writable &&
                !desc2.configurable) {
+      var diagnostic = 'Frozen harmless';
+      if (name === 'caller' || name === 'arguments') {
+        diagnostic = name + ' ' + diagnostic;
+      }
       reportProperty(ses.severities.SAFE,
-                     'Frozen harmless', path);
+                     diagnostic , path);
       return false;
     }
     reportProperty(ses.severities.NEW_SYMPTOM,

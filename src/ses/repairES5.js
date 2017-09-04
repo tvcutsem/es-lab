@@ -295,14 +295,6 @@ var ses;
   var simpleTamperProofOk = false;
 
   /**
-   * preemptThaw is only set to something other than a noop function
-   * when repairing THROWING_THAWS_FROZEN_OBJECT. It is made visible
-   * here because tamperProof needs to call it before it virtualizes
-   * data properties into accessor properties.
-   */
-  var preemptThaw = function(obj) {};
-
-  /**
    * "makeTamperProof()" returns a "tamperProof(obj, opt_pushNext)"
    * function that acts like "Object.freeze(obj)", except that, if obj
    * is a <i>prototypical</i> object (defined below), it ensures that
@@ -405,7 +397,6 @@ var ses;
           func.prototype === obj &&
           !isFrozen(obj)) {
         var pushNext = opt_pushNext || function(v) {};
-        preemptThaw(obj);
         forEachNonPoisonOwn(obj, function(name) {
           var value;
           function getter() {
@@ -4403,75 +4394,6 @@ var ses;
   }
 
   /**
-   * Repairs Safari-only bug
-   * https://bugs.webkit.org/show_bug.cgi?id=141878 by preemptively
-   * adding the 'line', 'column', 'sourceUrl', and 'stack' properties
-   * to any objects that are about to become non-extensible. When
-   * these are already present, then the Safari bug does not add them.
-   */
-  function repair_THROWING_THAWS_FROZEN_OBJECT() {
-    var defProp = Object.defineProperty;
-
-    /**
-     * Preemptively add to obj, if necessary, the properties that
-     * Safari would add on throwing/catching the object.
-     */
-    preemptThaw = function(obj) {
-      strictForEachFn(['line', 'column', 'sourceUrl', 'stack'],
-                      function(name) {
-        if (!hop.call(obj, name)) {
-          try {
-            // First try adding it ourselves to prevent the side
-            // channel that would happen when the throw and catch of
-            // obj below would add values according to its calling
-            // stack.
-            defProp(obj, name, {
-              value: void 0, // so naive feature tests will still fail
-              writable: false,
-              enumerable: false, // so it is invisible to ES3 iteration
-              configurable: true // so tamperProof can turn the data
-                                 // property into an accessor, to cope
-                                 // with the override mistake
-            });
-          } catch (ignoredErr) {}
-        }
-      });
-      // If the object was already non-extensible somehow, then the
-      // above defProp may have failed to add the property. So this
-      // throw-catch adds whatever remaining properties this bug would
-      // add. In this case, there may be a side channel, revealing
-      // information about the caller of preemptThaw. But at least it
-      // happens now, when it is less dangerous, before the monkey
-      // patched freeze, seal, or preventExtensions returns.
-      try { throw obj; } catch (_) {}
-    };
-
-    var oldFreeze = Object.freeze;
-    defProp(Object, 'freeze', {
-      value: function antithawFreeze(obj) {
-        preemptThaw(obj);
-        return oldFreeze(obj);
-      }
-    });
-
-    var oldSeal = Object.seal;
-    defProp(Object, 'seal', {
-      value: function antithawSeal(obj) {
-        preemptThaw(obj);
-        return oldSeal(obj);
-      }
-    });
-
-    var oldPreventExtensions = Object.preventExtensions;
-    defProp(Object, 'preventExtensions', {
-      value: function antithawPreventExtensions(obj) {
-        preemptThaw(obj);
-        return oldPreventExtensions(obj);
-      }
-    });
-  }
-
-  /**
    * According to
    * https://bugzilla.mozilla.org/show_bug.cgi?id=1125389#c28 comment 28
    * <blockquote>
@@ -5816,9 +5738,9 @@ var ses;
       id: 'THROWING_THAWS_FROZEN_OBJECT',
       description: 'Throwing a frozen object opens a capability leak',
       test: test_THROWING_THAWS_FROZEN_OBJECT,
-      repair: repair_THROWING_THAWS_FROZEN_OBJECT,
+      repair: void 0,
       preSeverity: severities.NOT_ISOLATED,
-      canRepair: true,
+      canRepair: false,
       urls: ['https://bugs.webkit.org/show_bug.cgi?id=141871',
              'https://bugs.webkit.org/show_bug.cgi?id=141878'],
       sections: [],
@@ -5843,7 +5765,7 @@ var ses;
       repair: repair_MISSING_GET_OWN_PROPERTY_DESCRIPTORS,
       preSeverity: severities.SAFE_SPEC_VIOLATION,
       canRepair: true,
-      urls: [],
+      urls: ['https://github.com/ljharb/Object.getOwnPropertyDescriptors'],
       sections: [],
       tests: []
     }

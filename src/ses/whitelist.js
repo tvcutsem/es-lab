@@ -152,30 +152,53 @@ var ses;
         // instances respond to are actually the builtin methods they
         // inherit from this object.
         GeneratorFunction: {  // 25.2
+          length: '*',  // Not sure why this is needed
           prototype: {  // 25.3
             prototype: {
               next: '*',
-              'return': '*',
-              'throw': '*'
+              return: '*',
+              throw: '*',
+              constructor: '*'  // Not sure why this is needed
             }
           }
         },
         // TODO: 25.5 AsyncFunction
 
-        TypedArray: TypedArrayWhitelist = {
+        TypedArray: TypedArrayWhitelist = {  // 22.2
           length: '*',  // does not inherit from Function.prototype on Chrome
           name: '*',  // ditto
-          BYTES_PER_ELEMENT: '*',
           from: t,
           of: t,
+          BYTES_PER_ELEMENT: '*',
           prototype: {
             buffer: 'maybeAccessor',
-            byteOffset: 'maybeAccessor',
             byteLength: 'maybeAccessor',
+            byteOffset: 'maybeAccessor',
+            copyWithin: '*',
+            entries: '*',
+            every: '*',
+            fill: '*',
+            filter: '*',
+            find: '*',
+            findIndex: '*',
+            forEach: '*',
+            includes: '*',
+            indexOf: '*',
+            join: '*',
+            keys: '*',
+            lastIndexOf: '*',
             length: 'maybeAccessor',
-            BYTES_PER_ELEMENT: '*',
+            map: '*',
+            reduce: '*',
+            reduceRight: '*',
+            reverse: '*',
             set: '*',
-            subarray: '*'
+            slice: '*',
+            some: '*',
+            sort: '*',
+            subarray: '*',
+            values: '*',
+            BYTES_PER_ELEMENT: '*'
           }
         }
       },
@@ -250,7 +273,7 @@ var ses;
       entries: t,                    // ES-Harmony
       freeze: t,
       getOwnPropertyDescriptor: t,
-      getOwnPropertyDescriptors: t,  // ES-Harmony
+      getOwnPropertyDescriptors: t,  // proposed ES-Harmony
       getOwnPropertyNames: t,
       getOwnPropertySymbols: t,      // ES-Harmony
       getPrototypeOf: t,
@@ -272,17 +295,6 @@ var ses;
         __defineSetter__: t,
         __lookupGetter__: t,
         __lookupSetter__: t,
-
-        // There are only here to support repair_THROWING_THAWS_FROZEN_OBJECT,
-        // which repairs Safari-only bug
-        // https://bugs.webkit.org/show_bug.cgi?id=141878 by
-        // preemptively adding these properties to any objects that
-        // are about to become non-extensible. When these are already
-        // present, then the Safari bug does not add them.
-        line: '*',
-        column: '*',
-        sourceUrl: '*',
-        stack: '*',
 
         constructor: '*',
         hasOwnProperty: t,
@@ -324,6 +336,7 @@ var ses;
     },
     
     Symbol: {  // 19.4               all ES-Harmony
+      asyncIterator: t,              // proposed? ES-Harmony
       for: t,
       hasInstance: t,
       isConcatSpreadable: t,
@@ -411,6 +424,7 @@ var ses;
 
       abs: t,
       acos: t,
+      acosh: t,                      // ES-Harmony
       asin: t,
       asinh: t,                      // ES-Harmony
       atan: t,
@@ -520,14 +534,14 @@ var ses;
         localeCompare: t,
         match: t,
         normalize: t,                // ES-Harmony
-        padEnd: t,                // ES-Harmony
-        padStart: t,                // ES-Harmony
-        repeat: t,                // ES-Harmony
+        padEnd: t,                   // ES-Harmony
+        padStart: t,                 // ES-Harmony
+        repeat: t,                   // ES-Harmony
         replace: t,
         search: t,
         slice: t,
         split: t,
-        startsWith: t,                // ES-Harmony
+        startsWith: t,               // ES-Harmony
         substring: t,
         toLocaleLowerCase: t,
         toLocaleUpperCase: t,
@@ -573,7 +587,8 @@ var ses;
         [Symbol.split]: '*',         // ES-Harmony
         sticky: 'maybeAccessor',
         test: t,        
-        unicode: 'maybeAccessor',
+        unicode: 'maybeAccessor',    // ES-Harmony
+        dotAll: 'maybeAccessor',     // proposed ES-Harmony
 
         // 21.2.6 instances
         lastIndex: '*',
@@ -593,15 +608,15 @@ var ses;
         copyWithin: t,               // ES-Harmony
         entries: t,                  // ES-Harmony
         every: t,
-        fill: t,                  // ES-Harmony
+        fill: t,                     // ES-Harmony
         filter: t,
-        find: t,                  // ES-Harmony
-        findIndex: t,                  // ES-Harmony
+        find: t,                     // ES-Harmony
+        findIndex: t,                // ES-Harmony
         forEach: t,
-        includes: t,                  // ES-Harmony
+        includes: t,                 // ES-Harmony
         indexOf: t,
         join: t,
-        keys: t,                  // ES-Harmony
+        keys: t,                     // ES-Harmony
         lastIndexOf: t,
         map: t,
         pop: t,
@@ -615,10 +630,10 @@ var ses;
         sort: t,
         splice: t,
         unshift: t,
-        values: t,                  // ES-Harmony
+        values: t,                   // ES-Harmony
 
         // B.2.5
-        compile: false,             // UNSAFE. Purposely suppressed
+        compile: false,              // UNSAFE. Purposely suppressed
 
         // 22.1.4 instances
         length: '*'
@@ -703,9 +718,10 @@ var ses;
 
     // 24.2 TODO: Omitting SharedArrayBuffer for now
 
-    DataView: {  // 24.3            all ES-Harmony
+    DataView: {  // 24.3               all ES-Harmony
       length: t,  // does not inherit from Function.prototype on Chrome
       name: t,    // ditto
+      BYTES_PER_ELEMENT: '*',          // non-standard. really?
       prototype: {
         buffer: 'maybeAccessor',
         byteOffset: 'maybeAccessor',
@@ -747,6 +763,7 @@ var ses;
       prototype: {
         catch: t,
         then: t,
+        finally: t,                    // proposed ES-Harmony
 
         // nanoq.js
         get: t,
@@ -778,12 +795,13 @@ var ses;
       makeFar: t,
 
       // Temporary compat with the old makeQ.js
-      promise: t,
       shorten: t,
       isPromise: t,
+      async: t,
+      rejected: t,
+      promise: t,
       delay: t,
       memoize: t,
-      async: t,
       defer: t
     },
 
