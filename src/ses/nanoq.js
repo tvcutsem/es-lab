@@ -1,3 +1,4 @@
+/*global cajaVM setTimeout*/
 // Shim a small subset of Q
 
 (function(global) {

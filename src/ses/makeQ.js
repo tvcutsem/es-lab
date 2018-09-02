@@ -1,3 +1,4 @@
+/*global cajaVM*/
 // Copyright (C) 2011 Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -475,8 +476,7 @@ var ses;
 
      /*************************************************************************
       * A far promise is a fulfilled promise to a possibly remote
-      * object whose behavior is locally represented by a farDispatch
-      * function.
+      * object whose behavior is locally represented by a farRelay.
       *
       * <p>The farDispatch function acts like the dispatch method of the
       * FarHandler, except that it gets only the HTTP verb operations,
@@ -486,28 +486,28 @@ var ses;
       * whose failure model makes partition visible, a far promise may
       * become rejected.
       */
-     function FarHandler(prom, dispatch) {
+     function FarHandler(prom, farRelay) {
        this.promise = prom;
-       this.dispatch = dispatch;
+       this.farRelay = farRelay;
      }
      FarHandler.prototype = {
        stateName: 'far',
 
        shorten: function() { return this.promise; },
 
+       dispatch: function(OP, args) {
+         if (OP === 'THEN') { return this.THEN(args[0], args[1]); }
+         return this.farRelay[OP](...args);
+       },
+
        /** Just invoke sk, the success continuation */
        THEN: function(sk, fk) { return sk(this.promise); }
      };
 
-     function makeFar(farDispatch, nextSlotP) {
+     function makeFar(farRelay, nextSlotP) {
        var farPromise;
 
-       function dispatch(OP, args) {
-         if (OP === 'THEN') { return farPromise.THEN(args[0], args[1]); }
-         return farDispatch(OP, args);
-       }
-       farPromise = new HiddenPromise(FarHandler, dispatch);
-
+       farPromise = new HiddenPromise(FarHandler, farRelay);
 
        function rejectFar(reason) {
          // Note that a farPromise is resolved, so its shorten()
@@ -544,9 +544,9 @@ var ses;
       * forwarded on to the promise for the remote promise's next
       * resolution.
       */
-     function RemoteHandler(prom, dispatch) {
+     function RemoteHandler(prom, remoteRelay) {
        this.promise = prom;
-       this.dispatch = dispatch;
+       this.remoteRelay = remoteRelay;
      }
      RemoteHandler.prototype = {
        stateName: 'pending remote',
@@ -554,7 +554,7 @@ var ses;
        shorten: function()       { return this.promise; }
      };
 
-     function makeRemote(remoteDispatch, nextSlotP) {
+     function makeRemote(remoteRelay, nextSlotP) {
        var remotePromise;
 
        function dispatch(OP, args) {
@@ -564,9 +564,9 @@ var ses;
            // until there is such a next resolution.
            return Q(nextSlotP).get('value').then(args[0], args[1]);
          }
-         return remoteDispatch(OP, args);
+         return remoteRelay[OP](...args);
        }
-       remotePromise = new HiddenPromise(RemoteHandler, remoteDispatch);
+       remotePromise = new HiddenPromise(RemoteHandler, remoteRelay);
 
 
        Q(nextSlotP).then(function(nextSlot) {
