@@ -516,4 +516,11 @@ var ses;
    };
    ses.getStack = getStack;
 
+   Object.defineProperty(FakeError.prototype, 'stack', {
+     get() { return getStack(this); },
+     set: undefined,
+     enumerable: false,
+     configurable: true
+   });
+
  })(this);
